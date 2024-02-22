@@ -35,7 +35,7 @@ class Video {
             format.setFloat(MediaFormat.KEY_I_FRAME_INTERVAL, 0.5F)
             format.setInteger(MediaFormat.KEY_BIT_RATE, configure.bitRate)
             format.setInteger(MediaFormat.KEY_FRAME_RATE, configure.frameRate)
-            format.setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
+            format.setInteger(MediaFormat.KEY_COLOR_FORMAT, configure.format)
             format.setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR)
             format.setInteger(MediaFormat.KEY_LEVEL, MediaCodecInfo.CodecProfileLevel.AVCProfileBaseline)
             format.setInteger(MediaFormat.KEY_PROFILE, MediaCodecInfo.CodecProfileLevel.AVCProfileBaseline)
@@ -72,6 +72,14 @@ class Video {
             }
         }
 
+        fun sink(buf: ByteArray) {
+            val index = codec.dequeueInputBuffer(-1)
+            if (index >= 0) {
+                codec.getInputBuffer(index)?.put(buf)
+                codec.queueInputBuffer(index, 0, buf.size, 0, 0)
+            }
+        }
+
         fun getSurface(): Surface {
             return surface
         }
@@ -96,6 +104,11 @@ class Video {
         }
 
         interface VideoEncoderConfigure {
+
+            /**
+             * [MediaCodecInfo.CodecCapabilities](https://developer.android.com/reference/android/media/MediaCodecInfo.CodecCapabilities)
+             */
+            val format: Int;
             val width: Int;
             val height: Int;
 

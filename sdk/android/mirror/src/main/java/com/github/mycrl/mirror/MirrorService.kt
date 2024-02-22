@@ -288,6 +288,14 @@ class MirrorSender constructor(
     }
 
     /**
+     * Push a single frame of data into the video encoder, note that the frame type needs to be the
+     * same as the encoder configuration and you need to be aware of the input frame rate.
+     */
+    fun pushFrame(frame: ByteArray) {
+        videoEncoder.sink(frame)
+    }
+
+    /**
      * Get the port that sender is bound to.
      */
     fun getPort(): Int {
