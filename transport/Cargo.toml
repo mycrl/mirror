@@ -1,0 +1,26 @@
+[package]
+name = "transport"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+async-trait = "0.1.77"
+bytes = "1.5.0"
+codec = { path = "../codec" }
+log = "0.4.20"
+rmp-serde = "1.1.2"
+serde = { version = "1.0.195", features = ["derive"] }
+srt = { path = "../srt" }
+sync = { path = "../sync" }
+thiserror = "1.0.56"
+tokio = { version = "1.35.1", features = ["net", "sync", "time"] }
+uuid = { version = "1.6.1", features = ["v4", "fast-rng", "serde"] }
+
+[[example]]
+name = "simple"
+
+[dev-dependencies]
+tokio = { version = "1.35.1", features = ["full"] }
+clap = { version = "4", features = ["derive", "env"] }
+anyhow = "1.0.79"
+simple_logger = "4"

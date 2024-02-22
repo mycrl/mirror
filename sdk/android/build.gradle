@@ -1,0 +1,41 @@
+buildscript {
+    repositories {
+        maven {
+            url "https://plugins.gradle.org/m2/"
+        }
+    }
+    dependencies {
+        classpath 'org.mozilla.rust-android-gradle:plugin:0.9.3'
+    }
+}
+
+plugins {
+    id 'com.android.application' version '8.2.2' apply false
+    id 'org.jetbrains.kotlin.android' version '1.9.22' apply false
+    id 'com.android.library' version '8.2.2' apply false
+    id "org.mozilla.rust-android-gradle.rust-android" version "0.9.3"
+    id 'maven-publish'
+}
+
+task clean(type: Delete) {
+    delete rootProject.buildDir
+}
+
+wrapper {
+    distributionType = Wrapper.DistributionType.ALL
+}
+
+version = "0.0.1"
+
+publishing {
+    repositories {
+        maven {
+            name = "GitHubPackages"
+            url = "https://maven.pkg.github.com/mycrl/mirror"
+            credentials {
+                username = System.getenv("GITHUB_ACTOR")
+                password = System.getenv("GITHUB_TOKEN")
+            }
+        }
+    }
+}

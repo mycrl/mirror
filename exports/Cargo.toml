@@ -1,0 +1,21 @@
+[package]
+name = "exports"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["staticlib", "rlib", "cdylib"]
+name = "mirror_exports"
+
+[dependencies]
+async-trait = "0.1.77"
+bytes = "1.5"
+transport = { path = "../transport" }
+tokio = { version = "1.35.1", features = ["rt", "rt-multi-thread"] }
+srt = { path = "../srt" }
+log = { version = "0.4.20", features = ["std"]}
+num_cpus = "1.16.0"
+jni = "0.21.1"
+jni-macro = { path = "../jni-macro"}
+codec = { path = "../codec" }
+anyhow = "1.0.79"

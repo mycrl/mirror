@@ -1,0 +1,65 @@
+use std::ffi::{c_char, c_int};
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LogLevel {
+    VERBOSE = 2,
+    DEBUG,
+    INFO,
+    WARN,
+    ERROR,
+}
+
+impl LogLevel {
+    fn from_level(level: log::Level) -> Self {
+        match level {
+            log::Level::Trace => Self::VERBOSE,
+            log::Level::Debug => Self::DEBUG,
+            log::Level::Info => Self::INFO,
+            log::Level::Warn => Self::WARN,
+            log::Level::Error => Self::ERROR,
+        }
+    }
+}
+
+extern "C" {
+    // __android_log_write
+    //
+    //
+    // int __android_log_write(
+    //   int prio,
+    //   const char *tag,
+    //   const char *text
+    // )
+    //
+    // Writes the constant string text to the log, with priority prio and tag tag.
+    fn __android_log_write(prio: c_int, tag: *const c_char, text: *const c_char) -> c_int;
+}
+
+pub struct AndroidLogger;
+
+impl AndroidLogger {
+    pub fn init() {
+        log::set_boxed_logger(Box::new(Self)).unwrap();
+        log::set_max_level(log::LevelFilter::Info);
+        std::panic::set_hook(Box::new(|info| log::error!("{:?}", info)))
+    }
+}
+
+impl log::Log for AndroidLogger {
+    fn enabled(&self, metadata: &log::Metadata) -> bool {
+        metadata.level() == log::LevelFilter::Info
+    }
+
+    fn log(&self, record: &log::Record) {
+        unsafe {
+            __android_log_write(
+                LogLevel::from_level(record.level()) as c_int,
+                "lib.mirror.java\0".as_ptr() as *const _,
+                format!("{}\0", record.args()).as_ptr() as *const _,
+            );
+        }
+    }
+
+    fn flush(&self) {}
+}
