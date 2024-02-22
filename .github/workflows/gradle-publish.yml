@@ -38,14 +38,14 @@ jobs:
     - name: Build with Gradle
       run: |
         cd sdk/android
-        ./gradlew build
+        ./gradlew mirror:build
 
     # The USERNAME and TOKEN need to correspond to the credentials environment variables used in
     # the publishing section of your build.gradle
     - name: Publish to GitHub Packages
       run: |
         cd sdk/android
-        ./gradlew publish
+        ./gradlew mirror:publish
       env:
         USERNAME: ${{ github.actor }}
         TOKEN: ${{ secrets.GITHUB_TOKEN }}
