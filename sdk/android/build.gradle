@@ -25,7 +25,8 @@ wrapper {
     distributionType = Wrapper.DistributionType.ALL
 }
 
-version = "0.0.1"
+group 'com.github.mycrl'
+version "0.0.1"
 
 publishing {
     repositories {
