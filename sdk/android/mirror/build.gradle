@@ -81,8 +81,8 @@ cargo {
     targetDirectory = '../../../target'
     targetIncludes = ['libmirror_exports.so']
     exec { spec, toolchain ->
-        def absolutePath = project.file('../../../target').absolutePath
-        spec.environment('CARGO_TARGET_DIR', '$absolutePath')
+        def absolutePath = project.file("../../../target").absolutePath
+        spec.environment("CARGO_TARGET_DIR", "$absolutePath")
     }
 }
 
