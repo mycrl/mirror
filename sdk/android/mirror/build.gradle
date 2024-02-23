@@ -2,7 +2,7 @@ plugins {
     id 'com.android.library'
     id 'org.jetbrains.kotlin.android'
     id 'org.jetbrains.kotlin.plugin.serialization' version '1.9.21'
-    id "org.mozilla.rust-android-gradle.rust-android" version "0.9.3"
+    id 'org.mozilla.rust-android-gradle.rust-android' version '0.9.3'
     id 'maven-publish'
 }
 
@@ -33,10 +33,10 @@ android {
             abiFilters 'arm64-v8a'
         }
 
-        consumerProguardFiles "consumer-rules.pro"
+        consumerProguardFiles 'consumer-rules.pro'
         externalNativeBuild {
             cmake {
-                arguments "-DANDROID_STL=c++_shared"
+                arguments '-DANDROID_STL=c++_shared'
                 cppFlags ''
             }
         }
@@ -82,7 +82,7 @@ cargo {
     targetIncludes = ['libmirror_exports.so']
     exec { spec, toolchain ->
         def absolutePath = project.file('../../../target').absolutePath
-        spec.environment("CARGO_TARGET_DIR", "$absolutePath")
+        spec.environment('CARGO_TARGET_DIR', '$absolutePath')
     }
 }
 
@@ -95,20 +95,20 @@ tasks.whenTaskAdded { task ->
 publishing {
     repositories {
         maven {
-            name = "GitHubPackages"
-            url = "https://maven.pkg.github.com/mycrl/mirror"
+            name = 'GitHubPackages'
+            url = 'https://maven.pkg.github.com/mycrl/mirror'
             credentials {
-                username = System.getenv("GITHUB_ACTOR")
-                password = System.getenv("GITHUB_TOKEN")
+                username = System.getenv('GITHUB_USERNAME')
+                password = System.getenv('GITHUB_TOKEN')
             }
         }
     }
 
     publications {
         release(MavenPublication) {
-            groupId = "com.github.mycrl"
-            artifactId = "mirror"
-            version = System.getenv("RELEASE_VERSION")
+            groupId = 'com.github.mycrl'
+            artifactId = 'mirror'
+            version = '0.0.1'
 
             afterEvaluate {
                 from components.release
