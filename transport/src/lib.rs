@@ -39,7 +39,7 @@ pub struct TransportOptions {
 
 #[derive(Debug)]
 pub struct Transport {
-    services: Mutex<HashSet<Service>>,
+    services: Arc<Mutex<HashSet<Service>>>,
     discovery: Arc<Discovery>,
     options: TransportOptions,
 }
@@ -63,6 +63,8 @@ impl Transport {
                     let discovery = if let Some(discovery) = discovery.upgrade() {
                         discovery
                     } else {
+                        log::info!("discovery is drop, maybe is released.");
+
                         break;
                     };
 
@@ -142,11 +144,11 @@ impl Transport {
                             log::info!("adapter factory not create adapter.");
                         }
                     } else {
+                        log::info!("discovery recv online a none, maybe is released.");
+
                         break;
                     }
                 }
-
-                log::info!("discovery is drop, maybe is released.");
             });
         }
 
@@ -174,13 +176,15 @@ impl Transport {
         let port = server.local_addr().unwrap().port();
         log::info!("srt server bind to port={}", port);
 
+        let service = Service {
+            description,
+            port,
+            id,
+        };
+
         {
             let mut services = self.services.lock().await;
-            services.insert(Service {
-                description,
-                port,
-                id,
-            });
+            services.insert(service.clone());
 
             self.discovery
                 .set_services(services.iter().map(|item| item.clone()).collect())
@@ -206,6 +210,8 @@ impl Transport {
                                     addr,
                                     e
                                 );
+
+                                break;
                             }
                         }
                     }
@@ -214,12 +220,12 @@ impl Transport {
                 }
 
                 sockets_.write().await.insert(addr, socket);
-
                 log::info!("srt server accept socket, addr={}", addr);
             }
         });
 
-        let discovery = Arc::downgrade(&self.discovery);
+        let services_ = Arc::downgrade(&self.services);
+        let discovery_ = Arc::downgrade(&self.discovery);
         let adapter_ = Arc::downgrade(adapter);
         tokio::spawn(async move {
             let mut closed = Vec::with_capacity(10);
@@ -262,8 +268,15 @@ impl Transport {
 
             accept_task.abort();
             sockets.write().await.clear();
-            if let Some(discovery) = discovery.upgrade() {
-                discovery.set_services(Vec::new()).await;
+            if let Some(discovery) = discovery_.upgrade() {
+                if let Some(services) = services_.upgrade() {
+                    let mut services = services.lock().await;
+                    services.remove(&service);
+
+                    discovery
+                        .set_services(services.iter().map(|item| item.clone()).collect())
+                        .await;
+                }
             }
         });
 

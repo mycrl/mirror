@@ -87,17 +87,21 @@ impl Discovery {
                     _ => continue,
                 };
 
-                log::info!(
-                    "Discovery udp socket recv buf, size={}, addr={}",
-                    size,
-                    addr
-                );
-
                 if size == 0 {
                     log::info!("Discovery udp socket recv zero buf, close the socket receiver.");
 
                     break;
                 }
+
+                if addr.ip() == this.addr.ip() {
+                    continue;
+                }
+
+                log::info!(
+                    "Discovery udp socket recv buf, size={}, addr={}",
+                    size,
+                    addr
+                );
 
                 if let Ok(pkt) = rmp_serde::decode::from_slice::<Message>(&buf[..size]) {
                     log::info!("Discovery recv a message, pkt={:?}", pkt);
@@ -105,10 +109,6 @@ impl Discovery {
                     match pkt {
                         Message::Notify { id, services } => {
                             if id == this.id {
-                                log::info!(
-                                    "Discovery udp socket recv a local message, skip the a message."
-                                );
-
                                 continue;
                             }
 
@@ -126,10 +126,6 @@ impl Discovery {
                         }
                         Message::Query { id } => {
                             if id == this.id {
-                                log::info!(
-                                    "Discovery udp socket recv a local message, skip the a message."
-                                );
-
                                 continue;
                             }
 
@@ -189,7 +185,7 @@ impl Discovery {
                             break;
                         }
                     } else {
-                        sleep(Duration::from_millis(100)).await;
+                        sleep(Duration::from_millis(1000)).await;
                     }
                 } else {
                     break;
