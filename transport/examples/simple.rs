@@ -72,7 +72,7 @@ async fn main() -> anyhow::Result<()> {
         let buf = Bytes::from_static(&[0u8; 3000]);
         loop {
             sleep(Duration::from_millis(100)).await;
-            if !adapter.send(buf.clone(), StreamBufferInfo::Video(0)).await {
+            if !adapter.send(buf.clone(), StreamBufferInfo::Video(0)) {
                 break;
             }
         }

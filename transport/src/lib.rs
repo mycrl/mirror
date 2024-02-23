@@ -110,7 +110,7 @@ impl Transport {
 
                                             if let Some(adapter) = adapter.upgrade() {
                                                 for (chunk, kind) in decoder.decode(&buf[..size]) {
-                                                    if !adapter.send(chunk, kind).await {
+                                                    if !adapter.send(chunk, kind) {
                                                         log::error!("adapter on buf failed.");
                                                         break;
                                                     }
@@ -125,7 +125,7 @@ impl Transport {
 
                                         discovery.remove(&addr).await;
                                         if let Some(adapter) = adapter.upgrade() {
-                                            adapter.close().await;
+                                            adapter.close();
                                         }
                                     });
                                 }
@@ -209,6 +209,8 @@ impl Transport {
                             }
                         }
                     }
+                } else {
+                    break;
                 }
 
                 sockets_.write().await.insert(addr, socket);
@@ -217,13 +219,13 @@ impl Transport {
             }
         });
 
-        let discovery = self.discovery.clone();
-        let adapter = Arc::downgrade(adapter);
+        let discovery = Arc::downgrade(&self.discovery);
+        let adapter_ = Arc::downgrade(adapter);
         tokio::spawn(async move {
             let mut closed = Vec::with_capacity(10);
             let mut encoder = Encoder::default();
 
-            while let Some(adapter) = adapter.upgrade() {
+            while let Some(adapter) = adapter_.upgrade() {
                 if let Some((buf, kind)) = adapter.next().await {
                     {
                         let sockets = sockets.read().await;
@@ -260,7 +262,9 @@ impl Transport {
 
             accept_task.abort();
             sockets.write().await.clear();
-            discovery.set_services(Vec::new()).await;
+            if let Some(discovery) = discovery.upgrade() {
+                discovery.set_services(Vec::new()).await;
+            }
         });
 
         Ok(port)
@@ -294,7 +298,7 @@ impl Transport {
 
                 if let Some(adapter) = adapter.upgrade() {
                     for (chunk, kind) in decoder.decode(&buf[..size]) {
-                        if !adapter.send(chunk, kind).await {
+                        if !adapter.send(chunk, kind) {
                             log::error!("adapter on buf failed.");
                             break;
                         }
@@ -312,7 +316,7 @@ impl Transport {
             }
 
             if let Some(adapter) = adapter.upgrade() {
-                adapter.close().await;
+                adapter.close();
             }
         });
 

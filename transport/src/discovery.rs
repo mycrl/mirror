@@ -189,7 +189,7 @@ impl Discovery {
                             break;
                         }
                     } else {
-                        sleep(Duration::from_millis(1000)).await;
+                        sleep(Duration::from_millis(100)).await;
                     }
                 } else {
                     break;

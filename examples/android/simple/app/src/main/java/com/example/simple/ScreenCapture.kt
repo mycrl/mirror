@@ -18,20 +18,22 @@ import android.media.AudioFormat
 import android.media.AudioPlaybackCaptureConfiguration
 import android.media.AudioRecord
 import android.media.AudioTrack
+import android.media.MediaCodecInfo
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.os.Binder
 import android.os.IBinder
+import android.util.Log
 import android.view.Surface
-import mirror.java.Audio
-import mirror.java.MirrorAdapterConfigure
-import mirror.java.MirrorReceiver
-import mirror.java.MirrorSender
-import mirror.java.MirrorService
-import mirror.java.MirrorServiceConfigure
-import mirror.java.MirrorServiceObserver
-import mirror.java.ReceiverAdapterWrapper
-import mirror.java.Video
+import com.github.mycrl.mirror.Audio
+import com.github.mycrl.mirror.MirrorAdapterConfigure
+import com.github.mycrl.mirror.MirrorReceiver
+import com.github.mycrl.mirror.MirrorSender
+import com.github.mycrl.mirror.MirrorService
+import com.github.mycrl.mirror.MirrorServiceConfigure
+import com.github.mycrl.mirror.MirrorServiceObserver
+import com.github.mycrl.mirror.ReceiverAdapterWrapper
+import com.github.mycrl.mirror.Video
 
 class ScreenCaptureServiceBinder(private val service: ScreenCaptureService) : Binder() {
     fun startup(intent: Intent) {
@@ -79,7 +81,7 @@ class ScreenCaptureService : Service() {
                 }
 
                 override fun released() {
-
+                    Log.w("app", "=========================== released")
                 }
             }
         }
@@ -102,6 +104,7 @@ class ScreenCaptureService : Service() {
         sender = mirror.createSender(
             0, object : MirrorAdapterConfigure {
                 override val video = object : Video.VideoEncoder.VideoEncoderConfigure {
+                    override val format = MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface
                     override val width = 2560
                     override val height = 1600
                     override val frameRate = 60
@@ -136,6 +139,11 @@ class ScreenCaptureService : Service() {
         )
 
         virtualDisplay.surface = sender?.getSurface()
+        Thread {
+            Thread.sleep(10000)
+            sender?.release()
+            Log.d("app", "==================== release sender")
+        }.start()
     }
 
     private fun startNotification() {

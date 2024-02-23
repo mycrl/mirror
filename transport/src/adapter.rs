@@ -9,7 +9,7 @@ use bytes::Bytes;
 use codec::video::VideoStreamSenderProcesser;
 use tokio::sync::{
     broadcast::{channel, Receiver, Sender},
-    Mutex, RwLock,
+    Mutex,
 };
 
 #[repr(u8)]
@@ -60,8 +60,8 @@ pub trait ReceiverAdapterFactory: Send + Sync {
 
 pub struct StreamSenderAdapter {
     video: VideoStreamSenderProcesser,
-    tx: Sender<(Bytes, StreamKind)>,
-    rx: Mutex<Receiver<(Bytes, StreamKind)>>,
+    tx: Sender<Option<(Bytes, StreamKind)>>,
+    rx: Mutex<Receiver<Option<(Bytes, StreamKind)>>>,
 }
 
 impl StreamSenderAdapter {
@@ -74,27 +74,31 @@ impl StreamSenderAdapter {
         })
     }
 
-    pub async fn send(&self, buf: Bytes, info: StreamBufferInfo) -> bool {
+    pub fn close(&self) {
+        self.tx.send(None).unwrap();
+    }
+
+    pub fn send(&self, buf: Bytes, info: StreamBufferInfo) -> bool {
         if let StreamBufferInfo::Video(flags) = info {
             self.video.apply(buf.clone(), flags);
         }
 
         self.tx
-            .send((
+            .send(Some((
                 buf,
                 match info {
                     StreamBufferInfo::Video(_) => StreamKind::Video,
                     StreamBufferInfo::Audio(_) => StreamKind::Audio,
                 },
-            ))
+            )))
             .is_ok()
     }
 
-    pub(crate) async fn next(&self) -> Option<(Bytes, StreamKind)> {
-        self.rx.lock().await.recv().await.ok()
+    pub async fn next(&self) -> Option<(Bytes, StreamKind)> {
+        self.rx.lock().await.recv().await.ok()?
     }
 
-    pub(crate) fn get_config(&self) -> Vec<(&[u8], StreamKind)> {
+    pub fn get_config(&self) -> Vec<(&[u8], StreamKind)> {
         [
             (
                 self.video.get_config_buffer().unwrap_or_else(|| &[]),
@@ -110,32 +114,28 @@ impl StreamSenderAdapter {
 }
 
 pub struct StreamReceiverAdapter {
-    tx: RwLock<Option<Sender<(Bytes, StreamKind)>>>,
-    rx: Mutex<Receiver<(Bytes, StreamKind)>>,
+    tx: Sender<Option<(Bytes, StreamKind)>>,
+    rx: Mutex<Receiver<Option<(Bytes, StreamKind)>>>,
 }
 
 impl StreamReceiverAdapter {
     pub fn new() -> Arc<Self> {
         let (tx, rx) = channel(10);
         Arc::new(Self {
-            tx: RwLock::new(Some(tx)),
             rx: Mutex::new(rx),
+            tx,
         })
     }
 
+    pub fn close(&self) {
+        self.tx.send(None).unwrap();
+    }
+
     pub async fn next(&self) -> Option<(Bytes, StreamKind)> {
-        self.rx.lock().await.recv().await.ok()
+        self.rx.lock().await.recv().await.ok()?
     }
 
-    pub(crate) async fn send(&self, buf: Bytes, kind: StreamKind) -> bool {
-        if let Some(sender) = self.tx.read().await.as_ref() {
-            sender.send((buf, kind)).is_ok()
-        } else {
-            false
-        }
-    }
-
-    pub(crate) async fn close(&self) {
-        drop(self.tx.write().await.take())
+    pub fn send(&self, buf: Bytes, kind: StreamKind) -> bool {
+        self.tx.send(Some((buf, kind))).is_ok()
     }
 }
