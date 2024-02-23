@@ -1,11 +1,6 @@
-pluginManagement {
-    repositories {
-        google()
-        mavenCentral()
-        gradlePluginPortal()
-    }
-}
+settings.gradle
 
+```gradle
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
@@ -21,6 +16,12 @@ dependencyResolutionManagement {
         }
     }
 }
+```
 
-rootProject.name = 'simple'
-include ':app'
+build.gradle
+
+```gradle
+dependencies {
+    implementation 'com.github.mycrl:mirror:0.0.1'
+}
+```
