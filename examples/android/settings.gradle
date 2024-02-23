@@ -11,16 +11,11 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
-
-        maven {
-            url = uri('https://maven.pkg.github.com/mycrl/mirror')
-            credentials {
-                username = System.getenv('GITHUB_USERNAME')
-                password = System.getenv('GITHUB_TOKEN')
-            }
-        }
     }
 }
 
 rootProject.name = 'simple'
 include ':app'
+include ':mirror'
+
+project(':mirror').projectDir = new File(settingsDir, '../../sdk/android/mirror')
