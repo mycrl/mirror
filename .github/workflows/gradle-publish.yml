@@ -35,9 +35,10 @@ jobs:
             -
                 name: Publish to GitHub Packages
                 run: |
+                    RELEASE_VERSION="${{ github.ref_name }}"
+                    RELEASE_VERSION="${RELEASE_VERSION#"v"}"
                     cd sdk/android
                     ./gradlew mirror:publish
                 env:
                     USERNAME: '${{ github.actor }}'
                     TOKEN: '${{ secrets.GITHUB_TOKEN }}'
-                    RELEASE_VERSION: '${{ github.ref_name }}'
