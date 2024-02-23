@@ -74,9 +74,9 @@ class MirrorService constructor(
                     object : ReceiverAdapter() {
                         private var isReleased: Boolean = false
                         private val codecDescription = CodecDescriptionFactory.decode(description)
-                        private val videoDecoder = Video.VideoDeocder(
+                        private val videoDecoder = Video.VideoDecoder(
                             peer.surface,
-                            object : Video.VideoDeocder.VideoDecoderConfigure {
+                            object : Video.VideoDecoder.VideoDecoderConfigure {
                                 override val height = codecDescription.video.height
                                 override val width = codecDescription.video.width
                             })
@@ -191,9 +191,9 @@ class MirrorService constructor(
     ): ReceiverAdapterWrapper {
         return mirror.createReceiver(port, object : ReceiverAdapter() {
             private var isReleased: Boolean = false
-            private val videoDecoder = Video.VideoDeocder(
+            private val videoDecoder = Video.VideoDecoder(
                 observer.surface,
-                object : Video.VideoDeocder.VideoDecoderConfigure {
+                object : Video.VideoDecoder.VideoDecoderConfigure {
                     override val height = configure.video.height
                     override val width = configure.video.width
                 })
@@ -263,28 +263,36 @@ class MirrorSender constructor(
             }
         })
 
-    private val audioEncoder: Audio.AudioEncoder? =
-        if (record != null) {
-            Audio.AudioEncoder(record, configure.audio, object : ByteArraySinker() {
-                override fun sink(info: StreamBufferInfo, buf: ByteArray) {
-                    sender.send(info, buf)
-                }
-            })
-        } else {
-            null
-        }
+    private val audioEncoder: Audio.AudioEncoder =
+        Audio.AudioEncoder(record, configure.audio, object : ByteArraySinker() {
+            override fun sink(info: StreamBufferInfo, buf: ByteArray) {
+                sender.send(info, buf)
+            }
+        })
 
     init {
         videoEncoder.start()
-        audioEncoder?.start()
+        audioEncoder.start()
     }
 
     /**
      * Get the surface inside the sender, you need to render the texture to this surface to pass the
      * screen to other receivers.
      */
-    fun getSurface(): Surface {
+    fun getSurface(): Surface? {
         return videoEncoder.getSurface()
+    }
+
+    /**
+     * Push a single frame of data into the video encoder, note that the frame type needs to be the
+     * same as the encoder configuration and you need to be aware of the input frame rate.
+     */
+    fun pushVideoFrame(frame: ByteArray) {
+        videoEncoder.sink(frame)
+    }
+
+    fun pushAudioChunk(chunk: ByteArray) {
+        audioEncoder.sink(chunk)
     }
 
     /**
@@ -298,7 +306,7 @@ class MirrorSender constructor(
      * Close and release this sender.
      */
     fun release() {
-        audioEncoder?.release()
+        audioEncoder.release()
         videoEncoder.release()
         sender.release()
     }

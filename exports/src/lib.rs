@@ -404,7 +404,7 @@ mod objects {
 /// }
 struct Mirror;
 
-#[jni_exports(package = "mirror.java")]
+#[jni_exports(package = "com.github.mycrl.mirror")]
 impl Mirror {
     /// /**
     ///  * Create a stream receiver adapter factory where the return value is a
@@ -475,7 +475,7 @@ impl Mirror {
         _this: JClass,
         ptr: *const Arc<StreamReceiverAdapter>,
     ) {
-        let _ = unsafe { Box::from_raw(ptr as *mut Arc<StreamReceiverAdapter>) };
+        unsafe { Box::from_raw(ptr as *mut Arc<StreamReceiverAdapter>) }.close();
     }
 
     /// /**
@@ -492,11 +492,11 @@ impl Mirror {
         _this: JClass,
         options: JObject,
         adapter_factory: *const AndroidStreamReceiverAdapterFactory,
-    ) -> *const transport::Transport {
+    ) -> *const Transport {
         catcher(&mut env, |env| {
             let options = objects::to_transport_options(env, &options)?;
             Ok(Box::into_raw(Box::new(get_runtime()?.block_on(async {
-                transport::Transport::new(
+                Transport::new(
                     options,
                     if adapter_factory.is_null() {
                         None
@@ -519,7 +519,7 @@ impl Mirror {
     ///  */
     /// private external fun releaseMirror(mirror: Long)
     pub fn release_mirror(_env: JNIEnv, _this: JClass, ptr: *const transport::Transport) {
-        let _ = unsafe { Box::from_raw(ptr as *mut Transport) };
+        drop(unsafe { Box::from_raw(ptr as *mut Transport) })
     }
 
     /// /**
@@ -544,7 +544,7 @@ impl Mirror {
         _this: JClass,
         ptr: *const Arc<StreamSenderAdapter>,
     ) {
-        let _ = unsafe { Box::from_raw(ptr as *mut Arc<StreamSenderAdapter>) };
+        unsafe { Box::from_raw(ptr as *mut Arc<StreamSenderAdapter>) }.close();
     }
 
     /// /**
@@ -561,7 +561,7 @@ impl Mirror {
     pub fn create_sender(
         mut env: JNIEnv,
         _this: JClass,
-        mirror: *const transport::Transport,
+        mirror: *const Transport,
         id: i32,
         description: JByteArray,
         adapter: *const Arc<StreamSenderAdapter>,
@@ -569,10 +569,8 @@ impl Mirror {
         catcher(&mut env, |env| {
             let buf = env.convert_byte_array(&description)?;
             Ok(get_runtime()?.block_on(async move {
-                unsafe { &*(mirror as *const Transport) }
-                    .create_sender(id as u8, buf, unsafe {
-                        &*(adapter as *const Arc<StreamSenderAdapter>)
-                    })
+                unsafe { &*mirror }
+                    .create_sender(id as u8, buf, unsafe { &*adapter })
                     .await
             })? as i32)
         })
@@ -595,14 +593,9 @@ impl Mirror {
         buf: JByteArray,
     ) {
         catcher(&mut env, |env| {
-            let adapter = adapter as usize;
             let buf = copy_from_byte_array(env, &buf)?;
             let info = objects::to_stream_buffer_info(env, &info)?;
-            get_runtime()?.spawn(async move {
-                unsafe { &*(adapter as *const Arc<StreamSenderAdapter>) }
-                    .send(buf, info)
-                    .await;
-            });
+            unsafe { &*adapter }.send(buf, info);
 
             Ok(())
         });
@@ -621,16 +614,14 @@ impl Mirror {
     pub fn create_receiver(
         mut env: JNIEnv,
         _this: JClass,
-        mirror: *const transport::Transport,
+        mirror: *const Transport,
         port: i32,
         adapter: *const Arc<StreamReceiverAdapter>,
     ) -> i32 {
         catcher(&mut env, |_| {
             Ok(get_runtime()?.block_on(async move {
-                unsafe { &*(mirror as *const Transport) }
-                    .create_receiver(port as u16, unsafe {
-                        &*(adapter as *const Arc<StreamReceiverAdapter>)
-                    })
+                unsafe { &*mirror }
+                    .create_receiver(port as u16, unsafe { &*adapter })
                     .await
                     .is_ok()
             }))

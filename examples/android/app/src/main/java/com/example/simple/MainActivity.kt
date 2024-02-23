@@ -9,7 +9,6 @@ import android.graphics.Color
 import android.media.projection.MediaProjectionManager
 import android.os.Bundle
 import android.os.IBinder
-import android.util.Log
 import android.view.Gravity
 import android.view.SurfaceHolder
 import android.view.SurfaceView
@@ -18,9 +17,6 @@ import android.widget.Button
 import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.core.app.ActivityCompat
-import java.io.File
-import java.io.FileOutputStream
 
 class MainActivity : ComponentActivity() {
     private var screenCaptureService: Intent? = null
@@ -81,7 +77,7 @@ class MainActivity : ComponentActivity() {
         surfaceView = SurfaceView(this)
         button = Button(this)
 
-        button.text = "开始投屏"
+        button.text = "Start"
         button.setBackgroundColor(Color.BLUE)
         button.setTextColor(Color.WHITE)
 
@@ -94,13 +90,11 @@ class MainActivity : ComponentActivity() {
         button.layoutParams = buttonLayoutParams
 
         val projectionIntent = mediaProjectionManager.createScreenCaptureIntent()
-        button.setOnClickListener(object : View.OnClickListener {
-            override fun onClick(v: View?) {
-                projectionIntent.let {
-                    permissionLauncher.launch(it)
-                }
+        button.setOnClickListener {
+            projectionIntent.let {
+                permissionLauncher.launch(it)
             }
-        })
+        }
 
         surfaceView.holder.addCallback(object : SurfaceHolder.Callback {
             override fun surfaceCreated(holder: SurfaceHolder) {

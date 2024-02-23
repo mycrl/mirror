@@ -26,7 +26,7 @@ class Video {
         public var isRunning: Boolean = false
 
         private val bufferInfo = MediaCodec.BufferInfo()
-        private var surface: Surface
+        private var surface: Surface? = null
         private var codec: MediaCodec
         private var worker: Thread
 
@@ -35,14 +35,19 @@ class Video {
             format.setFloat(MediaFormat.KEY_I_FRAME_INTERVAL, 0.5F)
             format.setInteger(MediaFormat.KEY_BIT_RATE, configure.bitRate)
             format.setInteger(MediaFormat.KEY_FRAME_RATE, configure.frameRate)
-            format.setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
+            format.setInteger(MediaFormat.KEY_COLOR_FORMAT, configure.format)
             format.setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR)
             format.setInteger(MediaFormat.KEY_LEVEL, MediaCodecInfo.CodecProfileLevel.AVCProfileBaseline)
             format.setInteger(MediaFormat.KEY_PROFILE, MediaCodecInfo.CodecProfileLevel.AVCProfileBaseline)
 
             codec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
             codec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
-            surface = codec.createInputSurface()
+
+            surface = if (configure.format == MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface) {
+                codec.createInputSurface()
+            } else {
+                null
+            }
 
             worker = Thread {
                 val buffer = ByteArray(1024 * 1024)
@@ -72,7 +77,15 @@ class Video {
             }
         }
 
-        fun getSurface(): Surface {
+        fun sink(buf: ByteArray) {
+            val index = codec.dequeueInputBuffer(-1)
+            if (index >= 0) {
+                codec.getInputBuffer(index)?.put(buf)
+                codec.queueInputBuffer(index, 0, buf.size, 0, 0)
+            }
+        }
+
+        fun getSurface(): Surface? {
             return surface
         }
 
@@ -96,6 +109,11 @@ class Video {
         }
 
         interface VideoEncoderConfigure {
+
+            /**
+             * [MediaCodecInfo.CodecCapabilities](https://developer.android.com/reference/android/media/MediaCodecInfo.CodecCapabilities)
+             */
+            val format: Int;
             val width: Int;
             val height: Int;
 
@@ -111,7 +129,7 @@ class Video {
         }
     }
 
-    class VideoDeocder constructor(private val surface: Surface, private val configure: VideoDecoderConfigure) {
+    class VideoDecoder constructor(private val surface: Surface, private val configure: VideoDecoderConfigure) {
         public var isRunning: Boolean = false
 
         private val bufferInfo = MediaCodec.BufferInfo()
@@ -256,7 +274,7 @@ class Audio {
     }
 
     class AudioEncoder constructor(
-        private val record: AudioRecord,
+        private val record: AudioRecord?,
         private val configure: AudioEncoderConfigure,
         private val sinker: ByteArraySinker
     ) {
@@ -265,7 +283,7 @@ class Audio {
         private val bufferInfo = MediaCodec.BufferInfo()
         private var codec: MediaCodec
         private var worker: Thread
-        private var recorder: Thread
+        private var recorder: Thread? = null
 
         private val minBufferSize = AudioRecord.getMinBufferSize(
             configure.sampleRate,
@@ -307,28 +325,32 @@ class Audio {
                 }
             }
 
-            recorder = Thread {
-                while (isRunning) {
-                    try {
-                        val buf = ByteBuffer.allocateDirect(minBufferSize)
-                        val size = record.read(buf, buf.capacity(), AudioRecord.READ_BLOCKING)
-                        if (size > 0) {
-                            val index = codec.dequeueInputBuffer(-1)
-                            if (index >= 0) {
-                                codec.getInputBuffer(index)?.put(buf)
-                                codec.queueInputBuffer(
-                                    index,
-                                    0,
-                                    size,
-                                    System.nanoTime() / 1000,
-                                    0
-                                )
+            if (record != null) {
+                recorder = Thread {
+                    while (isRunning) {
+                        try {
+                            val buf = ByteBuffer.allocateDirect(minBufferSize)
+                            val size = record.read(buf, buf.capacity(), AudioRecord.READ_BLOCKING)
+                            if (size > 0) {
+                                val index = codec.dequeueInputBuffer(-1)
+                                if (index >= 0) {
+                                    codec.getInputBuffer(index)?.put(buf)
+                                    codec.queueInputBuffer(index, 0, size, 0, 0)
+                                }
                             }
+                        } catch (_: Exception) {
+                            release()
                         }
-                    } catch (_: Exception) {
-                        release()
                     }
                 }
+            }
+        }
+
+        fun sink(buf: ByteArray) {
+            val index = codec.dequeueInputBuffer(-1)
+            if (index >= 0) {
+                codec.getInputBuffer(index)?.put(buf)
+                codec.queueInputBuffer(index, 0, buf.size, 0, 0)
             }
         }
 
@@ -338,8 +360,8 @@ class Audio {
 
                 codec.start()
                 worker.start()
-                recorder.start()
-                record.startRecording()
+                recorder?.start()
+                record?.startRecording()
             }
         }
 
@@ -347,7 +369,7 @@ class Audio {
             if (isRunning) {
                 isRunning = false
 
-                record.stop()
+                record?.stop()
                 codec.flush()
                 codec.stop()
                 codec.release()

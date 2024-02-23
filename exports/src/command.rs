@@ -50,7 +50,7 @@ where
     match func(env) {
         Ok(ret) => Some(ret),
         Err(e) => {
-            env.throw_new("java/lang/Exception", e.to_string()).unwrap();
+            log::error!("java runtime exception, err={:?}", e);
             None
         }
     }

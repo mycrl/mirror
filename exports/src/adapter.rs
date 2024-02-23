@@ -95,7 +95,7 @@ impl AndroidStreamReceiverAdapterFactory {
             let ret = env.call_method(
                 self.callback.as_obj(),
                 "connect",
-                "(ILjava/lang/String;[B)Lmirror/java/ReceiverAdapter;",
+                "(ILjava/lang/String;[B)Lcom/github/mycrl/mirror/ReceiverAdapter;",
                 &[
                     JValue::Int(id as i32),
                     JValue::Object(&ip),

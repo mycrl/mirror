@@ -18,20 +18,21 @@ import android.media.AudioFormat
 import android.media.AudioPlaybackCaptureConfiguration
 import android.media.AudioRecord
 import android.media.AudioTrack
+import android.media.MediaCodecInfo
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.os.Binder
 import android.os.IBinder
 import android.view.Surface
-import mirror.java.Audio
-import mirror.java.MirrorAdapterConfigure
-import mirror.java.MirrorReceiver
-import mirror.java.MirrorSender
-import mirror.java.MirrorService
-import mirror.java.MirrorServiceConfigure
-import mirror.java.MirrorServiceObserver
-import mirror.java.ReceiverAdapterWrapper
-import mirror.java.Video
+import com.github.mycrl.mirror.Audio
+import com.github.mycrl.mirror.MirrorAdapterConfigure
+import com.github.mycrl.mirror.MirrorReceiver
+import com.github.mycrl.mirror.MirrorSender
+import com.github.mycrl.mirror.MirrorService
+import com.github.mycrl.mirror.MirrorServiceConfigure
+import com.github.mycrl.mirror.MirrorServiceObserver
+import com.github.mycrl.mirror.ReceiverAdapterWrapper
+import com.github.mycrl.mirror.Video
 
 class ScreenCaptureServiceBinder(private val service: ScreenCaptureService) : Binder() {
     fun startup(intent: Intent) {
@@ -92,6 +93,12 @@ class ScreenCaptureService : Service() {
         mediaProjectionManager =
             getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
         mediaProjection = mediaProjectionManager.getMediaProjection(Activity.RESULT_OK, intent)
+        mediaProjection.registerCallback(object : MediaProjection.Callback() {
+            override fun onStop() {
+                super.onStop()
+            }
+        }, null)
+
         virtualDisplay = mediaProjection.createVirtualDisplay(
             "MirrorVirtualDisplayService",
             2560, 1600, 1,
@@ -102,6 +109,7 @@ class ScreenCaptureService : Service() {
         sender = mirror.createSender(
             0, object : MirrorAdapterConfigure {
                 override val video = object : Video.VideoEncoder.VideoEncoderConfigure {
+                    override val format = MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface
                     override val width = 2560
                     override val height = 1600
                     override val frameRate = 60
@@ -154,9 +162,9 @@ class ScreenCaptureService : Service() {
                 R.mipmap.sym_def_app_icon
             )
         )
-            .setContentTitle("屏幕录制")
+            .setContentTitle("Screen recording")
             .setSmallIcon(R.mipmap.sym_def_app_icon)
-            .setContentText("正在录制屏幕......")
+            .setContentText("Recording screen......")
             .setWhen(System.currentTimeMillis())
         builder.setChannelId("MirrorVirtualDisplayServiceNotificationId")
 
