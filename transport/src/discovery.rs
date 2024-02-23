@@ -93,10 +93,6 @@ impl Discovery {
                     break;
                 }
 
-                if addr.ip() == this.addr.ip() {
-                    continue;
-                }
-
                 log::info!(
                     "Discovery udp socket recv buf, size={}, addr={}",
                     size,
