@@ -30,12 +30,12 @@ jobs:
                 name: Build with Gradle
                 run: |
                     cd sdk/android
-                    ./gradlew mirror:build
+                    ./gradlew :mirror:build
             -
                 name: Publish to GitHub Packages
                 run: |
                     cd sdk/android
-                    ./gradlew mirror:publish
+                    ./gradlew :mirror:publish
                 env:
                     GITHUB_USERNAME: ${{ github.actor }}
                     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
