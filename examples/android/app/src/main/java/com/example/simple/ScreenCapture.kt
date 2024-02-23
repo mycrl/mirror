@@ -23,7 +23,6 @@ import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.os.Binder
 import android.os.IBinder
-import android.util.Log
 import android.view.Surface
 import com.github.mycrl.mirror.Audio
 import com.github.mycrl.mirror.MirrorAdapterConfigure
@@ -81,7 +80,7 @@ class ScreenCaptureService : Service() {
                 }
 
                 override fun released() {
-                    Log.w("app", "=========================== released")
+
                 }
             }
         }
@@ -94,6 +93,12 @@ class ScreenCaptureService : Service() {
         mediaProjectionManager =
             getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
         mediaProjection = mediaProjectionManager.getMediaProjection(Activity.RESULT_OK, intent)
+        mediaProjection.registerCallback(object : MediaProjection.Callback() {
+            override fun onStop() {
+                super.onStop()
+            }
+        }, null)
+
         virtualDisplay = mediaProjection.createVirtualDisplay(
             "MirrorVirtualDisplayService",
             2560, 1600, 1,
@@ -139,51 +144,6 @@ class ScreenCaptureService : Service() {
         )
 
         virtualDisplay.surface = sender?.getSurface()
-        Thread {
-            Thread.sleep(10000)
-            sender?.release()
-            Log.d("app", "==================== release sender")
-
-            Thread.sleep(1000)
-            sender = mirror.createSender(
-                0, object : MirrorAdapterConfigure {
-                    override val video = object : Video.VideoEncoder.VideoEncoderConfigure {
-                        override val format = MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface
-                        override val width = 2560
-                        override val height = 1600
-                        override val frameRate = 60
-                        override val bitRate = 7000 * 1024
-                    }
-
-                    override val audio = object : Audio.AudioEncoder.AudioEncoderConfigure {
-                        override val channels = 1
-                        override val bitRate = 1000 * 10
-                        override val sampleRate = 16000
-                        override val channalConfig = AudioFormat.CHANNEL_IN_MONO
-                        override val sampleBits = AudioFormat.ENCODING_PCM_16BIT
-                    }
-                }, AudioRecord.Builder()
-                    .setAudioFormat(
-                        AudioFormat.Builder().setSampleRate(16000)
-                            .setChannelMask(AudioFormat.CHANNEL_IN_MONO)
-                            .setEncoding(AudioFormat.ENCODING_PCM_16BIT).build()
-                    ).setBufferSizeInBytes(
-                        AudioRecord.getMinBufferSize(
-                            16000,
-                            AudioFormat.CHANNEL_IN_MONO,
-                            AudioFormat.ENCODING_PCM_16BIT
-                        )
-                    )
-                    .setAudioPlaybackCaptureConfig(
-                        AudioPlaybackCaptureConfiguration.Builder(mediaProjection)
-                            .addMatchingUsage(AudioAttributes.USAGE_MEDIA)
-                            .addMatchingUsage(AudioAttributes.USAGE_GAME)
-                            .build()
-                    ).build()
-            )
-
-            virtualDisplay.surface = sender?.getSurface()
-        }.start()
     }
 
     private fun startNotification() {
@@ -202,9 +162,9 @@ class ScreenCaptureService : Service() {
                 R.mipmap.sym_def_app_icon
             )
         )
-            .setContentTitle("屏幕录制")
+            .setContentTitle("Screen recording")
             .setSmallIcon(R.mipmap.sym_def_app_icon)
-            .setContentText("正在录制屏幕......")
+            .setContentText("Recording screen......")
             .setWhen(System.currentTimeMillis())
         builder.setChannelId("MirrorVirtualDisplayServiceNotificationId")
 
