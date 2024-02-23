@@ -14,7 +14,7 @@ dependencyResolutionManagement {
         maven {
             url = uri("https://maven.pkg.github.com/mycrl/mirror")
             credentials {
-                username = System.getenv("GITHUB_USER")
+                username = System.getenv("GITHUB_USERNAME")
                 password = System.getenv("GITHUB_TOKEN")
             }
         }
