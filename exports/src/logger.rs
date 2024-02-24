@@ -55,7 +55,7 @@ impl log::Log for AndroidLogger {
         unsafe {
             __android_log_write(
                 LogLevel::from_level(record.level()) as c_int,
-                "lib.mirror.java\0".as_ptr() as *const _,
+                "com.github.mycrl.mirror\0".as_ptr() as *const _,
                 format!("{}\0", record.args()).as_ptr() as *const _,
             );
         }

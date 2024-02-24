@@ -5,6 +5,7 @@ import android.media.AudioTrack
 import android.media.MediaCodec
 import android.media.MediaCodecInfo
 import android.media.MediaFormat
+import android.util.Log
 import android.view.Surface
 import com.ensarsarajcic.kotlinx.serialization.msgpack.MsgPack
 import kotlinx.serialization.SerialName
@@ -70,7 +71,9 @@ class Video {
 
                             codec.releaseOutputBuffer(index, false)
                         }
-                    } catch (_: Exception) {
+                    } catch (e: Exception) {
+                        Log.e("com.github.mycrl.mirror", "VideoEncoder worker exception", e)
+
                         release()
                     }
                 }
@@ -145,7 +148,6 @@ class Video {
 
             codec = MediaCodec.createDecoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
             codec.configure(format, surface, null, 0)
-            surface.lockHardwareCanvas()
 
             worker = Thread {
                 while (isRunning) {
@@ -154,7 +156,9 @@ class Video {
                         if (index >= 0) {
                             codec.releaseOutputBuffer(index, true)
                         }
-                    } catch (_: Exception) {
+                    } catch (e: Exception) {
+                        Log.e("com.github.mycrl.mirror", "VideoDecoder worker exception", e)
+
                         release()
                     }
                 }
@@ -168,7 +172,9 @@ class Video {
                     codec.getInputBuffer(index)?.put(buf)
                     codec.queueInputBuffer(index, 0, buf.size, 0, 0)
                 }
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                Log.e("com.github.mycrl.mirror", "VideoDecoder sink exception", e)
+
                 release()
             }
         }
@@ -229,7 +235,9 @@ class Audio {
 
                             codec.releaseOutputBuffer(index, false)
                         }
-                    } catch (_: Exception) {
+                    } catch (e: Exception) {
+                        Log.e("com.github.mycrl.mirror", "AudioDecoder worker exception", e)
+
                         release()
                     }
                 }
@@ -319,7 +327,9 @@ class Audio {
 
                             codec.releaseOutputBuffer(index, false)
                         }
-                    } catch (_: Exception) {
+                    } catch (e: Exception) {
+                        Log.e("com.github.mycrl.mirror", "AudioEncoder worker exception", e)
+
                         release()
                     }
                 }
@@ -338,7 +348,9 @@ class Audio {
                                     codec.queueInputBuffer(index, 0, size, 0, 0)
                                 }
                             }
-                        } catch (_: Exception) {
+                        } catch (e: Exception) {
+                            Log.e("com.github.mycrl.mirror", "AudioDecoder record exception", e)
+
                             release()
                         }
                     }

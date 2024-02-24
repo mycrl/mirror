@@ -2,7 +2,9 @@ package com.github.mycrl.mirror
 
 import android.media.AudioRecord
 import android.media.AudioTrack
+import android.util.Log
 import android.view.Surface
+import java.lang.Exception
 
 typealias MirrorServiceConfigure = MirrorOptions;
 
@@ -36,13 +38,13 @@ abstract class MirrorReceiver {
      * layer has been disconnected, perhaps because the sender has been closed or the network is
      * disconnected.
      */
-    abstract fun released();
+    open fun released() {}
 
     /**
      * Called when the receiver is created, this will pass you a wrapper for the underlying adapter,
      * and you can actively release this receiver by calling the release method of the adapter.
      */
-    abstract fun onStart(adapter: ReceiverAdapterWrapper);
+    open fun onStart(adapter: ReceiverAdapterWrapper) {}
 }
 
 abstract class MirrorServiceObserver {
@@ -69,21 +71,21 @@ class MirrorService constructor(
                 ip: String,
                 description: ByteArray
             ): ReceiverAdapter? {
-                val peer = observer.accept(id, ip)
-                return if (peer != null) {
+                val receiver = observer.accept(id, ip)
+                return if (receiver != null) {
                     object : ReceiverAdapter() {
                         private var isReleased: Boolean = false
                         private val codecDescription = CodecDescriptionFactory.decode(description)
                         private val videoDecoder = Video.VideoDecoder(
-                            peer.surface,
+                            receiver.surface,
                             object : Video.VideoDecoder.VideoDecoderConfigure {
                                 override val height = codecDescription.video.height
                                 override val width = codecDescription.video.width
                             })
 
-                        private val audioDecoder = if (peer.track != null) {
+                        private val audioDecoder = if (receiver.track != null) {
                             Audio.AudioDecoder(
-                                peer.track!!,
+                                receiver.track!!,
                                 object : Audio.AudioDecoder.AudioDecoderConfigure {
                                     override val sampleRate = codecDescription.audio.sampleRate
                                     override val channels = codecDescription.audio.channels
@@ -96,38 +98,56 @@ class MirrorService constructor(
                         init {
                             videoDecoder.start()
                             audioDecoder?.start()
-                            peer.onStart(ReceiverAdapterWrapper { -> close() })
+                            receiver.onStart(ReceiverAdapterWrapper { -> close() })
                         }
 
                         override fun sink(kind: Int, buf: ByteArray): Boolean {
-                            if (isReleased) {
+                            try {
+                                if (isReleased) {
+                                    return false
+                                }
+
+                                when (kind) {
+                                    StreamKind.Video -> {
+                                        if (videoDecoder.isRunning) {
+                                            videoDecoder.sink(buf)
+                                        }
+                                    }
+
+                                    StreamKind.Audio -> {
+                                        if (audioDecoder != null && audioDecoder.isRunning) {
+                                            audioDecoder.sink(buf)
+                                        }
+                                    }
+                                }
+
+                                receiver.sink(buf, kind)
+                                return true
+                            } catch (e: Exception) {
+                                Log.e(
+                                    "com.github.mycrl.mirror",
+                                    "Mirror ReceiverAdapter sink exception",
+                                    e
+                                )
+
                                 return false
                             }
-
-                            when (kind) {
-                                StreamKind.Video -> {
-                                    if (videoDecoder.isRunning) {
-                                        videoDecoder.sink(buf)
-                                    }
-                                }
-
-                                StreamKind.Audio -> {
-                                    if (audioDecoder != null && audioDecoder.isRunning) {
-                                        audioDecoder.sink(buf)
-                                    }
-                                }
-                            }
-
-                            peer.sink(buf, kind)
-                            return true
                         }
 
                         override fun close() {
-                            if (!isReleased) {
-                                isReleased = true
-                                audioDecoder?.release()
-                                videoDecoder.release()
-                                peer.released()
+                            try {
+                                if (!isReleased) {
+                                    isReleased = true
+                                    audioDecoder?.release()
+                                    videoDecoder.release()
+                                    receiver.released()
+                                }
+                            } catch (e: Exception) {
+                                Log.e(
+                                    "com.github.mycrl.mirror",
+                                    "Mirror ReceiverAdapter close exception",
+                                    e
+                                )
                             }
                         }
                     }
