@@ -97,6 +97,7 @@ class Video {
                 isRunning = true
 
                 codec.start()
+                codec.flush()
                 worker.start()
             }
         }
@@ -184,6 +185,7 @@ class Video {
                 isRunning = true
 
                 codec.start()
+                codec.flush()
                 worker.start()
             }
         }
@@ -257,6 +259,7 @@ class Audio {
                 isRunning = true
 
                 codec.start()
+                codec.flush()
                 worker.start()
                 track.play()
             }
@@ -371,6 +374,7 @@ class Audio {
                 isRunning = true
 
                 codec.start()
+                codec.flush()
                 worker.start()
                 recorder?.start()
                 record?.startRecording()
