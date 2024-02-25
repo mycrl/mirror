@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use std::ffi::{c_char, c_int};
 
 #[repr(C)]
@@ -22,6 +24,7 @@ impl LogLevel {
     }
 }
 
+#[cfg(target_os = "android")]
 extern "C" {
     // __android_log_write
     //
@@ -51,7 +54,9 @@ impl log::Log for AndroidLogger {
         metadata.level() == log::LevelFilter::Info
     }
 
+    #[allow(unused_variables)]
     fn log(&self, record: &log::Record) {
+        #[cfg(target_os = "android")]
         unsafe {
             __android_log_write(
                 LogLevel::from_level(record.level()) as c_int,

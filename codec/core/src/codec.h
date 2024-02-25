@@ -15,14 +15,18 @@
 #define EXPORT
 #endif
 
-#include <cstdint>
-
-extern "C"
-{
+#include <stdbool.h>
+#include <stdint.h>
 #include <libavcodec/avcodec.h>
-}
 
-struct VideoEncoderSettings
+typedef struct
+{
+    uint8_t* buffer;
+    size_t len;
+    int flags;
+} VideoEncodePacket;
+
+typedef struct
 {
     const char* codec_name;
     uint8_t max_b_frames;
@@ -31,40 +35,31 @@ struct VideoEncoderSettings
     uint32_t height;
     uint64_t bit_rate;
     uint32_t key_frame_interval;
-};
+} VideoEncoderSettings;
 
-struct VideoEncoder
+typedef struct
 {
     const AVCodec* codec;
     AVCodecContext* context;
     AVPacket* packet;
     AVFrame* frame;
     uint64_t frame_num;
-};
+    VideoEncodePacket* output_packet;
+} VideoEncoder;
 
-struct VideoFrame
+typedef struct
 {
     bool key_frame;
     uint8_t* buffer;
     size_t len;
     uint32_t stride_y;
     uint32_t stride_uv;
-};
+} VideoFrame;
 
-struct VideoEncodePacket
-{
-    uint8_t* buffer;
-    size_t len;
-    int flags;
-};
-
-extern "C"
-{
-EXPORT struct VideoEncoder* create_video_encoder(struct VideoEncoderSettings* settings);
-EXPORT int video_encoder_send_frame(struct VideoEncoder* codec, VideoFrame frame);
-EXPORT struct VideoEncodePacket* video_encoder_read_packet(struct VideoEncoder* codec);
-EXPORT void release_video_encoder_packet(struct VideoEncoder* codec);
-EXPORT void release_video_encoder(struct VideoEncoder* codec);
-}
+EXPORT VideoEncoder* create_video_encoder(VideoEncoderSettings* settings);
+EXPORT int video_encoder_send_frame(VideoEncoder* codec, VideoFrame* frame);
+EXPORT VideoEncodePacket* video_encoder_read_packet(VideoEncoder* codec);
+EXPORT void release_video_encoder_packet(VideoEncoder* codec);
+EXPORT void release_video_encoder(VideoEncoder* codec);
 
 #endif /* codec_h */

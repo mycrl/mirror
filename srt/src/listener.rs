@@ -279,11 +279,17 @@ extern "C" fn listener_fn(
     peeraddr: *const sockaddr,
     _streamid: *const c_char,
 ) {
+    #[cfg(not(target_os = "windows"))]
+    use libc::sockaddr_in;
+
+    #[cfg(target_os = "windows")]
+    let size = size_of::<sockaddr>() as i32;
+
+    #[cfg(not(target_os = "windows"))]
+    let size = size_of::<sockaddr_in>() as u32;
+
     let tx = unsafe { &*(opaque as *mut UnboundedSender<(SRTSOCKET, SocketAddr)>) };
-    if let Some(addr) =
-        unsafe { OsSocketAddr::copy_from_raw(peeraddr as *const _, size_of::<sockaddr>() as i32) }
-            .into()
-    {
+    if let Some(addr) = unsafe { OsSocketAddr::copy_from_raw(peeraddr as *const _, size) }.into() {
         tx.send((s, addr)).expect("Attempting to notify the listener that a new connection has come fails, this is a bug.")
     }
 }
