@@ -125,13 +125,13 @@ class Mirror constructor(
         )
     }
 
-    fun createReceiver(port: Int, adapter: ReceiverAdapter): ReceiverAdapterWrapper {
+    fun createReceiver(addr: String, adapter: ReceiverAdapter): ReceiverAdapterWrapper {
         val receiver = createStreamReceiverAdapter(adapter)
         if (receiver == 0L) {
             throw Exception("failed to create receiver adapter!")
         }
 
-        if (!createReceiver(mirror, port, receiver)) {
+        if (!createReceiver(mirror, addr, receiver)) {
             throw Exception("failed to create mirror receiver adapter!")
         }
 
@@ -187,7 +187,7 @@ class Mirror constructor(
 
     private external fun createReceiver(
         mirror: Long,
-        port: Int,
+        addr: String,
         adapter: Long
     ): Boolean
 }

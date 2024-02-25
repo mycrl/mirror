@@ -205,11 +205,12 @@ class MirrorService constructor(
      * `port` The port number from the created sender.
      */
     fun createReceiver(
+        ip: String,
         port: Int,
         configure: MirrorAdapterConfigure,
         observer: MirrorReceiver
     ): ReceiverAdapterWrapper {
-        return mirror.createReceiver(port, object : ReceiverAdapter() {
+        return mirror.createReceiver("$ip:$port", object : ReceiverAdapter() {
             private var isReleased: Boolean = false
             private val videoDecoder = Video.VideoDecoder(
                 observer.surface,

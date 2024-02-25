@@ -8,7 +8,7 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use codec::video::VideoStreamSenderProcesser;
 use tokio::sync::{
-    broadcast::{channel, Receiver, Sender},
+    mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
     Mutex,
 };
 
@@ -60,13 +60,13 @@ pub trait ReceiverAdapterFactory: Send + Sync {
 
 pub struct StreamSenderAdapter {
     video: VideoStreamSenderProcesser,
-    tx: Sender<Option<(Bytes, StreamKind)>>,
-    rx: Mutex<Receiver<Option<(Bytes, StreamKind)>>>,
+    tx: UnboundedSender<Option<(Bytes, StreamKind)>>,
+    rx: Mutex<UnboundedReceiver<Option<(Bytes, StreamKind)>>>,
 }
 
 impl StreamSenderAdapter {
     pub fn new() -> Arc<Self> {
-        let (tx, rx) = channel(10);
+        let (tx, rx) = unbounded_channel();
         Arc::new(Self {
             video: VideoStreamSenderProcesser::new(),
             rx: Mutex::new(rx),
@@ -97,7 +97,7 @@ impl StreamSenderAdapter {
     }
 
     pub async fn next(&self) -> Option<(Bytes, StreamKind)> {
-        self.rx.lock().await.recv().await.ok()?
+        self.rx.lock().await.recv().await.flatten()
     }
 
     pub fn get_config(&self) -> Vec<(&[u8], StreamKind)> {
@@ -116,13 +116,13 @@ impl StreamSenderAdapter {
 }
 
 pub struct StreamReceiverAdapter {
-    tx: Sender<Option<(Bytes, StreamKind)>>,
-    rx: Mutex<Receiver<Option<(Bytes, StreamKind)>>>,
+    tx: UnboundedSender<Option<(Bytes, StreamKind)>>,
+    rx: Mutex<UnboundedReceiver<Option<(Bytes, StreamKind)>>>,
 }
 
 impl StreamReceiverAdapter {
     pub fn new() -> Arc<Self> {
-        let (tx, rx) = channel(10);
+        let (tx, rx) = unbounded_channel();
         Arc::new(Self {
             rx: Mutex::new(rx),
             tx,
@@ -136,7 +136,7 @@ impl StreamReceiverAdapter {
     }
 
     pub async fn next(&self) -> Option<(Bytes, StreamKind)> {
-        self.rx.lock().await.recv().await.ok()?
+        self.rx.lock().await.recv().await.unwrap()
     }
 
     pub fn send(&self, buf: Bytes, kind: StreamKind) -> bool {
