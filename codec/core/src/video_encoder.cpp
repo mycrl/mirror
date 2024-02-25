@@ -172,7 +172,7 @@ struct VideoEncodePacket* video_encoder_read_packet(struct VideoEncoder* codec)
     return bytes;
 }
 
-void release_video_encode_packet(struct VideoEncoder* codec, struct VideoEncodePacket* packet)
+void release_video_encoder_packet(struct VideoEncoder* codec, struct VideoEncodePacket* packet)
 {
     av_packet_unref(codec->packet);
     

@@ -1,5 +1,6 @@
 use std::{
     net::{IpAddr, SocketAddr},
+    process::Stdio,
     sync::{Arc, Weak},
     time::Duration,
 };
@@ -11,7 +12,8 @@ use srt::SrtOptions;
 use tokio::{io::AsyncWriteExt, process::Command, time::sleep};
 use transport::{
     adapter::{
-        ReceiverAdapterFactory, StreamBufferInfo, StreamReceiverAdapter, StreamSenderAdapter,
+        ReceiverAdapterFactory, StreamBufferInfo, StreamKind, StreamReceiverAdapter,
+        StreamSenderAdapter,
     },
     Transport, TransportOptions,
 };
@@ -26,21 +28,36 @@ impl ReceiverAdapterFactory for SimpleReceiverAdapterFactory {
         _ip: IpAddr,
         _description: &[u8],
     ) -> Option<Weak<StreamReceiverAdapter>> {
-        let child = Command::new("ffplay")
-            .args(&["-i", "pipe:0"])
-            .spawn()
-            .ok()?;
-
         let adapter = StreamReceiverAdapter::new();
         let adapter_ = Arc::downgrade(&adapter);
         tokio::spawn(async move {
+            let child = Command::new("ffplay")
+                .args(&[
+                    "-vcodec",
+                    "h264",
+                    "-fflags",
+                    "nobuffer",
+                    "-flags",
+                    "low_delay",
+                    "-framedrop",
+                    "-i",
+                    "pipe:0",
+                ])
+                .stdin(Stdio::piped())
+                .spawn()?;
+
             if let Some(mut stdin) = child.stdin {
-                while let Some((buf, _kind)) = adapter.next().await {
-                    if stdin.write_all(&buf).await.is_err() {
-                        break;
+                while let Some((buf, kind)) = adapter.next().await {
+                    if kind == StreamKind::Video {
+                        if let Err(e) = stdin.write_all(&buf).await {
+                            println!("{:?}", e);
+                            break;
+                        }
                     }
                 }
             }
+
+            Ok::<(), anyhow::Error>(())
         });
 
         Some(adapter_)
