@@ -5,125 +5,277 @@ import android.app.Activity
 import android.content.ComponentName
 import android.content.Intent
 import android.content.ServiceConnection
-import android.graphics.Color
 import android.media.projection.MediaProjectionManager
 import android.os.Bundle
 import android.os.IBinder
-import android.view.Gravity
+import android.util.Log
+import android.view.Surface
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 import android.view.View
-import android.widget.Button
-import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 
-class MainActivity : ComponentActivity() {
-    private var screenCaptureService: Intent? = null
-    private var screenCaptureServiceBinder: ScreenCaptureServiceBinder? = null
-    private lateinit var surfaceView: SurfaceView
-    private lateinit var button: Button
-    private var permissionLauncherData: Intent? = null
+open class Layout : ComponentActivity() {
+    private var surfaceView: SurfaceView? = null
+    private var clickStartHandler: (() -> Unit)? = null
+    private var buttonAlign by mutableStateOf(Alignment.Center)
+    private var buttonText by mutableStateOf("Start")
+    private var state: Int = State.New
 
-    private val connection: ServiceConnection = object : ServiceConnection {
-        override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
-            screenCaptureServiceBinder = service as ScreenCaptureServiceBinder
-            screenCaptureServiceBinder?.setRenderSurface(surfaceView.holder.surface)
+    class State {
+        companion object {
+            const val New = 0;
+            const val Started = 1;
+            const val Receiving = 2;
         }
-
-        override fun onServiceDisconnected(name: ComponentName?) {
-
-        }
-    }
-
-    override fun onRequestPermissionsResult(
-        requestCode: Int,
-        permissions: Array<out String>,
-        grantResults: IntArray
-    ) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        screenCaptureServiceBinder?.startup(permissionLauncherData!!)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        setContent {
+            CreateLayout()
+        }
+    }
 
-        val intent = Intent(this, ScreenCaptureService::class.java)
-        bindService(intent, connection, BIND_AUTO_CREATE)
-        screenCaptureService = intent
+    fun layoutGetSurface(): Surface? {
+        return surfaceView?.holder?.surface
+    }
 
-        val mediaProjectionManager =
-            getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-        val permissionLauncher =
-            registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-                if (result.resultCode == Activity.RESULT_OK) {
-                    val data: Intent? = result.data
-                    if (data != null) {
-                        permissionLauncherData = data
-                        if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                            requestPermissions(
-                                arrayOf(Manifest.permission.RECORD_AUDIO),
-                                123
-                            )
-                        } else {
-                            screenCaptureServiceBinder?.startup(permissionLauncherData!!)
-                        }
+    fun layoutGetState(): Int {
+        return state
+    }
+
+    fun layoutRegisterClickStart(handler: () -> Unit) {
+        clickStartHandler = handler
+    }
+
+    fun layoutChangeReceived() {
+        state = State.Receiving
+        buttonText = "Receiving... Stop"
+        buttonAlign = Alignment.BottomStart
+
+        runOnUiThread {
+            surfaceView?.let { view ->
+                view.visibility = View.VISIBLE
+            }
+        }
+    }
+
+    fun layoutChangeStarted() {
+        state = State.Started
+        buttonText = "Working... Stop"
+        buttonAlign = Alignment.Center
+
+        runOnUiThread {
+            surfaceView?.let { view ->
+                view.visibility = View.INVISIBLE
+            }
+        }
+    }
+
+    fun layoutChangeReset() {
+        state = State.New
+        buttonText = "Start"
+        buttonAlign = Alignment.Center
+
+        runOnUiThread {
+            surfaceView?.let { view ->
+                view.visibility = View.INVISIBLE
+            }
+        }
+    }
+
+    @Composable
+    private fun CreateLayout() {
+        Surface(color = Color.Black) {
+            AndroidView(
+                factory = { ctx ->
+                    val view = SurfaceView(ctx).apply {
+                        holder.addCallback(object : SurfaceHolder.Callback {
+                            override fun surfaceCreated(holder: SurfaceHolder) {
+                                Log.i("simple", "create preview surface view.")
+                            }
+
+                            override fun surfaceChanged(
+                                holder: SurfaceHolder,
+                                format: Int,
+                                width: Int,
+                                height: Int
+                            ) {
+                                Log.i("simple", "preview surface view changed.")
+                            }
+
+                            override fun surfaceDestroyed(holder: SurfaceHolder) {
+                                Log.i("simple", "preview surface view destroyed.")
+                            }
+                        })
                     }
-                } else {
-                    // panic!
+
+                    view.visibility = View.INVISIBLE
+                    surfaceView = view
+                    view
+                },
+                modifier = Modifier
+                    .fillMaxSize(),
+            )
+
+            Box(modifier = Modifier.fillMaxSize()) {
+                Button(
+                    onClick = {
+                        clickStartHandler?.let { it() }
+                    },
+                    modifier = Modifier
+                        .padding(20.dp)
+                        .align(buttonAlign),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text(
+                        text = buttonText,
+                        color = Color.White,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
+        }
+    }
+}
 
-        surfaceView = SurfaceView(this)
-        button = Button(this)
+open class Permissions : Layout() {
+    private var callback: ((Intent?) -> Unit)? = null
+    private var captureScreenIntent: Intent? = null
+    private val captureScreenPermission =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode == Activity.RESULT_OK && result.data != null) {
+                Log.i("simple", "request screen capture permission done.")
 
-        button.text = "Start"
-        button.setBackgroundColor(Color.BLUE)
-        button.setTextColor(Color.WHITE)
+                captureScreenIntent = result.data
+                captureAudioPermission.launch(Manifest.permission.RECORD_AUDIO)
+            } else {
+                Log.e("simple", "failed to request screen capture permission.")
 
-        val buttonLayoutParams = FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.WRAP_CONTENT,
-            FrameLayout.LayoutParams.WRAP_CONTENT
-        )
-
-        buttonLayoutParams.gravity = Gravity.CENTER
-        button.layoutParams = buttonLayoutParams
-
-        val projectionIntent = mediaProjectionManager.createScreenCaptureIntent()
-        button.setOnClickListener {
-            projectionIntent.let {
-                permissionLauncher.launch(it)
+                callback?.let { it(null) }
             }
         }
 
-        surfaceView.holder.addCallback(object : SurfaceHolder.Callback {
-            override fun surfaceCreated(holder: SurfaceHolder) {
+    private val captureAudioPermission =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
+            callback?.let {
+                it(
+                    if (isGranted) {
+                        Log.i("simple", "request audio capture permission done.")
 
+                        captureScreenIntent
+                    } else {
+                        Log.e("simple", "failed request audio capture permission.")
+
+                        null
+                    }
+                )
+            }
+        }
+
+    fun requestPermissions() {
+        captureScreenPermission.launch(
+            (getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager).createScreenCaptureIntent()
+        )
+    }
+
+    fun registerPermissionsHandler(handler: (Intent?) -> Unit) {
+        callback = handler
+    }
+}
+
+class MainActivity : Permissions() {
+    private var simpleMirrorService: Intent? = null
+    private var simpleMirrorServiceBinder: SimpleMirrorServiceBinder? = null
+    private val connection: ServiceConnection = object : ServiceConnection {
+        override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
+            Log.i("simple", "service connected.")
+
+            simpleMirrorServiceBinder = service as SimpleMirrorServiceBinder
+            simpleMirrorServiceBinder?.registerReceivedHandler { id, ip ->
+                Log.i("simple", "start receiving sender stream. id=${id}, ip=${ip}")
+
+                layoutChangeReceived()
             }
 
-            override fun surfaceChanged(
-                holder: SurfaceHolder,
-                format: Int,
-                width: Int,
-                height: Int
-            ) {
+            simpleMirrorServiceBinder?.registerReceivedReleaseHandler { id, ip ->
+                Log.i("simple", "receiver is released. id=${id}, ip=${ip}")
 
+                layoutChangeReset()
             }
 
-            override fun surfaceDestroyed(holder: SurfaceHolder) {
-
+            layoutGetSurface()?.let { surface ->
+                simpleMirrorServiceBinder?.setRenderSurface(surface)
             }
-        })
+        }
 
-        val frameLayout = FrameLayout(this)
-        frameLayout.setBackgroundColor(Color.BLACK)
-        frameLayout.addView(surfaceView)
-        frameLayout.addView(button)
-        setContentView(frameLayout)
+        override fun onServiceDisconnected(name: ComponentName?) {
+            Log.w("simple", "service disconnected.")
+        }
+    }
+
+    init {
+        registerPermissionsHandler { intent ->
+            if (intent != null) {
+                simpleMirrorServiceBinder?.startup(intent, resources.displayMetrics)
+                layoutChangeStarted()
+            }
+        }
+
+        layoutRegisterClickStart {
+            val state = layoutGetState()
+            Log.i("simple", "click start button. state=${state}")
+
+            if (state == State.New) {
+                requestPermissions()
+            } else {
+                layoutChangeReset()
+                when (state) {
+                    State.Receiving -> simpleMirrorServiceBinder?.stopReceiver()
+                    State.Started -> simpleMirrorServiceBinder?.stopSender()
+                }
+            }
+        }
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        simpleMirrorService = startSimpleMirrorService()
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        stopService(screenCaptureService)
+        stopService(simpleMirrorService)
+    }
+
+    private fun startSimpleMirrorService(): Intent {
+        val intent = Intent(this, SimpleMirrorService::class.java)
+        bindService(intent, connection, BIND_AUTO_CREATE)
+
+        Log.i("simple", "start simple mirror service.")
+
+        return intent
     }
 }

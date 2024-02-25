@@ -147,7 +147,11 @@ impl ReceiverAdapterFactory for AndroidStreamReceiverAdapterFactory {
                 if let Some((buf, kind)) = stream_adapter.next().await {
                     if adapter.sink(buf, kind) {
                         continue;
+                    } else {
+                        log::warn!("receiver adapter sink return false.")
                     }
+                } else {
+                    log::warn!("receiver adapter next is none.")
                 }
 
                 adapter.close();

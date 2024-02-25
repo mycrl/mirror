@@ -35,8 +35,20 @@ fn universal_build() -> Result<()> {
     let out_dir = env::var("OUT_DIR")?;
     let srt_dir = join(&out_dir, "srt");
 
-    println!("cargo:rustc-link-lib=srt");
-    println!("cargo:rustc-link-search=all={}", srt_dir);
+    #[cfg(target_os = "windows")]
+    {
+        println!(
+            "cargo:rustc-link-search=all={}",
+            join(&srt_dir, "./Release")
+        );
+        println!("cargo:rustc-link-lib=srt_static");
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        println!("cargo:rustc-link-search=all={}", srt_dir);
+        println!("cargo:rustc-link-lib=srt");
+    }
 
     #[cfg(target_os = "macos")]
     println!("cargo:rustc-link-lib=c++");
@@ -84,16 +96,17 @@ fn universal_build() -> Result<()> {
     } else {
         if !is_exsit(&join(
             &srt_dir,
-            if cfg!(target_os = "windows") {
-                "srt_static.lib"
+            if cfg!(windows) {
+                "./Release/srt_static.lib"
             } else {
                 "libsrt.a"
             },
         )) {
             exec(
                 &format!(
-                    "cmake {} . && cmake --build .",
+                    "cmake {} . && cmake --build . --config Release",
                     [
+                        "-DCMAKE_BUILD_TYPE=Release",
                         "-DENABLE_APPS=false",
                         "-DENABLE_BONDING=true",
                         "-DENABLE_CODE_COVERAGE=false",

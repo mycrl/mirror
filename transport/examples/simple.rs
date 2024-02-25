@@ -1,5 +1,6 @@
 use std::{
     net::{IpAddr, SocketAddr},
+    process::Stdio,
     sync::{Arc, Weak},
     time::Duration,
 };
@@ -8,10 +9,11 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use clap::Parser;
 use srt::SrtOptions;
-use tokio::time::sleep;
+use tokio::{io::AsyncWriteExt, process::Command, time::sleep};
 use transport::{
     adapter::{
-        ReceiverAdapterFactory, StreamBufferInfo, StreamReceiverAdapter, StreamSenderAdapter,
+        ReceiverAdapterFactory, StreamBufferInfo, StreamKind, StreamReceiverAdapter,
+        StreamSenderAdapter,
     },
     Transport, TransportOptions,
 };
@@ -29,9 +31,33 @@ impl ReceiverAdapterFactory for SimpleReceiverAdapterFactory {
         let adapter = StreamReceiverAdapter::new();
         let adapter_ = Arc::downgrade(&adapter);
         tokio::spawn(async move {
-            while let Some((buf, _kind)) = adapter.next().await {
-                println!("{}", buf.as_ref().len())
+            let child = Command::new("ffplay")
+                .args(&[
+                    "-vcodec",
+                    "h264",
+                    "-fflags",
+                    "nobuffer",
+                    "-flags",
+                    "low_delay",
+                    "-framedrop",
+                    "-i",
+                    "pipe:0",
+                ])
+                .stdin(Stdio::piped())
+                .spawn()?;
+
+            if let Some(mut stdin) = child.stdin {
+                while let Some((buf, kind)) = adapter.next().await {
+                    if kind == StreamKind::Video {
+                        if let Err(e) = stdin.write_all(&buf).await {
+                            println!("{:?}", e);
+                            break;
+                        }
+                    }
+                }
             }
+
+            Ok::<(), anyhow::Error>(())
         });
 
         Some(adapter_)

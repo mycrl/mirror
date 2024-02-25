@@ -1,4 +1,4 @@
-name: Gradle Package
+name: Publish gradle package to GitHub Packages
 on:
     push:
         tags:
@@ -25,19 +25,17 @@ jobs:
                 run: rustup target add aarch64-linux-android
             -
                 name: Setup Gradle
-                uses: >-
-                    gradle/actions/setup-gradle@417ae3ccd767c252f5661f1ace9f835f9654f2b5
+                uses: gradle/actions/setup-gradle@417ae3ccd767c252f5661f1ace9f835f9654f2b5
             -
                 name: Build with Gradle
                 run: |
                     cd sdk/android
-                    ./gradlew mirror:build
+                    ./gradlew :mirror:build
             -
                 name: Publish to GitHub Packages
                 run: |
                     cd sdk/android
-                    ./gradlew mirror:publish
+                    ./gradlew :mirror:publish
                 env:
-                    USERNAME: '${{ github.actor }}'
-                    TOKEN: '${{ secrets.GITHUB_TOKEN }}'
-                    RELEASE_VERSION: '${{ github.ref_name }}'
+                    GITHUB_USERNAME: ${{ github.actor }}
+                    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

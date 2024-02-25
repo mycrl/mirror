@@ -47,7 +47,7 @@ mod api {
         pub fn create_video_encoder(settings: *const VideoEncoderSettings) -> VideoEncoder;
         pub fn video_encoder_send_frame(codec: VideoEncoder, frame: VideoFrame) -> c_int;
         pub fn video_encoder_read_packet(codec: VideoEncoder) -> *const VideoEncodePacket;
-        pub fn release_video_encode_packet(codec: VideoEncoder, packet: *const VideoEncodePacket);
+        pub fn release_video_encoder_packet(codec: VideoEncoder, packet: *const VideoEncodePacket);
         pub fn release_video_encoder(codec: VideoEncoder);
     }
 }

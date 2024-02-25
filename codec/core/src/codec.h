@@ -63,7 +63,7 @@ extern "C"
 EXPORT struct VideoEncoder* create_video_encoder(struct VideoEncoderSettings* settings);
 EXPORT int video_encoder_send_frame(struct VideoEncoder* codec, VideoFrame frame);
 EXPORT struct VideoEncodePacket* video_encoder_read_packet(struct VideoEncoder* codec);
-EXPORT void release_video_encode_packet(struct VideoEncoder* codec);
+EXPORT void release_video_encoder_packet(struct VideoEncoder* codec);
 EXPORT void release_video_encoder(struct VideoEncoder* codec);
 }
 

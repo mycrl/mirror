@@ -285,15 +285,14 @@ impl Transport {
 
     pub async fn create_receiver(
         &self,
-        port: u16,
+        addr: SocketAddr,
         adapter: &Arc<StreamReceiverAdapter>,
     ) -> Result<(), TransportError> {
-        let addr = SocketAddr::new(self.options.bind.ip(), port);
         let socket = Socket::connect(addr, self.options.srt.clone()).await?;
         log::info!(
             "connected to remote service, ip={}, port={}",
             addr.ip(),
-            port
+            addr.port(),
         );
 
         let adapter = Arc::downgrade(adapter);
@@ -322,7 +321,7 @@ impl Transport {
                 }
             }
 
-            log::warn!("socket is closed, ip={}, port={}", addr.ip(), port);
+            log::warn!("socket is closed, ip={}, port={}", addr.ip(), addr.port());
 
             if let Some(discovery) = discovery.upgrade() {
                 discovery.remove(&addr).await;

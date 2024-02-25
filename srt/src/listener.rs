@@ -5,7 +5,7 @@ use std::{
     os::raw::c_void,
 };
 
-use libc::{sockaddr, sockaddr_in};
+use libc::sockaddr;
 use os_socketaddr::OsSocketAddr;
 use tokio::{
     runtime::Handle,
@@ -281,7 +281,8 @@ extern "C" fn listener_fn(
 ) {
     let tx = unsafe { &*(opaque as *mut UnboundedSender<(SRTSOCKET, SocketAddr)>) };
     if let Some(addr) =
-        unsafe { OsSocketAddr::copy_from_raw(peeraddr, size_of::<sockaddr_in>() as u32) }.into()
+        unsafe { OsSocketAddr::copy_from_raw(peeraddr as *const _, size_of::<sockaddr>() as i32) }
+            .into()
     {
         tx.send((s, addr)).expect("Attempting to notify the listener that a new connection has come fails, this is a bug.")
     }

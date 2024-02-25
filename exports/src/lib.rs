@@ -7,7 +7,7 @@ use std::{ffi::c_void, ptr::null_mut, sync::Arc};
 use adapter::{AndroidStreamReceiverAdapter, AndroidStreamReceiverAdapterFactory};
 use command::{catcher, copy_from_byte_array, get_runtime, ENV, RUNTIME};
 use jni::{
-    objects::{JByteArray, JClass, JObject},
+    objects::{JByteArray, JClass, JObject, JString},
     sys::JNI_VERSION_1_6,
     JNIEnv, JavaVM,
 };
@@ -608,20 +608,22 @@ impl Mirror {
     ///  */
     /// private external fun createReceiver(
     ///     mirror: Long,
-    ///     port: Int,
+    ///     addr: String,
     ///     adapter: Long
     /// ): Boolean
     pub fn create_receiver(
         mut env: JNIEnv,
         _this: JClass,
         mirror: *const Transport,
-        port: i32,
+        addr: JString,
         adapter: *const Arc<StreamReceiverAdapter>,
     ) -> i32 {
-        catcher(&mut env, |_| {
+        catcher(&mut env, |env| {
+            let addr: String = env.get_string(&addr)?.into();
+            let addr = addr.parse()?;
             Ok(get_runtime()?.block_on(async move {
                 unsafe { &*mirror }
-                    .create_receiver(port as u16, unsafe { &*adapter })
+                    .create_receiver(addr, unsafe { &*adapter })
                     .await
                     .is_ok()
             }))

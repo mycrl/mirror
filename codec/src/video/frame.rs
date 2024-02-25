@@ -1,6 +1,6 @@
 use crate::{
     api::{
-        create_video_encoder, release_video_encode_packet, release_video_encoder,
+        create_video_encoder, release_video_encoder_packet, release_video_encoder,
         video_encoder_read_packet, video_encoder_send_frame,
     },
     free_cstring, to_c_str,
@@ -59,7 +59,7 @@ pub struct VideoEncodePacket<'a> {
 
 impl Drop for VideoEncodePacket<'_> {
     fn drop(&mut self) {
-        unsafe { release_video_encode_packet(self.codec, self.ptr) }
+        unsafe { release_video_encoder_packet(self.codec, self.ptr) }
     }
 }
 
