@@ -8,7 +8,7 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use clap::Parser;
 use srt::SrtOptions;
-use tokio::time::sleep;
+use tokio::{io::AsyncWriteExt, process::Command, time::sleep};
 use transport::{
     adapter::{
         ReceiverAdapterFactory, StreamBufferInfo, StreamReceiverAdapter, StreamSenderAdapter,
@@ -26,11 +26,20 @@ impl ReceiverAdapterFactory for SimpleReceiverAdapterFactory {
         _ip: IpAddr,
         _description: &[u8],
     ) -> Option<Weak<StreamReceiverAdapter>> {
+        let child = Command::new("ffplay")
+            .args(&["-i", "pipe:0"])
+            .spawn()
+            .ok()?;
+
         let adapter = StreamReceiverAdapter::new();
         let adapter_ = Arc::downgrade(&adapter);
         tokio::spawn(async move {
-            while let Some((buf, _kind)) = adapter.next().await {
-                println!("{}", buf.as_ref().len())
+            if let Some(mut stdin) = child.stdin {
+                while let Some((buf, _kind)) = adapter.next().await {
+                    if stdin.write_all(&buf).await.is_err() {
+                        break;
+                    }
+                }
             }
         });
 

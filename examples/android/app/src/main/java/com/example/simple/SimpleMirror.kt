@@ -23,6 +23,7 @@ import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.os.Binder
 import android.os.IBinder
+import android.util.DisplayMetrics
 import android.util.Log
 import android.view.Surface
 import com.github.mycrl.mirror.Audio
@@ -38,8 +39,8 @@ import com.github.mycrl.mirror.Video
 class Notify(service: SimpleMirrorService) {
     companion object {
         private const val NotifyId = 100
-        private const val NotifyChannelId = "MirrorVirtualDisplayServiceNotificationId"
-        private const val NotifyChannelName = "MirrorVirtualDisplayServiceNotificationName"
+        private const val NotifyChannelId = "SimpleMirror"
+        private const val NotifyChannelName = "SimpleMirror"
     }
 
     init {
@@ -53,21 +54,17 @@ class Notify(service: SimpleMirrorService) {
         )
 
         val intent = Intent(service, MainActivity::class.java)
+        val icon = BitmapFactory.decodeResource(service.resources, R.mipmap.sym_def_app_icon)
+        val content = PendingIntent.getActivity(
+            service,
+            0,
+            intent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
         val builder = Notification.Builder(service.applicationContext, NotifyChannelId)
-        builder.setContentIntent(
-            PendingIntent.getActivity(
-                service,
-                0,
-                intent,
-                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-            )
-        )
-        builder.setLargeIcon(
-            BitmapFactory.decodeResource(
-                service.resources,
-                R.mipmap.sym_def_app_icon
-            )
-        )
+        builder.setContentIntent(content)
+        builder.setLargeIcon(icon)
         builder.setContentTitle("Screen recording")
         builder.setSmallIcon(R.mipmap.sym_def_app_icon)
         builder.setContentText("Recording screen......")
@@ -77,10 +74,10 @@ class Notify(service: SimpleMirrorService) {
 }
 
 class SimpleMirrorServiceBinder(private val service: SimpleMirrorService) : Binder() {
-    fun startup(intent: Intent) {
+    fun startup(intent: Intent, displayMetrics: DisplayMetrics) {
         Log.i("simple", "startup service.")
 
-        service.createSender(intent)
+        service.createSender(intent, displayMetrics)
     }
 
     fun setRenderSurface(surface: Surface) {
@@ -124,8 +121,8 @@ class SimpleMirrorService : Service() {
             override val format = MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface
             override val bitRate = 7000 * 1024
             override val frameRate = 60
-            override val width = 2560
-            override val height = 1600
+            override var width = 2560
+            override var height = 1600
         }
 
         private val AudioConfigure = object : Audio.AudioEncoder.AudioEncoderConfigure {
@@ -197,10 +194,13 @@ class SimpleMirrorService : Service() {
         outputSurface = surface
     }
 
-    fun createSender(intent: Intent) {
+    fun createSender(intent: Intent, displayMetrics: DisplayMetrics) {
+        Notify(this)
+
         Log.i("simple", "create sender.")
 
-        Notify(this)
+        VideoConfigure.width = displayMetrics.widthPixels
+        VideoConfigure.height = displayMetrics.heightPixels
         mediaProjection =
             (getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager).getMediaProjection(
                 Activity.RESULT_OK,

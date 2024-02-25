@@ -11,7 +11,7 @@ use thiserror::Error;
 use tokio::{
     net::UdpSocket,
     sync::{
-        broadcast::{channel, Receiver},
+        mpsc::{unbounded_channel, UnboundedReceiver},
         Mutex, RwLock,
     },
     time::sleep,
@@ -28,7 +28,7 @@ pub enum DiscoveryError {
 pub struct Discovery {
     id: Uuid,
     services: Mutex<HashMap<SocketAddr, Services>>,
-    receiver: Mutex<Receiver<(Service, SocketAddr)>>,
+    receiver: Mutex<UnboundedReceiver<(Service, SocketAddr)>>,
     local_services: RwLock<Services>,
     socket: Arc<UdpSocket>,
     addr: SocketAddr,
@@ -36,7 +36,7 @@ pub struct Discovery {
 
 impl Discovery {
     pub async fn new(addr: &SocketAddr) -> Result<Arc<Self>, DiscoveryError> {
-        let (tx, rx) = channel(1);
+        let (tx, rx) = unbounded_channel();
         let socket = Arc::new(UdpSocket::bind(addr).await?);
         socket.set_broadcast(true)?;
 
@@ -157,7 +157,7 @@ impl Discovery {
     }
 
     pub async fn recv_online(&self) -> Option<(Service, SocketAddr)> {
-        self.receiver.lock().await.recv().await.ok()
+        self.receiver.lock().await.recv().await
     }
 
     pub async fn remove(&self, addr: &SocketAddr) {
@@ -173,7 +173,7 @@ impl Discovery {
         log::info!("Discovery start broadcast, target={:?}", addr);
 
         tokio::spawn(async move {
-            for _ in 0..count.unwrap_or(3) {
+            for _ in 0..count.unwrap_or(5) {
                 if let Some(socket) = socket.upgrade() {
                     if let Err(e) = socket.send_to(&pkt, addr).await {
                         if e.kind() != ConnectionReset {
@@ -181,7 +181,7 @@ impl Discovery {
                             break;
                         }
                     } else {
-                        sleep(Duration::from_millis(1000)).await;
+                        sleep(Duration::from_millis(100)).await;
                     }
                 } else {
                     break;
