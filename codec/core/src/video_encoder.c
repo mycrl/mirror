@@ -1,44 +1,44 @@
 //
-//  codec.cpp
+//  video_encoder.c
 //  codec
 //
 //  Created by Mr.Panda on 2024/2/14.
 //
 
-#include <string>
+#include <stdlib.h>
+#include <string.h>
 
-#include "codec.h"
-
-extern "C"
-{
 #include "libavutil/imgutils.h"
 #include "libavutil/opt.h"
-}
+#include "codec.h"
 
-size_t get_i420_buffer_size(struct VideoFrame& frame, int height)
+size_t get_i420_buffer_size(VideoFrame* frame, int height)
 {
-    size_t sizey = frame.stride_y * height;
-    size_t sizeu = frame.stride_uv * (height / 2);
+    size_t sizey = frame->stride_y * height;
+    size_t sizeu = frame->stride_uv * (height / 2);
     return sizey + (sizeu * 2);
 }
 
-struct VideoEncoder* create_video_encoder(struct VideoEncoderSettings* settings)
+VideoEncoder* create_video_encoder(VideoEncoderSettings* settings)
 {
-    std::string name = std::string(settings->codec_name);
-    struct VideoEncoder* codec = new VideoEncoder();
-    
-    codec->codec = avcodec_find_encoder_by_name(name.c_str());
+    VideoEncoder* codec = (VideoEncoder*)malloc(sizeof(VideoEncoder));
+    if (codec == NULL) 
+    {
+        return NULL;
+    }
+
+    codec->codec = avcodec_find_encoder_by_name(settings->codec_name);
     if (!codec->codec)
     {
-        delete codec;
-        return nullptr;
+        free(codec);
+        return NULL;
     }
     
     codec->context = avcodec_alloc_context3(codec->codec);
     if (!codec->context)
     {
-        delete codec;
-        return nullptr;
+        free(codec);
+        return NULL;
     }
     
     codec->context->width = settings->width;
@@ -51,12 +51,12 @@ struct VideoEncoder* create_video_encoder(struct VideoEncoderSettings* settings)
     codec->context->max_b_frames = settings->max_b_frames;
     codec->context->pix_fmt = AV_PIX_FMT_NV12;
     
-    if (name == "h264_qsv")
+    if (strcmp(settings->codec_name, "h264_qsv") == 0)
     {
         av_opt_set_int(codec->context->priv_data, "preset", 7, 0);
         av_opt_set_int(codec->context->priv_data, "profile", 66, 0);
     }
-    else if (name == "h264_nvenc")
+    else if (strcmp(settings->codec_name, "h264_nvenc") == 0)
     {
         av_opt_set_int(codec->context->priv_data, "zerolatency", 1, 0);
         av_opt_set_int(codec->context->priv_data, "b_adapt", 0, 0);
@@ -66,35 +66,35 @@ struct VideoEncoder* create_video_encoder(struct VideoEncoderSettings* settings)
         av_opt_set_int(codec->context->priv_data, "tune", 1, 0);
         av_opt_set_int(codec->context->priv_data, "cq", 30, 0);
     }
-    else if (name == "libx264")
+    else if (strcmp(settings->codec_name, "libx264") == 0)
     {
         av_opt_set(codec->context->priv_data, "tune", "zerolatency", 0);
     }
     
-    if (avcodec_open2(codec->context, codec->codec, nullptr) != 0)
+    if (avcodec_open2(codec->context, codec->codec, NULL) != 0)
     {
-        delete codec;
-        return nullptr;
+        free(codec);
+        return NULL;
     }
 
     if (avcodec_is_open(codec->context) == 0)
     {
-        delete codec;
-        return nullptr;
+        free(codec);
+        return NULL;
     }
     
     codec->packet = av_packet_alloc();
-    if (codec->packet == nullptr)
+    if (codec->packet == NULL)
     {
-        delete codec;
-        return nullptr;
+        free(codec);
+        return NULL;
     }
 
     codec->frame = av_frame_alloc();
-    if (codec->frame == nullptr)
+    if (codec->frame == NULL)
     {
-        delete codec;
-        return nullptr;
+        free(codec);
+        return NULL;
     }
 
     codec->frame_num = 0;
@@ -104,8 +104,8 @@ struct VideoEncoder* create_video_encoder(struct VideoEncoderSettings* settings)
 
     if (av_frame_get_buffer(codec->frame, 32) < 0)
     {
-        delete codec;
-        return nullptr;
+        free(codec);
+        return NULL;
     }
     else
     {
@@ -113,7 +113,7 @@ struct VideoEncoder* create_video_encoder(struct VideoEncoderSettings* settings)
     }
 }
 
-int video_encoder_send_frame(struct VideoEncoder* codec, struct VideoFrame frame)
+int video_encoder_send_frame(VideoEncoder* codec, VideoFrame* frame)
 {
     if (av_frame_make_writable(codec->frame) != 0)
     {
@@ -122,7 +122,7 @@ int video_encoder_send_frame(struct VideoEncoder* codec, struct VideoFrame frame
 
     int need_size = av_image_fill_arrays(codec->frame->data,
                                          codec->frame->linesize,
-                                         frame.buffer,
+                                         frame->buffer,
                                          codec->context->pix_fmt,
                                          codec->context->width,
                                          codec->context->height,
@@ -133,13 +133,13 @@ int video_encoder_send_frame(struct VideoEncoder* codec, struct VideoFrame frame
         return -1;
     }
     
-    if (frame.key_frame)
+    if (frame->key_frame)
     {
-        codec->frame->key_frame = 1;
+        codec->frame->flags = AV_FRAME_FLAG_KEY;
     }
     else
     {
-        codec->frame->key_frame = 0;
+        codec->frame->flags = 0;
     }
     
     codec->frame->pts = av_rescale_q(codec->frame_num,
@@ -157,34 +157,41 @@ int video_encoder_send_frame(struct VideoEncoder* codec, struct VideoFrame frame
     return 0;
 }
 
-struct VideoEncodePacket* video_encoder_read_packet(struct VideoEncoder* codec)
+VideoEncodePacket* video_encoder_read_packet(VideoEncoder* codec)
 {
+    if (codec->output_packet == NULL)
+    {
+        codec->output_packet = (VideoEncodePacket*)malloc(sizeof(VideoEncodePacket));
+    }
+
+    if (codec->output_packet == NULL) 
+    {
+        return NULL;
+    }
+
     if (avcodec_receive_packet(codec->context, codec->packet) != 0)
     {
-        return nullptr;
+        return NULL;
     }
+
+    codec->output_packet->buffer = codec->packet->data;
+    codec->output_packet->len = codec->packet->size;
+    codec->output_packet->flags = codec->packet->flags;
     
-    struct VideoEncodePacket* bytes = new VideoEncodePacket();
-    bytes->buffer = codec->packet->data;
-    bytes->len = codec->packet->size;
-    bytes->flags = codec->packet->flags;
-    
-    return bytes;
+    return codec->output_packet;
 }
 
-void release_video_encoder_packet(struct VideoEncoder* codec, struct VideoEncodePacket* packet)
+void release_video_encoder_packet(VideoEncoder* codec)
 {
     av_packet_unref(codec->packet);
-    
-    delete packet;
 }
 
-void release_video_encoder(struct VideoEncoder* codec)
+void release_video_encoder(VideoEncoder* codec)
 {
-    avcodec_send_frame(codec->context, nullptr);
+    avcodec_send_frame(codec->context, NULL);
     avcodec_free_context(&codec->context);
     av_packet_free(&codec->packet);
     av_frame_free(&codec->frame);
-    
-    delete codec;
+    free(codec->output_packet);
+    free(codec);
 }
