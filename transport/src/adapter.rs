@@ -136,7 +136,7 @@ impl StreamReceiverAdapter {
     }
 
     pub async fn next(&self) -> Option<(Bytes, StreamKind)> {
-        self.rx.lock().await.recv().await.unwrap()
+        self.rx.lock().await.recv().await.flatten()
     }
 
     pub fn send(&self, buf: Bytes, kind: StreamKind) -> bool {
