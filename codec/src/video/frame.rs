@@ -1,6 +1,6 @@
 use crate::{
     api::{
-        create_video_encoder, release_video_encoder_packet, release_video_encoder,
+        create_video_encoder, release_video_encoder, release_video_encoder_packet,
         video_encoder_read_packet, video_encoder_send_frame,
     },
     free_cstring, to_c_str,
@@ -51,7 +51,6 @@ impl<'a> VideoFrame<'a> {
 
 #[repr(C)]
 pub struct VideoEncodePacket<'a> {
-    ptr: *const crate::api::VideoEncodePacket,
     codec: crate::api::VideoEncoder,
     pub buffer: &'a [u8],
     pub flags: i32,
@@ -59,7 +58,7 @@ pub struct VideoEncodePacket<'a> {
 
 impl Drop for VideoEncodePacket<'_> {
     fn drop(&mut self) {
-        unsafe { release_video_encoder_packet(self.codec, self.ptr) }
+        unsafe { release_video_encoder_packet(self.codec) }
     }
 }
 
@@ -73,7 +72,6 @@ impl<'a> VideoEncodePacket<'a> {
             buffer: unsafe { std::slice::from_raw_parts(raw.buffer, raw.len) },
             flags: raw.flags,
             codec,
-            ptr,
         }
     }
 }
@@ -99,7 +97,7 @@ impl VideoFrameSenderProcesser {
     }
 
     pub fn encode(&self, frame: &VideoFrame) -> Vec<Vec<u8>> {
-        if unsafe { video_encoder_send_frame(self.codec, frame.as_raw()) } != 0 {
+        if unsafe { video_encoder_send_frame(self.codec, &frame.as_raw()) } != 0 {
             return Vec::new();
         }
 
