@@ -133,7 +133,8 @@ impl Transport {
                                 }
                                 Err(e) => {
                                     log::error!(
-                                        "connect to remote service failed, ip={}, port={}, err={:?}",
+                                        "connect to remote service failed, ip={}, port={}, \
+                                         err={:?}",
                                         addr.ip(),
                                         service.port,
                                         e,
