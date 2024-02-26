@@ -1,4 +1,4 @@
-#![cfg(not(target_os = "android"))]
+#![cfg(not(feature = "android"))]
 
 use crate::{
     api::{

@@ -1,4 +1,4 @@
-#[allow(unused)]
+#![allow(unused)]
 
 use std::{env, fs, path::Path, process::Command};
 
@@ -6,11 +6,11 @@ use anyhow::anyhow;
 use dotenv::dotenv;
 
 fn main() -> anyhow::Result<()> {
-    #[cfg(not(target_os = "android"))]
-    {
-        println!("cargo:rerun-if-changed=./core/src");
-        println!("cargo:rerun-if-changed=./build.rs");
+    println!("cargo:rerun-if-changed=./core/src");
+    println!("cargo:rerun-if-changed=./build.rs");
 
+    #[cfg(not(feature = "android"))]
+    {
         let settings = Settings::build()?;
         compile_lib(&settings)?;
         link_lib(&settings);
