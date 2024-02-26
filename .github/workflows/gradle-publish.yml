@@ -20,8 +20,9 @@ jobs:
           settings-path: '${{ github.workspace }}'
       - name: Setup Dependencies
         run: |
-          sudo apt install libavcodec-dev libavutil-dev pkg-config -y
-          FFMPEG_PREFIX=$(echo $(pkg-config --cflags libavcodec) | sed 's/-I//g')
+          git clone --branch n6.1.1 https://git.ffmpeg.org/ffmpeg.git ffmpeg
+          cd ffmpeg
+          FFMPEG_PREFIX=$(pwd)
           echo "FFMPEG_PREFIX=$FFMPEG_PREFIX" >> $GITHUB_ENV
       - name: Setup Rust Toolchain
         run: rustup target add aarch64-linux-android
