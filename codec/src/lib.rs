@@ -11,6 +11,7 @@ pub enum BufferFlag {
     Partial = 8,
 }
 
+#[cfg(not(target_os = "linux"))]
 mod api {
     use std::ffi::{c_char, c_int, c_void};
 

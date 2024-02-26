@@ -9,8 +9,12 @@ fn main() -> anyhow::Result<()> {
     println!("cargo:rerun-if-changed=./core/src");
     println!("cargo:rerun-if-changed=./build.rs");
 
-    compile_lib(&settings)?;
-    link_lib(&settings);
+    #[cfg(not(target_os = "linux"))]
+    {
+        compile_lib(&settings)?;
+        link_lib(&settings);
+    }
+    
     Ok(())
 }
 

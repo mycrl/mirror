@@ -18,11 +18,6 @@ jobs:
           distribution: temurin
           server-id: github
           settings-path: '${{ github.workspace }}'
-      - name: Setup Dependencies
-        run: |
-          git clone --branch n6.1.1 https://git.ffmpeg.org/ffmpeg.git include
-          FFMPEG_PREFIX=$(pwd)
-          echo "FFMPEG_PREFIX=$FFMPEG_PREFIX" >> $GITHUB_ENV
       - name: Setup Rust Toolchain
         run: rustup target add aarch64-linux-android
       - name: Setup Gradle
@@ -31,8 +26,6 @@ jobs:
         run: |
           cd sdk/android
           ./gradlew :mirror:build
-        env:
-          FFMPEG_PREFIX: ${{ env.FFMPEG_PREFIX }}
       - name: Publish to GitHub Packages
         run: |
           cd sdk/android
@@ -40,4 +33,3 @@ jobs:
         env:
           GITHUB_USERNAME: '${{ github.actor }}'
           GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
-          FFMPEG_PREFIX: ${{ env.FFMPEG_PREFIX }}
