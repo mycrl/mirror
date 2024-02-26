@@ -20,8 +20,7 @@ jobs:
           settings-path: '${{ github.workspace }}'
       - name: Setup Dependencies
         run: |
-          git clone --branch n6.1.1 https://git.ffmpeg.org/ffmpeg.git ffmpeg
-          cd ffmpeg
+          git clone --branch n6.1.1 https://git.ffmpeg.org/ffmpeg.git include
           FFMPEG_PREFIX=$(pwd)
           echo "FFMPEG_PREFIX=$FFMPEG_PREFIX" >> $GITHUB_ENV
       - name: Setup Rust Toolchain
