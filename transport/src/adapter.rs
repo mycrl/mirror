@@ -75,9 +75,10 @@ impl StreamSenderAdapter {
     }
 
     pub fn close(&self) {
-        self.tx
-            .send(None)
-            .expect("Failed to close close, this is because it is not possible to send None to the channel, this is a bug.");
+        self.tx.send(None).expect(
+            "Failed to close close, this is because it is not possible to send None to the \
+             channel, this is a bug.",
+        );
     }
 
     pub fn send(&self, buf: Bytes, info: StreamBufferInfo) -> bool {
@@ -130,9 +131,10 @@ impl StreamReceiverAdapter {
     }
 
     pub fn close(&self) {
-        self.tx
-            .send(None)
-            .expect("Failed to close close, this is because it is not possible to send None to the channel, this is a bug.");
+        self.tx.send(None).expect(
+            "Failed to close close, this is because it is not possible to send None to the \
+             channel, this is a bug.",
+        );
     }
 
     pub async fn next(&self) -> Option<(Bytes, StreamKind)> {

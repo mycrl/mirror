@@ -290,6 +290,9 @@ extern "C" fn listener_fn(
 
     let tx = unsafe { &*(opaque as *mut UnboundedSender<(SRTSOCKET, SocketAddr)>) };
     if let Some(addr) = unsafe { OsSocketAddr::copy_from_raw(peeraddr as *const _, size) }.into() {
-        tx.send((s, addr)).expect("Attempting to notify the listener that a new connection has come fails, this is a bug.")
+        tx.send((s, addr)).expect(
+            "Attempting to notify the listener that a new connection has come fails, this is a \
+             bug.",
+        )
     }
 }
