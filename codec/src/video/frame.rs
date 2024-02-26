@@ -1,3 +1,5 @@
+#![cfg(not(target_os = "android"))]
+
 use crate::{
     api::{
         create_video_encoder, release_video_encoder, release_video_encoder_packet,
