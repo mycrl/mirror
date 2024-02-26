@@ -6,11 +6,11 @@ use anyhow::anyhow;
 use dotenv::dotenv;
 
 fn main() -> anyhow::Result<()> {
+    println!("cargo:rerun-if-changed=./core/src");
+    println!("cargo:rerun-if-changed=./build.rs");
+
     #[cfg(not(target_os = "android"))]
     {
-        println!("cargo:rerun-if-changed=./core/src");
-        println!("cargo:rerun-if-changed=./build.rs");
-
         let settings = Settings::build()?;
         compile_lib(&settings)?;
         link_lib(&settings);
