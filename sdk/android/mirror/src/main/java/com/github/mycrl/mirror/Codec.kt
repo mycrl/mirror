@@ -83,6 +83,7 @@ class Video {
         fun sink(buf: ByteArray) {
             val index = codec.dequeueInputBuffer(-1)
             if (index >= 0) {
+                codec.getInputBuffer(index)?.clear()
                 codec.getInputBuffer(index)?.put(buf)
                 codec.queueInputBuffer(index, 0, buf.size, 0, 0)
             }
@@ -168,6 +169,7 @@ class Video {
             try {
                 val index = codec.dequeueInputBuffer(-1)
                 if (index >= 0) {
+                    codec.getInputBuffer(index)?.clear()
                     codec.getInputBuffer(index)?.put(buf)
                     codec.queueInputBuffer(index, 0, buf.size, 0, 0)
                 }
@@ -245,6 +247,7 @@ class Audio {
         fun sink(buf: ByteArray) {
             val index = codec.dequeueInputBuffer(-1)
             if (index >= 0) {
+                codec.getInputBuffer(index)?.clear()
                 codec.getInputBuffer(index)?.put(buf)
                 codec.queueInputBuffer(index, 0, buf.size, 0, 0)
             }
@@ -358,6 +361,7 @@ class Audio {
         fun sink(buf: ByteArray) {
             val index = codec.dequeueInputBuffer(-1)
             if (index >= 0) {
+                codec.getInputBuffer(index)?.clear()
                 codec.getInputBuffer(index)?.put(buf)
                 codec.queueInputBuffer(index, 0, buf.size, 0, 0)
             }
