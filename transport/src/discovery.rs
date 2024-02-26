@@ -3,9 +3,10 @@ use std::{
     io::ErrorKind::ConnectionReset,
     net::{IpAddr, Ipv4Addr, SocketAddr},
     sync::Arc,
-    time::Duration,
+    time::{Duration, SystemTime},
 };
 
+use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::{
@@ -16,7 +17,6 @@ use tokio::{
     },
     time::sleep,
 };
-use uuid::Uuid;
 
 #[derive(Debug, Error)]
 pub enum DiscoveryError {
@@ -46,7 +46,7 @@ impl Discovery {
             local_services: RwLock::new(Services(vec![])),
             services: Default::default(),
             receiver: Mutex::new(rx),
-            id: Uuid::new_v4(),
+            id: Uuid::new(),
             addr: *addr,
             socket,
         });
@@ -104,12 +104,12 @@ impl Discovery {
 
                     match pkt {
                         Message::Notify { id, services } => {
-                            if id == this.id {
+                            if id == this.id.0 {
                                 continue;
                             }
 
-                            let mut service = this.services.lock().await;
-                            if let Some(service) = service.get_mut(&addr) {
+                            let mut services_ = this.services.lock().await;
+                            if let Some(service) = services_.get_mut(&addr) {
                                 if let Some(diffs) = service.diff(&services) {
                                     notify_service(addr, diffs).await;
                                 }
@@ -117,27 +117,29 @@ impl Discovery {
                                 *service = Services(services);
                             } else {
                                 notify_service(addr, services.clone()).await;
-                                service.insert(addr, Services(services));
+                                services_.insert(addr, Services(services));
                             }
                         }
                         Message::Query { id } => {
-                            if id == this.id {
+                            if id == this.id.0 {
                                 continue;
                             }
 
                             if let Ok(pkt) = rmp_serde::encode::to_vec(&Message::Notify {
                                 services: this.local_services.read().await.0.clone(),
-                                id: this.id,
+                                id: this.id.0,
                             }) {
                                 this.broadcast(pkt, None);
                             }
                         }
                     }
+                } else {
+                    log::warn!("Discovery received to a invalid message.")
                 }
             }
         });
 
-        if let Ok(pkt) = rmp_serde::encode::to_vec(&Message::Query { id: this.id }) {
+        if let Ok(pkt) = rmp_serde::encode::to_vec(&Message::Query { id: this.id.0 }) {
             this.broadcast(pkt, Some(2));
         }
 
@@ -149,7 +151,7 @@ impl Discovery {
 
         self.local_services.write().await.0 = services.clone();
         if let Ok(pkt) = rmp_serde::encode::to_vec(&Message::Notify {
-            id: self.id,
+            id: self.id.0,
             services,
         }) {
             self.broadcast(pkt, None);
@@ -206,12 +208,12 @@ enum Message {
     #[serde(alias = "q")]
     Query {
         #[serde(alias = "i")]
-        id: Uuid,
+        id: [u8; 10],
     },
     #[serde(alias = "n")]
     Notify {
         #[serde(alias = "i")]
-        id: Uuid,
+        id: [u8; 10],
         #[serde(alias = "s")]
         services: Vec<Service>,
     },
@@ -234,5 +236,25 @@ impl Services {
         } else {
             Some(diffs)
         }
+    }
+}
+
+#[derive(Debug)]
+struct Uuid([u8; 10]);
+
+impl Uuid {
+    fn new() -> Self {
+        let mut uid = [0u8; 10];
+        (&mut uid[..8]).copy_from_slice(
+            SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_secs()
+                .to_be_bytes()
+                .as_slice(),
+        );
+
+        thread_rng().fill(&mut uid[8..]);
+        Self(uid)
     }
 }

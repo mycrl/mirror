@@ -4,13 +4,16 @@ use anyhow::anyhow;
 use dotenv::dotenv;
 
 fn main() -> anyhow::Result<()> {
-    let settings = Settings::build()?;
-
     println!("cargo:rerun-if-changed=./core/src");
     println!("cargo:rerun-if-changed=./build.rs");
 
-    compile_lib(&settings)?;
-    link_lib(&settings);
+    #[cfg(not(target_os = "linux"))]
+    {
+        let settings = Settings::build()?;
+        compile_lib(&settings)?;
+        link_lib(&settings);
+    }
+    
     Ok(())
 }
 

@@ -72,7 +72,7 @@ class Video {
                             codec.releaseOutputBuffer(index, false)
                         }
                     } catch (e: Exception) {
-                        Log.e("com.github.mycrl.mirror", "VideoEncoder worker exception", e)
+                        Log.w("com.github.mycrl.mirror", "VideoEncoder worker exception", e)
 
                         release()
                     }
@@ -97,7 +97,6 @@ class Video {
                 isRunning = true
 
                 codec.start()
-                codec.flush()
                 worker.start()
             }
         }
@@ -106,7 +105,6 @@ class Video {
             if (isRunning) {
                 isRunning = false
 
-                codec.flush()
                 codec.stop()
                 codec.release()
             }
@@ -158,7 +156,7 @@ class Video {
                             codec.releaseOutputBuffer(index, true)
                         }
                     } catch (e: Exception) {
-                        Log.e("com.github.mycrl.mirror", "VideoDecoder worker exception", e)
+                        Log.w("com.github.mycrl.mirror", "VideoDecoder worker exception", e)
 
                         release()
                     }
@@ -174,7 +172,7 @@ class Video {
                     codec.queueInputBuffer(index, 0, buf.size, 0, 0)
                 }
             } catch (e: Exception) {
-                Log.e("com.github.mycrl.mirror", "VideoDecoder sink exception", e)
+                Log.w("com.github.mycrl.mirror", "VideoDecoder sink exception", e)
 
                 release()
             }
@@ -185,7 +183,6 @@ class Video {
                 isRunning = true
 
                 codec.start()
-                codec.flush()
                 worker.start()
             }
         }
@@ -194,7 +191,6 @@ class Video {
             if (isRunning) {
                 isRunning = false
 
-                codec.flush()
                 codec.stop()
                 codec.release()
             }
@@ -238,7 +234,7 @@ class Audio {
                             codec.releaseOutputBuffer(index, false)
                         }
                     } catch (e: Exception) {
-                        Log.e("com.github.mycrl.mirror", "AudioDecoder worker exception", e)
+                        Log.w("com.github.mycrl.mirror", "AudioDecoder worker exception", e)
 
                         release()
                     }
@@ -259,7 +255,6 @@ class Audio {
                 isRunning = true
 
                 codec.start()
-                codec.flush()
                 worker.start()
                 track.play()
             }
@@ -271,7 +266,6 @@ class Audio {
 
                 track.stop()
                 track.release()
-                codec.flush()
                 codec.stop()
                 codec.release()
             }
@@ -331,7 +325,7 @@ class Audio {
                             codec.releaseOutputBuffer(index, false)
                         }
                     } catch (e: Exception) {
-                        Log.e("com.github.mycrl.mirror", "AudioEncoder worker exception", e)
+                        Log.w("com.github.mycrl.mirror", "AudioEncoder worker exception", e)
 
                         release()
                     }
@@ -352,7 +346,7 @@ class Audio {
                                 }
                             }
                         } catch (e: Exception) {
-                            Log.e("com.github.mycrl.mirror", "AudioDecoder record exception", e)
+                            Log.w("com.github.mycrl.mirror", "AudioDecoder record exception", e)
 
                             release()
                         }
@@ -374,7 +368,6 @@ class Audio {
                 isRunning = true
 
                 codec.start()
-                codec.flush()
                 worker.start()
                 recorder?.start()
                 record?.startRecording()
@@ -386,7 +379,6 @@ class Audio {
                 isRunning = false
 
                 record?.stop()
-                codec.flush()
                 codec.stop()
                 codec.release()
             }
