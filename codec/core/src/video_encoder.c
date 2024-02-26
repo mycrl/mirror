@@ -9,8 +9,13 @@
 #include <string.h>
 
 #include "libavutil/imgutils.h"
+#include "libavutil/frame.h"
 #include "libavutil/opt.h"
 #include "codec.h"
+
+#ifndef AV_FRAME_FLAG_KEY
+#define AV_FRAME_FLAG_KEY (1 << 1)
+#endif
 
 size_t get_i420_buffer_size(VideoFrame* frame, int height)
 {
