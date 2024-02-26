@@ -5,6 +5,7 @@ import android.media.AudioTrack
 import android.media.MediaCodec
 import android.media.MediaCodecInfo
 import android.media.MediaFormat
+import android.os.Build
 import android.util.Log
 import android.view.Surface
 import com.ensarsarajcic.kotlinx.serialization.msgpack.MsgPack
@@ -33,17 +34,25 @@ class Video {
 
         init {
             val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, configure.width, configure.height)
-            format.setFloat(MediaFormat.KEY_I_FRAME_INTERVAL, 0.5F)
-            format.setInteger(MediaFormat.KEY_BIT_RATE, configure.bitRate)
+            format.setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR)
+            format.setInteger(MediaFormat.KEY_PROFILE, MediaCodecInfo.CodecProfileLevel.AVCProfileBaseline)
+            format.setInteger(MediaFormat.KEY_LEVEL, MediaCodecInfo.CodecProfileLevel.AVCProfileBaseline)
+            format.setFloat(MediaFormat.KEY_MAX_FPS_TO_ENCODER, configure.frameRate.toFloat())
+            format.setInteger(MediaFormat.KEY_LATENCY, configure.frameRate / 2)
+            format.setInteger(MediaFormat.KEY_OPERATING_RATE, configure.frameRate)
+            format.setInteger(MediaFormat.KEY_CAPTURE_RATE, configure.frameRate)
             format.setInteger(MediaFormat.KEY_FRAME_RATE, configure.frameRate)
             format.setInteger(MediaFormat.KEY_COLOR_FORMAT, configure.format)
-            format.setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR)
-            format.setInteger(MediaFormat.KEY_LEVEL, MediaCodecInfo.CodecProfileLevel.AVCProfileBaseline)
-            format.setInteger(MediaFormat.KEY_PROFILE, MediaCodecInfo.CodecProfileLevel.AVCProfileBaseline)
+            format.setInteger(MediaFormat.KEY_BIT_RATE, configure.bitRate)
+            format.setFloat(MediaFormat.KEY_I_FRAME_INTERVAL, 0.5F)
+            format.setInteger(MediaFormat.KEY_PRIORITY, 0)
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                format.setInteger(MediaFormat.KEY_ALLOW_FRAME_DROP, 1)
+            }
 
             codec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
             codec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
-
             surface = if (configure.format == MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface) {
                 codec.createInputSurface()
             } else {
@@ -145,6 +154,11 @@ class Video {
             format.setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR)
             format.setInteger(MediaFormat.KEY_LEVEL, MediaCodecInfo.CodecProfileLevel.AVCProfileBaseline)
             format.setInteger(MediaFormat.KEY_PROFILE, MediaCodecInfo.CodecProfileLevel.AVCProfileBaseline)
+            format.setInteger(MediaFormat.KEY_PUSH_BLANK_BUFFERS_ON_STOP, 1)
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                format.setInteger(MediaFormat.KEY_LOW_LATENCY, 1)
+            }
 
             codec = MediaCodec.createDecoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
             codec.configure(format, surface, null, 0)
