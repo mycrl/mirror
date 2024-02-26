@@ -42,7 +42,10 @@ impl Decoder {
             // Gets the length of the current packet data and checks that the packet
             // contents arrived in full.
             let size = u32::from_be_bytes(self.0[1..5].try_into().unwrap()) as usize;
-            // log::info!("payload decoder chunk size={}", size);
+            if size > 300000 {
+                log::info!("============================== {}", size);
+            }
+
             if size + 5 > self.0.len() {
                 break;
             }
