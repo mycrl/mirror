@@ -20,7 +20,7 @@ jobs:
           settings-path: '${{ github.workspace }}'
       - name: Setup Dependencies
         run: |
-          apt install ffmpeg libavcodec-dev pkg-config -y
+          sudo apt install ffmpeg libavcodec-dev pkg-config -y
           FFMPEG_PREFIX=$(echo $(pkg-config --cflags libavcodec) | sed 's/-I//g')
           echo "FFMPEG_PREFIX=$FFMPEG_PREFIX" >> $GITHUB_ENV
       - name: Setup Rust Toolchain
