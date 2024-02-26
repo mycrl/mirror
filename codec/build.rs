@@ -21,29 +21,32 @@ fn link_lib(settings: &Settings) {
 fn compile_lib(settings: &Settings) -> anyhow::Result<()> {
     cc::Build::new()
         .cpp(false)
+        .std("c17")
         .debug(settings.is_debug)
         .static_crt(true)
         .target(&settings.target)
         .warnings(false)
         .out_dir(&settings.out_dir)
         .file("./core/src/video_encoder.c")
-        .include(join(
+        .includes(
             &settings
                 .ffmpeg_prefix
                 .clone()
-                .unwrap_or_else(|| setup_dependencies(&settings))
-                .trim(),
-            "./include",
-        )?)
+                .map(|path| vec![join(&path, "./include").unwrap()])
+                .unwrap_or_else(|| setup_dependencies(&settings)),
+        )
         .compile("codec");
     Ok(())
 }
 
-fn setup_dependencies(settings: &Settings) -> String {
+fn setup_dependencies(settings: &Settings) -> Vec<String> {
     if cfg!(target_os = "macos") {
-        exec("brew --prefix ffmpeg", &settings.out_dir).expect(
-            "You don't have ffmpeg installed, please install ffmpeg: `brew install ffmpeg`.",
-        )
+        vec![
+            join(exec("brew --prefix ffmpeg", &settings.out_dir).expect(
+                "You don't have ffmpeg installed, please install ffmpeg: `brew install ffmpeg`.",
+            ).trim(), "./include")
+            .unwrap()
+        ]
     } else if cfg!(target_os = "windows") {
         if is_exsit(&join(&settings.out_dir, "7z.exe").unwrap()) {
             exec(
@@ -64,9 +67,28 @@ fn setup_dependencies(settings: &Settings) -> String {
             .expect("Unable to download ffmpeg shard release.");
         }
 
-        ffmpeg_prefix
+        vec![join(&ffmpeg_prefix, "./include").unwrap()]
     } else {
-        panic!("not supports the linux target.")
+        let mut paths = Vec::with_capacity(10);
+        paths.append(
+            &mut pkg_config::probe_library("libavcodec")
+                .expect("You don't have pck-config or libavcodec-dev installed.")
+                .include_paths
+                .iter()
+                .map(|path| path.to_str().unwrap().to_string())
+                .collect::<Vec<String>>(),
+        );
+
+        paths.append(
+            &mut pkg_config::probe_library("libavutil")
+                .expect("You don't have pck-config or libavutil-dev installed.")
+                .include_paths
+                .iter()
+                .map(|path| path.to_str().unwrap().to_string())
+                .collect::<Vec<String>>(),
+        );
+
+        paths
     }
 }
 
