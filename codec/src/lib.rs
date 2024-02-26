@@ -1,5 +1,6 @@
 pub mod video;
 
+#[allow(unused_imports)]
 use std::ffi::{c_char, CString};
 
 #[repr(i32)]
@@ -11,6 +12,7 @@ pub enum BufferFlag {
     Partial = 8,
 }
 
+#[cfg(not(target_os = "android"))]
 mod api {
     use std::ffi::{c_char, c_int, c_void};
 
@@ -52,10 +54,12 @@ mod api {
     }
 }
 
+#[cfg(not(target_os = "android"))]
 pub(crate) fn to_c_str(str: &str) -> *const c_char {
     CString::new(str).unwrap().into_raw()
 }
 
+#[cfg(not(target_os = "android"))]
 pub(crate) fn free_cstring(str: *const c_char) {
     if !str.is_null() {
         drop(unsafe { CString::from_raw(str as *mut c_char) })
