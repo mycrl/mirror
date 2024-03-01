@@ -111,7 +111,9 @@ impl Transport {
                                             }
 
                                             if let Some(adapter) = adapter.upgrade() {
-                                                for (chunk, kind) in decoder.decode(&buf[..size]) {
+                                                if let Some((chunk, kind)) =
+                                                    decoder.decode(&buf[..size])
+                                                {
                                                     if !adapter.send(chunk, kind) {
                                                         log::error!("adapter on buf failed.");
                                                         break;
@@ -174,6 +176,7 @@ impl Transport {
         )
         .await?;
 
+        let max_pkt_size = self.options.srt.max_pkt_size();
         let port = server.local_addr().unwrap().port();
         log::info!("srt server bind to port={}", port);
 
@@ -204,15 +207,17 @@ impl Transport {
 
                 if let Some(adapter) = adapter_.upgrade() {
                     for (buf, kind) in adapter.get_config() {
-                        if let Some(payload) = encoder.encode(kind, buf) {
-                            if let Err(e) = socket.send(payload).await {
-                                log::error!(
-                                    "failed to send buf in socket, addr={}, err={:?}",
-                                    addr,
-                                    e
-                                );
+                        if let Some(payloads) = encoder.encode(max_pkt_size, kind, buf) {
+                            for payload in payloads {
+                                if let Err(e) = socket.send(payload).await {
+                                    log::error!(
+                                        "failed to send buf in socket, addr={}, err={:?}",
+                                        addr,
+                                        e
+                                    );
 
-                                break;
+                                    break;
+                                }
                             }
                         }
                     }
@@ -244,16 +249,18 @@ impl Transport {
                             continue;
                         }
 
-                        if let Some(payload) = encoder.encode(kind, buf.as_ref()) {
-                            for (addr, socket) in sockets.iter() {
-                                if let Err(e) = socket.send(payload).await {
-                                    closed.push(*addr);
+                        if let Some(payloads) = encoder.encode(max_pkt_size, kind, buf.as_ref()) {
+                            for payload in payloads {
+                                for (addr, socket) in sockets.iter() {
+                                    if let Err(e) = socket.send(payload).await {
+                                        closed.push(*addr);
 
-                                    log::error!(
-                                        "failed to send buf in socket, addr={}, err={:?}",
-                                        addr,
-                                        e
-                                    );
+                                        log::error!(
+                                            "failed to send buf in socket, addr={}, err={:?}",
+                                            addr,
+                                            e
+                                        );
+                                    }
                                 }
                             }
                         }
@@ -310,7 +317,7 @@ impl Transport {
                 }
 
                 if let Some(adapter) = adapter.upgrade() {
-                    for (chunk, kind) in decoder.decode(&buf[..size]) {
+                    if let Some((chunk, kind)) = decoder.decode(&buf[..size]) {
                         if !adapter.send(chunk, kind) {
                             log::error!("adapter on buf failed.");
                             break;
