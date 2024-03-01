@@ -252,8 +252,8 @@ impl Socket {
         let size = std::cmp::min(buf.len(), self.opt.max_pkt_size());
         Handle::current()
             .spawn_blocking(move || {
-                let ret = unsafe { srt_send(fd, buf_ptr as *const _, size as c_int) };
-                if ret < 0 {
+                let ret = unsafe { srt_send(fd, buf_ptr as *const _, size as c_int) } as usize;
+                if ret != size {
                     SrtError::error(SrtErrorKind::SendError)
                 } else {
                     Ok(ret as usize)

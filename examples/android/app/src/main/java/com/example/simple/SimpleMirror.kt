@@ -116,7 +116,12 @@ class SimpleMirrorService : Service() {
     private var sender: MirrorSender? = null
 
     companion object {
-        private val MirrorConfig = MirrorServiceConfigure("0.0.0.0:3200")
+        private var MirrorConfig = run {
+            val cfg = MirrorServiceConfigure("0.0.0.0:3200")
+            cfg.maxBandwidth = 60 * 1024
+            cfg
+        }
+
         private val VideoConfigure = object : Video.VideoEncoder.VideoEncoderConfigure {
             override val format = MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface
             override val bitRate = 7000 * 1024

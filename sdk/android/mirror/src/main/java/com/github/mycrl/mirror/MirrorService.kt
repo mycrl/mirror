@@ -209,8 +209,9 @@ class MirrorService constructor(
         port: Int,
         configure: MirrorAdapterConfigure,
         observer: MirrorReceiver
-    ): ReceiverAdapterWrapper {
-        return mirror.createReceiver("$ip:$port", object : ReceiverAdapter() {
+    ) {
+        var adapter: ReceiverAdapterWrapper? = null
+        adapter = mirror.createReceiver("$ip:$port", object : ReceiverAdapter() {
             private var isReleased: Boolean = false
             private val videoDecoder = Video.VideoDecoder(
                 observer.surface,
@@ -261,11 +262,20 @@ class MirrorService constructor(
             }
 
             override fun close() {
-                if (!isReleased) {
-                    isReleased = true
-                    audioDecoder?.release()
-                    videoDecoder.release()
-                    observer.released()
+                try {
+                    if (!isReleased) {
+                        isReleased = true
+                        adapter?.release()
+                        audioDecoder?.release()
+                        videoDecoder.release()
+                        observer.released()
+                    }
+                } catch (e: Exception) {
+                    Log.e(
+                        "com.github.mycrl.mirror",
+                        "Mirror ReceiverAdapter close exception",
+                        e
+                    )
                 }
             }
         })

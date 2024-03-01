@@ -6,6 +6,7 @@ import android.content.ComponentName
 import android.content.Intent
 import android.content.ServiceConnection
 import android.media.projection.MediaProjectionManager
+import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
 import android.util.Log
@@ -13,33 +14,39 @@ import android.view.Surface
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 import android.view.View
+import android.view.WindowInsets
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 
 open class Layout : ComponentActivity() {
     private var surfaceView: SurfaceView? = null
     private var clickStartHandler: (() -> Unit)? = null
     private var buttonAlign by mutableStateOf(Alignment.Center)
-    private var buttonText by mutableStateOf("Start")
+    private var icon by mutableIntStateOf(R.drawable.cell_tower)
     private var state: Int = State.New
 
     class State {
@@ -52,6 +59,7 @@ open class Layout : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         setContent {
             CreateLayout()
         }
@@ -71,19 +79,28 @@ open class Layout : ComponentActivity() {
 
     fun layoutChangeReceived() {
         state = State.Receiving
-        buttonText = "Receiving... Stop"
+        icon = R.drawable.stop_circle
         buttonAlign = Alignment.BottomStart
 
         runOnUiThread {
             surfaceView?.let { view ->
                 view.visibility = View.VISIBLE
             }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                window.insetsController?.hide(WindowInsets.Type.statusBars() or WindowInsets.Type.navigationBars())
+            } else {
+                window.decorView.systemUiVisibility = (View.SYSTEM_UI_FLAG_FULLSCREEN
+                        or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                        or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY)
+                window.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
+            }
         }
     }
 
     fun layoutChangeStarted() {
         state = State.Started
-        buttonText = "Working... Stop"
+        icon = R.drawable.wifi_tethering
         buttonAlign = Alignment.Center
 
         runOnUiThread {
@@ -95,12 +112,19 @@ open class Layout : ComponentActivity() {
 
     fun layoutChangeReset() {
         state = State.New
-        buttonText = "Start"
+        icon = R.drawable.cell_tower
         buttonAlign = Alignment.Center
 
         runOnUiThread {
             surfaceView?.let { view ->
                 view.visibility = View.INVISIBLE
+            }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                window.insetsController?.show(WindowInsets.Type.statusBars() or WindowInsets.Type.navigationBars())
+            } else {
+                window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_VISIBLE
+                window.clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
             }
         }
     }
@@ -147,14 +171,25 @@ open class Layout : ComponentActivity() {
                     modifier = Modifier
                         .padding(20.dp)
                         .align(buttonAlign),
-                    shape = RoundedCornerShape(8.dp)
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0C9CF8)),
                 ) {
-                    Text(
-                        text = buttonText,
-                        color = Color.White,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold
+                    Icon(
+                        painter = painterResource(id = icon),
+                        contentDescription = "Cell Tower",
+                        tint = Color.White
                     )
+
+                    if (state == State.Started || state == State.Receiving) {
+                        Spacer(modifier = Modifier.width(15.dp))
+                        Text(
+                            text = if (state == State.Started) {
+                                "Screen casting, Click to stop"
+                            } else {
+                                "Receiving screen casting, Click to stop"
+                            }, modifier = Modifier
+                        )
+                    }
                 }
             }
         }
