@@ -1,7 +1,11 @@
-use std::net::SocketAddr;
+use std::{
+    net::SocketAddr,
+    sync::{atomic::AtomicBool, Arc},
+};
 
 use libc::c_int;
 use os_socketaddr::OsSocketAddr;
+use sync::atomic::EasyAtomic;
 use tokio::runtime::Handle;
 
 use crate::{
@@ -14,11 +18,20 @@ use crate::{
 };
 
 pub struct Socket {
-    pub(crate) fd: SRTSOCKET,
-    pub(crate) opt: SrtOptions,
+    fd: SRTSOCKET,
+    opt: SrtOptions,
+    is_closed: Arc<AtomicBool>,
 }
 
 impl Socket {
+    pub(crate) fn new(fd: SRTSOCKET, opt: SrtOptions) -> Self {
+        Self {
+            is_closed: Arc::new(AtomicBool::new(false)),
+            opt,
+            fd,
+        }
+    }
+
     /// Connects a socket or a group to a remote party with a specified address
     /// and port.
     ///
@@ -96,7 +109,7 @@ impl Socket {
                     return SrtError::error(SrtErrorKind::ConnectError);
                 }
 
-                Ok(Self { fd, opt })
+                Ok(Self::new(fd, opt))
             })
             .await
             .expect("not run tokio spawn blocking")
@@ -172,13 +185,21 @@ impl Socket {
     /// time to play has come for a message that is next to the currently
     /// lost one, it will be delivered and the lost one dropped.
     pub async fn read(&self, buf: &mut [u8]) -> Result<usize, SrtError> {
-        let fd = self.fd;
+        if self.is_closed.get() {
+            return SrtError::error(SrtErrorKind::RecvError);
+        }
 
+        let fd = self.fd;
         let len = buf.len();
+        let is_closed = self.is_closed.clone();
         let buf_ptr = buf.as_mut_ptr() as usize;
         Handle::current()
             .spawn_blocking(move || {
                 let ret = unsafe { srt_recv(fd, buf_ptr as *mut _, len as c_int) };
+                if ret <= 0 {
+                    is_closed.update(true);
+                }
+
                 if ret < 0 {
                     SrtError::error(SrtErrorKind::RecvError)
                 } else {
@@ -247,13 +268,19 @@ impl Socket {
             return Ok(0);
         }
 
+        if self.is_closed.get() {
+            return SrtError::error(SrtErrorKind::SendError);
+        }
+
         let fd = self.fd;
         let buf_ptr = buf.as_ptr() as usize;
+        let is_closed = self.is_closed.clone();
         let size = std::cmp::min(buf.len(), self.opt.max_pkt_size());
         Handle::current()
             .spawn_blocking(move || {
                 let ret = unsafe { srt_send(fd, buf_ptr as *const _, size as c_int) } as usize;
                 if ret != size {
+                    is_closed.update(true);
                     SrtError::error(SrtErrorKind::SendError)
                 } else {
                     Ok(ret as usize)

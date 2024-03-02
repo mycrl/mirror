@@ -70,7 +70,7 @@ impl Decoder {
         if crc != fingerprint(&buf[..]) {
             log::warn!("Incorrect packet received.");
 
-            // If the check doesn't pass, then none of the packets in the set 
+            // If the check doesn't pass, then none of the packets in the set
             // can be used because there is no retransmission.
             self.throw = true;
             return None;
@@ -81,19 +81,19 @@ impl Decoder {
         let kind = StreamKind::try_from(buf.get_u8()).unwrap();
         let size = buf.get_u16() as usize;
         if self.throw {
-            // It has entered discard mode, but when it encounters a new group 
+            // It has entered discard mode, but when it encounters a new group
             // arriving, it begins to receive the new group normally.
             if seq == 0 {
                 self.throw = false;
             }
         } else {
-            // Normal processing, it is still necessary to check whether the 
-            // packet sequence number is consecutive, and check whether the 
+            // Normal processing, it is still necessary to check whether the
+            // packet sequence number is consecutive, and check whether the
             // current group has lost any packets.
             if seq > 0 && self.seq + 1 != seq {
                 log::warn!("Packets are starting to be lost, ignore this set of packets.");
 
-                // has dropped the packet, enters discard mode, and returns the 
+                // has dropped the packet, enters discard mode, and returns the
                 // null result immediately.
                 self.throw = true;
                 return None;
@@ -113,9 +113,7 @@ impl Decoder {
         self.seq = seq;
         let old_kind = self.kind.replace(kind);
 
-        bytes.map(|it| {
-            (it, old_kind.unwrap())
-        })
+        bytes.map(|it| (it, old_kind.unwrap()))
     }
 }
 

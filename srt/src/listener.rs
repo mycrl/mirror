@@ -234,13 +234,7 @@ impl Listener {
     /// usually for internal use only.
     pub async fn accept(&mut self) -> Result<(Socket, SocketAddr), SrtError> {
         if let Some((fd, addr)) = self.rx.recv().await {
-            Ok((
-                Socket {
-                    fd,
-                    opt: self.opt.clone(),
-                },
-                addr,
-            ))
+            Ok((Socket::new(fd, self.opt.clone()), addr))
         } else {
             SrtError::error(SrtErrorKind::AcceptError)
         }

@@ -9,6 +9,7 @@ libc = "0.2"
 log = "0.4.20"
 os_socketaddr = "0.2.5"
 tokio = { version = "1.35.1", features = ["sync", "rt"] }
+sync = { path = "../sync" }
 
 [dev-dependencies]
 tokio = { version = "1.35.1", features = ["full"] }
