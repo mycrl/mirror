@@ -13,7 +13,7 @@ abstract class ReceiverAdapter {
 }
 
 abstract class ReceiverAdapterFactory {
-    abstract fun connect(id: Int, ip: String, description: ByteArray): ReceiverAdapter?
+    abstract fun connect(id: Int, addr: String, description: ByteArray): ReceiverAdapter?
 }
 
 data class StreamBufferInfo(val kind: Int) {

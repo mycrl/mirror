@@ -74,10 +74,12 @@ class Notify(service: SimpleMirrorService) {
 }
 
 class SimpleMirrorServiceBinder(private val service: SimpleMirrorService) : Binder() {
-    fun startup(intent: Intent, displayMetrics: DisplayMetrics) {
-        Log.i("simple", "startup service.")
-
+    fun createSender(intent: Intent, displayMetrics: DisplayMetrics) {
         service.createSender(intent, displayMetrics)
+    }
+
+    fun createReceiver(addr: String) {
+        service.createReceiver(addr)
     }
 
     fun setRenderSurface(surface: Surface) {
@@ -133,8 +135,8 @@ class SimpleMirrorService : Service() {
         private val AudioConfigure = object : Audio.AudioEncoder.AudioEncoderConfigure {
             override val channalConfig = AudioFormat.CHANNEL_IN_MONO
             override val sampleBits = AudioFormat.ENCODING_PCM_16BIT
-            override val bitRate = 1000 * 10
-            override val sampleRate = 16000
+            override val sampleRate = 16 * 1000
+            override val bitRate = 23850
             override val channels = 1
         }
     }
@@ -142,8 +144,8 @@ class SimpleMirrorService : Service() {
     private var receiverAdapter: ReceiverAdapterWrapper? = null
     private val mirror: MirrorService =
         MirrorService(MirrorConfig, object : MirrorServiceObserver() {
-            override fun accept(id: Int, ip: String): MirrorReceiver {
-                receivedHandler?.let { it(id, ip) }
+            override fun accept(id: Int, addr: String): MirrorReceiver {
+                receivedHandler?.let { it(id, addr) }
 
                 return object : MirrorReceiver() {
                     override val track = createAudioTrack()
@@ -151,7 +153,7 @@ class SimpleMirrorService : Service() {
 
                     override fun released() {
                         super.released()
-                        receivedReleaseHandler?.let { it(id, ip) }
+                        receivedReleaseHandler?.let { it(id, addr) }
 
                         Log.w("simple", "receiver is released.")
                     }
@@ -197,6 +199,32 @@ class SimpleMirrorService : Service() {
 
     fun setOutputSurface(surface: Surface) {
         outputSurface = surface
+    }
+
+    fun createReceiver(addr: String) {
+        Log.i("simple", "create receiver.")
+
+        val (ip, port) = addr.split(":")
+        mirror.createReceiver(ip, port.toInt(), object : MirrorAdapterConfigure {
+            override val video = VideoConfigure
+            override val audio = AudioConfigure
+        }, object : MirrorReceiver() {
+            override val track = createAudioTrack()
+            override val surface = outputSurface!!
+
+            override fun released() {
+                super.released()
+                receivedReleaseHandler?.let { it(0, addr) }
+
+                Log.w("simple", "receiver is released.")
+            }
+
+            override fun onStart(adapter: ReceiverAdapterWrapper) {
+                super.onStart(adapter)
+
+                receiverAdapter = adapter
+            }
+        })
     }
 
     fun createSender(intent: Intent, displayMetrics: DisplayMetrics) {

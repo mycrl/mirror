@@ -1,5 +1,5 @@
 use std::{
-    net::IpAddr,
+    net::SocketAddr,
     sync::{Arc, Weak},
 };
 
@@ -129,14 +129,14 @@ impl ReceiverAdapterFactory for AndroidStreamReceiverAdapterFactory {
     async fn connect(
         &self,
         id: u8,
-        ip: IpAddr,
+        addr: SocketAddr,
         description: &[u8],
     ) -> Option<Weak<StreamReceiverAdapter>> {
         let this = unsafe { std::mem::transmute::<&Self, &'static Self>(self) };
         let description = unsafe { std::mem::transmute::<&[u8], &'static [u8]>(description) };
         let adapter = get_runtime()
             .ok()?
-            .spawn_blocking(move || this.connect(id, ip.to_string(), description))
+            .spawn_blocking(move || this.connect(id, addr.to_string(), description))
             .await
             .ok()??;
 

@@ -77,7 +77,11 @@ impl Transport {
                         );
 
                         if let Some(adapter) = adapter_factory
-                            .connect(service.id, addr.ip(), &service.description)
+                            .connect(
+                                service.id,
+                                SocketAddr::new(addr.ip(), service.port),
+                                &service.description,
+                            )
                             .await
                         {
                             log::info!("adapter factory created a adapter.");
