@@ -4,7 +4,7 @@ import android.media.AudioRecord
 import android.media.AudioTrack
 import android.util.Log
 import android.view.Surface
-import java.lang.Exception
+import kotlin.Exception
 
 typealias MirrorServiceConfigure = MirrorOptions;
 
@@ -68,10 +68,10 @@ class MirrorService constructor(
         object : ReceiverAdapterFactory() {
             override fun connect(
                 id: Int,
-                ip: String,
+                addr: String,
                 description: ByteArray
             ): ReceiverAdapter? {
-                val receiver = observer.accept(id, ip)
+                val receiver = observer.accept(id, addr)
                 return if (receiver != null) {
                     object : ReceiverAdapter() {
                         private var isReleased: Boolean = false
@@ -239,26 +239,36 @@ class MirrorService constructor(
             }
 
             override fun sink(kind: Int, buf: ByteArray): Boolean {
-                if (isReleased) {
+                try {
+                    if (isReleased) {
+                        return false
+                    }
+
+                    when (kind) {
+                        StreamKind.Video -> {
+                            if (videoDecoder.isRunning) {
+                                videoDecoder.sink(buf)
+                            }
+                        }
+
+                        StreamKind.Audio -> {
+                            if (audioDecoder != null && audioDecoder.isRunning) {
+                                audioDecoder.sink(buf)
+                            }
+                        }
+                    }
+
+                    observer.sink(buf, kind)
+                    return true
+                } catch (e: Exception) {
+                    Log.e(
+                        "com.github.mycrl.mirror",
+                        "Mirror ReceiverAdapter sink exception",
+                        e
+                    )
+
                     return false
                 }
-
-                when (kind) {
-                    StreamKind.Video -> {
-                        if (videoDecoder.isRunning) {
-                            videoDecoder.sink(buf)
-                        }
-                    }
-
-                    StreamKind.Audio -> {
-                        if (audioDecoder != null && audioDecoder.isRunning) {
-                            audioDecoder.sink(buf)
-                        }
-                    }
-                }
-
-                observer.sink(buf, kind)
-                return true
             }
 
             override fun close() {

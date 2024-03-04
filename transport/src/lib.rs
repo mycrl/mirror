@@ -13,6 +13,7 @@ use adapter::StreamReceiverAdapter;
 use srt::{Listener, Socket, SrtError, SrtOptions};
 use thiserror::Error;
 use tokio::{
+    runtime::Handle,
     sync::{Mutex, RwLock},
     time::sleep,
 };
@@ -99,11 +100,12 @@ impl Transport {
                                         service.port
                                     );
 
-                                    tokio::spawn(async move {
+                                    let runtime = Handle::current();
+                                    std::thread::spawn(move || {
                                         let mut buf = [0u8; 2048];
                                         let mut decoder = Decoder::default();
 
-                                        while let Ok(size) = socket.read(&mut buf).await {
+                                        while let Ok(size) = socket.read(&mut buf) {
                                             if size == 0 {
                                                 log::error!(
                                                     "read zero buf from socket, ip={}, port={}",
@@ -131,7 +133,7 @@ impl Transport {
 
                                         log::warn!("socket is closed, ip={}", addr.ip());
 
-                                        discovery.remove(&addr).await;
+                                        runtime.block_on(discovery.remove(&addr));
                                         if let Some(adapter) = adapter.upgrade() {
                                             adapter.close();
                                         }
@@ -213,7 +215,7 @@ impl Transport {
                     for (buf, kind) in adapter.get_config() {
                         if let Some(payloads) = encoder.encode(max_pkt_size, kind, buf) {
                             for payload in payloads {
-                                if let Err(e) = socket.send(payload).await {
+                                if let Err(e) = socket.send(payload) {
                                     log::error!(
                                         "failed to send buf in socket, addr={}, err={:?}",
                                         addr,
@@ -256,7 +258,7 @@ impl Transport {
                         if let Some(payloads) = encoder.encode(max_pkt_size, kind, buf.as_ref()) {
                             for payload in payloads {
                                 for (addr, socket) in sockets.iter() {
-                                    if let Err(e) = socket.send(payload).await {
+                                    if let Err(e) = socket.send(payload) {
                                         closed.push(*addr);
 
                                         log::error!(
@@ -307,13 +309,14 @@ impl Transport {
             addr.port(),
         );
 
+        let runtime = Handle::current();
         let adapter = Arc::downgrade(adapter);
         let discovery = Arc::downgrade(&self.discovery);
-        tokio::spawn(async move {
+        std::thread::spawn(move || {
             let mut buf = [0u8; 2048];
             let mut decoder = Decoder::default();
 
-            while let Ok(size) = socket.read(&mut buf).await {
+            while let Ok(size) = socket.read(&mut buf) {
                 if size == 0 {
                     log::error!("read zero buf from socket, ip={}", addr.ip());
 
@@ -336,7 +339,7 @@ impl Transport {
             log::warn!("socket is closed, ip={}, port={}", addr.ip(), addr.port());
 
             if let Some(discovery) = discovery.upgrade() {
-                discovery.remove(&addr).await;
+                runtime.block_on(discovery.remove(&addr));
             }
 
             if let Some(adapter) = adapter.upgrade() {
