@@ -47,6 +47,7 @@ use transport::Transport;
 #[no_mangle]
 pub extern "system" fn JNI_OnLoad(vm: JavaVM, _: *mut c_void) -> i32 {
     AndroidLogger::init();
+    srt::startup();
 
     unsafe {
         RUNTIME
@@ -66,7 +67,6 @@ pub extern "system" fn JNI_OnLoad(vm: JavaVM, _: *mut c_void) -> i32 {
             .unwrap();
     }
 
-    srt::startup();
     JNI_VERSION_1_6
 }
 
@@ -620,13 +620,11 @@ impl Mirror {
     ) -> i32 {
         catcher(&mut env, |env| {
             let addr: String = env.get_string(&addr)?.into();
-            let addr = addr.parse()?;
-            Ok(get_runtime()?.block_on(async move {
-                unsafe { &*mirror }
-                    .create_receiver(addr, unsafe { &*adapter })
-                    .await
-                    .is_ok()
-            }))
+            get_runtime()?.block_on(
+                unsafe { &*mirror }.create_receiver(addr.parse()?, unsafe { &*adapter }),
+            )?;
+            
+            Ok(true)
         })
         .unwrap_or(false) as i32
     }

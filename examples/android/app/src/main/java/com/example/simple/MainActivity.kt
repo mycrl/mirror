@@ -38,6 +38,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -48,12 +49,14 @@ open class Layout : ComponentActivity() {
     private var buttonAlign by mutableStateOf(Alignment.Center)
     private var icon by mutableIntStateOf(R.drawable.cell_tower)
     private var state: Int = State.New
+    private var socketaddr: String? = null
 
     class State {
         companion object {
             const val New = 0;
             const val Started = 1;
             const val Receiving = 2;
+            const val StopReceiving = 3;
         }
     }
 
@@ -63,6 +66,10 @@ open class Layout : ComponentActivity() {
         setContent {
             CreateLayout()
         }
+    }
+
+    fun layoutGetPeerAddr(): String? {
+        return socketaddr
     }
 
     fun layoutGetSurface(): Surface? {
@@ -77,16 +84,16 @@ open class Layout : ComponentActivity() {
         clickStartHandler = handler
     }
 
-    fun layoutChangeReceived() {
+    fun layoutChangeReceived(addr: String?) {
+        if (addr != null) {
+            socketaddr = addr
+        }
+
         state = State.Receiving
         icon = R.drawable.stop_circle
         buttonAlign = Alignment.BottomStart
 
         runOnUiThread {
-            surfaceView?.let { view ->
-                view.visibility = View.VISIBLE
-            }
-
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 window.insetsController?.hide(WindowInsets.Type.statusBars() or WindowInsets.Type.navigationBars())
             } else {
@@ -102,12 +109,12 @@ open class Layout : ComponentActivity() {
         state = State.Started
         icon = R.drawable.wifi_tethering
         buttonAlign = Alignment.Center
+    }
 
-        runOnUiThread {
-            surfaceView?.let { view ->
-                view.visibility = View.INVISIBLE
-            }
-        }
+    fun layoutStopReceiving() {
+        state = State.StopReceiving
+        icon = R.drawable.link
+        buttonAlign = Alignment.Center
     }
 
     fun layoutChangeReset() {
@@ -116,10 +123,6 @@ open class Layout : ComponentActivity() {
         buttonAlign = Alignment.Center
 
         runOnUiThread {
-            surfaceView?.let { view ->
-                view.visibility = View.INVISIBLE
-            }
-
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 window.insetsController?.show(WindowInsets.Type.statusBars() or WindowInsets.Type.navigationBars())
             } else {
@@ -155,7 +158,6 @@ open class Layout : ComponentActivity() {
                         })
                     }
 
-                    view.visibility = View.INVISIBLE
                     surfaceView = view
                     view
                 },
@@ -180,13 +182,13 @@ open class Layout : ComponentActivity() {
                         tint = Color.White
                     )
 
-                    if (state == State.Started || state == State.Receiving) {
+                    if (state != State.New) {
                         Spacer(modifier = Modifier.width(15.dp))
                         Text(
-                            text = if (state == State.Started) {
-                                "Screen casting, Click to stop"
-                            } else {
-                                "Receiving screen casting, Click to stop"
+                            text = when (state) {
+                                State.StopReceiving -> "$socketaddr"
+                                State.Started -> "Screen casting, Click to stop"
+                                else -> "Receiving screen casting, Click to stop"
                             }, modifier = Modifier
                         )
                     }
@@ -249,16 +251,16 @@ class MainActivity : Permissions() {
             Log.i("simple", "service connected.")
 
             simpleMirrorServiceBinder = service as SimpleMirrorServiceBinder
-            simpleMirrorServiceBinder?.registerReceivedHandler { id, ip ->
-                Log.i("simple", "start receiving sender stream. id=${id}, ip=${ip}")
+            simpleMirrorServiceBinder?.registerReceivedHandler { id, addr ->
+                Log.i("simple", "start receiving sender stream. id=$id, addr=$addr")
 
-                layoutChangeReceived()
+                layoutChangeReceived(addr)
             }
 
-            simpleMirrorServiceBinder?.registerReceivedReleaseHandler { id, ip ->
-                Log.i("simple", "receiver is released. id=${id}, ip=${ip}")
+            simpleMirrorServiceBinder?.registerReceivedReleaseHandler { id, addr ->
+                Log.i("simple", "receiver is released. id=$id, ip=$addr")
 
-                layoutChangeReset()
+                layoutStopReceiving()
             }
 
             layoutGetSurface()?.let { surface ->
@@ -274,7 +276,7 @@ class MainActivity : Permissions() {
     init {
         registerPermissionsHandler { intent ->
             if (intent != null) {
-                simpleMirrorServiceBinder?.startup(intent, resources.displayMetrics)
+                simpleMirrorServiceBinder?.createSender(intent, resources.displayMetrics)
                 layoutChangeStarted()
             }
         }
@@ -283,13 +285,20 @@ class MainActivity : Permissions() {
             val state = layoutGetState()
             Log.i("simple", "click start button. state=${state}")
 
-            if (state == State.New) {
-                requestPermissions()
-            } else {
-                layoutChangeReset()
-                when (state) {
-                    State.Receiving -> simpleMirrorServiceBinder?.stopReceiver()
-                    State.Started -> simpleMirrorServiceBinder?.stopSender()
+            when (state) {
+                State.New -> requestPermissions()
+                State.StopReceiving -> {
+                    simpleMirrorServiceBinder?.createReceiver(layoutGetPeerAddr()!!)
+                    layoutChangeReceived(null)
+                }
+
+                State.Receiving -> {
+                    simpleMirrorServiceBinder?.stopReceiver()
+                }
+
+                State.Started -> {
+                    simpleMirrorServiceBinder?.stopSender()
+                    layoutChangeReset()
                 }
             }
         }

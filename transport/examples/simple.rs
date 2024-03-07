@@ -1,5 +1,5 @@
 use std::{
-    net::{IpAddr, SocketAddr},
+    net::SocketAddr,
     process::Stdio,
     sync::{Arc, Weak},
     time::Duration,
@@ -25,7 +25,7 @@ impl ReceiverAdapterFactory for SimpleReceiverAdapterFactory {
     async fn connect(
         &self,
         _id: u8,
-        _ip: IpAddr,
+        _ip: SocketAddr,
         _description: &[u8],
     ) -> Option<Weak<StreamReceiverAdapter>> {
         let adapter = StreamReceiverAdapter::new();

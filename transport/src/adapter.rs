@@ -1,6 +1,6 @@
 use std::{
     fmt,
-    net::IpAddr,
+    net::SocketAddr,
     sync::{Arc, Weak},
 };
 
@@ -53,7 +53,7 @@ pub trait ReceiverAdapterFactory: Send + Sync {
     async fn connect(
         &self,
         id: u8,
-        ip: IpAddr,
+        addr: SocketAddr,
         description: &[u8],
     ) -> Option<Weak<StreamReceiverAdapter>>;
 }

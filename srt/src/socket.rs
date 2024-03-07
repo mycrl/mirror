@@ -184,30 +184,21 @@ impl Socket {
     /// until then it will be kept in the receiver buffer. Also, when the
     /// time to play has come for a message that is next to the currently
     /// lost one, it will be delivered and the lost one dropped.
-    pub async fn read(&self, buf: &mut [u8]) -> Result<usize, SrtError> {
+    pub fn read(&self, buf: &mut [u8]) -> Result<usize, SrtError> {
         if self.is_closed.get() {
             return SrtError::error(SrtErrorKind::RecvError);
         }
 
-        let fd = self.fd;
-        let len = buf.len();
-        let is_closed = self.is_closed.clone();
-        let buf_ptr = buf.as_mut_ptr() as usize;
-        Handle::current()
-            .spawn_blocking(move || {
-                let ret = unsafe { srt_recv(fd, buf_ptr as *mut _, len as c_int) };
-                if ret <= 0 {
-                    is_closed.update(true);
-                }
+        let ret = unsafe { srt_recv(self.fd, buf.as_mut_ptr() as *mut _, buf.len() as c_int) };
+        if ret <= 0 {
+            self.is_closed.update(true);
+        }
 
-                if ret < 0 {
-                    SrtError::error(SrtErrorKind::RecvError)
-                } else {
-                    Ok(ret as usize)
-                }
-            })
-            .await
-            .expect("not run tokio spawn blocking")
+        if ret < 0 {
+            SrtError::error(SrtErrorKind::RecvError)
+        } else {
+            Ok(ret as usize)
+        }
     }
 
     /// Sends a payload to a remote party over a given socket.
@@ -251,19 +242,19 @@ impl Socket {
     /// rest of the buffer next time to send it completely. In both **file/
     /// message** and **live mode** the successful return is always equal to
     /// `len`.
-    pub async fn send(&self, mut buf: &[u8]) -> Result<(), SrtError> {
+    pub fn send(&self, mut buf: &[u8]) -> Result<(), SrtError> {
         if buf.len() == 0 {
             return Ok(());
         }
 
         while !buf.is_empty() {
-            buf = &buf[self.send_with_sized(buf).await?..];
+            buf = &buf[self.send_with_sized(buf)?..];
         }
 
         Ok(())
     }
 
-    async fn send_with_sized(&self, buf: &[u8]) -> Result<usize, SrtError> {
+    fn send_with_sized(&self, buf: &[u8]) -> Result<usize, SrtError> {
         if buf.len() == 0 {
             return Ok(0);
         }
@@ -272,22 +263,14 @@ impl Socket {
             return SrtError::error(SrtErrorKind::SendError);
         }
 
-        let fd = self.fd;
-        let buf_ptr = buf.as_ptr() as usize;
-        let is_closed = self.is_closed.clone();
         let size = std::cmp::min(buf.len(), self.opt.max_pkt_size());
-        Handle::current()
-            .spawn_blocking(move || {
-                let ret = unsafe { srt_send(fd, buf_ptr as *const _, size as c_int) } as usize;
-                if ret != size {
-                    is_closed.update(true);
-                    SrtError::error(SrtErrorKind::SendError)
-                } else {
-                    Ok(ret as usize)
-                }
-            })
-            .await
-            .expect("not run tokio spawn blocking")
+        let ret = unsafe { srt_send(self.fd, buf.as_ptr() as *const _, size as c_int) } as usize;
+        if ret != size {
+            self.is_closed.update(true);
+            SrtError::error(SrtErrorKind::SendError)
+        } else {
+            Ok(ret as usize)
+        }
     }
 }
 

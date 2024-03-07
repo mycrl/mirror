@@ -37,12 +37,12 @@ async fn main() -> Result<(), anyhow::Error> {
         let mut server = Listener::bind(args.addr, options, 100).await?;
         while let Ok((socket, _addr)) = server.accept().await {
             let mut buf = [0u8; 2000];
-            while let Ok(size) = socket.read(&mut buf).await {
+            while let Ok(size) = socket.read(&mut buf) {
                 if size == 0 {
                     break;
                 }
 
-                socket.send(&buf[..size]).await?;
+                socket.send(&buf[..size])?;
             }
         }
     } else {
@@ -53,7 +53,7 @@ async fn main() -> Result<(), anyhow::Error> {
         let socket_ = socket.clone();
         tokio::spawn(async move {
             let mut buf = [0u8; 2000];
-            while let Ok(size) = socket_.read(&mut buf).await {
+            while let Ok(size) = socket_.read(&mut buf) {
                 if size == 0 {
                     break;
                 }
@@ -75,7 +75,7 @@ async fn main() -> Result<(), anyhow::Error> {
             tables.lock().await.insert(index, Instant::now());
             index = if index + 1 >= u8::MAX { 0 } else { index + 1 };
 
-            socket.send(&buf).await?;
+            socket.send(&buf)?;
             sleep(Duration::from_millis(1000)).await;
         }
     }
