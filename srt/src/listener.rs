@@ -143,7 +143,7 @@ impl Listener {
     /// option must be first set explicitly to 0 or 1, otherwise the binding
     /// will fail. In all other cases this option is meaningless. See
     /// `SRTO_IPV6ONLY` option for more information.
-    pub async fn bind(addr: SocketAddr, opt: SrtOptions, backlog: u8) -> Result<Self, SrtError> {
+    pub async fn bind(addr: SocketAddr, opt: SrtOptions, backlog: u32) -> Result<Self, SrtError> {
         Handle::current()
             .spawn_blocking(move || {
                 let fd = unsafe { srt_create_socket() };
@@ -158,7 +158,7 @@ impl Listener {
                     return SrtError::error(SrtErrorKind::BindError);
                 }
 
-                if unsafe { srt_listen(fd, backlog.into()) } == -1 {
+                if unsafe { srt_listen(fd, backlog as c_int) } == -1 {
                     return SrtError::error(SrtErrorKind::ListenError);
                 }
 
@@ -261,7 +261,9 @@ impl Drop for Listener {
     fn drop(&mut self) {
         unsafe {
             let _ = Box::from_raw(self.ctx);
-            srt_close(self.fd);
+            if srt_close(self.fd) != 0 {
+                log::error!("not release the listener!");
+            }
         }
     }
 }
@@ -272,7 +274,7 @@ extern "C" fn listener_fn(
     _hs_version: c_int,
     peeraddr: *const sockaddr,
     _streamid: *const c_char,
-) {
+) -> c_int {
     #[cfg(not(target_os = "windows"))]
     use libc::sockaddr_in;
 
@@ -284,9 +286,12 @@ extern "C" fn listener_fn(
 
     let tx = unsafe { &*(opaque as *mut UnboundedSender<(SRTSOCKET, SocketAddr)>) };
     if let Some(addr) = unsafe { OsSocketAddr::copy_from_raw(peeraddr as *const _, size) }.into() {
-        tx.send((s, addr)).expect(
-            "Attempting to notify the listener that a new connection has come fails, this is a \
-             bug.",
-        )
+        if tx.send((s, addr)).is_ok() {
+            0
+        } else {
+            -1
+        }
+    } else {
+        -1
     }
 }

@@ -174,11 +174,11 @@ impl Transport {
         description: Vec<u8>,
         adapter: &Arc<StreamSenderAdapter>,
     ) -> Result<u16, TransportError> {
-        let sockets = Arc::new(RwLock::new(HashMap::with_capacity(100)));
+        let sockets = Arc::new(RwLock::new(HashMap::with_capacity(256)));
         let mut server = Listener::bind(
             SocketAddr::new(self.options.bind.ip(), 0),
             self.options.srt.clone(),
-            100,
+            i32::MAX as u32,
         )
         .await?;
 
@@ -278,6 +278,7 @@ impl Transport {
 
                     for addr in &closed {
                         let _ = sockets.write().await.remove(addr);
+                        log::info!("remove a socket, addr={}", addr)
                     }
                 } else {
                     break;
