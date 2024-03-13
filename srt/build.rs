@@ -104,7 +104,7 @@ fn universal_build() -> Result<()> {
         )) {
             exec(
                 &format!(
-                    "cmake {} . && cmake --build . --config Release",
+                    "cmake {} .",
                     [
                         "-DCMAKE_BUILD_TYPE=Release",
                         "-DENABLE_APPS=false",
@@ -120,6 +120,8 @@ fn universal_build() -> Result<()> {
                 ),
                 &srt_dir,
             )?;
+
+            exec("cmake --build . --config Release", &srt_dir)?;
         }
     }
 
