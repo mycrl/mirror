@@ -102,12 +102,10 @@ impl StreamSenderAdapter {
     }
 
     pub fn get_config(&self) -> Vec<(&[u8], StreamKind)> {
-        [
-            (
-                self.video.get_config_buffer().unwrap_or_else(|| &[]),
-                StreamKind::Video,
-            ),
-        ]
+        [(
+            self.video.get_config_buffer().unwrap_or_else(|| &[]),
+            StreamKind::Video,
+        )]
         .to_vec()
     }
 }
