@@ -7,34 +7,74 @@
 
 #include "devices.h"
 
-void show_dshow_device() {
-	AVFormatContext* pFormatCtx = avformat_alloc_context();
-	AVDictionary* options = NULL;
-	av_dict_set(&options, "list_devices", "true", 0); //0表示不区分大小写
-	AVInputFormat* iformat = av_find_input_format("avfoundation");
-	printf("========Device Info=============\n");
-	avformat_open_input(&pFormatCtx, "", iformat, &options);
-	printf("================================\n");
-	avformat_free_context(pFormatCtx);
+enum AVMediaType kind_into_type(DeviceKind kind)
+{
+    if (kind == DeviceKindVideo)
+    {
+        return AVMEDIA_TYPE_VIDEO;
+    }
+    else
+    {
+        return AVMEDIA_TYPE_AUDIO;
+    }
+}
+
+Devices get_devices(DeviceKind kind) {
+    Devices devices;
+
+    AVInputFormat* fmt = av_find_input_format("dshow");
+    AVFormatContext* ctx = avformat_alloc_context();
+
+    AVDeviceInfoList* list = NULL;
+    if (avdevice_list_input_sources(fmt, "dummy", NULL, &list) < 0)
+    {
+        return devices;
+    }
+
+    enum AVMediaType type = kind_into_type(kind);
+    devices.items = malloc(sizeof(Device) * 50);
+    if (devices.items == NULL)
+    {
+        return devices;
+    }
+
+    for (int i = 0; i < list->nb_devices; i ++) 
+    {
+        for (int k = 0; k < list->devices[i]->nb_media_types; k ++)
+        {
+            if (list->devices[i]->media_types[k] == type)
+            {
+                devices.items[devices.size].kind = kind;
+                devices.items[devices.size].name = list->devices[i]->device_name;
+                devices.items[devices.size].description = list->devices[i]->device_description;
+                devices.size ++;
+            }
+        }
+    }
+
+    avdevice_free_list_devices(&list);
+    avformat_close_input(&ctx);
+    avformat_free_context(ctx);
+
+    return devices;
 }
 
 void init()
 {
     avdevice_register_all();
-    show_dshow_device();
 }
 
-const AVInputFormat* get_audio_device_next(const AVInputFormat* device) 
+Devices get_audio_devices() 
 {
-    return av_input_audio_device_next(device);
+    return get_devices(DeviceKindAudio);
 }
 
-const AVInputFormat* get_video_device_next(const AVInputFormat* device) 
+Devices get_video_devices() 
 {
-    return av_input_video_device_next(device);
+    return get_devices(DeviceKindVideo);
 }
 
-const char* get_device_name(const AVInputFormat* device)
+void release_devices(Devices* devices)
 {
-    return device->long_name;
+    free(devices->items);
 }

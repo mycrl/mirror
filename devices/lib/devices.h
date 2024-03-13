@@ -21,9 +21,28 @@
 #include <libavformat/avformat.h>
 #include <libavutil/avutil.h>
 
+typedef enum
+{
+    DeviceKindVideo = 0,
+    DeviceKindAudio = 1
+} DeviceKind;
+
+typedef struct
+{
+    char* name;
+    char* description;
+    DeviceKind kind;
+} Device;
+
+typedef struct
+{
+    Device* items;
+    size_t size;
+} Devices;
+
 EXPORT void init();
-EXPORT const AVInputFormat* get_audio_device_next(const AVInputFormat* device);
-EXPORT const AVInputFormat* get_video_device_next(const AVInputFormat* device);
-EXPORT const char* get_device_name(const AVInputFormat* device);
+EXPORT Devices get_audio_devices();
+EXPORT Devices get_video_devices();
+EXPORT void release_devices(Devices* devices);
 
 #endif /* devices_h */
