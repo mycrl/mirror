@@ -33,7 +33,6 @@ import com.github.mycrl.mirror.MirrorSender
 import com.github.mycrl.mirror.MirrorService
 import com.github.mycrl.mirror.MirrorServiceConfigure
 import com.github.mycrl.mirror.MirrorServiceObserver
-import com.github.mycrl.mirror.Platform
 import com.github.mycrl.mirror.ReceiverAdapterWrapper
 import com.github.mycrl.mirror.Video
 
@@ -127,7 +126,6 @@ class SimpleMirrorService : Service() {
 
         private val VideoConfigure = object : Video.VideoEncoder.VideoEncoderConfigure {
             override val format = MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface
-            override val platform = Platform.Default
             override val bitRate = 7000 * 1024
             override val frameRate = 60
             override var width = 2560
@@ -137,7 +135,6 @@ class SimpleMirrorService : Service() {
         private val AudioConfigure = object : Audio.AudioEncoder.AudioEncoderConfigure {
             override val channalConfig = AudioFormat.CHANNEL_IN_MONO
             override val sampleBits = AudioFormat.ENCODING_PCM_16BIT
-            override val platform = Platform.Default
             override val sampleRate = 16 * 1000
             override val bitRate = 23850
             override val channels = 1
@@ -146,7 +143,7 @@ class SimpleMirrorService : Service() {
 
     private var receiverAdapter: ReceiverAdapterWrapper? = null
     private val mirror: MirrorService =
-        MirrorService(Platform.Default, MirrorConfig, object : MirrorServiceObserver() {
+        MirrorService(true, MirrorConfig, object : MirrorServiceObserver() {
             override fun accept(id: Int, addr: String): MirrorReceiver {
                 receivedHandler?.let { it(id, addr) }
 
@@ -209,9 +206,9 @@ class SimpleMirrorService : Service() {
 
         val (ip, port) = addr.split(":")
         mirror.createReceiver(ip, port.toInt(), object : MirrorAdapterConfigure {
-            override val platform = Platform.Default
             override val video = VideoConfigure
             override val audio = AudioConfigure
+            override val isLowLatency = true
         }, object : MirrorReceiver() {
             override val track = createAudioTrack()
             override val surface = outputSurface!!
@@ -246,9 +243,9 @@ class SimpleMirrorService : Service() {
 
         mediaProjection?.registerCallback(object : MediaProjection.Callback() {}, null)
         sender = mirror.createSender(0, object : MirrorAdapterConfigure {
-            override val platform = Platform.Default
             override val video = VideoConfigure
             override val audio = AudioConfigure
+            override val isLowLatency = true
         }, createAudioRecord())
 
         virtualDisplay = mediaProjection?.createVirtualDisplay(
