@@ -623,7 +623,7 @@ impl Mirror {
             get_runtime()?.block_on(
                 unsafe { &*mirror }.create_receiver(addr.parse()?, unsafe { &*adapter }),
             )?;
-            
+
             Ok(true)
         })
         .unwrap_or(false) as i32

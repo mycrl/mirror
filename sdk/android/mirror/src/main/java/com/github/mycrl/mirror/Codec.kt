@@ -157,7 +157,9 @@ class Video {
             format.setInteger(MediaFormat.KEY_PUSH_BLANK_BUFFERS_ON_STOP, 1)
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                format.setInteger(MediaFormat.KEY_LOW_LATENCY, 1)
+                if (configure.lowLatency) {
+                    format.setInteger(MediaFormat.KEY_LOW_LATENCY, 1)
+                }
             }
 
             codec = MediaCodec.createDecoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
@@ -213,6 +215,7 @@ class Video {
         }
 
         interface VideoDecoderConfigure {
+            val lowLatency: Boolean;
             val width: Int;
             val height: Int;
         }

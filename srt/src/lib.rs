@@ -452,7 +452,7 @@ mod api {
                 hs_version: c_int,
                 peeraddr: *const sockaddr,
                 streamid: *const c_char,
-            ),
+            ) -> c_int,
             hook_opaque: *mut c_void,
         ) -> c_int;
         /// Connects a socket or a group to a remote party with a specified

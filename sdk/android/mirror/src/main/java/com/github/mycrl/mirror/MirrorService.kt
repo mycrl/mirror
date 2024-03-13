@@ -9,6 +9,7 @@ import kotlin.Exception
 typealias MirrorServiceConfigure = MirrorOptions;
 
 interface MirrorAdapterConfigure {
+    val isLowLatency: Boolean;
     val video: Video.VideoEncoder.VideoEncoderConfigure
     val audio: Audio.AudioEncoder.AudioEncoderConfigure
 }
@@ -61,6 +62,7 @@ abstract class MirrorServiceObserver {
  * automatically respond to any sender push.
  */
 class MirrorService constructor(
+    private val isLowLatency: Boolean,
     private val configure: MirrorServiceConfigure,
     private val observer: MirrorServiceObserver?
 ) {
@@ -81,6 +83,7 @@ class MirrorService constructor(
                             object : Video.VideoDecoder.VideoDecoderConfigure {
                                 override val height = codecDescription.video.height
                                 override val width = codecDescription.video.width
+                                override val lowLatency = isLowLatency
                             })
 
                         private val audioDecoder = if (receiver.track != null) {
@@ -216,6 +219,7 @@ class MirrorService constructor(
             private val videoDecoder = Video.VideoDecoder(
                 observer.surface,
                 object : Video.VideoDecoder.VideoDecoderConfigure {
+                    override val lowLatency = configure.isLowLatency
                     override val height = configure.video.height
                     override val width = configure.video.width
                 })

@@ -10,23 +10,17 @@ use crate::BufferFlag;
 /// sps and pps as well as the key frame information.
 pub struct VideoStreamSenderProcesser {
     config_buffer: AtomicOption<Bytes>,
-    key_buffer: AtomicOption<Bytes>,
 }
 
 impl VideoStreamSenderProcesser {
     pub fn new() -> Self {
         Self {
             config_buffer: AtomicOption::new(None),
-            key_buffer: AtomicOption::new(None),
         }
     }
 
     pub fn get_config_buffer(&self) -> Option<&[u8]> {
         self.config_buffer.get().map(|v| &v[..])
-    }
-
-    pub fn get_key_buffer(&self) -> Option<&[u8]> {
-        self.key_buffer.get().map(|v| &v[..])
     }
 
     pub fn apply(&self, buf: Bytes, flags: i32) {
@@ -36,11 +30,6 @@ impl VideoStreamSenderProcesser {
             // should be noted that the configuration frames will only be
             // generated once.
             self.config_buffer.swap(Some(buf));
-        } else if flags == BufferFlag::KeyFrame as i32 {
-            // In order to decode p-frames more nicely, keyframes are saved here,
-            // and normally keyframes come every once in a while, so refresh the
-            // keyframe cache every time there is a new keyframe.
-            self.key_buffer.swap(Some(buf));
         }
     }
 }

@@ -108,7 +108,7 @@ publishing {
         release(MavenPublication) {
             groupId = 'com.github.mycrl'
             artifactId = 'mirror'
-            version = '0.1.2'
+            version = '0.1.6'
 
             afterEvaluate {
                 from components.release

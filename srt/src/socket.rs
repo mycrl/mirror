@@ -276,8 +276,8 @@ impl Socket {
 
 impl Drop for Socket {
     fn drop(&mut self) {
-        unsafe {
-            srt_close(self.fd);
+        if unsafe { srt_close(self.fd) } != 0 {
+            log::error!("not release the socket!");
         }
     }
 }

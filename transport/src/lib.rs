@@ -174,11 +174,11 @@ impl Transport {
         description: Vec<u8>,
         adapter: &Arc<StreamSenderAdapter>,
     ) -> Result<u16, TransportError> {
-        let sockets = Arc::new(RwLock::new(HashMap::with_capacity(100)));
+        let sockets = Arc::new(RwLock::new(HashMap::with_capacity(256)));
         let mut server = Listener::bind(
             SocketAddr::new(self.options.bind.ip(), 0),
             self.options.srt.clone(),
-            100,
+            i32::MAX as u32,
         )
         .await?;
 
@@ -212,7 +212,8 @@ impl Transport {
                 sleep(Duration::from_millis(100)).await;
 
                 if let Some(adapter) = adapter_.upgrade() {
-                    for (buf, kind) in adapter.get_config() {
+                    let mut is_allow = true;
+                    'a: for (buf, kind) in adapter.get_config() {
                         if let Some(payloads) = encoder.encode(max_pkt_size, kind, buf) {
                             for payload in payloads {
                                 if let Err(e) = socket.send(payload) {
@@ -222,17 +223,20 @@ impl Transport {
                                         e
                                     );
 
-                                    break;
+                                    is_allow = false;
+                                    break 'a;
                                 }
                             }
                         }
                     }
+
+                    if is_allow {
+                        sockets_.write().await.insert(addr, socket);
+                        log::info!("srt server accept socket, addr={}", addr);
+                    }
                 } else {
                     break;
                 }
-
-                sockets_.write().await.insert(addr, socket);
-                log::info!("srt server accept socket, addr={}", addr);
             }
         });
 
@@ -274,7 +278,10 @@ impl Transport {
 
                     for addr in &closed {
                         let _ = sockets.write().await.remove(addr);
+                        log::info!("remove a socket, addr={}", addr)
                     }
+                } else {
+                    break;
                 }
             }
 

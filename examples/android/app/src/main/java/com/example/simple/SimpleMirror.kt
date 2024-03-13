@@ -143,7 +143,7 @@ class SimpleMirrorService : Service() {
 
     private var receiverAdapter: ReceiverAdapterWrapper? = null
     private val mirror: MirrorService =
-        MirrorService(MirrorConfig, object : MirrorServiceObserver() {
+        MirrorService(true, MirrorConfig, object : MirrorServiceObserver() {
             override fun accept(id: Int, addr: String): MirrorReceiver {
                 receivedHandler?.let { it(id, addr) }
 
@@ -208,6 +208,7 @@ class SimpleMirrorService : Service() {
         mirror.createReceiver(ip, port.toInt(), object : MirrorAdapterConfigure {
             override val video = VideoConfigure
             override val audio = AudioConfigure
+            override val isLowLatency = true
         }, object : MirrorReceiver() {
             override val track = createAudioTrack()
             override val surface = outputSurface!!
@@ -244,6 +245,7 @@ class SimpleMirrorService : Service() {
         sender = mirror.createSender(0, object : MirrorAdapterConfigure {
             override val video = VideoConfigure
             override val audio = AudioConfigure
+            override val isLowLatency = true
         }, createAudioRecord())
 
         virtualDisplay = mediaProjection?.createVirtualDisplay(
