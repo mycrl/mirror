@@ -107,10 +107,6 @@ impl StreamSenderAdapter {
                 self.video.get_config_buffer().unwrap_or_else(|| &[]),
                 StreamKind::Video,
             ),
-            (
-                self.video.get_key_buffer().unwrap_or_else(|| &[]),
-                StreamKind::Video,
-            ),
         ]
         .to_vec()
     }
