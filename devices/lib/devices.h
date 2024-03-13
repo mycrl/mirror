@@ -18,17 +18,12 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <libavdevice/avdevice.h>
-
-typedef struct
-{
-    const AVInputFormat** items;
-    size_t size;
-} Devices;
+#include <libavformat/avformat.h>
+#include <libavutil/avutil.h>
 
 EXPORT void init();
-EXPORT Devices get_audio_devices();
-EXPORT Devices get_video_devices();
-EXPORT void release_devices(Devices* devices);
+EXPORT const AVInputFormat* get_audio_device_next(const AVInputFormat* device);
+EXPORT const AVInputFormat* get_video_device_next(const AVInputFormat* device);
 EXPORT const char* get_device_name(const AVInputFormat* device);
 
 #endif /* devices_h */

@@ -7,54 +7,31 @@
 
 #include "devices.h"
 
+void show_dshow_device() {
+	AVFormatContext* pFormatCtx = avformat_alloc_context();
+	AVDictionary* options = NULL;
+	av_dict_set(&options, "list_devices", "true", 0); //0表示不区分大小写
+	AVInputFormat* iformat = av_find_input_format("avfoundation");
+	printf("========Device Info=============\n");
+	avformat_open_input(&pFormatCtx, "", iformat, &options);
+	printf("================================\n");
+	avformat_free_context(pFormatCtx);
+}
+
 void init()
 {
     avdevice_register_all();
+    show_dshow_device();
 }
 
-Devices get_audio_devices() 
+const AVInputFormat* get_audio_device_next(const AVInputFormat* device) 
 {
-    Devices devices;
-    devices.size = 0;
-    devices.items = malloc(sizeof(const AVInputFormat*) * 100);
-    if (devices.items == NULL)
-    {
-        return devices;
-    }
-
-    const AVInputFormat* item = av_input_audio_device_next(NULL);
-    for (;item != NULL; devices.size += 1)
-    {
-        devices.items[devices.size] = item;
-        item = av_input_audio_device_next(item);
-    }
-
-    return devices;
+    return av_input_audio_device_next(device);
 }
 
-Devices get_video_devices() 
+const AVInputFormat* get_video_device_next(const AVInputFormat* device) 
 {
-    Devices devices;
-    devices.size = 0;
-    devices.items = malloc(sizeof(const AVInputFormat*) * 100);
-    if (devices.items == NULL)
-    {
-        return devices;
-    }
-
-    const AVInputFormat* item = av_input_video_device_next(NULL);
-    for (;item != NULL; devices.size += 1)
-    {
-        devices.items[devices.size] = item;
-        item = av_input_video_device_next(item);
-    }
-
-    return devices;
-}
-
-void release_devices(Devices* devices)
-{
-    free(devices->items);
+    return av_input_video_device_next(device);
 }
 
 const char* get_device_name(const AVInputFormat* device)

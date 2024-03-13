@@ -1,22 +1,17 @@
-use std::ffi::{c_char, CStr};
+use std::{
+    ffi::{c_char, c_void, CStr},
+    ptr::null,
+};
 
-use api::release_devices;
+use api::get_device_name;
 
 mod api {
     use std::ffi::{c_char, c_void};
 
-    #[repr(C)]
-    #[derive(Debug)]
-    pub struct Devices {
-        pub items: *const *const c_void,
-        pub size: usize,
-    }
-
     extern "C" {
         pub fn init();
-        pub fn get_audio_devices() -> Devices;
-        pub fn get_video_devices() -> Devices;
-        pub fn release_devices(devices: *const Devices);
+        pub fn get_audio_device_next(device: *const c_void) -> *const c_void;
+        pub fn get_video_device_next(device: *const c_void) -> *const c_void;
         pub fn get_device_name(device: *const c_void) -> *const c_char;
     }
 }
@@ -37,35 +32,33 @@ enum DeviceKind {
 }
 
 #[derive(Debug)]
-struct Devices {
-    raw: api::Devices,
-    pub items: Vec<String>,
+struct Device {
+    ptr: *const c_void,
+    pub name: Option<String>,
     pub kind: DeviceKind,
 }
 
-impl Devices {
-    fn get_audio_devices() -> Self {
-        let raw = unsafe { api::get_audio_devices() };
-        let devices = unsafe { std::slice::from_raw_parts(raw.items, raw.size) };
-        let mut items = Vec::with_capacity(devices.len());
+struct Devices;
 
-        for device in devices {
-            if let Some(name) = from_c_str(unsafe { api::get_device_name(*device) }) {
-                items.push(name)
+impl Devices {
+    fn get_audio_devices() -> Vec<Device> {
+        let mut items = Vec::with_capacity(20);
+
+        let mut ptr = null();
+        loop {
+            ptr = unsafe { api::get_audio_device_next(ptr) };
+            if !ptr.is_null() {
+                items.push(Device {
+                    name: from_c_str(unsafe { get_device_name(ptr) }),
+                    kind: DeviceKind::Audio,
+                    ptr,
+                })
+            } else {
+                break;
             }
         }
 
-        Self {
-            kind: DeviceKind::Audio,
-            items,
-            raw,
-        }
-    }
-}
-
-impl Drop for Devices {
-    fn drop(&mut self) {
-        unsafe { release_devices(&self.raw) }
+        items
     }
 }
 
