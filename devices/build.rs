@@ -64,6 +64,16 @@ fn main() -> anyhow::Result<()> {
         .out_dir(&settings.out_dir)
         .file("./lib/devices.c")
         .includes(&settings.ffmpeg_include_prefix)
+        .define(
+            if cfg!(target_os = "windows") {
+                "WINDOWS"
+            } else if cfg!(target_os = "macos") {
+                "MACOS"
+            } else {
+                "LINUX"
+            },
+            None,
+        )
         .compile("devices");
 
     println!("cargo:rustc-link-search=all={}", &settings.out_dir);

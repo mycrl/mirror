@@ -9,14 +9,14 @@
 #define devices_h
 #pragma once
 
-#ifdef WIN32
+#ifdef WINDOWS
 #define EXPORT __declspec(dllexport)
 #else
 #define EXPORT
 #endif
 
-#include <stdbool.h>
 #include <stdint.h>
+#include <stdbool.h>
 #include <libavdevice/avdevice.h>
 #include <libavformat/avformat.h>
 #include <libavutil/avutil.h>

@@ -7,6 +7,14 @@
 
 #include "devices.h"
 
+#ifdef WINDOWS
+#define DEVICE "dshow"
+#define DEVICE_NAME "dummy"
+#elif MACOS
+#define DEVICE "avfoundation"
+#define DEVICE_NAME ""
+#endif
+
 enum AVMediaType kind_into_type(DeviceKind kind)
 {
     if (kind == DeviceKindVideo)
@@ -21,23 +29,22 @@ enum AVMediaType kind_into_type(DeviceKind kind)
 
 Devices get_devices(DeviceKind kind) {
     Devices devices;
-
-    AVInputFormat* fmt = av_find_input_format("dshow");
-    AVFormatContext* ctx = avformat_alloc_context();
-
-    AVDeviceInfoList* list = NULL;
-    if (avdevice_list_input_sources(fmt, "dummy", NULL, &list) < 0)
-    {
-        return devices;
-    }
-
-    enum AVMediaType type = kind_into_type(kind);
-    devices.items = malloc(sizeof(Device) * 50);
+    devices.size = 0;
+    devices.items = malloc(sizeof(Device) * 100);
     if (devices.items == NULL)
     {
         return devices;
     }
 
+    AVDeviceInfoList* list = NULL;
+    AVFormatContext* ctx = avformat_alloc_context();
+    const AVInputFormat* fmt = av_find_input_format(DEVICE);
+    if (avdevice_list_input_sources(fmt, DEVICE_NAME, NULL, &list) < 0)
+    {
+        return devices;
+    }
+
+    enum AVMediaType type = kind_into_type(kind);
     for (int i = 0; i < list->nb_devices; i ++) 
     {
         for (int k = 0; k < list->devices[i]->nb_media_types; k ++)
@@ -45,8 +52,8 @@ Devices get_devices(DeviceKind kind) {
             if (list->devices[i]->media_types[k] == type)
             {
                 devices.items[devices.size].kind = kind;
-                devices.items[devices.size].name = list->devices[i]->device_name;
-                devices.items[devices.size].description = list->devices[i]->device_description;
+                devices.items[devices.size].name = strdup(list->devices[i]->device_name);
+                devices.items[devices.size].description = strdup(list->devices[i]->device_description);
                 devices.size ++;
             }
         }
@@ -76,5 +83,11 @@ Devices get_video_devices()
 
 void release_devices(Devices* devices)
 {
+    for (size_t i = 0; i < devices->size; i ++)
+    {
+        free(devices->items[i].description);
+        free(devices->items[i].name);
+    }
+
     free(devices->items);
 }
