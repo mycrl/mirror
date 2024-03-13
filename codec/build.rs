@@ -6,7 +6,7 @@ use anyhow::anyhow;
 use dotenv::dotenv;
 
 fn main() -> anyhow::Result<()> {
-    println!("cargo:rerun-if-changed=./core/src");
+    println!("cargo:rerun-if-changed=./lib");
     println!("cargo:rerun-if-changed=./build.rs");
 
     #[cfg(not(feature = "android"))]
