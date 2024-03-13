@@ -16,14 +16,6 @@ import kotlinx.serialization.encodeToByteArray
 import java.lang.Exception
 import java.nio.ByteBuffer
 
-class Platform {
-    companion object {
-        const val Default = 0;
-        const val Hisi = 1;
-        const val Rockchip = 2;
-    }
-}
-
 abstract class ByteArraySinker {
     abstract fun sink(info: StreamBufferInfo, buf: ByteArray);
 }
@@ -129,7 +121,6 @@ class Video {
         }
 
         interface VideoEncoderConfigure {
-            val platform: Int;
 
             /**
              * [MediaCodecInfo.CodecCapabilities](https://developer.android.com/reference/android/media/MediaCodecInfo.CodecCapabilities)
@@ -166,7 +157,7 @@ class Video {
             format.setInteger(MediaFormat.KEY_PUSH_BLANK_BUFFERS_ON_STOP, 1)
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                if (configure.platform != Platform.Rockchip) {
+                if (configure.lowLatency) {
                     format.setInteger(MediaFormat.KEY_LOW_LATENCY, 1)
                 }
             }
@@ -224,7 +215,7 @@ class Video {
         }
 
         interface VideoDecoderConfigure {
-            val platform: Int;
+            val lowLatency: Boolean;
             val width: Int;
             val height: Int;
         }
@@ -301,7 +292,6 @@ class Audio {
         }
 
         interface AudioDecoderConfigure {
-            val platform: Int;
             val sampleRate: Int;
             val channels: Int;
             val bitRate: Int;
@@ -416,7 +406,6 @@ class Audio {
         }
 
         interface AudioEncoderConfigure {
-            val platform: Int;
 
             /**
              * [AudioFormat#ENCODING_PCM_16BIT](https://developer.android.com/reference/android/media/AudioFormat#ENCODING_PCM_16BIT)
