@@ -4,3 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+
+[build-dependencies]
+cc = "1.0.88"
+anyhow = "1.0.80"
+dotenv = "0.15.0"
+pkg-config = "0.3.30"

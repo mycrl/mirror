@@ -1,5 +1,3 @@
-#![allow(unused)]
-
 use std::{env, fs, path::Path, process::Command};
 
 use anyhow::anyhow;
@@ -9,13 +7,9 @@ fn main() -> anyhow::Result<()> {
     println!("cargo:rerun-if-changed=./core/src");
     println!("cargo:rerun-if-changed=./build.rs");
 
-    #[cfg(not(feature = "android"))]
-    {
-        let settings = Settings::build()?;
-        compile_lib(&settings)?;
-        link_lib(&settings);
-    }
-
+    let settings = Settings::build()?;
+    compile_lib(&settings)?;
+    link_lib(&settings);
     Ok(())
 }
 
@@ -33,7 +27,7 @@ fn compile_lib(settings: &Settings) -> anyhow::Result<()> {
         .target(&settings.target)
         .warnings(false)
         .out_dir(&settings.out_dir)
-        .file("./lib/video_encoder.c")
+        .file("./lib/devices.c")
         .includes(
             &settings
                 .ffmpeg_prefix
@@ -41,7 +35,7 @@ fn compile_lib(settings: &Settings) -> anyhow::Result<()> {
                 .map(|path| vec![join(&path, "./include").unwrap()])
                 .unwrap_or_else(|| setup_dependencies(&settings)),
         )
-        .compile("codec");
+        .compile("devices");
     Ok(())
 }
 
