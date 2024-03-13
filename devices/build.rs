@@ -48,7 +48,7 @@ fn setup_dependencies(settings: &Settings) -> Vec<String> {
             .unwrap()
         ]
     } else if cfg!(target_os = "windows") {
-        if is_exsit(&join(&settings.out_dir, "7z.exe").unwrap()) {
+        if !is_exsit(&join(&settings.out_dir, "7z.exe").unwrap()) {
             exec(
                 "Invoke-WebRequest -Uri https://www.7-zip.org/a/7zr.exe -OutFile 7z.exe",
                 &settings.out_dir,
@@ -57,7 +57,7 @@ fn setup_dependencies(settings: &Settings) -> Vec<String> {
         }
 
         let ffmpeg_prefix = join(&settings.out_dir, "ffmpeg-6.0-full_build-shared").unwrap();
-        if is_exsit(&ffmpeg_prefix) {
+        if !is_exsit(&ffmpeg_prefix) {
             exec(
                 "Invoke-WebRequest -Uri https://www.gyan.dev/ffmpeg/builds/packages/ffmpeg-6.0-full_build-shared.7z -OutFile ffmpeg.7z; \
                          ./7z.exe x ffmpeg.7z -aoa; \
