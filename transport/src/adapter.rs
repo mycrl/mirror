@@ -76,7 +76,7 @@ impl StreamSenderAdapter {
 
     pub fn close(&self) {
         self.tx.send(None).expect(
-            "Failed to close close, this is because it is not possible to send None to the \
+            "Failed to close, this is because it is not possible to send None to the \
              channel, this is a bug.",
         );
     }
@@ -126,7 +126,7 @@ impl StreamReceiverAdapter {
 
     pub fn close(&self) {
         self.tx.send(None).expect(
-            "Failed to close close, this is because it is not possible to send None to the \
+            "Failed to close, this is because it is not possible to send None to the \
              channel, this is a bug.",
         );
     }
