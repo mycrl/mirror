@@ -91,3 +91,63 @@ void release_devices(Devices* devices)
 
     free(devices->items);
 }
+
+DeviceContext* open_device(char* device)
+{
+    DeviceContext* dctx = (DeviceContext*)malloc(sizeof(DeviceContext));
+    if (dctx == NULL)
+    {
+        return NULL;
+    }
+
+    dctx->chunk = (DevicePacket*)malloc(sizeof(DevicePacket));
+    if (dctx->chunk == NULL)
+    {
+        release_device_context(dctx);
+        return NULL;
+    }
+
+    dctx->ctx = NULL;
+    dctx->fmt = av_find_input_format(DEVICE);
+    if (avformat_open_input(&dctx->ctx, device, dctx->fmt, NULL) != 0)
+    {
+        release_device_context(dctx);
+        return NULL;
+    }
+
+    dctx->pkt = av_packet_alloc();
+    if (dctx->pkt == NULL)
+    {
+        release_device_context(dctx);
+        return NULL;
+    }
+
+    return dctx->pkt;
+}
+
+void release_device_context(DeviceContext* dctx)
+{
+    if (dctx->ctx != NULL)
+    {
+        avformat_close_input(dctx->ctx);
+    }
+
+    if (dctx->chunk != NULL)
+    {
+        free(dctx->chunk);
+    }
+
+    free(dctx);
+}
+
+DevicePacket* device_read_packet(DeviceContext* dctx)
+{
+    if (av_read_frame(dctx->ctx, dctx->pkt) != 0)
+    {
+        return NULL;
+    }
+
+    dctx->chunk->data = dctx->pkt->data;
+    dctx->chunk->size = dctx->pkt->size;
+    return dctx->chunk;
+}

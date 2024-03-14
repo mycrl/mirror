@@ -1,4 +1,4 @@
-use std::ffi::c_char;
+use std::ffi::{c_char, c_void};
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -26,9 +26,26 @@ impl Drop for Devices {
     }
 }
 
+#[repr(C)]
+pub struct Packet {
+    pub data: *const u8,
+    pub size: usize,
+}
+
+#[repr(C)]
+pub struct Context {
+    ctx: *const c_void,
+    fmt: *const c_void,
+    pkt: *const c_void,
+    chunk: *const Packet,
+}
+
 extern "C" {
     pub fn init();
     pub fn get_audio_devices() -> Devices;
     pub fn get_video_devices() -> Devices;
     pub fn release_devices(devices: *const Devices);
+    pub fn open_device(device: *const c_char) -> *const Context;
+    pub fn release_device_context(ctx: *const Context);
+    pub fn device_read_packet(ctx: *const Context) -> *const Packet;
 }
