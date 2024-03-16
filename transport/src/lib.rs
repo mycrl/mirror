@@ -10,6 +10,7 @@ use std::{
 };
 
 use adapter::StreamReceiverAdapter;
+use codec::BufferFlag;
 use srt::{Listener, Socket, SrtError, SrtOptions};
 use thiserror::Error;
 use tokio::{
@@ -21,7 +22,7 @@ use tokio::{
 use crate::{
     adapter::{ReceiverAdapterFactory, StreamSenderAdapter},
     discovery::{Discovery, DiscoveryError, Service},
-    payload::{Decoder, Encoder},
+    payload::{DecodeRet, Decoder, Encoder},
 };
 
 #[derive(Debug, Error)]
@@ -117,13 +118,17 @@ impl Transport {
                                             }
 
                                             if let Some(adapter) = adapter.upgrade() {
-                                                if let Some((chunk, kind)) =
-                                                    decoder.decode(&buf[..size])
-                                                {
-                                                    if !adapter.send(chunk, kind) {
-                                                        log::error!("adapter on buf failed.");
-                                                        break;
+                                                match decoder.decode(&buf[..size]) {
+                                                    DecodeRet::Pkt(chunk, kind, flags) => {
+                                                        if !adapter.send(chunk, kind, flags) {
+                                                            log::error!("adapter on buf failed.");
+                                                            break;
+                                                        }
                                                     }
+                                                    DecodeRet::Loss => {
+                                                        adapter.loss_pkt();
+                                                    }
+                                                    _ => (),
                                                 }
                                             } else {
                                                 log::warn!("adapter is droped!");
@@ -214,7 +219,9 @@ impl Transport {
                 if let Some(adapter) = adapter_.upgrade() {
                     let mut is_allow = true;
                     'a: for (buf, kind) in adapter.get_config() {
-                        if let Some(payloads) = encoder.encode(max_pkt_size, kind, buf) {
+                        if let Some(payloads) =
+                            encoder.encode(max_pkt_size, kind, BufferFlag::Config as u8, buf)
+                        {
                             for payload in payloads {
                                 if let Err(e) = socket.send(payload) {
                                     log::error!(
@@ -248,7 +255,7 @@ impl Transport {
             let mut encoder = Encoder::default();
 
             while let Some(adapter) = adapter_.upgrade() {
-                if let Some((buf, kind)) = adapter.next().await {
+                if let Some((buf, kind, flags)) = adapter.next().await {
                     {
                         let sockets = sockets.read().await;
                         if !closed.is_empty() {
@@ -259,7 +266,9 @@ impl Transport {
                             continue;
                         }
 
-                        if let Some(payloads) = encoder.encode(max_pkt_size, kind, buf.as_ref()) {
+                        if let Some(payloads) =
+                            encoder.encode(max_pkt_size, kind, flags, buf.as_ref())
+                        {
                             for payload in payloads {
                                 for (addr, socket) in sockets.iter() {
                                     if let Err(e) = socket.send(payload) {
@@ -331,11 +340,17 @@ impl Transport {
                 }
 
                 if let Some(adapter) = adapter.upgrade() {
-                    if let Some((chunk, kind)) = decoder.decode(&buf[..size]) {
-                        if !adapter.send(chunk, kind) {
-                            log::error!("adapter on buf failed.");
-                            break;
+                    match decoder.decode(&buf[..size]) {
+                        DecodeRet::Pkt(chunk, kind, flags) => {
+                            if !adapter.send(chunk, kind, flags) {
+                                log::error!("adapter on buf failed.");
+                                break;
+                            }
                         }
+                        DecodeRet::Loss => {
+                            adapter.loss_pkt();
+                        }
+                        _ => (),
                     }
                 } else {
                     log::warn!("adapter is droped!");
