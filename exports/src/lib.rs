@@ -18,6 +18,9 @@ use tokio::runtime::Builder;
 use transport::adapter::{StreamReceiverAdapter, StreamSenderAdapter};
 use transport::Transport;
 
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 /// JNI_OnLoad
 ///
 /// jint JNI_OnLoad(JavaVM *vm, void *reserved);

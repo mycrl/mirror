@@ -12,13 +12,19 @@ pub struct Encoder(Vec<Vec<u8>>);
 impl Encoder {
     /// The result of the encoding may be null, this is because an empty packet
     /// may be passed in from outside.
-    pub fn encode(&mut self, unit_len: usize, kind: StreamKind, buf: &[u8]) -> Option<&[Vec<u8>]> {
+    pub fn encode(
+        &mut self,
+        unit_len: usize,
+        kind: StreamKind,
+        flags: u8,
+        buf: &[u8],
+    ) -> Option<&[Vec<u8>]> {
         if buf.len() == 0 {
             return None;
         }
 
         let mut size = 0;
-        for (i, chunk) in buf.chunks(unit_len - 9).enumerate() {
+        for (i, chunk) in buf.chunks(unit_len - 10).enumerate() {
             {
                 if self.0.get(i).is_none() {
                     self.0.push(vec![0u8; unit_len]);
@@ -30,6 +36,7 @@ impl Encoder {
                 buf.put_u32(0);
                 buf.put_u16(i as u16);
                 buf.put_u8(kind as u8);
+                buf.put_u8(flags);
                 buf.put_u16(chunk.len() as u16);
                 buf.put(chunk);
 
@@ -43,10 +50,20 @@ impl Encoder {
     }
 }
 
+/// Packet decoder decoding results
+pub enum DecodeRet {
+    /// Decode the packet normally.
+    Pkt(Bytes, StreamKind, u8),
+    /// Need to wait for more data.
+    Wait,
+    /// There was a loss of transmitted packets.
+    Loss,
+}
+
 /// Decode the packets received from the network and separate out the different
 /// types of data.
 pub struct Decoder {
-    kind: Option<StreamKind>,
+    mark: Option<(StreamKind, u8)>,
     buf: BytesMut,
     throw: bool,
     seq: i16,
@@ -56,7 +73,7 @@ impl Default for Decoder {
     fn default() -> Self {
         Self {
             seq: -1,
-            kind: None,
+            mark: None,
             throw: false,
             buf: BytesMut::with_capacity(1024 * 1024),
         }
@@ -64,7 +81,7 @@ impl Default for Decoder {
 }
 
 impl Decoder {
-    pub fn decode(&mut self, mut buf: &[u8]) -> Option<(Bytes, StreamKind)> {
+    pub fn decode(&mut self, mut buf: &[u8]) -> DecodeRet {
         // Check if the current slice is damaged.
         let crc = buf.get_u32();
         if crc != fingerprint(&buf[..]) {
@@ -73,12 +90,13 @@ impl Decoder {
             // If the check doesn't pass, then none of the packets in the set
             // can be used because there is no retransmission.
             self.throw = true;
-            return None;
+            return DecodeRet::Loss;
         }
 
         // Get slice header information.
         let seq = buf.get_u16() as i16;
         let kind = StreamKind::try_from(buf.get_u8()).unwrap();
+        let flags = buf.get_u8();
         let size = buf.get_u16() as usize;
         if self.throw {
             // It has entered discard mode, but when it encounters a new group
@@ -96,7 +114,7 @@ impl Decoder {
                 // has dropped the packet, enters discard mode, and returns the
                 // null result immediately.
                 self.throw = true;
-                return None;
+                return DecodeRet::Loss;
             }
         }
 
@@ -111,9 +129,13 @@ impl Decoder {
         }
 
         self.seq = seq;
-        let old_kind = self.kind.replace(kind);
-
-        bytes.map(|it| (it, old_kind.unwrap()))
+        let previous = self.mark.replace((kind, flags));
+        bytes
+            .map(|it| {
+                let (kind, flags) = previous.unwrap();
+                DecodeRet::Pkt(it, kind, flags)
+            })
+            .unwrap_or(DecodeRet::Wait)
     }
 }
 
