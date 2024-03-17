@@ -6,7 +6,7 @@ use std::{
 
 use async_trait::async_trait;
 use bytes::Bytes;
-use codec::video::VideoStreamSenderProcesser;
+use codec::video::{VideoStreamReceiverProcesser, VideoStreamSenderProcesser};
 use tokio::sync::{
     mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
     Mutex,
@@ -60,8 +60,8 @@ pub trait ReceiverAdapterFactory: Send + Sync {
 
 pub struct StreamSenderAdapter {
     video: VideoStreamSenderProcesser,
-    tx: UnboundedSender<Option<(Bytes, StreamKind)>>,
-    rx: Mutex<UnboundedReceiver<Option<(Bytes, StreamKind)>>>,
+    tx: UnboundedSender<Option<(Bytes, StreamKind, u8)>>,
+    rx: Mutex<UnboundedReceiver<Option<(Bytes, StreamKind, u8)>>>,
 }
 
 impl StreamSenderAdapter {
@@ -82,8 +82,10 @@ impl StreamSenderAdapter {
     }
 
     pub fn send(&self, buf: Bytes, info: StreamBufferInfo) -> bool {
-        if let StreamBufferInfo::Video(flags) = info {
-            self.video.apply(buf.clone(), flags);
+        let mut flags = 0;
+        if let StreamBufferInfo::Video(f) = info {
+            self.video.apply(&buf, f);
+            flags = f as u8;
         }
 
         self.tx
@@ -93,17 +95,18 @@ impl StreamSenderAdapter {
                     StreamBufferInfo::Video(_) => StreamKind::Video,
                     StreamBufferInfo::Audio(_) => StreamKind::Audio,
                 },
+                flags,
             )))
             .is_ok()
     }
 
-    pub async fn next(&self) -> Option<(Bytes, StreamKind)> {
+    pub async fn next(&self) -> Option<(Bytes, StreamKind, u8)> {
         self.rx.lock().await.recv().await.flatten()
     }
 
     pub fn get_config(&self) -> Vec<(&[u8], StreamKind)> {
         [(
-            self.video.get_config_buffer().unwrap_or_else(|| &[]),
+            self.video.get_config().unwrap_or_else(|| &[]),
             StreamKind::Video,
         )]
         .to_vec()
@@ -111,6 +114,7 @@ impl StreamSenderAdapter {
 }
 
 pub struct StreamReceiverAdapter {
+    video: VideoStreamReceiverProcesser,
     tx: UnboundedSender<Option<(Bytes, StreamKind)>>,
     rx: Mutex<UnboundedReceiver<Option<(Bytes, StreamKind)>>>,
 }
@@ -119,6 +123,7 @@ impl StreamReceiverAdapter {
     pub fn new() -> Arc<Self> {
         let (tx, rx) = unbounded_channel();
         Arc::new(Self {
+            video: VideoStreamReceiverProcesser::new(),
             rx: Mutex::new(rx),
             tx,
         })
@@ -135,7 +140,17 @@ impl StreamReceiverAdapter {
         self.rx.lock().await.recv().await.flatten()
     }
 
-    pub fn send(&self, buf: Bytes, kind: StreamKind) -> bool {
+    pub fn send(&self, buf: Bytes, kind: StreamKind, flags: u8) -> bool {
+        if kind == StreamKind::Video {
+            self.video.apply(&buf, flags);
+        }
+
         self.tx.send(Some((buf, kind))).is_ok()
+    }
+
+    pub fn loss_pkt(&self) {
+        if let Some(buf) = self.video.get_key_frame() {
+            let _ = self.tx.send(Some((buf, StreamKind::Video)));
+        }
     }
 }

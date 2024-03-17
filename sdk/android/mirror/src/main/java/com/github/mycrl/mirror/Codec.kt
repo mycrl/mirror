@@ -27,31 +27,32 @@ class Video {
     ) {
         public var isRunning: Boolean = false
 
+        private val codec: MediaCodec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
         private val bufferInfo = MediaCodec.BufferInfo()
         private var surface: Surface? = null
-        private var codec: MediaCodec
         private var worker: Thread
 
         init {
             val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, configure.width, configure.height)
             format.setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR)
             format.setInteger(MediaFormat.KEY_PROFILE, MediaCodecInfo.CodecProfileLevel.AVCProfileBaseline)
-            format.setInteger(MediaFormat.KEY_LEVEL, MediaCodecInfo.CodecProfileLevel.AVCProfileBaseline)
+            format.setInteger(MediaFormat.KEY_LEVEL, MediaCodecInfo.CodecProfileLevel.AVCLevel1)
             format.setFloat(MediaFormat.KEY_MAX_FPS_TO_ENCODER, configure.frameRate.toFloat())
-            format.setInteger(MediaFormat.KEY_LATENCY, configure.frameRate / 2)
+            format.setInteger(MediaFormat.KEY_LATENCY, configure.frameRate / 10)
             format.setInteger(MediaFormat.KEY_OPERATING_RATE, configure.frameRate)
             format.setInteger(MediaFormat.KEY_CAPTURE_RATE, configure.frameRate)
             format.setInteger(MediaFormat.KEY_FRAME_RATE, configure.frameRate)
             format.setInteger(MediaFormat.KEY_COLOR_FORMAT, configure.format)
             format.setInteger(MediaFormat.KEY_BIT_RATE, configure.bitRate)
-            format.setFloat(MediaFormat.KEY_I_FRAME_INTERVAL, 0.5F)
-            format.setInteger(MediaFormat.KEY_PRIORITY, 0)
+            format.setFloat(MediaFormat.KEY_I_FRAME_INTERVAL, 0.4F)
+            format.setInteger(MediaFormat.KEY_MAX_B_FRAMES, 0)
+            format.setInteger(MediaFormat.KEY_COMPLEXITY, 0)
+            format.setInteger(MediaFormat.KEY_PRIORITY, 1)
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 format.setInteger(MediaFormat.KEY_ALLOW_FRAME_DROP, 1)
             }
 
-            codec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
             codec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
             surface = if (configure.format == MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface) {
                 codec.createInputSurface()
@@ -144,27 +145,22 @@ class Video {
     class VideoDecoder constructor(private val surface: Surface, private val configure: VideoDecoderConfigure) {
         public var isRunning: Boolean = false
 
+        private var codec: MediaCodec = MediaCodec.createDecoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
         private val bufferInfo = MediaCodec.BufferInfo()
-        private var codec: MediaCodec
         private var worker: Thread
 
         init {
             val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, configure.width, configure.height)
             format.setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
-            format.setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR)
-            format.setInteger(MediaFormat.KEY_LEVEL, MediaCodecInfo.CodecProfileLevel.AVCProfileBaseline)
-            format.setInteger(MediaFormat.KEY_PROFILE, MediaCodecInfo.CodecProfileLevel.AVCProfileBaseline)
             format.setInteger(MediaFormat.KEY_PUSH_BLANK_BUFFERS_ON_STOP, 1)
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                if (configure.lowLatency) {
+                if (codec.name.indexOf(".rk.") < 0 && codec.name.indexOf(".hisi.") < 0) {
                     format.setInteger(MediaFormat.KEY_LOW_LATENCY, 1)
                 }
             }
 
-            codec = MediaCodec.createDecoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
             codec.configure(format, surface, null, 0)
-
             worker = Thread {
                 while (isRunning) {
                     try {
@@ -215,7 +211,6 @@ class Video {
         }
 
         interface VideoDecoderConfigure {
-            val lowLatency: Boolean;
             val width: Int;
             val height: Int;
         }
