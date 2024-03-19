@@ -6,7 +6,10 @@ use std::{
 
 use async_trait::async_trait;
 use bytes::Bytes;
-use codec::video::{VideoStreamReceiverProcesser, VideoStreamSenderProcesser};
+use codec::{
+    audio::AudioStreamSenderProcesser,
+    video::{VideoStreamReceiverProcesser, VideoStreamSenderProcesser},
+};
 use tokio::sync::{
     mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
     Mutex,
@@ -59,6 +62,7 @@ pub trait ReceiverAdapterFactory: Send + Sync {
 }
 
 pub struct StreamSenderAdapter {
+    audio: AudioStreamSenderProcesser,
     video: VideoStreamSenderProcesser,
     tx: UnboundedSender<Option<(Bytes, StreamKind, u8)>>,
     rx: Mutex<UnboundedReceiver<Option<(Bytes, StreamKind, u8)>>>,
@@ -68,6 +72,7 @@ impl StreamSenderAdapter {
     pub fn new() -> Arc<Self> {
         let (tx, rx) = unbounded_channel();
         Arc::new(Self {
+            audio: AudioStreamSenderProcesser::new(),
             video: VideoStreamSenderProcesser::new(),
             rx: Mutex::new(rx),
             tx,
@@ -82,22 +87,18 @@ impl StreamSenderAdapter {
     }
 
     pub fn send(&self, buf: Bytes, info: StreamBufferInfo) -> bool {
-        let mut flags = 0;
-        if let StreamBufferInfo::Video(f) = info {
-            self.video.apply(&buf, f);
-            flags = f as u8;
-        }
+        let (flags, kind) = match info {
+            StreamBufferInfo::Video(f) => {
+                self.video.apply(&buf, f);
+                (f as u8, StreamKind::Video)
+            }
+            StreamBufferInfo::Audio(f) => {
+                self.audio.apply(&buf, f);
+                (f as u8, StreamKind::Audio)
+            }
+        };
 
-        self.tx
-            .send(Some((
-                buf,
-                match info {
-                    StreamBufferInfo::Video(_) => StreamKind::Video,
-                    StreamBufferInfo::Audio(_) => StreamKind::Audio,
-                },
-                flags,
-            )))
-            .is_ok()
+        self.tx.send(Some((buf, kind, flags))).is_ok()
     }
 
     pub async fn next(&self) -> Option<(Bytes, StreamKind, u8)> {
@@ -105,10 +106,16 @@ impl StreamSenderAdapter {
     }
 
     pub fn get_config(&self) -> Vec<(&[u8], StreamKind)> {
-        [(
-            self.video.get_config().unwrap_or_else(|| &[]),
-            StreamKind::Video,
-        )]
+        [
+            (
+                self.video.get_config().unwrap_or_else(|| &[]),
+                StreamKind::Video,
+            ),
+            (
+                self.audio.get_config().unwrap_or_else(|| &[]),
+                StreamKind::Audio,
+            ),
+        ]
         .to_vec()
     }
 }
