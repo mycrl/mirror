@@ -37,7 +37,7 @@ typedef struct
 
 typedef struct
 {
-    Device* items;
+    Device** items;
     size_t size;
 } Devices;
 
@@ -45,22 +45,23 @@ typedef struct
 {
     uint8_t* data;
     size_t size;
-} DevicePacket;
+} Buffer;
 
 typedef struct
 {
     AVFormatContext* ctx;
     AVInputFormat* fmt;
     AVPacket* pkt;
-    DevicePacket* chunk;
+    Buffer* buf;
 } DeviceContext;
 
 EXPORT void init();
 EXPORT Devices get_audio_devices();
 EXPORT Devices get_video_devices();
+EXPORT void release_device(Device* device);
 EXPORT void release_devices(Devices* devices);
-EXPORT DeviceContext* open_device(char* device);
+EXPORT DeviceContext* open_device(Device* device);
 EXPORT void release_device_context(DeviceContext* dctx);
-EXPORT DevicePacket* device_read_packet(DeviceContext* dctx);
+EXPORT Buffer* device_read_packet(DeviceContext* dctx);
 
 #endif /* devices_h */

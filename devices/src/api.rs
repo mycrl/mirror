@@ -16,7 +16,7 @@ pub struct Device {
 
 #[repr(C)]
 pub struct Devices {
-    pub items: *const Device,
+    pub items: *const *const Device,
     pub size: usize,
 }
 
@@ -27,7 +27,7 @@ impl Drop for Devices {
 }
 
 #[repr(C)]
-pub struct Packet {
+pub struct Buffer {
     pub data: *const u8,
     pub size: usize,
 }
@@ -37,15 +37,16 @@ pub struct Context {
     ctx: *const c_void,
     fmt: *const c_void,
     pkt: *const c_void,
-    chunk: *const Packet,
+    buf: *const Buffer,
 }
 
 extern "C" {
     pub fn init();
     pub fn get_audio_devices() -> Devices;
     pub fn get_video_devices() -> Devices;
+    pub fn release_device(device: *const Device);
     pub fn release_devices(devices: *const Devices);
-    pub fn open_device(device: *const c_char) -> *const Context;
+    pub fn open_device(device: *const Device) -> *const Context;
     pub fn release_device_context(ctx: *const Context);
-    pub fn device_read_packet(ctx: *const Context) -> *const Packet;
+    pub fn device_read_packet(ctx: *const Context) -> *const Buffer;
 }

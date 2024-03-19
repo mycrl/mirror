@@ -2,8 +2,12 @@ use devices::{init, Devices};
 
 fn main() {
     init();
-    
+
     let devices = Devices::get_video_devices();
+    for device in &devices {
+        println!("{:?}", device.description());
+    }
+
     if !devices.is_empty() {
         let device = devices[0].open().unwrap();
         loop {

@@ -7,14 +7,6 @@
 
 #include "devices.h"
 
-#ifdef WINDOWS
-#define DEVICE "dshow"
-#define DEVICE_NAME "dummy"
-#elif MACOS
-#define DEVICE "avfoundation"
-#define DEVICE_NAME ""
-#endif
-
 enum AVMediaType kind_into_type(DeviceKind kind)
 {
     if (kind == DeviceKindVideo)
@@ -38,8 +30,16 @@ Devices get_devices(DeviceKind kind) {
 
     AVDeviceInfoList* list = NULL;
     AVFormatContext* ctx = avformat_alloc_context();
-    const AVInputFormat* fmt = av_find_input_format(DEVICE);
-    if (avdevice_list_input_sources(fmt, DEVICE_NAME, NULL, &list) < 0)
+
+#ifdef WINDOWS
+    const AVInputFormat* fmt = av_find_input_format("dshow");
+    if (avdevice_list_input_sources(fmt, "dummy", NULL, &list) < 0)
+    {
+        return devices;
+    }
+#endif
+
+    if (list == NULL)
     {
         return devices;
     }
@@ -51,10 +51,15 @@ Devices get_devices(DeviceKind kind) {
         {
             if (list->devices[i]->media_types[k] == type)
             {
-                devices.items[devices.size].kind = kind;
-                devices.items[devices.size].name = strdup(list->devices[i]->device_name);
-                devices.items[devices.size].description = strdup(list->devices[i]->device_description);
-                devices.size ++;
+                Device* device = (Device*)malloc(sizeof(Device));
+                if (device != NULL)
+                {
+                    device->kind = kind;
+                    device->name = strdup(list->devices[i]->device_name);
+                    device->description = strdup(list->devices[i]->device_description);
+                    devices.items[devices.size] = device;
+                    devices.size ++;
+                }
             }
         }
     }
@@ -83,16 +88,17 @@ Devices get_video_devices()
 
 void release_devices(Devices* devices)
 {
-    for (size_t i = 0; i < devices->size; i ++)
-    {
-        free(devices->items[i].description);
-        free(devices->items[i].name);
-    }
-
     free(devices->items);
 }
 
-DeviceContext* open_device(char* device)
+void release_device(Device* device) 
+{
+    free(device->description);
+    free(device->name);
+    free(device);
+}
+
+DeviceContext* open_device(Device* device)
 {
     DeviceContext* dctx = (DeviceContext*)malloc(sizeof(DeviceContext));
     if (dctx == NULL)
@@ -100,20 +106,34 @@ DeviceContext* open_device(char* device)
         return NULL;
     }
 
-    dctx->chunk = (DevicePacket*)malloc(sizeof(DevicePacket));
-    if (dctx->chunk == NULL)
+    dctx->buf = (Buffer*)malloc(sizeof(Buffer));
+    if (dctx->buf == NULL)
     {
         release_device_context(dctx);
         return NULL;
     }
 
+#ifdef WINDOWS
+    char name[255] = "";
+    if (device->kind == DeviceKindVideo)
+    {
+        strcat(name, "video=");
+    }
+    else
+    {
+        strcat(name, "audio=");
+    }
+
+    strcat(name, device->name);
+
     dctx->ctx = NULL;
-    dctx->fmt = av_find_input_format(DEVICE);
-    if (avformat_open_input(&dctx->ctx, device, dctx->fmt, NULL) != 0)
+    dctx->fmt = av_find_input_format("dshow");
+    if (avformat_open_input(&dctx->ctx, name, dctx->fmt, NULL) != 0)
     {
         release_device_context(dctx);
         return NULL;
     }
+#endif
 
     dctx->pkt = av_packet_alloc();
     if (dctx->pkt == NULL)
@@ -132,22 +152,26 @@ void release_device_context(DeviceContext* dctx)
         avformat_close_input(dctx->ctx);
     }
 
-    if (dctx->chunk != NULL)
+    if (dctx->buf != NULL)
     {
-        free(dctx->chunk);
+        free(dctx->buf);
     }
 
     free(dctx);
 }
 
-DevicePacket* device_read_packet(DeviceContext* dctx)
+Buffer* device_read_packet(DeviceContext* dctx)
 {
     if (av_read_frame(dctx->ctx, dctx->pkt) != 0)
     {
         return NULL;
     }
+    else
+    {
+        av_packet_unref(dctx->pkt);
+    }
 
-    dctx->chunk->data = dctx->pkt->data;
-    dctx->chunk->size = dctx->pkt->size;
-    return dctx->chunk;
+    dctx->buf->data = dctx->pkt->data;
+    dctx->buf->size = dctx->pkt->size;
+    return dctx->buf;
 }

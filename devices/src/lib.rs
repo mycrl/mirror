@@ -1,11 +1,10 @@
 mod api;
 
-use std::ffi::{c_char, CStr, CString};
+use std::ffi::{c_char, CStr};
 
 #[derive(Debug)]
 pub enum DeviceError {
     InvalidDevice,
-    FailedOpenDevice,
 }
 
 impl std::error::Error for DeviceError {}
@@ -17,7 +16,6 @@ impl std::fmt::Display for DeviceError {
             "{}",
             match self {
                 Self::InvalidDevice => "InvalidDevice",
-                Self::FailedOpenDevice => "FailedOpenDevice",
             }
         )
     }
@@ -27,38 +25,33 @@ pub fn init() {
     unsafe { api::init() }
 }
 
-#[derive(Debug)]
-pub struct Device {
-    pub kind: api::DeviceKind,
-    pub name: Option<String>,
-    pub description: Option<String>,
-}
+pub struct Device(*const api::Device);
 
-impl From<&api::Device> for Device {
-    fn from(item: &api::Device) -> Self {
-        Self {
-            description: from_c_str(item.description),
-            name: from_c_str(item.name),
-            kind: item.kind,
-        }
+impl Drop for Device {
+    fn drop(&mut self) {
+        unsafe { api::release_device(self.0) }
     }
 }
 
 impl Device {
+    pub fn name(&self) -> Option<String> {
+        from_c_str(unsafe { &*self.0 }.name)
+    }
+
+    pub fn description(&self) -> Option<String> {
+        from_c_str(unsafe { &*self.0 }.description)
+    }
+
+    pub fn kind(&self) -> api::DeviceKind {
+        unsafe { &*self.0 }.kind
+    }
+
     pub fn open(&self) -> Result<DeviceManager, DeviceError> {
-        let device = if let Some(name) = &self.name {
-            to_c_str(&name)
-        } else {
-            return Err(DeviceError::InvalidDevice);
-        };
-
-        let ctx = unsafe { api::open_device(device) };
-        release_c_str(device);
-
+        let ctx = unsafe { api::open_device(self.0) };
         if !ctx.is_null() {
             Ok(DeviceManager(ctx))
         } else {
-            Err(DeviceError::FailedOpenDevice)
+            Err(DeviceError::InvalidDevice)
         }
     }
 }
@@ -89,7 +82,7 @@ impl Devices {
         let list = unsafe { api::get_audio_devices() };
         unsafe { std::slice::from_raw_parts(list.items, list.size) }
             .into_iter()
-            .map(|item| Device::from(item))
+            .map(|item| Device(*item))
             .collect()
     }
 
@@ -97,7 +90,7 @@ impl Devices {
         let list = unsafe { api::get_video_devices() };
         unsafe { std::slice::from_raw_parts(list.items, list.size) }
             .into_iter()
-            .map(|item| Device::from(item))
+            .map(|item| Device(*item))
             .collect()
     }
 }
@@ -110,15 +103,5 @@ pub(crate) fn from_c_str(str: *const c_char) -> Option<String> {
             .ok()
     } else {
         None
-    }
-}
-
-pub(crate) fn to_c_str(str: &str) -> *const c_char {
-    CString::new(str).unwrap().into_raw()
-}
-
-pub(crate) fn release_c_str(str: *const c_char) {
-    if !str.is_null() {
-        drop(unsafe { CString::from_raw(str as *mut c_char) })
     }
 }
