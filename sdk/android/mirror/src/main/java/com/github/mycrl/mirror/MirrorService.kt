@@ -89,7 +89,6 @@ class MirrorService constructor(
                                 object : Audio.AudioDecoder.AudioDecoderConfigure {
                                     override val sampleRate = codecDescription.audio.sampleRate
                                     override val channels = codecDescription.audio.channels
-                                    override val bitRate = codecDescription.audio.bitRate
                                 })
                         } else {
                             null
@@ -188,7 +187,6 @@ class MirrorService constructor(
                         CodecDescriptionFactory.AudioDescription(
                             configure.audio.sampleRate,
                             configure.audio.channels,
-                            configure.audio.bitRate,
                         )
                     )
                 ),
@@ -226,7 +224,6 @@ class MirrorService constructor(
                     object : Audio.AudioDecoder.AudioDecoderConfigure {
                         override val sampleRate = configure.audio.sampleRate
                         override val channels = configure.audio.channels
-                        override val bitRate = configure.audio.bitRate
                     })
             } else {
                 null

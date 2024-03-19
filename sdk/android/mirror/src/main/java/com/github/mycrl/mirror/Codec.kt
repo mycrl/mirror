@@ -1,5 +1,6 @@
 package com.github.mycrl.mirror
 
+import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.AudioTrack
 import android.media.MediaCodec
@@ -227,13 +228,14 @@ class Audio {
 
         init {
             val format = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_AMR_WB, configure.sampleRate, configure.channels)
-            format.setInteger(MediaFormat.KEY_BIT_RATE, configure.bitRate)
+            format.setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR)
+            format.setInteger(MediaFormat.KEY_PCM_ENCODING, AudioFormat.ENCODING_PCM_16BIT)
 
             codec = MediaCodec.createDecoderByType(MediaFormat.MIMETYPE_AUDIO_AMR_WB)
             codec.configure(format, null, null, 0)
 
             worker = Thread {
-                val buf = ByteArray(1024 * 10)
+                val buf = ByteArray(1024 * 1024)
 
                 while (isRunning) {
                     try {
@@ -257,7 +259,7 @@ class Audio {
         }
 
         fun sink(buf: ByteArray) {
-            val index = codec.dequeueInputBuffer(-1)
+            val index = codec.dequeueInputBuffer(1000)
             if (index >= 0) {
                 codec.getInputBuffer(index)?.clear()
                 codec.getInputBuffer(index)?.put(buf)
@@ -289,7 +291,6 @@ class Audio {
         interface AudioDecoderConfigure {
             val sampleRate: Int;
             val channels: Int;
-            val bitRate: Int;
         }
     }
 
@@ -313,7 +314,11 @@ class Audio {
 
         init {
             val format = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_AMR_WB, configure.sampleRate, configure.channels)
+            format.setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR)
+            format.setInteger(MediaFormat.KEY_PCM_ENCODING, AudioFormat.ENCODING_PCM_16BIT)
+            format.setInteger(MediaFormat.KEY_CHANNEL_COUNT, configure.channels)
             format.setInteger(MediaFormat.KEY_BIT_RATE, configure.bitRate)
+            format.setInteger(MediaFormat.KEY_COMPLEXITY, 0)
 
             codec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_AUDIO_AMR_WB)
             codec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
@@ -447,7 +452,6 @@ class CodecDescriptionFactory {
     data class AudioDescription(
         @SerialName("sr") val sampleRate: Int,
         @SerialName("cs") val channels: Int,
-        @SerialName("br") val bitRate: Int,
     )
 
     companion object {

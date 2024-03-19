@@ -1,3 +1,4 @@
+pub mod audio;
 pub mod video;
 
 #[allow(unused_imports)]
