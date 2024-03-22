@@ -1,4 +1,4 @@
-use devices::{init, Devices};
+use devices::{init, DeviceConstraint, Devices};
 
 fn main() {
     init();
@@ -9,9 +9,19 @@ fn main() {
     }
 
     if !devices.is_empty() {
-        let device = devices[0].open().unwrap();
+        let device = devices[1].open(DeviceConstraint {
+            width: 1920,
+            height: 1080,
+            frame_rate: 30,
+        }).unwrap();
         loop {
-            println!("{:?}", device.next().is_none());
+            if device.make_readable() {
+                while let Some(frame) = device.get_frame() {
+                    println!("frame: width={}, height={}, format={}", frame.width, frame.height, frame.format)
+                }
+            } else {
+                break;
+            }
         }
     }
 }

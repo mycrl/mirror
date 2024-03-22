@@ -1,5 +1,7 @@
 mod api;
 
+pub use api::DeviceConstraint;
+
 use std::ffi::{c_char, CStr};
 
 #[derive(Debug)]
@@ -25,11 +27,11 @@ pub fn init() {
     unsafe { api::init() }
 }
 
-pub struct Device(*const api::Device);
+pub struct Device(*const api::DeviceInfo);
 
 impl Drop for Device {
     fn drop(&mut self) {
-        unsafe { api::release_device(self.0) }
+        unsafe { api::release_device_info(self.0) }
     }
 }
 
@@ -46,29 +48,70 @@ impl Device {
         unsafe { &*self.0 }.kind
     }
 
-    pub fn open(&self) -> Result<DeviceManager, DeviceError> {
-        let ctx = unsafe { api::open_device(self.0) };
-        if !ctx.is_null() {
-            Ok(DeviceManager(ctx))
+    pub fn open(&self, constraint: DeviceConstraint) -> Result<DeviceManager, DeviceError> {
+        let device = unsafe { api::open_device(self.0, constraint) };
+        if !device.is_null() {
+            Ok(DeviceManager::new(device))
         } else {
             Err(DeviceError::InvalidDevice)
         }
     }
 }
 
-pub struct DeviceManager(*const api::Context);
+#[derive(Debug)]
+pub struct VideoFrame<'a> {
+    pub format: u32,
+    pub width: u32,
+    pub height: u32,
+    pub planes: Vec<&'a [u8]>,
+}
+
+pub struct DeviceManager {
+    ptr: *const api::Device,
+}
 
 impl Drop for DeviceManager {
     fn drop(&mut self) {
-        unsafe { api::release_device_context(self.0) }
+        unsafe { api::release_device(self.ptr) }
     }
 }
 
 impl DeviceManager {
-    pub fn next(&self) -> Option<&[u8]> {
-        let pkt = unsafe { api::device_read_packet(self.0) };
-        if !pkt.is_null() {
-            Some(unsafe { std::slice::from_raw_parts((&*pkt).data, (&*pkt).size) })
+    fn new(ptr: *const api::Device) -> Self {
+        Self { ptr }
+    }
+
+    pub fn make_readable(&self) -> bool {
+        let mut ret = unsafe { api::device_advance(self.ptr) };
+        if ret == -2 {
+            ret = unsafe { api::device_advance(self.ptr) };
+        }
+
+        ret == 0
+    }
+
+    pub fn get_frame(&self) -> Option<VideoFrame> {
+        let frame = unsafe { api::device_get_frame(self.ptr) };
+        if !frame.is_null() {
+            let frame = unsafe { &*frame };
+            let mut planes = Vec::with_capacity(8);
+
+            let sizes = unsafe { std::slice::from_raw_parts(frame.linesizes, 8) };
+            for (i, plane) in unsafe { std::slice::from_raw_parts(frame.planes, 8) }
+                .iter()
+                .enumerate()
+            {
+                if sizes[i] > 0 {
+                    planes.push(unsafe { std::slice::from_raw_parts(*plane, sizes[i] as usize) });
+                }
+            }
+
+            Some(VideoFrame {
+                format: frame.format as u32,
+                width: frame.width,
+                height: frame.height,
+                planes,
+            })
         } else {
             None
         }
