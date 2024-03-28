@@ -68,7 +68,7 @@ fn universal_build() -> Result<()> {
             exec(
                 "wget \
                 -O libsrt.a \
-                https://github.com/mycrl/srt-distributions/releases/download/srt-android/libsrt-arm64-v8a.a",
+                https://github.com/mycrl/mirror/releases/download/distributions/libsrt-arm64-v8a.a",
                 &srt_dir,
             )?;
         }
@@ -77,7 +77,7 @@ fn universal_build() -> Result<()> {
             exec(
                 "wget \
                 -O libssl.a \
-                https://github.com/mycrl/srt-distributions/releases/download/srt-android/libssl-arm64-v8a.a",
+                https://github.com/mycrl/mirror/releases/download/distributions/libssl-arm64-v8a.a",
                 &srt_dir,
             )?;
         }
@@ -86,7 +86,7 @@ fn universal_build() -> Result<()> {
             exec(
                 "wget \
                 -O libcrypto.a \
-                https://github.com/mycrl/srt-distributions/releases/download/srt-android/libcrypto-arm64-v8a.a",
+                https://github.com/mycrl/mirror/releases/download/distributions/libcrypto-arm64-v8a.a",
                 &srt_dir,
             )?;
         }

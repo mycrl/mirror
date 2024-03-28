@@ -7,270 +7,162 @@
 
 #include "devices.h"
 
-enum AVMediaType kind_into_type(DeviceKind kind)
+int init(VideoInfo* info)
 {
-    if (kind == DeviceKindVideo)
-    {
-        return AVMEDIA_TYPE_VIDEO;
-    }
-    else
-    {
-        return AVMEDIA_TYPE_AUDIO;
-    }
-}
-
-Devices get_devices(DeviceKind kind) {
-    Devices devices;
-    devices.size = 0;
-    devices.items = malloc(sizeof(DeviceInfo*) * 100);
-    if (devices.items == NULL)
-    {
-        return devices;
-    }
-
-    const AVInputFormat* fmt = NULL;
-    AVDeviceInfoList* list = NULL;
-    AVFormatContext* ctx = avformat_alloc_context();
-
-#ifdef WINDOWS
-    fmt = av_find_input_format("dshow");
-    if (avdevice_list_input_sources(fmt, "dummy", NULL, &list) < 0)
-    {
-        return devices;
-    }
-#endif
-
-    if (list == NULL)
-    {
-        return devices;
-    }
-
-    enum AVMediaType type = kind_into_type(kind);
-    for (int i = 0; i < list->nb_devices; i ++) 
-    {
-        for (int k = 0; k < list->devices[i]->nb_media_types; k ++)
-        {
-            if (list->devices[i]->media_types[k] == type)
-            {
-                DeviceInfo* device = (DeviceInfo*)malloc(sizeof(DeviceInfo));
-                if (device != NULL)
-                {
-                    device->fmt = fmt;
-                    device->kind = kind;
-                    device->name = strdup(list->devices[i]->device_name);
-                    device->description = strdup(list->devices[i]->device_description);
-                    devices.items[devices.size] = device;
-                    devices.size ++;
-                }
-            }
-        }
-    }
-
-    avdevice_free_list_devices(&list);
-    avformat_close_input(&ctx);
-    avformat_free_context(ctx);
-
-    return devices;
-}
-
-void get_device_info(DeviceInfo* info)
-{
-    AVDictionary* dict = NULL;
-    av_dict_set(&dict, "list_options", "true", 0);
-
-    char name[255] = "";
-
-#ifdef WINDOWS
-    strcat(name, info->kind == DeviceKindVideo ? "video=" : "audio=");
-    strcat(name, info->name);
-#endif
-
-    AVFormatContext* ctx = NULL;
-    avformat_open_input(&ctx, name, info->fmt, &dict);
-    avformat_close_input(&ctx);
-    av_dict_free(&dict);
-}
-
-void init()
-{
-    avdevice_register_all();
-}
-
-Devices get_audio_devices() 
-{
-    return get_devices(DeviceKindAudio);
-}
-
-Devices get_video_devices() 
-{
-    return get_devices(DeviceKindVideo);
-}
-
-void release_devices(Devices* devices)
-{
-    free(devices->items);
-}
-
-void release_device_info(DeviceInfo* device) 
-{
-    free(device->description);
-    free(device->name);
-    free(device);
-}
-
-Device* open_device(DeviceInfo* info, DeviceConstraint constraint)
-{
-    get_device_info(info);
-
-    Device* device = (Device*)malloc(sizeof(Device));
-    if (device == NULL)
-    {
-        return NULL;
-    }
-
-    char name[255] = "";
-    AVDictionary* options = NULL;
-
-#ifdef WINDOWS
-    strcat(name, info->kind == DeviceKindVideo ? "video=" : "audio=");
-    strcat(name, info->name);
-
-    char video_size[20] = "";
-    sprintf(video_size, "%dx%d", constraint.width, constraint.height);
-    av_dict_set(&options, "video_size", video_size, 0);
-
-    char framerate[10] = "";
-    sprintf(framerate, "%d", constraint.frame_rate);
-    av_dict_set(&options, "framerate", framerate, 0);
-#endif
-
-    device->ctx = NULL;
-    device->fmt = info->fmt;
-    if (avformat_open_input(&device->ctx, name, device->fmt, &options) != 0)
-    {
-        release_device(device);
-        return NULL;
-    }
-
-    device->stream_idx = -1;
-    for (int i = 0; i < device->ctx->nb_streams; i++)
-    {
-        if (device->ctx->streams[i]->codecpar->codec_type == kind_into_type(info->kind)) 
-        {
-            device->stream_idx = i;
-            break;
-        }
-    }
-
-    if (device->stream_idx == -1)
-    {
-        release_device(device);
-        return NULL;
-    }
-
-    AVCodecParameters* codec_parameters = device->ctx->streams[device->stream_idx]->codecpar;
-    device->codec = avcodec_find_decoder(codec_parameters->codec_id);
-    if (!device->codec) 
-    {
-        release_device(device);
-        return NULL;
-    }
-     
-    device->codec_ctx = avcodec_alloc_context3(device->codec);
-    if (avcodec_parameters_to_context(device->codec_ctx, codec_parameters) < 0) 
-    {
-        release_device(device);
-        return NULL;
-    }
-     
-    if (avcodec_open2(device->codec_ctx, device->codec, NULL) < 0) 
-    {
-        release_device(device);
-        return NULL;
-    }
-
-    device->pkt = av_packet_alloc();
-    if (device->pkt == NULL)
-    {
-        release_device(device);
-        return NULL;
-    }
-
-    device->frame = av_frame_alloc();
-    if (device->frame == NULL)
-    {
-        release_device(device);
-        return NULL;
-    }
-
-    device->video_frame = (VideoFrame*)malloc(sizeof(VideoFrame));
-    if (device->video_frame == NULL)
-    {
-        release_device(device);
-        return NULL;
-    }
-
-    return device;
-}
-
-void release_device(Device* device)
-{
-    if (device->ctx != NULL)
-    {
-        avformat_close_input(device->ctx);
-    }
-
-    if (device->pkt != NULL)
-    {
-        av_packet_free(device->pkt);
-    }
-
-    if (device->video_frame != NULL)
-    {
-        free(device->video_frame);
-    }
-
-    if (device->codec_ctx != NULL)
-    {
-        avcodec_free_context(device->codec_ctx);
-    }
-
-    if (device->frame != NULL)
-    {
-        av_frame_free(device->frame);
-    }
-
-    free(device);
-}
-
-int device_advance(Device* device)
-{
-    av_packet_unref(device->pkt);
-    if (av_read_frame(device->ctx, device->pkt) != 0)
+    if (obs_initialized())
     {
         return -1;
     }
-
-    if (device->pkt->stream_index != device->stream_idx)
+    
+    if (!obs_startup("en-US", NULL, NULL))
     {
         return -2;
     }
 
-    avcodec_send_packet(device->codec_ctx, device->pkt);
+    struct obs_video_info video_info;
+    video_info.graphics_module = "libobs-d3d11";
+    video_info.fps_num = info->fps;
+    video_info.fps_den = 1;
+    video_info.gpu_conversion = true;
+    video_info.base_width = info->width;
+    video_info.base_height = info->height;
+    video_info.output_width = info->width;
+    video_info.output_height = info->height;
+    video_info.output_format = info->format;
+    video_info.colorspace = VIDEO_CS_DEFAULT;
+    video_info.range = VIDEO_RANGE_DEFAULT;
+    video_info.scale_type = OBS_SCALE_DISABLE;
+    video_info.adapter = 0;
+
+    if (obs_reset_video(&video_info) != OBS_VIDEO_SUCCESS)
+    {
+        return -3;
+    }
+
+    obs_load_all_modules();
+	obs_post_load_modules();
     return 0;
 }
 
-VideoFrame* device_get_frame(Device* device)
+void set_video_output_callback(VideoOutputCallback proc, void* ctx)
 {
-    if (avcodec_receive_frame(device->codec_ctx, device->frame) != 0)
+    obs_add_raw_video_callback(NULL, proc, ctx);
+}
+
+DeviceManager* create_device_manager(VideoInfo* info)
+{
+    DeviceManager* manager = (DeviceManager*)malloc(sizeof(DeviceManager));
+    if (manager == NULL)
     {
         return NULL;
     }
 
-    device->video_frame->format = device->frame->format;
-    device->video_frame->width = device->frame->width;
-    device->video_frame->height = device->frame->height;
-    device->video_frame->planes = &device->frame->data;
-    device->video_frame->linesizes = &device->frame->linesize;
-    return device->video_frame;
+    manager->scene = obs_scene_create("mirror");
+	if (manager->scene == NULL)
+	{
+        device_manager_release(manager);
+		return NULL;
+	}
+
+    obs_data_t* settings = obs_data_create();
+
+    char resolution[20];
+    sprintf(resolution, "%dx%d", info->width, info->height);
+
+    obs_data_set_bool(settings, "hw_decode", true);
+    obs_data_set_string(settings, "resolution", &resolution);
+
+	manager->video_source = obs_source_create("dshow_input", "mirror video input", settings, NULL);
+	if (manager->video_source == NULL)
+	{
+        device_manager_release(manager);
+		return NULL;
+	}
+    else
+    {
+        obs_set_output_source(0, manager->video_source);
+        obs_data_release(settings);
+    }
+
+	manager->video_scene_item = obs_scene_add(manager->scene, manager->video_source);
+	if (manager->video_scene_item == NULL)
+	{
+        device_manager_release(manager);
+		return NULL;
+	}
+	else
+	{
+		obs_sceneitem_set_visible(manager->video_scene_item, true);
+	}
+
+    return manager;
+}
+
+void device_manager_release(DeviceManager* manager)
+{
+    if (manager->scene != NULL)
+    {
+        obs_scene_release(manager->scene);
+    }
+
+    if (manager->video_source != NULL) 
+    {
+        obs_source_release(manager->video_source);
+    }
+
+    if (manager->video_scene_item != NULL)
+    {
+        obs_sceneitem_release(manager->video_scene_item);
+    }
+
+    free(manager);
+}
+
+void set_video_input(DeviceManager* manager, DeviceDescription* description)
+{
+    obs_data_t* settings = obs_data_create();
+    obs_data_t* cur_settings = obs_source_get_settings(manager->video_source);
+    obs_data_apply(settings, cur_settings);
+
+    obs_data_set_string(settings, "video_device_id", description->id);
+    obs_source_update(manager->video_source, settings);
+    obs_data_release(settings);
+}
+
+DeviceList get_device_list(DeviceManager* manager, DeviceType type)
+{
+    DeviceList list;
+    list.size = 0;
+    list.devices = (DeviceDescription**)malloc(sizeof(DeviceDescription*) * 50);
+
+    obs_properties_t* properties = obs_source_properties(manager->video_source);
+	obs_property_t* property = obs_properties_first(properties);
+	while (property)
+	{
+		const char* name = obs_property_name(property);
+		if (strcmp(name, "video_device_id") == 0)
+		{
+			for (size_t i = 0; i < obs_property_list_item_count(property); i++)
+			{
+                DeviceDescription* device = (DeviceDescription*)malloc(sizeof(DeviceDescription));
+                if (device != NULL)
+                {
+                    device->type = type;
+                    device->id = obs_property_list_item_string(property, i);
+                    device->name = obs_property_list_item_name(property, i);
+                    list.devices[list.size] = device;
+                    list.size ++;
+                }
+			}
+		}
+
+		obs_property_next(&property);
+	}
+
+    return list;
+}
+
+void release_device_description(DeviceDescription* description)
+{
+    free(description);
 }

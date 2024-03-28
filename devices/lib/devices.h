@@ -15,70 +15,52 @@
 #define EXPORT
 #endif
 
-#include <stdint.h>
-#include <stdbool.h>
-#include <libavcodec/avcodec.h>
-#include <libavdevice/avdevice.h>
-#include <libavformat/avformat.h>
-#include <libavutil/avutil.h>
-#include <libavcodec/packet.h>
+#include <libobs/obs.h>
+#include <stdio.h>
+
+typedef struct
+{
+    uint8_t fps;
+    uint32_t width;
+    uint32_t height;
+    enum video_format format;
+} VideoInfo;
+
+typedef struct
+{
+    obs_scene_t* scene;
+    obs_source_t* video_source;
+    obs_sceneitem_t* video_scene_item;
+} DeviceManager;
 
 typedef enum
 {
-    DeviceKindVideo = 0,
-    DeviceKindAudio = 1
-} DeviceKind;
+    kDeviceTypeVideo,
+    kDeviceTypeAudio,
+    kDeviceTypeScreen,
+} DeviceType;
 
 typedef struct
 {
-    char* name;
-    char* description;
-    DeviceKind kind;
-    const AVInputFormat* fmt;
-} DeviceInfo;
+    DeviceType type;
+    const char* id;
+    const char* name;
+} DeviceDescription;
 
 typedef struct
 {
-    DeviceInfo** items;
+    DeviceDescription** devices;
     size_t size;
-} Devices;
+} DeviceList;
 
-typedef struct
-{
-    int format;
-    uint32_t width;
-    uint32_t height;
-    uint8_t** planes;
-    uint32_t* linesizes;
-} VideoFrame;
+typedef void (*VideoOutputCallback)(void* ctx, struct video_data* frame);
 
-typedef struct
-{
-    const AVInputFormat* fmt;
-    AVFormatContext* ctx;
-    AVPacket* pkt;
-    AVFrame* frame;
-    int stream_idx;
-    const AVCodec* codec;
-    AVCodecContext* codec_ctx;
-    VideoFrame* video_frame;
-} Device;
-
-typedef struct
-{
-    uint32_t width;
-    uint32_t height;
-    uint8_t frame_rate;
-} DeviceConstraint;
-
-EXPORT void init();
-EXPORT Devices get_audio_devices();
-EXPORT Devices get_video_devices();
-EXPORT void release_device_info(DeviceInfo* device);
-EXPORT void release_devices(Devices* devices);
-EXPORT Device* open_device(DeviceInfo* device, DeviceConstraint constraint);
-EXPORT void release_device(Device* device);
-EXPORT int device_advance(Device* device);
-EXPORT VideoFrame* device_get_frame(Device* device);
+EXPORT int init(VideoInfo* info);
+EXPORT DeviceManager* create_device_manager(VideoInfo* info);
+EXPORT void device_manager_release(DeviceManager* manager);
+EXPORT DeviceList get_device_list(DeviceManager* manager, DeviceType type);
+EXPORT void release_device_description(DeviceDescription* description);
+EXPORT void set_video_input(DeviceManager* manager, DeviceDescription* description);
+EXPORT void set_video_output_callback(VideoOutputCallback proc, void* ctx);
 
 #endif /* devices_h */

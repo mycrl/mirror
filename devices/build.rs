@@ -1,7 +1,6 @@
 use std::{env, fs, path::Path, process::Command};
 
 use anyhow::anyhow;
-use dotenv::dotenv;
 
 fn join(root: &str, next: &str) -> anyhow::Result<String> {
     Ok(Path::new(root)
@@ -29,138 +28,48 @@ fn exec(command: &str, work_dir: &str) -> anyhow::Result<String> {
     }
 }
 
-#[cfg(target_os = "linux")]
-fn find_library(name: &str) -> (Vec<String>, Vec<String>) {
-    let probe = pkg_config::probe_library(name).expect(&format!(
-        "You don't have pck-config or {}-dev installed.",
-        name
-    ));
-    (
-        probe
-            .include_paths
-            .iter()
-            .map(|path| path.to_str().unwrap().to_string())
-            .collect::<Vec<String>>(),
-        probe
-            .link_paths
-            .iter()
-            .map(|path| path.to_str().unwrap().to_string())
-            .collect::<Vec<String>>(),
-    )
-}
-
 fn main() -> anyhow::Result<()> {
     println!("cargo:rerun-if-changed=./lib");
     println!("cargo:rerun-if-changed=./build.rs");
 
-    let settings = Settings::build()?;
+    let target = env::var("TARGET")?;
+    let out_dir = env::var("OUT_DIR")?;
+    let is_debug = env::var("DEBUG")
+        .map(|label| label == "true")
+        .unwrap_or(true);
+
+    #[cfg(target_os = "windows")]
+    {
+        if !is_exsit(&join(&out_dir, "obs.lib")?) {
+            exec(
+                "Invoke-WebRequest \
+                -Uri https://github.com/mycrl/mirror/releases/download/distributions/obs.lib \
+                -OutFile obs.lib",
+                &out_dir,
+            )?;
+        }
+    }
+
+    if !is_exsit(&join(&out_dir, "./obs-studio")?) {
+        exec(
+            "git clone --branch release/30.1 https://github.com/obsproject/obs-studio",
+            &out_dir,
+        )?;
+    }
+
     cc::Build::new()
         .cpp(false)
         .std("c17")
-        .debug(settings.is_debug)
+        .debug(is_debug)
         .static_crt(true)
-        .target(&settings.target)
+        .target(&target)
         .warnings(false)
-        .out_dir(&settings.out_dir)
+        .out_dir(&out_dir)
         .file("./lib/devices.c")
-        .includes(&settings.ffmpeg_include_prefix)
-        .define(
-            if cfg!(target_os = "windows") {
-                "WINDOWS"
-            } else if cfg!(target_os = "macos") {
-                "MACOS"
-            } else {
-                "LINUX"
-            },
-            None,
-        )
+        .include(&join(&out_dir, "./obs-studio")?)
         .compile("devices");
 
-    println!("cargo:rustc-link-search=all={}", &settings.out_dir);
-    for path in &settings.ffmpeg_lib_prefix {
-        println!("cargo:rustc-link-search=all={}", path);
-    }
-
-    println!("cargo:rustc-link-lib=avdevice");
-    println!("cargo:rustc-link-lib=avformat");
-    println!("cargo:rustc-link-lib=avutil");
-    println!("cargo:rustc-link-lib=avcodec");
-    println!("cargo:rustc-link-lib=devices");
+    println!("cargo:rustc-link-search=all={}", &out_dir);
+    println!("cargo:rustc-link-lib=obs");
     Ok(())
-}
-
-struct Settings {
-    is_debug: bool,
-    target: String,
-    out_dir: String,
-    ffmpeg_include_prefix: Vec<String>,
-    ffmpeg_lib_prefix: Vec<String>,
-}
-
-impl Settings {
-    fn build() -> anyhow::Result<Self> {
-        let _ = dotenv();
-        let out_dir = env::var("OUT_DIR")?;
-        let (ffmpeg_include_prefix, ffmpeg_lib_prefix) = if let (Some(include), Some(lib)) = (
-            env::var("FFMPEG_INCLUDE_PREFIX").ok(),
-            env::var("FFMPEG_LIB_PREFIX").ok(),
-        ) {
-            (vec![include], vec![lib])
-        } else {
-            find_ffmpeg_prefix(&out_dir)?
-        };
-
-        Ok(Self {
-            out_dir,
-            ffmpeg_lib_prefix,
-            ffmpeg_include_prefix,
-            target: env::var("TARGET")?,
-            is_debug: env::var("DEBUG")
-                .map(|label| label == "true")
-                .unwrap_or(true),
-        })
-    }
-}
-
-#[cfg(target_os = "macos")]
-fn find_ffmpeg_prefix(out_dir: &str) -> anyhow::Result<(Vec<String>, Vec<String>)> {
-    let ffmpeg_prefix = exec("brew --prefix ffmpeg", out_dir)
-        .expect("You don't have ffmpeg installed, please install ffmpeg: `brew install ffmpeg`.");
-
-    Ok((
-        vec![join(ffmpeg_prefix.trim(), "./include")?],
-        vec![join(ffmpeg_prefix.trim(), "./lib")?],
-    ))
-}
-
-#[cfg(target_os = "windows")]
-fn find_ffmpeg_prefix(out_dir: &str) -> anyhow::Result<(Vec<String>, Vec<String>)> {
-    if !is_exsit(&join(&out_dir, "7z.exe").unwrap()) {
-        exec(
-            "Invoke-WebRequest -Uri https://www.7-zip.org/a/7zr.exe -OutFile 7z.exe",
-            &out_dir,
-        )
-        .expect("Unable to download 7z cli exe.");
-    }
-
-    let ffmpeg_prefix = join(&out_dir, "ffmpeg-6.0-full_build-shared").unwrap();
-    if !is_exsit(&ffmpeg_prefix) {
-        exec(
-            "Invoke-WebRequest -Uri https://www.gyan.dev/ffmpeg/builds/packages/ffmpeg-6.0-full_build-shared.7z -OutFile ffmpeg.7z; \
-                     ./7z.exe x ffmpeg.7z -aoa; \
-                     del ffmpeg.7z",
-            &out_dir,
-        )
-        .expect("Unable to download ffmpeg shard release.");
-    }
-
-    Ok((
-        vec![join(&ffmpeg_prefix, "./include")?],
-        vec![join(&ffmpeg_prefix, "./lib")?],
-    ))
-}
-
-#[cfg(target_os = "linux")]
-fn find_ffmpeg_prefix(out_dir: &str) -> anyhow::Result<(Vec<String>, Vec<String>)> {
-    Ok(find_library("libavdevice"))
 }

@@ -1,12 +1,17 @@
-mod api;
+mod device;
+mod frame;
+mod manager;
+mod strings;
 
-pub use api::DeviceConstraint;
-
-use std::ffi::{c_char, CStr};
+pub use api::{DeviceKind, VideoFormat, VideoInfo};
+pub use device::Device;
+pub use frame::Frame;
+pub use manager::{DeviceManager, DeviceManagerOptions, Observer};
 
 #[derive(Debug)]
 pub enum DeviceError {
-    InvalidDevice,
+    InitializeFailed,
+    CreateDeviceManagerFailed,
 }
 
 impl std::error::Error for DeviceError {}
@@ -17,134 +22,75 @@ impl std::fmt::Display for DeviceError {
             f,
             "{}",
             match self {
-                Self::InvalidDevice => "InvalidDevice",
+                Self::CreateDeviceManagerFailed => "CreateDeviceManagerFailed",
+                Self::InitializeFailed => "InitializeFailed",
             }
         )
     }
 }
 
-pub fn init() {
-    unsafe { api::init() }
-}
+mod api {
+    use std::ffi::{c_char, c_int, c_void};
 
-pub struct Device(*const api::DeviceInfo);
+    pub type DeviceManager = *const c_void;
 
-impl Drop for Device {
-    fn drop(&mut self) {
-        unsafe { api::release_device_info(self.0) }
-    }
-}
-
-impl Device {
-    pub fn name(&self) -> Option<String> {
-        from_c_str(unsafe { &*self.0 }.name)
+    #[repr(C)]
+    #[allow(non_camel_case_types)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum VideoFormat {
+        VIDEO_FORMAT_I420 = 1,
+        VIDEO_FORMAT_NV12 = 2,
+        VIDEO_FORMAT_RGBA = 6,
+        VIDEO_FORMAT_BGRA = 7,
     }
 
-    pub fn description(&self) -> Option<String> {
-        from_c_str(unsafe { &*self.0 }.description)
+    #[repr(C)]
+    #[derive(Debug, Clone)]
+    pub struct VideoInfo {
+        pub fps: u8,
+        pub width: u32,
+        pub height: u32,
+        pub format: VideoFormat,
     }
 
-    pub fn kind(&self) -> api::DeviceKind {
-        unsafe { &*self.0 }.kind
+    #[repr(C)]
+    pub struct VideoFrame {
+        pub data: [*const u8; 8],
+        pub linesize: [u32; 8],
+        pub timestamp: u64,
     }
 
-    pub fn open(&self, constraint: DeviceConstraint) -> Result<DeviceManager, DeviceError> {
-        let device = unsafe { api::open_device(self.0, constraint) };
-        if !device.is_null() {
-            Ok(DeviceManager::new(device))
-        } else {
-            Err(DeviceError::InvalidDevice)
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct VideoFrame<'a> {
-    pub format: u32,
-    pub width: u32,
-    pub height: u32,
-    pub planes: Vec<&'a [u8]>,
-}
-
-pub struct DeviceManager {
-    ptr: *const api::Device,
-}
-
-impl Drop for DeviceManager {
-    fn drop(&mut self) {
-        unsafe { api::release_device(self.ptr) }
-    }
-}
-
-impl DeviceManager {
-    fn new(ptr: *const api::Device) -> Self {
-        Self { ptr }
+    #[repr(C)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum DeviceKind {
+        Video,
+        Audio,
+        Screen,
     }
 
-    pub fn make_readable(&self) -> bool {
-        let mut ret = unsafe { api::device_advance(self.ptr) };
-        if ret == -2 {
-            ret = unsafe { api::device_advance(self.ptr) };
-        }
-
-        ret == 0
+    #[repr(C)]
+    pub struct DeviceDescription {
+        pub kind: DeviceKind,
+        pub id: *const c_char,
+        pub name: *const c_char,
     }
 
-    pub fn get_frame(&self) -> Option<VideoFrame> {
-        let frame = unsafe { api::device_get_frame(self.ptr) };
-        if !frame.is_null() {
-            let frame = unsafe { &*frame };
-            let mut planes = Vec::with_capacity(8);
-
-            let sizes = unsafe { std::slice::from_raw_parts(frame.linesizes, 8) };
-            for (i, plane) in unsafe { std::slice::from_raw_parts(frame.planes, 8) }
-                .iter()
-                .enumerate()
-            {
-                if sizes[i] > 0 {
-                    planes.push(unsafe { std::slice::from_raw_parts(*plane, sizes[i] as usize) });
-                }
-            }
-
-            Some(VideoFrame {
-                format: frame.format as u32,
-                width: frame.width,
-                height: frame.height,
-                planes,
-            })
-        } else {
-            None
-        }
-    }
-}
-
-pub struct Devices;
-
-impl Devices {
-    pub fn get_audio_devices() -> Vec<Device> {
-        let list = unsafe { api::get_audio_devices() };
-        unsafe { std::slice::from_raw_parts(list.items, list.size) }
-            .into_iter()
-            .map(|item| Device(*item))
-            .collect()
+    #[repr(C)]
+    pub struct DeviceList {
+        pub devices: *const *const DeviceDescription,
+        pub size: usize,
     }
 
-    pub fn get_video_devices() -> Vec<Device> {
-        let list = unsafe { api::get_video_devices() };
-        unsafe { std::slice::from_raw_parts(list.items, list.size) }
-            .into_iter()
-            .map(|item| Device(*item))
-            .collect()
-    }
-}
-
-pub(crate) fn from_c_str(str: *const c_char) -> Option<String> {
-    if !str.is_null() {
-        unsafe { CStr::from_ptr(str) }
-            .to_str()
-            .map(|s| s.to_string())
-            .ok()
-    } else {
-        None
+    extern "C" {
+        pub fn init(info: *const VideoInfo) -> c_int;
+        pub fn create_device_manager(info: *const VideoInfo) -> DeviceManager;
+        pub fn device_manager_release(manager: DeviceManager);
+        pub fn get_device_list(manager: DeviceManager, kind: DeviceKind) -> DeviceList;
+        pub fn release_device_description(description: *const DeviceDescription);
+        pub fn set_video_input(manager: DeviceManager, description: *const DeviceDescription);
+        pub fn set_video_output_callback(
+            proc: extern "C" fn(ctx: *const c_void, frame: *const VideoFrame),
+            ctx: *const c_void,
+        );
     }
 }
