@@ -4,13 +4,14 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+futures = "0.3.30"
 async-trait = "0.1.77"
 bytes = "1.5.0"
 codec = { path = "../codec" }
 log = "0.4.20"
 rmp-serde = "1.1.2"
 serde = { version = "1.0.195", features = ["derive"] }
-srt = { path = "../srt" }
+rtp = { path = "../rtp" }
 sync = { path = "../sync" }
 thiserror = "1.0.56"
 tokio = { version = "1.35.1", features = ["net", "sync", "time"] }

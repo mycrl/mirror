@@ -6,8 +6,6 @@ import android.util.Log
 import android.view.Surface
 import kotlin.Exception
 
-typealias MirrorServiceConfigure = MirrorOptions;
-
 interface MirrorAdapterConfigure {
     val video: Video.VideoEncoder.VideoEncoderConfigure
     val audio: Audio.AudioEncoder.AudioEncoderConfigure
@@ -61,10 +59,10 @@ abstract class MirrorServiceObserver {
  * automatically respond to any sender push.
  */
 class MirrorService constructor(
-    private val configure: MirrorServiceConfigure,
+    private val bind: String,
     private val observer: MirrorServiceObserver?
 ) {
-    private val mirror: Mirror = Mirror(configure, if (observer != null) {
+    private val mirror: Mirror = Mirror(bind, if (observer != null) {
         object : ReceiverAdapterFactory() {
             override fun connect(
                 id: Int,
@@ -173,12 +171,16 @@ class MirrorService constructor(
      */
     fun createSender(
         id: Int,
+        bind: String,
+        to: String,
         configure: MirrorAdapterConfigure,
         record: AudioRecord?
     ): MirrorSender {
         return MirrorSender(
             mirror.createSender(
                 id,
+                bind,
+                to,
                 CodecDescriptionFactory.encode(
                     CodecDescriptionFactory.CodecDescription(
                         CodecDescriptionFactory.VideoDescription(
@@ -334,13 +336,6 @@ class MirrorSender constructor(
 
     fun pushAudioChunk(chunk: ByteArray) {
         audioEncoder.sink(chunk)
-    }
-
-    /**
-     * Get the port that sender is bound to.
-     */
-    fun getPort(): Int {
-        return sender.port
     }
 
     /**

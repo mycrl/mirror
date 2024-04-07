@@ -1,6 +1,9 @@
 use std::{
     ptr::null_mut,
-    sync::atomic::{AtomicBool, AtomicI8, AtomicIsize, AtomicPtr, AtomicU64, Ordering},
+    sync::atomic::{
+        AtomicBool, AtomicI16, AtomicI32, AtomicI64, AtomicI8, AtomicIsize, AtomicPtr, AtomicU16,
+        AtomicU32, AtomicU64, AtomicU8, AtomicUsize, Ordering,
+    },
 };
 
 pub trait EasyAtomic {
@@ -63,10 +66,17 @@ macro_rules! easy_atomic {
     };
 }
 
-easy_atomic!(AtomicBool, bool);
-easy_atomic!(AtomicU64, u64);
 easy_atomic!(AtomicI8, i8);
+easy_atomic!(AtomicU8, u8);
+easy_atomic!(AtomicI16, i16);
+easy_atomic!(AtomicU16, u16);
+easy_atomic!(AtomicI32, i32);
+easy_atomic!(AtomicU32, u32);
+easy_atomic!(AtomicI64, i64);
+easy_atomic!(AtomicU64, u64);
+easy_atomic!(AtomicBool, bool);
 easy_atomic!(AtomicIsize, isize);
+easy_atomic!(AtomicUsize, usize);
 
 /// Atomized Option type.
 pub struct AtomicOption<T>(AtomicPtr<T>);

@@ -1,5 +1,5 @@
 use std::{
-    net::SocketAddr,
+    net::{IpAddr, Ipv4Addr, SocketAddr},
     process::Stdio,
     sync::{Arc, Weak},
     time::Duration,
@@ -8,7 +8,6 @@ use std::{
 use async_trait::async_trait;
 use bytes::Bytes;
 use clap::Parser;
-use srt::SrtOptions;
 use tokio::{io::AsyncWriteExt, process::Command, time::sleep};
 use transport::{
     adapter::{
@@ -81,19 +80,25 @@ struct Args {
 async fn main() -> anyhow::Result<()> {
     simple_logger::init_with_level(log::Level::Info).unwrap();
 
-    let args = Args::parse();
-    let transport = Transport::new(
-        TransportOptions {
-            srt: SrtOptions::default(),
-            bind: args.addr,
-        },
-        Some(SimpleReceiverAdapterFactory),
-    )
+    let mut args = Args::parse();
+    let transport = Transport::new(Some(TransportOptions {
+        adapter_factory: SimpleReceiverAdapterFactory,
+        bind: args.addr,
+    }))
     .await?;
 
     if args.kind == "client" {
+        args.addr.set_port(args.addr.port() + 1);
         let adapter = StreamSenderAdapter::new();
-        transport.create_sender(0, vec![], &adapter).await?;
+        transport
+            .create_sender(
+                0,
+                SocketAddr::new(args.addr.ip(), 0),
+                SocketAddr::new(IpAddr::V4(Ipv4Addr::BROADCAST), args.addr.port()),
+                vec![],
+                &adapter,
+            )
+            .await?;
 
         let buf = Bytes::from_static(&[0u8; 3000]);
         loop {

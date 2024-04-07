@@ -9,10 +9,10 @@ lto = true
 resolver = "2"
 members = [
     "codec", 
-    "exports", 
-    "srt",
+    "exports",
     "transport", 
     "jni-macro",
     "sync", 
-    "devices",
+    "devices", 
+    "rtp"
 ]

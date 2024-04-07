@@ -31,7 +31,6 @@ import com.github.mycrl.mirror.MirrorAdapterConfigure
 import com.github.mycrl.mirror.MirrorReceiver
 import com.github.mycrl.mirror.MirrorSender
 import com.github.mycrl.mirror.MirrorService
-import com.github.mycrl.mirror.MirrorServiceConfigure
 import com.github.mycrl.mirror.MirrorServiceObserver
 import com.github.mycrl.mirror.ReceiverAdapterWrapper
 import com.github.mycrl.mirror.Video
@@ -118,12 +117,6 @@ class SimpleMirrorService : Service() {
     private var sender: MirrorSender? = null
 
     companion object {
-        private var MirrorConfig = run {
-            val cfg = MirrorServiceConfigure("0.0.0.0:3200")
-            cfg.maxBandwidth = 60 * 1024
-            cfg
-        }
-
         private val VideoConfigure = object : Video.VideoEncoder.VideoEncoderConfigure {
             override val format = MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface
             override val bitRate = 500 * 1024 * 8
@@ -143,7 +136,7 @@ class SimpleMirrorService : Service() {
 
     private var receiverAdapter: ReceiverAdapterWrapper? = null
     private val mirror: MirrorService =
-        MirrorService(MirrorConfig, object : MirrorServiceObserver() {
+        MirrorService("0.0.0.0:3200", object : MirrorServiceObserver() {
             override fun accept(id: Int, addr: String): MirrorReceiver {
                 receivedHandler?.let { it(id, addr) }
 
@@ -204,8 +197,8 @@ class SimpleMirrorService : Service() {
     fun createReceiver(addr: String) {
         Log.i("simple", "create receiver.")
 
-        val (ip, port) = addr.split(":")
-        mirror.createReceiver(ip, port.toInt(), object : MirrorAdapterConfigure {
+        val (_, port) = addr.split(":")
+        mirror.createReceiver("0.0.0.0", port.toInt(), object : MirrorAdapterConfigure {
             override val video = VideoConfigure
             override val audio = AudioConfigure
         }, object : MirrorReceiver() {
@@ -241,10 +234,16 @@ class SimpleMirrorService : Service() {
             )
 
         mediaProjection?.registerCallback(object : MediaProjection.Callback() {}, null)
-        sender = mirror.createSender(0, object : MirrorAdapterConfigure {
-            override val video = VideoConfigure
-            override val audio = AudioConfigure
-        }, createAudioRecord())
+        sender = mirror.createSender(
+            0,
+            "0.0.0.0:0",
+            "255.255.255.255:8080",
+            object : MirrorAdapterConfigure {
+                override val video = VideoConfigure
+                override val audio = AudioConfigure
+            },
+            createAudioRecord()
+        )
 
         virtualDisplay = mediaProjection?.createVirtualDisplay(
             "MirrorVirtualDisplayService",
