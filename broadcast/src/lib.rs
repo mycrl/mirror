@@ -31,8 +31,10 @@ impl Sender {
         assert!(options.bind.is_ipv4());
 
         let socket = UdpSocket::bind(options.bind).await?;
+        socket.join_multicast_v4("239.0.0.1".parse().unwrap(), "0.0.0.0".parse().unwrap())?;
+
         Ok(Self {
-            target: SocketAddr::new("224.0.0.1".parse().unwrap(), options.to),
+            target: SocketAddr::new("239.0.0.1".parse().unwrap(), options.to),
             muxer: PacketMuxer::new(options.mtu),
             socket,
         })
@@ -61,7 +63,7 @@ impl Receiver {
         assert!(bind.is_ipv4());
 
         let socket = UdpSocket::bind(bind).await?;
-        socket.join_multicast_v4("224.0.0.1".parse().unwrap(), "0.0.0.0".parse().unwrap())?;
+        socket.join_multicast_v4("239.0.0.1".parse().unwrap(), "0.0.0.0".parse().unwrap())?;
 
         Ok(Self {
             remuxer: PakcetRemuxer::new(20),
