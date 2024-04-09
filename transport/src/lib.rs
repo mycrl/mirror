@@ -9,19 +9,20 @@ use std::{
 };
 
 use adapter::StreamReceiverAdapter;
+use broadcast::{Client, Server};
 use thiserror::Error;
 use tokio::{runtime::Handle, sync::Mutex};
 
 use crate::{
     adapter::{ReceiverAdapterFactory, StreamSenderAdapter},
     discovery::{Discovery, DiscoveryError, Service},
-    payload::{DecodeRet, Decoder, Encoder},
+    payload::{Muxer, Remuxer, State},
 };
 
 #[derive(Debug, Error)]
 pub enum TransportError {
     #[error(transparent)]
-    RtpError(#[from] broadcast::Error),
+    NetError(#[from] broadcast::Error),
     #[error(transparent)]
     DiscoveryError(#[from] DiscoveryError),
 }
@@ -71,13 +72,10 @@ impl Transport {
                             addr
                         );
 
+                        let bind = SocketAddr::new(addr.ip(), service.port);
                         if let Some(adapter) = options
                             .adapter_factory
-                            .connect(
-                                service.id,
-                                SocketAddr::new(addr.ip(), service.port),
-                                &service.description,
-                            )
+                            .connect(service.id, bind, &service.description)
                             .await
                         {
                             log::info!(
@@ -86,12 +84,8 @@ impl Transport {
                                 service.port
                             );
 
-                            match broadcast::Receiver::new(
-                                multicast,
-                                SocketAddr::new(options.bind.ip(), service.port),
-                            )
-                            .await
-                            {
+                            let bind = SocketAddr::new(options.bind.ip(), service.port);
+                            match Client::new(multicast, bind, 20).await {
                                 Ok(mut socket) => {
                                     log::info!(
                                         "connected to remote service, ip={}, port={}",
@@ -101,13 +95,13 @@ impl Transport {
 
                                     let runtime = Handle::current();
                                     tokio::spawn(async move {
-                                        let mut decoder = Decoder::default();
+                                        let mut remuxer = Remuxer::default();
 
                                         'a: while let Ok(packets) = socket.read().await {
                                             for pkt in packets {
                                                 if let Some(adapter) = adapter.upgrade() {
-                                                    match decoder.decode(pkt) {
-                                                        DecodeRet::Pkt(chunk, kind, flags) => {
+                                                    match remuxer.remux(pkt) {
+                                                        State::Pkt(chunk, kind, flags) => {
                                                             if !adapter.send(chunk, kind, flags) {
                                                                 log::error!(
                                                                     "adapter on buf failed."
@@ -116,7 +110,7 @@ impl Transport {
                                                                 break 'a;
                                                             }
                                                         }
-                                                        DecodeRet::Loss => {
+                                                        State::Loss => {
                                                             adapter.loss_pkt();
                                                         }
                                                         _ => (),
@@ -172,16 +166,14 @@ impl Transport {
         description: Vec<u8>,
         adapter: &Arc<StreamSenderAdapter>,
     ) -> Result<(), TransportError> {
-        let mut sender = broadcast::Sender::new(self.multicast, bind, mtu).await?;
-
-        log::info!("sender bind to port={}", bind.port());
-
-        let max_pkt_size = sender.max_packet_size();
+        let mut server = Server::new(self.multicast, bind, mtu).await?;
         let service = Service {
             port: bind.port(),
             description,
             id,
         };
+
+        log::info!("sender bind to port={}", bind.port());
 
         {
             let mut services = self.services.lock().await;
@@ -198,14 +190,13 @@ impl Transport {
         let discovery_ = self.discovery.as_ref().map(Arc::downgrade);
         let adapter_ = Arc::downgrade(adapter);
         tokio::spawn(async move {
-            let mut encoder = Encoder::default();
+            let mut muxer = Muxer::new(server.max_packet_size());
 
             while let Some(adapter) = adapter_.upgrade() {
                 if let Some((buf, kind, flags)) = adapter.next().await {
-                    if let Some(payloads) = encoder.encode(max_pkt_size, kind, flags, buf.as_ref())
-                    {
+                    if let Some(payloads) = muxer.mux(kind, flags, buf.as_ref()) {
                         for payload in payloads {
-                            if let Err(e) = sender.send(payload).await {
+                            if let Err(e) = server.send(payload).await {
                                 log::error!("failed to send buf in socket, err={:?}", e);
                             }
                         }
@@ -237,24 +228,24 @@ impl Transport {
         bind: SocketAddr,
         adapter: &Arc<StreamReceiverAdapter>,
     ) -> Result<(), TransportError> {
-        let mut socket = broadcast::Receiver::new(self.multicast, bind).await?;
+        let mut socket = Client::new(self.multicast, bind, 20).await?;
         log::info!("receiver listening, port={}", bind.port(),);
 
         let adapter = Arc::downgrade(adapter);
         tokio::spawn(async move {
-            let mut decoder = Decoder::default();
+            let mut remuxer = Remuxer::default();
 
             'a: while let Ok(packets) = socket.read().await {
                 for pkt in packets {
                     if let Some(adapter) = adapter.upgrade() {
-                        match decoder.decode(pkt) {
-                            DecodeRet::Pkt(chunk, kind, flags) => {
+                        match remuxer.remux(pkt) {
+                            State::Pkt(chunk, kind, flags) => {
                                 if !adapter.send(chunk, kind, flags) {
                                     log::error!("adapter on buf failed.");
                                     break 'a;
                                 }
                             }
-                            DecodeRet::Loss => {
+                            State::Loss => {
                                 adapter.loss_pkt();
                             }
                             _ => (),

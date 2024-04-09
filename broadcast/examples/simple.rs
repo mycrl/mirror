@@ -1,12 +1,12 @@
 use std::time::Duration;
 
-use broadcast::{Receiver, Sender};
+use broadcast::{Client, Server};
 use tokio::time;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tokio::spawn(async {
-        let mut receiver = Receiver::new("239.0.0.1".parse()?, "0.0.0.0:8080".parse()?).await?;
+        let mut receiver = Client::new("239.0.0.1".parse()?, "0.0.0.0:8080".parse()?, 20).await?;
         while let Ok(packets) = receiver.read().await {
             for packet in packets {
                 println!("{}", packet.len())
@@ -16,7 +16,7 @@ async fn main() -> anyhow::Result<()> {
         Ok::<(), anyhow::Error>(())
     });
 
-    let mut sender = Sender::new("239.0.0.1".parse()?, "0.0.0.0:8080".parse()?, 1500).await?;
+    let mut sender = Server::new("239.0.0.1".parse()?, "0.0.0.0:8080".parse()?, 1500).await?;
     let buf = [0u8; 1000];
     loop {
         sender.send(&buf).await?;

@@ -6,35 +6,38 @@ use crc::{Crc, CRC_32_ISO_HDLC};
 /// Because of the need to transmit both audio and video data in srt, it is
 /// necessary to identify the type of packet, this encoder is used to packetize
 /// specific types of data for transmission over the network.
-#[derive(Default)]
-pub struct Encoder(Vec<Vec<u8>>);
+pub struct Muxer {
+    packets: Vec<Vec<u8>>,
+    max_size: usize,
+}
 
-impl Encoder {
+impl Muxer {
+    pub fn new(max_size: usize) -> Self {
+        Self {
+            packets: Default::default(),
+            max_size,
+        }
+    }
+
     /// The result of the encoding may be null, this is because an empty packet
     /// may be passed in from outside.
-    pub fn encode(
-        &mut self,
-        unit_len: usize,
-        kind: StreamKind,
-        flags: u8,
-        buf: &[u8],
-    ) -> Option<&[Vec<u8>]> {
+    pub fn mux(&mut self, kind: StreamKind, flags: u8, buf: &[u8]) -> Option<&[Vec<u8>]> {
         if buf.len() == 0 {
             return None;
         }
 
         let mut size = 0;
-        for (i, chunk) in buf.chunks(unit_len - 10).enumerate() {
+        for (i, chunk) in buf.chunks(self.max_size - 9).enumerate() {
             {
-                if self.0.get(i).is_none() {
-                    self.0.push(vec![0u8; unit_len]);
+                if self.packets.get(i).is_none() {
+                    self.packets.push(vec![0u8; self.max_size]);
                 }
             }
 
-            if let Some(buf) = self.0.get_mut(i) {
+            if let Some(buf) = self.packets.get_mut(i) {
                 buf.clear();
                 buf.put_u32(0);
-                buf.put_u16(i as u16);
+                buf.put_u8(i as u8);
                 buf.put_u8(kind as u8);
                 buf.put_u8(flags);
                 buf.put_u16(chunk.len() as u16);
@@ -46,12 +49,12 @@ impl Encoder {
             }
         }
 
-        Some(&self.0[..size])
+        Some(&self.packets[..size])
     }
 }
 
 /// Packet decoder decoding results
-pub enum DecodeRet {
+pub enum State {
     /// Decode the packet normally.
     Pkt(Bytes, StreamKind, u8),
     /// Need to wait for more data.
@@ -62,26 +65,26 @@ pub enum DecodeRet {
 
 /// Decode the packets received from the network and separate out the different
 /// types of data.
-pub struct Decoder {
+pub struct Remuxer {
     mark: Option<(StreamKind, u8)>,
     buf: BytesMut,
     throw: bool,
-    seq: i16,
+    seq: i8,
 }
 
-impl Default for Decoder {
+impl Default for Remuxer {
     fn default() -> Self {
         Self {
-            seq: -1,
-            mark: None,
-            throw: false,
             buf: BytesMut::with_capacity(1024 * 1024),
+            throw: false,
+            mark: None,
+            seq: -1,
         }
     }
 }
 
-impl Decoder {
-    pub fn decode(&mut self, mut buf: &[u8]) -> DecodeRet {
+impl Remuxer {
+    pub fn remux(&mut self, mut buf: &[u8]) -> State {
         // Check if the current slice is damaged.
         let crc = buf.get_u32();
         if crc != fingerprint(&buf[..]) {
@@ -90,11 +93,11 @@ impl Decoder {
             // If the check doesn't pass, then none of the packets in the set
             // can be used because there is no retransmission.
             self.throw = true;
-            return DecodeRet::Loss;
+            return State::Loss;
         }
 
         // Get slice header information.
-        let seq = buf.get_u16() as i16;
+        let seq = buf.get_u8() as i8;
         let kind = StreamKind::try_from(buf.get_u8()).unwrap();
         let flags = buf.get_u8();
         let size = buf.get_u16() as usize;
@@ -114,7 +117,7 @@ impl Decoder {
                 // has dropped the packet, enters discard mode, and returns the
                 // null result immediately.
                 self.throw = true;
-                return DecodeRet::Loss;
+                return State::Loss;
             }
         }
 
@@ -133,9 +136,9 @@ impl Decoder {
         bytes
             .map(|it| {
                 let (kind, flags) = previous.unwrap();
-                DecodeRet::Pkt(it, kind, flags)
+                State::Pkt(it, kind, flags)
             })
-            .unwrap_or(DecodeRet::Wait)
+            .unwrap_or(State::Wait)
     }
 }
 
