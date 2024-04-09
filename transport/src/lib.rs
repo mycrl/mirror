@@ -2,7 +2,11 @@ pub mod adapter;
 mod discovery;
 mod payload;
 
-use std::{collections::HashSet, net::SocketAddr, sync::Arc};
+use std::{
+    collections::HashSet,
+    net::{Ipv4Addr, SocketAddr},
+    sync::Arc,
+};
 
 use adapter::StreamReceiverAdapter;
 use thiserror::Error;
@@ -31,19 +35,20 @@ pub struct TransportOptions<T> {
 pub struct Transport {
     services: Arc<Mutex<HashSet<Service>>>,
     discovery: Option<Arc<Discovery>>,
+    multicast: Ipv4Addr,
 }
 
 impl Transport {
-    pub async fn new<T>(options: Option<TransportOptions<T>>) -> Result<Self, TransportError>
+    pub async fn new<T>(
+        multicast: Ipv4Addr,
+        options: Option<TransportOptions<T>>,
+    ) -> Result<Self, TransportError>
     where
         T: ReceiverAdapterFactory + 'static,
     {
         let mut discovery = None;
         if let Some(options) = options {
-            let mut listen = options.bind;
-            listen.set_port(listen.port() + 1);
-
-            discovery = Some(Discovery::new(listen).await?);
+            discovery = Some(Discovery::new(options.bind).await?);
             let discovery = discovery.as_ref().map(Arc::downgrade);
 
             tokio::spawn(async move {
@@ -81,10 +86,11 @@ impl Transport {
                                 service.port
                             );
 
-                            match broadcast::Receiver::new(SocketAddr::new(
-                                "0.0.0.0".parse().unwrap(),
-                                service.port,
-                            )).await
+                            match broadcast::Receiver::new(
+                                multicast,
+                                SocketAddr::new(options.bind.ip(), service.port),
+                            )
+                            .await
                             {
                                 Ok(mut socket) => {
                                     log::info!(
@@ -153,6 +159,7 @@ impl Transport {
 
         Ok(Self {
             services: Default::default(),
+            multicast,
             discovery,
         })
     }
@@ -165,15 +172,11 @@ impl Transport {
         description: Vec<u8>,
         adapter: &Arc<StreamSenderAdapter>,
     ) -> Result<(), TransportError> {
-        let mut sender = broadcast::Sender::new(broadcast::SenderOptions {
-            bind: SocketAddr::new(bind.ip(), 0),
-            to: bind.port(),
-            mtu,
-        }).await?;
+        let mut sender = broadcast::Sender::new(self.multicast, bind, mtu).await?;
 
-        let max_pkt_size = sender.max_packet_size();
         log::info!("sender bind to port={}", bind.port());
 
+        let max_pkt_size = sender.max_packet_size();
         let service = Service {
             port: bind.port(),
             description,
@@ -234,7 +237,7 @@ impl Transport {
         bind: SocketAddr,
         adapter: &Arc<StreamReceiverAdapter>,
     ) -> Result<(), TransportError> {
-        let mut socket = broadcast::Receiver::new(bind).await?;
+        let mut socket = broadcast::Receiver::new(self.multicast, bind).await?;
         log::info!("receiver listening, port={}", bind.port(),);
 
         let adapter = Arc::downgrade(adapter);

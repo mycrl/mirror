@@ -81,10 +81,13 @@ async fn main() -> anyhow::Result<()> {
     simple_logger::init_with_level(log::Level::Info).unwrap();
 
     let mut args = Args::parse();
-    let transport = Transport::new(Some(TransportOptions {
-        adapter_factory: SimpleReceiverAdapterFactory,
-        bind: args.addr,
-    }))
+    let transport = Transport::new(
+        "239.0.0.1".parse()?,
+        Some(TransportOptions {
+            adapter_factory: SimpleReceiverAdapterFactory,
+            bind: args.addr,
+        }),
+    )
     .await?;
 
     if args.kind == "client" {

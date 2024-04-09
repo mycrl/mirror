@@ -61,13 +61,6 @@ android {
     kotlinOptions {
         jvmTarget = '1.8'
     }
-
-    externalNativeBuild {
-        cmake {
-            path file('src/main/cpp/CMakeLists.txt')
-            version '3.22.1'
-        }
-    }
 }
 
 cargo {
@@ -108,7 +101,7 @@ publishing {
         release(MavenPublication) {
             groupId = 'com.github.mycrl'
             artifactId = 'mirror'
-            version = '0.1.9'
+            version = '0.3.0'
 
             afterEvaluate {
                 from components.release

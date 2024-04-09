@@ -13,13 +13,6 @@ pub enum Error {
     Closed,
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct SenderOptions {
-    pub bind: SocketAddr,
-    pub mtu: usize,
-    pub to: u16,
-}
-
 pub struct Sender {
     muxer: PacketMuxer,
     socket: UdpSocket,
@@ -27,15 +20,25 @@ pub struct Sender {
 }
 
 impl Sender {
-    pub async fn new(options: SenderOptions) -> Result<Self, Error> {
-        assert!(options.bind.is_ipv4());
+    pub async fn new(multicast: Ipv4Addr, bind: SocketAddr, mtu: usize) -> Result<Self, Error> {
+        assert!(bind.is_ipv4());
 
-        let socket = UdpSocket::bind(options.bind).await?;
-        socket.join_multicast_v4("239.0.0.1".parse().unwrap(), "0.0.0.0".parse().unwrap())?;
+        let socket = UdpSocket::bind(SocketAddr::new(bind.ip(), 0)).await?;
+        if let IpAddr::V4(bind) = bind.ip() {
+            socket.join_multicast_v4(multicast, bind)?;
+
+            log::info!(
+                "udp socket join multicast {}, interface {}",
+                multicast,
+                bind
+            );
+        }
+
+        log::info!("udp socket bind to {}", bind);
 
         Ok(Self {
-            target: SocketAddr::new("239.0.0.1".parse().unwrap(), options.to),
-            muxer: PacketMuxer::new(options.mtu),
+            target: SocketAddr::new(IpAddr::V4(multicast), bind.port()),
+            muxer: PacketMuxer::new(mtu),
             socket,
         })
     }
@@ -59,11 +62,21 @@ pub struct Receiver {
 }
 
 impl Receiver {
-    pub async fn new(bind: SocketAddr) -> Result<Self, Error> {
+    pub async fn new(multicast: Ipv4Addr, bind: SocketAddr) -> Result<Self, Error> {
         assert!(bind.is_ipv4());
 
         let socket = UdpSocket::bind(bind).await?;
-        socket.join_multicast_v4("239.0.0.1".parse().unwrap(), "0.0.0.0".parse().unwrap())?;
+        if let IpAddr::V4(bind) = bind.ip() {
+            socket.join_multicast_v4(multicast, bind)?;
+
+            log::info!(
+                "udp socket join multicast {}, interface {}",
+                multicast,
+                bind
+            );
+        }
+
+        log::info!("udp socket bind to {}", bind);
 
         Ok(Self {
             remuxer: PakcetRemuxer::new(20),

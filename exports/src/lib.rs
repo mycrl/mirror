@@ -417,16 +417,18 @@ impl Mirror {
     pub fn create_mirror(
         mut env: JNIEnv,
         _this: JClass,
-        addr: JString,
+        multicast: JString,
+        bind: JString,
         adapter_factory: *const AndroidStreamReceiverAdapterFactory,
     ) -> *const Transport {
         catcher(&mut env, |env| {
-            let addr: String = env.get_string(&addr)?.into();
+            let bind: String = env.get_string(&bind)?.into();
+            let multicast: String = env.get_string(&multicast)?.into();
             let options = if adapter_factory.is_null() {
                 None
             } else {
                 Some(TransportOptions {
-                    bind: addr.parse()?,
+                    bind: bind.parse()?,
                     adapter_factory: unsafe {
                         *Box::from_raw(adapter_factory as *mut AndroidStreamReceiverAdapterFactory)
                     },
@@ -434,7 +436,7 @@ impl Mirror {
             };
 
             Ok(Box::into_raw(Box::new(
-                get_runtime()?.block_on(Transport::new(options))?,
+                get_runtime()?.block_on(Transport::new(multicast.parse()?, options))?,
             )))
         })
         .unwrap_or_else(null_mut)

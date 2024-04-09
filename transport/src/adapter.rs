@@ -125,7 +125,6 @@ impl StreamReceiverAdapter {
 
     pub fn send(&self, buf: Bytes, kind: StreamKind, flags: u8) -> bool {
         if kind == StreamKind::Video {
-            log::info!("=, flag={}", flags);
             self.video
                 .process(buf, flags, |buf| self.tx.send(Some((buf, kind))).is_ok())
         } else {

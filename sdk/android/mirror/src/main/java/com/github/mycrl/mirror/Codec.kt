@@ -1,5 +1,6 @@
 package com.github.mycrl.mirror
 
+import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.AudioTrack
 import android.media.MediaCodec
@@ -14,6 +15,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromByteArray
 import kotlinx.serialization.encodeToByteArray
 import java.lang.Exception
+import java.lang.Thread.MAX_PRIORITY
 import java.nio.ByteBuffer
 
 abstract class ByteArraySinker {
@@ -106,6 +108,7 @@ class Video {
         fun start() {
             if (!isRunning) {
                 isRunning = true
+                worker.priority = MAX_PRIORITY
 
                 codec.start()
                 worker.start()
@@ -152,7 +155,7 @@ class Video {
         init {
             val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, configure.width, configure.height)
             format.setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
-            format.setInteger(MediaFormat.KEY_PUSH_BLANK_BUFFERS_ON_STOP, 1)
+            format.setLong(MediaFormat.KEY_REPEAT_PREVIOUS_FRAME_AFTER, 1000 * 50)
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 if (codec.name.indexOf(".rk.") < 0 && codec.name.indexOf(".hisi.") < 0) {
@@ -195,6 +198,7 @@ class Video {
         fun start() {
             if (!isRunning) {
                 isRunning = true
+                worker.priority = MAX_PRIORITY
 
                 codec.start()
                 worker.start()
@@ -227,13 +231,14 @@ class Audio {
 
         init {
             val format = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_AMR_WB, configure.sampleRate, configure.channels)
-            format.setInteger(MediaFormat.KEY_BIT_RATE, configure.bitRate)
+            format.setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR)
+            format.setInteger(MediaFormat.KEY_PCM_ENCODING, AudioFormat.ENCODING_PCM_16BIT)
 
             codec = MediaCodec.createDecoderByType(MediaFormat.MIMETYPE_AUDIO_AMR_WB)
             codec.configure(format, null, null, 0)
 
             worker = Thread {
-                val buf = ByteArray(1024 * 10)
+                val buf = ByteArray(1024 * 1024)
 
                 while (isRunning) {
                     try {
@@ -257,7 +262,7 @@ class Audio {
         }
 
         fun sink(buf: ByteArray) {
-            val index = codec.dequeueInputBuffer(-1)
+            val index = codec.dequeueInputBuffer(1000)
             if (index >= 0) {
                 codec.getInputBuffer(index)?.clear()
                 codec.getInputBuffer(index)?.put(buf)
@@ -268,6 +273,7 @@ class Audio {
         fun start() {
             if (!isRunning) {
                 isRunning = true
+                worker.priority = MAX_PRIORITY
 
                 codec.start()
                 worker.start()
@@ -289,7 +295,6 @@ class Audio {
         interface AudioDecoderConfigure {
             val sampleRate: Int;
             val channels: Int;
-            val bitRate: Int;
         }
     }
 
@@ -313,7 +318,11 @@ class Audio {
 
         init {
             val format = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_AMR_WB, configure.sampleRate, configure.channels)
+            format.setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR)
+            format.setInteger(MediaFormat.KEY_PCM_ENCODING, AudioFormat.ENCODING_PCM_16BIT)
+            format.setInteger(MediaFormat.KEY_CHANNEL_COUNT, configure.channels)
             format.setInteger(MediaFormat.KEY_BIT_RATE, configure.bitRate)
+            format.setInteger(MediaFormat.KEY_COMPLEXITY, 0)
 
             codec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_AUDIO_AMR_WB)
             codec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
@@ -382,6 +391,8 @@ class Audio {
         fun start() {
             if (!isRunning) {
                 isRunning = true
+                worker.priority = MAX_PRIORITY
+                recorder?.priority = MAX_PRIORITY
 
                 codec.start()
                 worker.start()
@@ -447,7 +458,6 @@ class CodecDescriptionFactory {
     data class AudioDescription(
         @SerialName("sr") val sampleRate: Int,
         @SerialName("cs") val channels: Int,
-        @SerialName("br") val bitRate: Int,
     )
 
     companion object {

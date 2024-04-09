@@ -43,14 +43,15 @@ class ReceiverAdapterWrapper constructor(private val releaser: () -> Unit) {
 }
 
 class Mirror constructor(
-    private val bind: String,
+    private val multicast: String,
+    private val bind: String?,
     private val adapterFactory: ReceiverAdapterFactory?
 ) {
     private var mirror: Long = 0
 
     init {
         mirror = createMirror(
-            bind, if (adapterFactory != null) {
+            multicast, bind, if (adapterFactory != null) {
                 createStreamReceiverAdapterFactory(adapterFactory)
             } else {
                 0L
@@ -112,7 +113,8 @@ class Mirror constructor(
     private external fun releaseStreamReceiverAdapter(adapter: Long)
 
     private external fun createMirror(
-        bind: String,
+        multicast: String,
+        bind: String?,
         adapterFactory: Long
     ): Long
 

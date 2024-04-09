@@ -59,10 +59,11 @@ abstract class MirrorServiceObserver {
  * automatically respond to any sender push.
  */
 class MirrorService constructor(
-    private val bind: String,
+    private val multicast: String,
+    private val bind: String?,
     private val observer: MirrorServiceObserver?
 ) {
-    private val mirror: Mirror = Mirror(bind, if (observer != null) {
+    private val mirror: Mirror = Mirror(multicast, bind, if (observer != null) {
         object : ReceiverAdapterFactory() {
             override fun connect(
                 id: Int,
@@ -87,7 +88,6 @@ class MirrorService constructor(
                                 object : Audio.AudioDecoder.AudioDecoderConfigure {
                                     override val sampleRate = codecDescription.audio.sampleRate
                                     override val channels = codecDescription.audio.channels
-                                    override val bitRate = codecDescription.audio.bitRate
                                 })
                         } else {
                             null
@@ -190,7 +190,6 @@ class MirrorService constructor(
                         CodecDescriptionFactory.AudioDescription(
                             configure.audio.sampleRate,
                             configure.audio.channels,
-                            configure.audio.bitRate,
                         )
                     )
                 ),
@@ -227,7 +226,6 @@ class MirrorService constructor(
                     object : Audio.AudioDecoder.AudioDecoderConfigure {
                         override val sampleRate = configure.audio.sampleRate
                         override val channels = configure.audio.channels
-                        override val bitRate = configure.audio.bitRate
                     })
             } else {
                 null
