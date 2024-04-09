@@ -171,16 +171,16 @@ class MirrorService constructor(
      */
     fun createSender(
         id: Int,
+        mtu: Int,
         bind: String,
-        to: String,
         configure: MirrorAdapterConfigure,
         record: AudioRecord?
     ): MirrorSender {
         return MirrorSender(
             mirror.createSender(
                 id,
+                mtu,
                 bind,
-                to,
                 CodecDescriptionFactory.encode(
                     CodecDescriptionFactory.CodecDescription(
                         CodecDescriptionFactory.VideoDescription(
@@ -207,13 +207,12 @@ class MirrorService constructor(
      * `port` The port number from the created sender.
      */
     fun createReceiver(
-        ip: String,
-        port: Int,
+        bind: String,
         configure: MirrorAdapterConfigure,
         observer: MirrorReceiver
     ) {
         var adapter: ReceiverAdapterWrapper? = null
-        adapter = mirror.createReceiver("$ip:$port", object : ReceiverAdapter() {
+        adapter = mirror.createReceiver(bind, object : ReceiverAdapter() {
             private var isReleased: Boolean = false
             private val videoDecoder = Video.VideoDecoder(
                 observer.surface,

@@ -1,5 +1,5 @@
 use std::{
-    net::{IpAddr, Ipv4Addr, SocketAddr},
+    net::SocketAddr,
     process::Stdio,
     sync::{Arc, Weak},
     time::Duration,
@@ -91,13 +91,7 @@ async fn main() -> anyhow::Result<()> {
         args.addr.set_port(args.addr.port() + 1);
         let adapter = StreamSenderAdapter::new();
         transport
-            .create_sender(
-                0,
-                SocketAddr::new(args.addr.ip(), 0),
-                SocketAddr::new(IpAddr::V4(Ipv4Addr::BROADCAST), args.addr.port()),
-                vec![],
-                &adapter,
-            )
+            .create_sender(0, 1500, args.addr, vec![], &adapter)
             .await?;
 
         let buf = Bytes::from_static(&[0u8; 3000]);

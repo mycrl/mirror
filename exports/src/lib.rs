@@ -489,18 +489,17 @@ impl Mirror {
         _this: JClass,
         mirror: *const Transport,
         id: i32,
+        mtu: i32,
         bind: JString,
-        to: JString,
         description: JByteArray,
         adapter: *const Arc<StreamSenderAdapter>,
     ) {
         catcher(&mut env, |env| {
-            let to: String = env.get_string(&to)?.into();
             let bind: String = env.get_string(&bind)?.into();
             let buf = env.convert_byte_array(&description)?;
             Ok(get_runtime()?.block_on(async move {
                 unsafe { &*mirror }
-                    .create_sender(id as u8, bind.parse()?, to.parse()?, buf, unsafe {
+                    .create_sender(id as u8, mtu as usize, bind.parse()?, buf, unsafe {
                         &*adapter
                     })
                     .await?;
@@ -548,13 +547,13 @@ impl Mirror {
         mut env: JNIEnv,
         _this: JClass,
         mirror: *const Transport,
-        addr: JString,
+        bind: JString,
         adapter: *const Arc<StreamReceiverAdapter>,
     ) -> i32 {
         catcher(&mut env, |env| {
-            let addr: String = env.get_string(&addr)?.into();
+            let bind: String = env.get_string(&bind)?.into();
             get_runtime()?.block_on(
-                unsafe { &*mirror }.create_receiver(addr.parse()?, unsafe { &*adapter }),
+                unsafe { &*mirror }.create_receiver(bind.parse()?, unsafe { &*adapter }),
             )?;
 
             Ok(true)

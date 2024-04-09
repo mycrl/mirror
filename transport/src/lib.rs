@@ -5,8 +5,6 @@ mod payload;
 use std::{collections::HashSet, net::SocketAddr, sync::Arc};
 
 use adapter::StreamReceiverAdapter;
-use futures::StreamExt;
-use rtp::{RtpError, RtpReceiver, RtpSender, RtpConfig};
 use thiserror::Error;
 use tokio::{runtime::Handle, sync::Mutex};
 
@@ -19,7 +17,7 @@ use crate::{
 #[derive(Debug, Error)]
 pub enum TransportError {
     #[error(transparent)]
-    RtpError(#[from] RtpError),
+    RtpError(#[from] broadcast::Error),
     #[error(transparent)]
     DiscoveryError(#[from] DiscoveryError),
 }
@@ -42,7 +40,10 @@ impl Transport {
     {
         let mut discovery = None;
         if let Some(options) = options {
-            discovery = Some(Discovery::new(options.bind).await?);
+            let mut listen = options.bind;
+            listen.set_port(listen.port() + 1);
+
+            discovery = Some(Discovery::new(listen).await?);
             let discovery = discovery.as_ref().map(Arc::downgrade);
 
             tokio::spawn(async move {
@@ -80,7 +81,10 @@ impl Transport {
                                 service.port
                             );
 
-                            match RtpReceiver::new()
+                            match broadcast::Receiver::new(SocketAddr::new(
+                                "0.0.0.0".parse().unwrap(),
+                                service.port,
+                            )).await
                             {
                                 Ok(mut socket) => {
                                     log::info!(
@@ -93,23 +97,28 @@ impl Transport {
                                     tokio::spawn(async move {
                                         let mut decoder = Decoder::default();
 
-                                        while let Some(pkt) = socket.next().await {
-                                            if let Some(adapter) = adapter.upgrade() {
-                                                match decoder.decode(pkt.as_bytes()) {
-                                                    DecodeRet::Pkt(chunk, kind, flags) => {
-                                                        if !adapter.send(chunk, kind, flags) {
-                                                            log::error!("adapter on buf failed.");
-                                                            break;
+                                        'a: while let Ok(packets) = socket.read().await {
+                                            for pkt in packets {
+                                                if let Some(adapter) = adapter.upgrade() {
+                                                    match decoder.decode(pkt) {
+                                                        DecodeRet::Pkt(chunk, kind, flags) => {
+                                                            if !adapter.send(chunk, kind, flags) {
+                                                                log::error!(
+                                                                    "adapter on buf failed."
+                                                                );
+
+                                                                break 'a;
+                                                            }
                                                         }
+                                                        DecodeRet::Loss => {
+                                                            adapter.loss_pkt();
+                                                        }
+                                                        _ => (),
                                                     }
-                                                    DecodeRet::Loss => {
-                                                        adapter.loss_pkt();
-                                                    }
-                                                    _ => (),
+                                                } else {
+                                                    log::warn!("adapter is droped!");
+                                                    break 'a;
                                                 }
-                                            } else {
-                                                log::warn!("adapter is droped!");
-                                                break;
                                             }
                                         }
 
@@ -151,17 +160,22 @@ impl Transport {
     pub async fn create_sender(
         &self,
         id: u8,
+        mtu: usize,
         bind: SocketAddr,
-        dest: SocketAddr,
         description: Vec<u8>,
         adapter: &Arc<StreamSenderAdapter>,
     ) -> Result<(), TransportError> {
-        let server = RtpSender::new(RtpConfig { bind, dest })?;
-        let max_pkt_size = RtpSender::max_packet_size();
-        log::info!("sender server bind to port={}", dest.port());
+        let mut sender = broadcast::Sender::new(broadcast::SenderOptions {
+            bind: SocketAddr::new(bind.ip(), 0),
+            to: bind.port(),
+            mtu,
+        }).await?;
+
+        let max_pkt_size = sender.max_packet_size();
+        log::info!("sender bind to port={}", bind.port());
 
         let service = Service {
-            port: dest.port(),
+            port: bind.port(),
             description,
             id,
         };
@@ -188,7 +202,7 @@ impl Transport {
                     if let Some(payloads) = encoder.encode(max_pkt_size, kind, flags, buf.as_ref())
                     {
                         for payload in payloads {
-                            if let Err(e) = server.send(payload) {
+                            if let Err(e) = sender.send(payload).await {
                                 log::error!("failed to send buf in socket, err={:?}", e);
                             }
                         }
@@ -217,47 +231,39 @@ impl Transport {
 
     pub async fn create_receiver(
         &self,
-        addr: SocketAddr,
+        bind: SocketAddr,
         adapter: &Arc<StreamReceiverAdapter>,
     ) -> Result<(), TransportError> {
-        let mut socket = RtpReceiver::new(addr)?;
-        log::info!(
-            "connected to remote service, ip={}, port={}",
-            addr.ip(),
-            addr.port(),
-        );
+        let mut socket = broadcast::Receiver::new(bind).await?;
+        log::info!("receiver listening, port={}", bind.port(),);
 
-        let runtime = Handle::current();
         let adapter = Arc::downgrade(adapter);
-        let discovery = self.discovery.as_ref().map(Arc::downgrade);
         tokio::spawn(async move {
             let mut decoder = Decoder::default();
 
-            while let Some(pkt) = socket.next().await {
-                if let Some(adapter) = adapter.upgrade() {
-                    match decoder.decode(pkt.as_bytes()) {
-                        DecodeRet::Pkt(chunk, kind, flags) => {
-                            if !adapter.send(chunk, kind, flags) {
-                                log::error!("adapter on buf failed.");
-                                break;
+            'a: while let Ok(packets) = socket.read().await {
+                for pkt in packets {
+                    if let Some(adapter) = adapter.upgrade() {
+                        match decoder.decode(pkt) {
+                            DecodeRet::Pkt(chunk, kind, flags) => {
+                                if !adapter.send(chunk, kind, flags) {
+                                    log::error!("adapter on buf failed.");
+                                    break 'a;
+                                }
                             }
+                            DecodeRet::Loss => {
+                                adapter.loss_pkt();
+                            }
+                            _ => (),
                         }
-                        DecodeRet::Loss => {
-                            adapter.loss_pkt();
-                        }
-                        _ => (),
+                    } else {
+                        log::warn!("adapter is droped!");
+                        break 'a;
                     }
-                } else {
-                    log::warn!("adapter is droped!");
-                    break;
                 }
             }
 
-            log::warn!("receiver is closed, ip={}, port={}", addr.ip(), addr.port());
-
-            if let Some(discovery) = discovery.as_ref().map(|item| item.upgrade()).flatten() {
-                runtime.block_on(discovery.remove(&addr));
-            }
+            log::warn!("receiver is closed, addr={}", bind);
 
             if let Some(adapter) = adapter.upgrade() {
                 adapter.close();

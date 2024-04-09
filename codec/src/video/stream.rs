@@ -76,10 +76,14 @@ impl VideoStreamReceiverProcesser {
             self.key_frame.swap(Some(buf.clone()));
         }
 
-        if flags == BufferFlag::Config as u8 {
-            if !self.cfg_ready.get() {
+        if !self.cfg_ready.get() {
+            if flags == BufferFlag::Config as u8 {
                 self.cfg_ready.update(true);
             } else {
+                return true;
+            }
+        } else {
+            if flags == BufferFlag::Config as u8 {
                 return true;
             }
         }

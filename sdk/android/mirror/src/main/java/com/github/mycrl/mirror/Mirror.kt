@@ -62,26 +62,26 @@ class Mirror constructor(
         }
     }
 
-    fun createSender(id: Int, bind: String, to: String, description: ByteArray): SenderAdapterWrapper {
+    fun createSender(id: Int, mtu: Int, bind: String, description: ByteArray): SenderAdapterWrapper {
         val sender = createStreamSenderAdapter()
         if (sender == 0L) {
             throw Exception("failed to create sender adapter!")
         }
 
-        createSender(mirror, id, bind, to, description, sender)
+        createSender(mirror, id, mtu, bind, description, sender)
         return SenderAdapterWrapper(
             { info, buf -> sendBufToSender(sender, info, buf) },
             { -> releaseStreamSenderAdapter(sender) },
         )
     }
 
-    fun createReceiver(addr: String, adapter: ReceiverAdapter): ReceiverAdapterWrapper {
+    fun createReceiver(bind: String, adapter: ReceiverAdapter): ReceiverAdapterWrapper {
         val receiver = createStreamReceiverAdapter(adapter)
         if (receiver == 0L) {
             throw Exception("failed to create receiver adapter!")
         }
 
-        if (!createReceiver(mirror, addr, receiver)) {
+        if (!createReceiver(mirror, bind, receiver)) {
             throw Exception("failed to create mirror receiver adapter!")
         }
 
@@ -125,8 +125,8 @@ class Mirror constructor(
     private external fun createSender(
         mirror: Long,
         id: Int,
+        mtu: Int,
         bind: String,
-        to: String,
         description: ByteArray,
         adapter: Long
     )
@@ -139,7 +139,7 @@ class Mirror constructor(
 
     private external fun createReceiver(
         mirror: Long,
-        addr: String,
+        bind: String,
         adapter: Long
     ): Boolean
 }

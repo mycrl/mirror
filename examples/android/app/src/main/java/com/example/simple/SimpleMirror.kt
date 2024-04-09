@@ -198,7 +198,7 @@ class SimpleMirrorService : Service() {
         Log.i("simple", "create receiver.")
 
         val (_, port) = addr.split(":")
-        mirror.createReceiver("0.0.0.0", port.toInt(), object : MirrorAdapterConfigure {
+        mirror.createReceiver("0.0.0.0:${port.toInt()}", object : MirrorAdapterConfigure {
             override val video = VideoConfigure
             override val audio = AudioConfigure
         }, object : MirrorReceiver() {
@@ -236,8 +236,8 @@ class SimpleMirrorService : Service() {
         mediaProjection?.registerCallback(object : MediaProjection.Callback() {}, null)
         sender = mirror.createSender(
             0,
-            "0.0.0.0:0",
-            "255.255.255.255:8080",
+            1200,
+            "0.0.0.0:3200",
             object : MirrorAdapterConfigure {
                 override val video = VideoConfigure
                 override val audio = AudioConfigure
