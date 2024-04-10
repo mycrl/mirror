@@ -1,0 +1,16 @@
+[package]
+name = "desktop"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["staticlib", "rlib", "cdylib"]
+name = "mirror"
+
+[dependencies]
+transport = { path = "../../transport" }
+devices = { path = "../../devices" }
+codec = { path = "../../codec" }
+tokio = { version = "1.37.0", features = ["rt"]}
+log = "0.4.21"
+anyhow = "1.0.82"

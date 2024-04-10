@@ -9,7 +9,7 @@ use std::{
 };
 
 use adapter::StreamReceiverAdapter;
-use broadcast::{Client, Server};
+use multicast::{Client, Server};
 use thiserror::Error;
 use tokio::{runtime::Handle, sync::Mutex};
 
@@ -22,7 +22,7 @@ use crate::{
 #[derive(Debug, Error)]
 pub enum TransportError {
     #[error(transparent)]
-    NetError(#[from] broadcast::Error),
+    NetError(#[from] multicast::Error),
     #[error(transparent)]
     DiscoveryError(#[from] DiscoveryError),
 }

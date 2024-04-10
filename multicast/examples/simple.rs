@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use broadcast::{Client, Server};
+use multicast::{Client, Server};
 use tokio::time;
 
 #[tokio::main]
