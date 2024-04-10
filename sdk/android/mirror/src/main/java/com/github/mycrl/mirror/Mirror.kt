@@ -102,7 +102,7 @@ class Mirror constructor(
 
     companion object {
         init {
-            System.loadLibrary("mirror_exports")
+            System.loadLibrary("mirror_android")
         }
     }
 

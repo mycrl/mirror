@@ -69,10 +69,10 @@ cargo {
     prebuiltToolchains = true
     pythonCommand = 'python3'
     module = '../jni-exports'
-    libname = 'mirror.android'
+    libname = 'mirror_android'
     targets = ['arm64']
     targetDirectory = '../../../target'
-    targetIncludes = ['libmirror.android.so']
+    targetIncludes = ['libmirror_android.so']
     exec { spec, toolchain ->
         def absolutePath = project.file("../../../target").absolutePath
         spec.environment("CARGO_TARGET_DIR", "$absolutePath")

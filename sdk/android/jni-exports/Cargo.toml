@@ -1,11 +1,11 @@
 [package]
-name = "exports"
+name = "jni-exports"
 version = "0.1.0"
 edition = "2021"
 
 [lib]
 crate-type = ["cdylib"]
-name = "mirror.android"
+name = "mirror_android"
 
 [dependencies]
 async-trait = "0.1.77"
