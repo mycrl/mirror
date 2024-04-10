@@ -15,8 +15,11 @@ use jni::{
 use jni_macro::jni_exports;
 use logger::AndroidLogger;
 use tokio::runtime::Builder;
-use transport::adapter::{StreamReceiverAdapter, StreamSenderAdapter};
 use transport::Transport;
+use transport::{
+    adapter::{StreamReceiverAdapter, StreamSenderAdapter},
+    TransportOptions,
+};
 
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
@@ -50,7 +53,6 @@ static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 #[no_mangle]
 pub extern "system" fn JNI_OnLoad(vm: JavaVM, _: *mut c_void) -> i32 {
     AndroidLogger::init();
-    srt::startup();
 
     unsafe {
         RUNTIME
@@ -110,8 +112,6 @@ pub extern "system" fn JNI_OnLoad(vm: JavaVM, _: *mut c_void) -> i32 {
 /// Exported from native libraries that contain native method implementation.
 #[no_mangle]
 pub extern "system" fn JNI_OnUnload(_: JavaVM, _: *mut c_void) {
-    srt::cleanup();
-
     unsafe {
         if let Some(r) = RUNTIME.take() {
             r.shutdown_background()
@@ -120,17 +120,12 @@ pub extern "system" fn JNI_OnUnload(_: JavaVM, _: *mut c_void) {
 }
 
 mod objects {
-    use std::net::SocketAddr;
-
     use anyhow::{anyhow, Ok};
     use jni::{
-        objects::{JObject, JString, JValueGen},
+        objects::{JObject, JValueGen},
         JNIEnv,
     };
     use transport::adapter::{StreamBufferInfo, StreamKind};
-
-    use srt::SrtOptions;
-    use transport::TransportOptions;
 
     /// /**
     ///  * Streaming data information.
@@ -160,77 +155,6 @@ mod objects {
                 StreamKind::Audio => StreamBufferInfo::Audio(flags),
             },
         )
-    }
-
-    /// /**
-    ///  * Transport configure.
-    ///  */
-    /// data class MirrorOptions(val bind: String) {
-    ///     var fec: String = "fec,layout:even,rows:20,cols:10,arq:always";
-    ///     var maxBandwidth: Int = -1;
-    ///     var timeout: Int = 5000;
-    ///     var latency: Int = 20;
-    ///     var fc: Int = 25600;
-    ///     var mtu: Int = 1500;
-    /// }
-    pub fn to_transport_options(
-        env: &mut JNIEnv,
-        options: &JObject,
-    ) -> anyhow::Result<TransportOptions> {
-        let mut srt = SrtOptions::default();
-
-        let bind = if let JValueGen::Object(bind) =
-            env.get_field(options, "bind", "Ljava/lang/String;")?
-        {
-            let bind: String = env.get_string(&JString::from(bind))?.into();
-            bind.parse::<SocketAddr>()?
-        } else {
-            return Err(anyhow!("bind not a string."));
-        };
-
-        srt.latency = if let JValueGen::Int(latency) = env.get_field(options, "latency", "I")? {
-            latency as u32
-        } else {
-            return Err(anyhow!("latency not a int."));
-        };
-
-        srt.fec =
-            if let JValueGen::Object(fec) = env.get_field(options, "fec", "Ljava/lang/String;")? {
-                env.get_string(&JString::from(fec))?.into()
-            } else {
-                return Err(anyhow!("fec not a string."));
-            };
-
-        srt.fc = if let JValueGen::Int(fc) = env.get_field(options, "fc", "I")? {
-            fc as u32
-        } else {
-            return Err(anyhow!("fc not a int."));
-        };
-
-        srt.max_bandwidth =
-            if let JValueGen::Int(max_bandwidth) = env.get_field(options, "maxBandwidth", "I")? {
-                (if max_bandwidth > 0 {
-                    max_bandwidth * 1024
-                } else {
-                    max_bandwidth
-                }) as i64
-            } else {
-                return Err(anyhow!("max_bandwidth not a int."));
-            };
-
-        srt.mtu = if let JValueGen::Int(mtu) = env.get_field(options, "mtu", "I")? {
-            mtu as u32
-        } else {
-            return Err(anyhow!("mtu not a int."));
-        };
-
-        srt.timeout = if let JValueGen::Int(timeout) = env.get_field(options, "timeout", "I")? {
-            timeout as u32
-        } else {
-            return Err(anyhow!("timeout not a int."));
-        };
-
-        Ok(TransportOptions { bind, srt })
     }
 }
 
@@ -493,26 +417,27 @@ impl Mirror {
     pub fn create_mirror(
         mut env: JNIEnv,
         _this: JClass,
-        options: JObject,
+        multicast: JString,
+        bind: JString,
         adapter_factory: *const AndroidStreamReceiverAdapterFactory,
     ) -> *const Transport {
         catcher(&mut env, |env| {
-            let options = objects::to_transport_options(env, &options)?;
-            Ok(Box::into_raw(Box::new(get_runtime()?.block_on(async {
-                Transport::new(
-                    options,
-                    if adapter_factory.is_null() {
-                        None
-                    } else {
-                        Some(unsafe {
-                            *Box::from_raw(
-                                adapter_factory as *mut AndroidStreamReceiverAdapterFactory,
-                            )
-                        })
+            let bind: String = env.get_string(&bind)?.into();
+            let multicast: String = env.get_string(&multicast)?.into();
+            let options = if adapter_factory.is_null() {
+                None
+            } else {
+                Some(TransportOptions {
+                    bind: bind.parse()?,
+                    adapter_factory: unsafe {
+                        *Box::from_raw(adapter_factory as *mut AndroidStreamReceiverAdapterFactory)
                     },
-                )
-                .await
-            })?)))
+                })
+            };
+
+            Ok(Box::into_raw(Box::new(
+                get_runtime()?.block_on(Transport::new(multicast.parse()?, options))?,
+            )))
         })
         .unwrap_or_else(null_mut)
     }
@@ -566,18 +491,24 @@ impl Mirror {
         _this: JClass,
         mirror: *const Transport,
         id: i32,
+        mtu: i32,
+        bind: JString,
         description: JByteArray,
         adapter: *const Arc<StreamSenderAdapter>,
-    ) -> i32 {
+    ) {
         catcher(&mut env, |env| {
+            let bind: String = env.get_string(&bind)?.into();
             let buf = env.convert_byte_array(&description)?;
             Ok(get_runtime()?.block_on(async move {
                 unsafe { &*mirror }
-                    .create_sender(id as u8, buf, unsafe { &*adapter })
-                    .await
-            })? as i32)
-        })
-        .unwrap_or(-1)
+                    .create_sender(id as u8, mtu as usize, bind.parse()?, buf, unsafe {
+                        &*adapter
+                    })
+                    .await?;
+
+                Ok::<(), anyhow::Error>(())
+            })?)
+        });
     }
 
     /// /**
@@ -618,13 +549,13 @@ impl Mirror {
         mut env: JNIEnv,
         _this: JClass,
         mirror: *const Transport,
-        addr: JString,
+        bind: JString,
         adapter: *const Arc<StreamReceiverAdapter>,
     ) -> i32 {
         catcher(&mut env, |env| {
-            let addr: String = env.get_string(&addr)?.into();
+            let bind: String = env.get_string(&bind)?.into();
             get_runtime()?.block_on(
-                unsafe { &*mirror }.create_receiver(addr.parse()?, unsafe { &*adapter }),
+                unsafe { &*mirror }.create_receiver(bind.parse()?, unsafe { &*adapter }),
             )?;
 
             Ok(true)

@@ -35,7 +35,7 @@ pub struct Discovery {
 }
 
 impl Discovery {
-    pub async fn new(addr: &SocketAddr) -> Result<Arc<Self>, DiscoveryError> {
+    pub async fn new(addr: SocketAddr) -> Result<Arc<Self>, DiscoveryError> {
         let (tx, rx) = unbounded_channel();
         let socket = Arc::new(UdpSocket::bind(addr).await?);
         socket.set_broadcast(true)?;
@@ -47,8 +47,8 @@ impl Discovery {
             services: Default::default(),
             receiver: Mutex::new(rx),
             id: Uuid::new(),
-            addr: *addr,
             socket,
+            addr,
         });
 
         let this_ = Arc::downgrade(&this);
