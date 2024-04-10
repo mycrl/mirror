@@ -131,10 +131,10 @@ fn find_ffmpeg_prefix(out_dir: &str) -> anyhow::Result<(Vec<String>, Vec<String>
         .expect("Unable to download 7z cli exe.");
     }
 
-    let ffmpeg_prefix = join(&out_dir, "ffmpeg-6.0-full_build-shared").unwrap();
+    let ffmpeg_prefix = join(&out_dir, "ffmpeg-6.1.1-full_build-shared").unwrap();
     if !is_exsit(&ffmpeg_prefix) {
         exec(
-            "Invoke-WebRequest -Uri https://www.gyan.dev/ffmpeg/builds/packages/ffmpeg-6.0-full_build-shared.7z -OutFile ffmpeg.7z; \
+            "Invoke-WebRequest -Uri https://github.com/mycrl/mirror/releases/download/distributions/ffmpeg-6.1.1-full_build-shared.7z -OutFile ffmpeg.7z; \
                      ./7z.exe x ffmpeg.7z -aoa; \
                      del ffmpeg.7z",
             &out_dir,

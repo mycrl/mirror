@@ -14,3 +14,4 @@ codec = { path = "../../codec" }
 tokio = { version = "1.37.0", features = ["rt"]}
 log = "0.4.21"
 anyhow = "1.0.82"
+once_cell = "1.19.0"

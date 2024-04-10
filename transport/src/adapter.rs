@@ -6,10 +6,7 @@ use std::{
 
 use async_trait::async_trait;
 use bytes::Bytes;
-use codec::{
-    audio::AudioStreamSenderProcesser,
-    video::{VideoStreamReceiverProcesser, VideoStreamSenderProcesser},
-};
+use codec::video::{VideoStreamReceiverProcesser, VideoStreamSenderProcesser};
 use tokio::sync::{
     mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
     Mutex,
@@ -61,8 +58,14 @@ pub trait ReceiverAdapterFactory: Send + Sync {
     ) -> Option<Weak<StreamReceiverAdapter>>;
 }
 
+#[async_trait]
+impl ReceiverAdapterFactory for () {
+    async fn connect(&self, _: u8, _: SocketAddr, _: &[u8]) -> Option<Weak<StreamReceiverAdapter>> {
+        None
+    }
+}
+
 pub struct StreamSenderAdapter {
-    audio: AudioStreamSenderProcesser,
     video: VideoStreamSenderProcesser,
     tx: UnboundedSender<Option<(Bytes, StreamKind, u8)>>,
     rx: Mutex<UnboundedReceiver<Option<(Bytes, StreamKind, u8)>>>,
@@ -72,7 +75,6 @@ impl StreamSenderAdapter {
     pub fn new() -> Arc<Self> {
         let (tx, rx) = unbounded_channel();
         Arc::new(Self {
-            audio: AudioStreamSenderProcesser::new(),
             video: VideoStreamSenderProcesser::new(),
             rx: Mutex::new(rx),
             tx,

@@ -39,8 +39,4 @@ impl Strings {
             None
         }
     }
-
-    pub fn as_ptr(&self) -> *const c_char {
-        self.ptr
-    }
 }
