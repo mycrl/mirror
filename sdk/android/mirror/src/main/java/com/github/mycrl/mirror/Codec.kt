@@ -15,6 +15,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromByteArray
 import kotlinx.serialization.encodeToByteArray
 import java.lang.Exception
+import java.lang.Thread.MAX_PRIORITY
 import java.nio.ByteBuffer
 
 abstract class ByteArraySinker {
@@ -107,6 +108,7 @@ class Video {
         fun start() {
             if (!isRunning) {
                 isRunning = true
+                worker.priority = MAX_PRIORITY
 
                 codec.start()
                 worker.start()
@@ -153,7 +155,7 @@ class Video {
         init {
             val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, configure.width, configure.height)
             format.setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
-            format.setInteger(MediaFormat.KEY_PUSH_BLANK_BUFFERS_ON_STOP, 1)
+            format.setLong(MediaFormat.KEY_REPEAT_PREVIOUS_FRAME_AFTER, 1000 * 50)
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 if (codec.name.indexOf(".rk.") < 0 && codec.name.indexOf(".hisi.") < 0) {
@@ -196,6 +198,7 @@ class Video {
         fun start() {
             if (!isRunning) {
                 isRunning = true
+                worker.priority = MAX_PRIORITY
 
                 codec.start()
                 worker.start()
@@ -270,6 +273,7 @@ class Audio {
         fun start() {
             if (!isRunning) {
                 isRunning = true
+                worker.priority = MAX_PRIORITY
 
                 codec.start()
                 worker.start()
@@ -387,6 +391,8 @@ class Audio {
         fun start() {
             if (!isRunning) {
                 isRunning = true
+                worker.priority = MAX_PRIORITY
+                recorder?.priority = MAX_PRIORITY
 
                 codec.start()
                 worker.start()

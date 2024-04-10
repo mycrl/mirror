@@ -87,36 +87,17 @@ impl StreamSenderAdapter {
     }
 
     pub fn send(&self, buf: Bytes, info: StreamBufferInfo) -> bool {
-        let (flags, kind) = match info {
-            StreamBufferInfo::Video(f) => {
-                self.video.apply(&buf, f);
-                (f as u8, StreamKind::Video)
-            }
-            StreamBufferInfo::Audio(f) => {
-                self.audio.apply(&buf, f);
-                (f as u8, StreamKind::Audio)
-            }
-        };
-
-        self.tx.send(Some((buf, kind, flags))).is_ok()
+        if let StreamBufferInfo::Video(flags) = info {
+            self.video.process(buf, flags, |buf, flags| {
+                self.tx.send(Some((buf, StreamKind::Video, flags))).is_ok()
+            })
+        } else {
+            self.tx.send(Some((buf, StreamKind::Audio, 0))).is_ok()
+        }
     }
 
     pub async fn next(&self) -> Option<(Bytes, StreamKind, u8)> {
         self.rx.lock().await.recv().await.flatten()
-    }
-
-    pub fn get_config(&self) -> Vec<(&[u8], StreamKind)> {
-        [
-            (
-                self.video.get_config().unwrap_or_else(|| &[]),
-                StreamKind::Video,
-            ),
-            (
-                self.audio.get_config().unwrap_or_else(|| &[]),
-                StreamKind::Audio,
-            ),
-        ]
-        .to_vec()
     }
 }
 
@@ -149,10 +130,11 @@ impl StreamReceiverAdapter {
 
     pub fn send(&self, buf: Bytes, kind: StreamKind, flags: u8) -> bool {
         if kind == StreamKind::Video {
-            self.video.apply(&buf, flags);
+            self.video
+                .process(buf, flags, |buf| self.tx.send(Some((buf, kind))).is_ok())
+        } else {
+            self.tx.send(Some((buf, kind))).is_ok()
         }
-
-        self.tx.send(Some((buf, kind))).is_ok()
     }
 
     pub fn loss_pkt(&self) {

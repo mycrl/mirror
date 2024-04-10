@@ -10,7 +10,7 @@ codec = { path = "../codec" }
 log = "0.4.20"
 rmp-serde = "1.1.2"
 serde = { version = "1.0.195", features = ["derive"] }
-srt = { path = "../srt" }
+broadcast = { path = "../broadcast" }
 sync = { path = "../sync" }
 thiserror = "1.0.56"
 tokio = { version = "1.35.1", features = ["net", "sync", "time"] }

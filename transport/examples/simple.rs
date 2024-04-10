@@ -8,7 +8,6 @@ use std::{
 use async_trait::async_trait;
 use bytes::Bytes;
 use clap::Parser;
-use srt::SrtOptions;
 use tokio::{io::AsyncWriteExt, process::Command, time::sleep};
 use transport::{
     adapter::{
@@ -81,19 +80,22 @@ struct Args {
 async fn main() -> anyhow::Result<()> {
     simple_logger::init_with_level(log::Level::Info).unwrap();
 
-    let args = Args::parse();
+    let mut args = Args::parse();
     let transport = Transport::new(
-        TransportOptions {
-            srt: SrtOptions::default(),
+        "239.0.0.1".parse()?,
+        Some(TransportOptions {
+            adapter_factory: SimpleReceiverAdapterFactory,
             bind: args.addr,
-        },
-        Some(SimpleReceiverAdapterFactory),
+        }),
     )
     .await?;
 
     if args.kind == "client" {
+        args.addr.set_port(args.addr.port() + 1);
         let adapter = StreamSenderAdapter::new();
-        transport.create_sender(0, vec![], &adapter).await?;
+        transport
+            .create_sender(0, 1500, args.addr, vec![], &adapter)
+            .await?;
 
         let buf = Bytes::from_static(&[0u8; 3000]);
         loop {

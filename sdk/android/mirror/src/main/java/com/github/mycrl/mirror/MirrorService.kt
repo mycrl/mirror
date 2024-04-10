@@ -6,8 +6,6 @@ import android.util.Log
 import android.view.Surface
 import kotlin.Exception
 
-typealias MirrorServiceConfigure = MirrorOptions;
-
 interface MirrorAdapterConfigure {
     val video: Video.VideoEncoder.VideoEncoderConfigure
     val audio: Audio.AudioEncoder.AudioEncoderConfigure
@@ -61,10 +59,11 @@ abstract class MirrorServiceObserver {
  * automatically respond to any sender push.
  */
 class MirrorService constructor(
-    private val configure: MirrorServiceConfigure,
+    private val multicast: String,
+    private val bind: String?,
     private val observer: MirrorServiceObserver?
 ) {
-    private val mirror: Mirror = Mirror(configure, if (observer != null) {
+    private val mirror: Mirror = Mirror(multicast, bind, if (observer != null) {
         object : ReceiverAdapterFactory() {
             override fun connect(
                 id: Int,
@@ -172,12 +171,16 @@ class MirrorService constructor(
      */
     fun createSender(
         id: Int,
+        mtu: Int,
+        bind: String,
         configure: MirrorAdapterConfigure,
         record: AudioRecord?
     ): MirrorSender {
         return MirrorSender(
             mirror.createSender(
                 id,
+                mtu,
+                bind,
                 CodecDescriptionFactory.encode(
                     CodecDescriptionFactory.CodecDescription(
                         CodecDescriptionFactory.VideoDescription(
@@ -203,13 +206,12 @@ class MirrorService constructor(
      * `port` The port number from the created sender.
      */
     fun createReceiver(
-        ip: String,
-        port: Int,
+        bind: String,
         configure: MirrorAdapterConfigure,
         observer: MirrorReceiver
     ) {
         var adapter: ReceiverAdapterWrapper? = null
-        adapter = mirror.createReceiver("$ip:$port", object : ReceiverAdapter() {
+        adapter = mirror.createReceiver(bind, object : ReceiverAdapter() {
             private var isReleased: Boolean = false
             private val videoDecoder = Video.VideoDecoder(
                 observer.surface,
@@ -331,13 +333,6 @@ class MirrorSender constructor(
 
     fun pushAudioChunk(chunk: ByteArray) {
         audioEncoder.sink(chunk)
-    }
-
-    /**
-     * Get the port that sender is bound to.
-     */
-    fun getPort(): Int {
-        return sender.port
     }
 
     /**
