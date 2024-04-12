@@ -49,11 +49,8 @@ typedef struct
 
 typedef struct
 {
-	bool key_frame;
-	uint8_t* buffer;
-	size_t len;
-	uint32_t stride_y;
-	uint32_t stride_uv;
+	uint8_t* buffer[4];
+	uint32_t stride[4];
 } VideoFrame;
 
 EXPORT VideoEncoder* create_video_encoder(VideoEncoderSettings* settings);

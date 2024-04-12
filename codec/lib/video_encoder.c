@@ -107,45 +107,58 @@ VideoEncoder* create_video_encoder(VideoEncoderSettings* settings)
 	codec->frame->height = codec->context->height;
 	codec->frame->format = codec->context->pix_fmt;
 
-	if (av_frame_get_buffer(codec->frame, 32) < 0)
+    if (strcmp(settings->codec_name, "h264_qsv") == 0 || strcmp(settings->codec_name, "h264_nvenc") == 0)
 	{
-		free(codec);
-		return NULL;
+        int ret = av_image_alloc(codec->frame->data,
+						   codec->frame->linesize,
+						   codec->context->width,
+						   codec->context->height,
+						   codec->context->pix_fmt,
+						   32);
+		if (ret < 0)
+        {
+            free(codec);
+		    return NULL;
+        }
 	}
-	else
+	else if (strcmp(settings->codec_name, "libx264") == 0)
 	{
-		return codec;
+		if (av_frame_get_buffer(codec->frame, 32) < 0)
+        {
+            free(codec);
+            return NULL;
+        }
 	}
+
+	return codec;
 }
 
 int video_encoder_send_frame(VideoEncoder* codec, VideoFrame* frame)
 {
-	if (av_frame_make_writable(codec->frame) != 0)
-	{
-		return -1;
-	}
+    if (strcmp(codec->codec->name, "libx264") == 0)
+    {
+        if (av_frame_make_writable(codec->frame) != 0)
+        {
+            return -1;
+        }
 
-	int need_size = av_image_fill_arrays(codec->frame->data,
-		codec->frame->linesize,
-		frame->buffer,
-		codec->context->pix_fmt,
-		codec->context->width,
-		codec->context->height,
-		1);
-	size_t size = get_i420_buffer_size(frame, codec->context->height);
-	if (need_size != size)
-	{
-		return -1;
-	}
+        av_image_copy(codec->frame->data,
+            codec->frame->linesize,
+            frame->buffer,
+            frame->stride,
+            codec->context->pix_fmt,
+            codec->context->width,
+            codec->context->height,
+            1);
+    }
+    else
+    {
+        codec->frame->linesize[0] = frame->stride[0];
+		codec->frame->linesize[1] = frame->stride[1];
 
-	if (frame->key_frame)
-	{
-		codec->frame->flags = AV_FRAME_FLAG_KEY;
-	}
-	else
-	{
-		codec->frame->flags = 0;
-	}
+		codec->frame->data[0] = frame->buffer[0];
+		codec->frame->data[1] = frame->buffer[1];
+    }
 
 	codec->frame->pts = av_rescale_q(codec->frame_num,
 		codec->context->pkt_timebase,

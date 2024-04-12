@@ -1,6 +1,6 @@
 mod frame;
 mod stream;
 
-#[cfg(not(feature = "android"))]
+#[cfg(feature = "frame")]
 pub use frame::*;
 pub use stream::*;

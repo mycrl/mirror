@@ -56,11 +56,11 @@ typedef struct
 typedef void (*VideoOutputCallback)(void* ctx, struct video_data* frame);
 
 EXPORT int init(VideoInfo* info);
-EXPORT DeviceManager* create_device_manager(VideoInfo* info);
+EXPORT DeviceManager* create_device_manager();
 EXPORT void device_manager_release(DeviceManager* manager);
 EXPORT DeviceList get_device_list(DeviceManager* manager, DeviceType type);
 EXPORT void release_device_description(DeviceDescription* description);
-EXPORT void set_video_input(DeviceManager* manager, DeviceDescription* description);
+EXPORT void set_video_input(DeviceManager* manager, DeviceDescription* description, VideoInfo* info);
 EXPORT void set_video_output_callback(VideoOutputCallback proc, void* ctx);
 
 #endif /* devices_h */

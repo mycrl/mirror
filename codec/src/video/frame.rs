@@ -1,4 +1,6 @@
-#![cfg(not(feature = "android"))]
+#![cfg(feature = "frame")]
+
+use bytes::Bytes;
 
 use crate::{
     api::{
@@ -33,7 +35,6 @@ impl VideoEncoderSettings {
 }
 
 pub struct VideoFrame<'a> {
-    pub key_frame: bool,
     pub buffer: &'a [u8],
     pub stride_y: u32,
     pub stride_uv: u32,
@@ -42,7 +43,6 @@ pub struct VideoFrame<'a> {
 impl<'a> VideoFrame<'a> {
     fn as_raw(&self) -> crate::api::VideoFrame {
         crate::api::VideoFrame {
-            key_frame: self.key_frame,
             buffer: self.buffer.as_ptr(),
             len: self.buffer.len(),
             stride_y: self.stride_y,
@@ -98,7 +98,7 @@ impl VideoFrameSenderProcesser {
         }
     }
 
-    pub fn encode(&self, frame: &VideoFrame) -> Vec<Vec<u8>> {
+    pub fn encode(&self, frame: &VideoFrame) -> Vec<Bytes> {
         if unsafe { video_encoder_send_frame(self.codec, &frame.as_raw()) } != 0 {
             return Vec::new();
         }
@@ -108,7 +108,7 @@ impl VideoFrameSenderProcesser {
             let packet = unsafe { video_encoder_read_packet(self.codec) };
             if !packet.is_null() {
                 let pkt = VideoEncodePacket::from_raw(self.codec, packet);
-                ret.push(pkt.buffer.to_vec())
+                ret.push(Bytes::copy_from_slice(pkt.buffer))
             } else {
                 break;
             }

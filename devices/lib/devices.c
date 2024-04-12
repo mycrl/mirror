@@ -49,7 +49,7 @@ void set_video_output_callback(VideoOutputCallback proc, void* ctx)
     obs_add_raw_video_callback(NULL, proc, ctx);
 }
 
-DeviceManager* create_device_manager(VideoInfo* info)
+DeviceManager* create_device_manager()
 {
     DeviceManager* manager = (DeviceManager*)malloc(sizeof(DeviceManager));
     if (manager == NULL)
@@ -64,15 +64,7 @@ DeviceManager* create_device_manager(VideoInfo* info)
 		return NULL;
 	}
 
-    obs_data_t* settings = obs_data_create();
-
-    char resolution[20];
-    sprintf(resolution, "%dx%d", info->width, info->height);
-
-    obs_data_set_bool(settings, "hw_decode", true);
-    obs_data_set_string(settings, "resolution", &resolution);
-
-	manager->video_source = obs_source_create("dshow_input", "mirror video input", settings, NULL);
+	manager->video_source = obs_source_create("dshow_input", "mirror video input", NULL, NULL);
 	if (manager->video_source == NULL)
 	{
         device_manager_release(manager);
@@ -81,7 +73,6 @@ DeviceManager* create_device_manager(VideoInfo* info)
     else
     {
         obs_set_output_source(0, manager->video_source);
-        obs_data_release(settings);
     }
 
 	manager->video_scene_item = obs_scene_add(manager->scene, manager->video_source);
@@ -118,12 +109,18 @@ void device_manager_release(DeviceManager* manager)
     free(manager);
 }
 
-void set_video_input(DeviceManager* manager, DeviceDescription* description)
+void set_video_input(DeviceManager* manager, DeviceDescription* description, VideoInfo* info)
 {
     obs_data_t* settings = obs_data_create();
     obs_data_t* cur_settings = obs_source_get_settings(manager->video_source);
     obs_data_apply(settings, cur_settings);
 
+    char resolution[20];
+    sprintf(resolution, "%dx%d", info->width, info->height);
+
+    obs_data_set_int(settings, "res_type", 1);
+    obs_data_set_bool(settings, "hw_decode", true);
+    obs_data_set_string(settings, "resolution", &resolution);
     obs_data_set_string(settings, "video_device_id", description->id);
     obs_source_update(manager->video_source, settings);
     obs_data_release(settings);

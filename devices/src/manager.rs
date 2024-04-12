@@ -12,6 +12,7 @@ pub struct DeviceManagerOptions {
 }
 
 pub struct DeviceManager {
+    opt: DeviceManagerOptions,
     ptr: api::DeviceManager,
     ctx: *const Context,
 }
@@ -34,11 +35,11 @@ impl DeviceManager {
             api::set_video_output_callback(video_sink_proc, ctx as *const c_void);
         }
 
-        let ptr = unsafe { api::create_device_manager(&opt.video) };
+        let ptr = unsafe { api::create_device_manager() };
         if ptr.is_null() {
             Err(DeviceError::CreateDeviceManagerFailed)
         } else {
-            Ok(Self { ptr, ctx })
+            Ok(Self { ptr, ctx, opt })
         }
     }
 
@@ -52,7 +53,7 @@ impl DeviceManager {
 
     pub fn set_input(&self, device: &Device) {
         if device.kind() == DeviceKind::Video {
-            unsafe { api::set_video_input(self.ptr, device.as_ptr()) }
+            unsafe { api::set_video_input(self.ptr, device.as_ptr(), &self.opt.video) }
         }
     }
 }

@@ -83,11 +83,16 @@ mod api {
 
     extern "C" {
         pub fn init(info: *const VideoInfo) -> c_int;
-        pub fn create_device_manager(info: *const VideoInfo) -> DeviceManager;
+        pub fn create_device_manager() -> DeviceManager;
         pub fn device_manager_release(manager: DeviceManager);
         pub fn get_device_list(manager: DeviceManager, kind: DeviceKind) -> DeviceList;
         pub fn release_device_description(description: *const DeviceDescription);
-        pub fn set_video_input(manager: DeviceManager, description: *const DeviceDescription);
+        pub fn set_video_input(
+            manager: DeviceManager,
+            description: *const DeviceDescription,
+            info: *const VideoInfo,
+        );
+
         pub fn set_video_output_callback(
             proc: extern "C" fn(ctx: *const c_void, frame: *const VideoFrame),
             ctx: *const c_void,

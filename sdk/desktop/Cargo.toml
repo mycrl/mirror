@@ -8,9 +8,9 @@ crate-type = ["staticlib", "cdylib"]
 name = "mirror"
 
 [dependencies]
-transport = { path = "../../transport" }
+transport = { path = "../../transport", features = ["codec"]}
 devices = { path = "../../devices" }
-codec = { path = "../../codec" }
+codec = { path = "../../codec", features = ["frame"]}
 tokio = { version = "1.37.0", features = ["rt"]}
 log = "0.4.21"
 anyhow = "1.0.82"

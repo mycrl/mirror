@@ -27,4 +27,4 @@ anyhow = "1.0.79"
 simple_logger = "4"
 
 [features]
-android = ["codec/android"]
+codec = ["codec/frame"]
