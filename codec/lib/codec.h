@@ -21,36 +21,36 @@
 
 typedef struct
 {
-	uint8_t* buffer;
-	size_t len;
-	int flags;
+    uint8_t* buffer;
+    size_t len;
+    int flags;
 } VideoEncodePacket;
 
 typedef struct
 {
-	const char* codec_name;
-	uint8_t max_b_frames;
-	uint8_t frame_rate;
-	uint32_t width;
-	uint32_t height;
-	uint64_t bit_rate;
-	uint32_t key_frame_interval;
+    const char* codec_name;
+    uint8_t max_b_frames;
+    uint8_t frame_rate;
+    uint32_t width;
+    uint32_t height;
+    uint64_t bit_rate;
+    uint32_t key_frame_interval;
 } VideoEncoderSettings;
 
 typedef struct
 {
-	const AVCodec* codec;
-	AVCodecContext* context;
-	AVPacket* packet;
-	AVFrame* frame;
-	uint64_t frame_num;
-	VideoEncodePacket* output_packet;
+    const AVCodec* codec;
+    AVCodecContext* context;
+    AVPacket* packet;
+    AVFrame* frame;
+    uint64_t frame_num;
+    VideoEncodePacket* output_packet;
 } VideoEncoder;
 
 typedef struct
 {
-	uint8_t* buffer[4];
-	uint32_t stride[4];
+    uint8_t* buffer[4];
+    uint32_t stride[4];
 } VideoFrame;
 
 EXPORT VideoEncoder* create_video_encoder(VideoEncoderSettings* settings);
