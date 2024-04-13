@@ -7,7 +7,7 @@
 
 #include "devices.h"
 
-int init(VideoInfo* info)
+int _init(VideoInfo* info)
 {
     if (obs_initialized())
     {
@@ -44,12 +44,12 @@ int init(VideoInfo* info)
     return 0;
 }
 
-void set_video_output_callback(VideoOutputCallback proc, void* ctx)
+void _set_video_output_callback(VideoOutputCallback proc, void* ctx)
 {
     obs_add_raw_video_callback(NULL, proc, ctx);
 }
 
-DeviceManager* create_device_manager()
+DeviceManager* _create_device_manager()
 {
     DeviceManager* manager = (DeviceManager*)malloc(sizeof(DeviceManager));
     if (manager == NULL)
@@ -60,14 +60,14 @@ DeviceManager* create_device_manager()
     manager->scene = obs_scene_create("mirror");
 	if (manager->scene == NULL)
 	{
-        device_manager_release(manager);
+        _device_manager_release(manager);
 		return NULL;
 	}
 
 	manager->video_source = obs_source_create("dshow_input", "mirror video input", NULL, NULL);
 	if (manager->video_source == NULL)
 	{
-        device_manager_release(manager);
+        _device_manager_release(manager);
 		return NULL;
 	}
     else
@@ -78,7 +78,7 @@ DeviceManager* create_device_manager()
 	manager->video_scene_item = obs_scene_add(manager->scene, manager->video_source);
 	if (manager->video_scene_item == NULL)
 	{
-        device_manager_release(manager);
+        _device_manager_release(manager);
 		return NULL;
 	}
 	else
@@ -89,7 +89,7 @@ DeviceManager* create_device_manager()
     return manager;
 }
 
-void device_manager_release(DeviceManager* manager)
+void _device_manager_release(DeviceManager* manager)
 {
     if (manager->scene != NULL)
     {
@@ -109,7 +109,7 @@ void device_manager_release(DeviceManager* manager)
     free(manager);
 }
 
-void set_video_input(DeviceManager* manager, DeviceDescription* description, VideoInfo* info)
+void _set_video_input(DeviceManager* manager, DeviceDescription* description, VideoInfo* info)
 {
     obs_data_t* settings = obs_data_create();
     obs_data_t* cur_settings = obs_source_get_settings(manager->video_source);
@@ -126,7 +126,7 @@ void set_video_input(DeviceManager* manager, DeviceDescription* description, Vid
     obs_data_release(settings);
 }
 
-DeviceList get_device_list(DeviceManager* manager, DeviceType type)
+DeviceList _get_device_list(DeviceManager* manager, DeviceType type)
 {
     DeviceList list;
     list.size = 0;
@@ -159,7 +159,7 @@ DeviceList get_device_list(DeviceManager* manager, DeviceType type)
     return list;
 }
 
-void release_device_description(DeviceDescription* description)
+void _release_device_description(DeviceDescription* description)
 {
     free(description);
 }

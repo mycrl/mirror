@@ -5,11 +5,15 @@ use std::{
 };
 
 use anyhow::anyhow;
-use codec::video::{VideoEncoderSettings, VideoFrameSenderProcesser};
+use bytes::Bytes;
+use codec::video::{VideoEncoderSettings, VideoFrame, VideoFrameSenderProcesser};
 use devices::{Device, DeviceKind, DeviceManager, DeviceManagerOptions, VideoFormat, VideoInfo};
 use once_cell::sync::Lazy;
 use tokio::runtime;
-use transport::{adapter::{StreamBufferInfo, StreamSenderAdapter}, Transport};
+use transport::{
+    adapter::{StreamBufferInfo, StreamSenderAdapter},
+    Transport,
+};
 
 static RUNTIME: Lazy<runtime::Runtime> = Lazy::new(|| {
     runtime::Builder::new_multi_thread()
@@ -61,10 +65,18 @@ impl DeviceManagerObserver {
 }
 
 impl devices::Observer for DeviceManagerObserver {
-    fn video_sink(&self, frmae: devices::Frame) {
+    fn video_sink(&self, frame: devices::Frame) {
         if let Some(adapter) = self.adapter.read().unwrap().as_ref() {
-            for packet in self.video_encoder.encode(None) {
-                adapter.send(packet, StreamBufferInfo::Video(0));
+            if self.video_encoder.push_frame(&VideoFrame {
+                buffer: frame.data,
+                stride: frame.linesize,
+            }) {
+                while let Some(packet) = self.video_encoder.read_packet() {
+                    adapter.send(
+                        Bytes::copy_from_slice(packet.buffer),
+                        StreamBufferInfo::Video(packet.flags),
+                    );
+                }
             }
         }
     }
@@ -185,7 +197,7 @@ pub struct RawMirror {
 }
 
 #[no_mangle]
-extern "C" fn create_mirrir(multicast: *const c_char) -> *const RawMirror {
+extern "C" fn create_mirror(multicast: *const c_char) -> *const RawMirror {
     assert!(!multicast.is_null());
 
     let func = || {

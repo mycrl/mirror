@@ -22,7 +22,7 @@ impl DeviceManager {
         opt: DeviceManagerOptions,
         observer: O,
     ) -> Result<Self, DeviceError> {
-        if unsafe { api::init(&opt.video) } != 0 {
+        if unsafe { api::_init(&opt.video) } != 0 {
             return Err(DeviceError::InitializeFailed);
         }
 
@@ -32,10 +32,10 @@ impl DeviceManager {
         })) as *const _;
 
         unsafe {
-            api::set_video_output_callback(video_sink_proc, ctx as *const c_void);
+            api::_set_video_output_callback(video_sink_proc, ctx as *const c_void);
         }
 
-        let ptr = unsafe { api::create_device_manager() };
+        let ptr = unsafe { api::_create_device_manager() };
         if ptr.is_null() {
             Err(DeviceError::CreateDeviceManagerFailed)
         } else {
@@ -44,7 +44,7 @@ impl DeviceManager {
     }
 
     pub fn get_devices(&self, kind: DeviceKind) -> Vec<Device> {
-        let list = unsafe { api::get_device_list(self.ptr, kind) };
+        let list = unsafe { api::_get_device_list(self.ptr, kind) };
         unsafe { std::slice::from_raw_parts(list.devices, list.size) }
             .into_iter()
             .map(|item| Device::new(*item))
@@ -53,14 +53,14 @@ impl DeviceManager {
 
     pub fn set_input(&self, device: &Device) {
         if device.kind() == DeviceKind::Video {
-            unsafe { api::set_video_input(self.ptr, device.as_ptr(), &self.opt.video) }
+            unsafe { api::_set_video_input(self.ptr, device.as_ptr(), &self.opt.video) }
         }
     }
 }
 
 impl Drop for DeviceManager {
     fn drop(&mut self) {
-        unsafe { api::device_manager_release(self.ptr) }
+        unsafe { api::_device_manager_release(self.ptr) }
         drop(unsafe { Box::from_raw(self.ctx as *mut Context) })
     }
 }

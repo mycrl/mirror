@@ -12,7 +12,3 @@ cc = "1.0.88"
 anyhow = "1.0.80"
 dotenv = "0.15.0"
 pkg-config = "0.3.30"
-
-[features]
-default = []
-frame = []

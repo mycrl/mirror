@@ -4,6 +4,7 @@ strip = "debuginfo"
 panic = "abort"
 debug = false
 lto = true
+debug-assertions = false
 
 [workspace]
 resolver = "2"

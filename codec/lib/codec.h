@@ -15,9 +15,13 @@
 #define EXPORT
 #endif
 
-#include <stdbool.h>
-#include <stdint.h>
-#include <libavcodec/avcodec.h>
+#include <string>
+#include <cstddef>
+
+extern "C"
+{
+    #include <libavcodec/avcodec.h>
+}
 
 typedef struct
 {
@@ -39,6 +43,7 @@ typedef struct
 
 typedef struct
 {
+    std::string codec_name;
     const AVCodec* codec;
     AVCodecContext* context;
     AVPacket* packet;
@@ -50,13 +55,16 @@ typedef struct
 typedef struct
 {
     uint8_t* buffer[4];
-    uint32_t stride[4];
+    const int stride[4];
 } VideoFrame;
 
-EXPORT VideoEncoder* create_video_encoder(VideoEncoderSettings* settings);
-EXPORT int video_encoder_send_frame(VideoEncoder* codec, VideoFrame* frame);
-EXPORT VideoEncodePacket* video_encoder_read_packet(VideoEncoder* codec);
-EXPORT void release_video_encoder_packet(VideoEncoder* codec);
-EXPORT void release_video_encoder(VideoEncoder* codec);
+extern "C"
+{
+    EXPORT VideoEncoder* _create_video_encoder(VideoEncoderSettings* settings);
+    EXPORT int _video_encoder_send_frame(VideoEncoder* codec, VideoFrame* frame);
+    EXPORT VideoEncodePacket* _video_encoder_read_packet(VideoEncoder* codec);
+    EXPORT void _unref_video_encoder_packet(VideoEncoder* codec);
+    EXPORT void _release_video_encoder(VideoEncoder* codec);
+}
 
 #endif /* codec_h */

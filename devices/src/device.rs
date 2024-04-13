@@ -30,6 +30,6 @@ impl Device {
 
 impl Drop for Device {
     fn drop(&mut self) {
-        unsafe { api::release_device_description(self.description) }
+        unsafe { api::_release_device_description(self.description) }
     }
 }

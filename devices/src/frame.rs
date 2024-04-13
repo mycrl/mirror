@@ -2,14 +2,15 @@ use crate::{api::VideoFrame, VideoFormat, VideoInfo};
 
 #[derive(Debug)]
 pub struct Frame<'a> {
-    pub data: [&'a [u8]; 3],
+    pub data: [&'a [u8]; 4],
+    pub linesize: [u32; 4],
     pub timestamp: u64,
 }
 
 impl<'a> Frame<'a> {
     pub(crate) fn from_raw(value: *const VideoFrame, info: &VideoInfo) -> Self {
         let frame = unsafe { &*value };
-        let mut data: [&[u8]; 3] = [&[]; 3];
+        let mut data: [&[u8]; 4] = [&[]; 4];
 
         if info.format == VideoFormat::VIDEO_FORMAT_BGRA
             || info.format == VideoFormat::VIDEO_FORMAT_RGBA
@@ -46,8 +47,14 @@ impl<'a> Frame<'a> {
         }
 
         Self {
-            timestamp: frame.timestamp,
             data,
+            timestamp: frame.timestamp,
+            linesize: [
+                frame.linesize[0],
+                frame.linesize[1],
+                frame.linesize[2],
+                frame.linesize[3],
+            ],
         }
     }
 }

@@ -13,9 +13,11 @@ pub enum BufferFlag {
     Partial = 8,
 }
 
-#[cfg(feature = "frame")]
+#[cfg(any(target_os = "windows", target_os = "linux"))]
 mod api {
     use std::ffi::{c_char, c_int, c_void};
+
+    use crate::free_cstring;
 
     pub type VideoEncoder = *const c_void;
 
@@ -30,12 +32,16 @@ mod api {
         pub key_frame_interval: u32,
     }
 
+    impl Drop for VideoEncoderSettings {
+        fn drop(&mut self) {
+            free_cstring(self.codec_name);
+        }
+    }
+
     #[repr(C)]
     pub struct VideoFrame {
-        pub buffer: *const u8,
-        pub len: usize,
-        pub stride_y: u32,
-        pub stride_uv: u32,
+        pub buffer: [*const u8; 4],
+        pub stride: [c_int; 4],
     }
 
     #[repr(C)]
@@ -46,20 +52,20 @@ mod api {
     }
 
     extern "C" {
-        pub fn create_video_encoder(settings: *const VideoEncoderSettings) -> VideoEncoder;
-        pub fn video_encoder_send_frame(codec: VideoEncoder, frame: *const VideoFrame) -> c_int;
-        pub fn video_encoder_read_packet(codec: VideoEncoder) -> *const VideoEncodePacket;
-        pub fn release_video_encoder_packet(codec: VideoEncoder);
-        pub fn release_video_encoder(codec: VideoEncoder);
+        pub fn _create_video_encoder(settings: *const VideoEncoderSettings) -> VideoEncoder;
+        pub fn _video_encoder_send_frame(codec: VideoEncoder, frame: *const VideoFrame) -> c_int;
+        pub fn _video_encoder_read_packet(codec: VideoEncoder) -> *const VideoEncodePacket;
+        pub fn _unref_video_encoder_packet(codec: VideoEncoder);
+        pub fn _release_video_encoder(codec: VideoEncoder);
     }
 }
 
-#[cfg(feature = "frame")]
+#[cfg(any(target_os = "windows", target_os = "linux"))]
 pub(crate) fn to_c_str(str: &str) -> *const c_char {
     CString::new(str).unwrap().into_raw()
 }
 
-#[cfg(feature = "frame")]
+#[cfg(any(target_os = "windows", target_os = "linux"))]
 pub(crate) fn free_cstring(str: *const c_char) {
     if !str.is_null() {
         drop(unsafe { CString::from_raw(str as *mut c_char) })

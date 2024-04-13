@@ -56,13 +56,13 @@ fn main() -> anyhow::Result<()> {
     let settings = Settings::build()?;
     cc::Build::new()
         .cpp(false)
-        .std("c17")
+        .std("c++20")
         .debug(settings.is_debug)
         .static_crt(true)
         .target(&settings.target)
         .warnings(false)
         .out_dir(&settings.out_dir)
-        .file("./lib/video_encoder.c")
+        .file("./lib/video_encoder.cpp")
         .includes(&settings.ffmpeg_include_prefix)
         .compile("codec");
 

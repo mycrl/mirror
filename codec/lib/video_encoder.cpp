@@ -5,45 +5,40 @@
 //  Created by Mr.Panda on 2024/2/14.
 //
 
-#include <stdlib.h>
-#include <string.h>
-
-#include "libavutil/imgutils.h"
-#include "libavutil/frame.h"
-#include "libavutil/opt.h"
 #include "codec.h"
 
-#ifndef AV_FRAME_FLAG_KEY
-#define AV_FRAME_FLAG_KEY (1 << 1)
-#endif
-
-size_t get_i420_buffer_size(VideoFrame* frame, int height)
+extern "C"
 {
-    size_t sizey = frame->stride_y * height;
-    size_t sizeu = frame->stride_uv * (height / 2);
-    return sizey + (sizeu * 2);
+    #include "libavutil/imgutils.h"
+    #include "libavutil/frame.h"
+    #include "libavutil/opt.h"
 }
 
-VideoEncoder* create_video_encoder(VideoEncoderSettings* settings)
+VideoEncoder* _create_video_encoder(VideoEncoderSettings* settings)
 {
-    VideoEncoder* codec = (VideoEncoder*)malloc(sizeof(VideoEncoder));
-    if (codec == NULL)
+    VideoEncoder* codec = new VideoEncoder;
+    if (codec == nullptr)
     {
-        return NULL;
+        return nullptr;
+    }
+    else
+    {
+        codec->codec_name = std::string(settings->codec_name);
+        codec->output_packet = new VideoEncodePacket;
     }
     
     codec->codec = avcodec_find_encoder_by_name(settings->codec_name);
     if (!codec->codec)
     {
-        free(codec);
-        return NULL;
+        _release_video_encoder(codec);
+        return nullptr;
     }
     
     codec->context = avcodec_alloc_context3(codec->codec);
     if (!codec->context)
     {
-        free(codec);
-        return NULL;
+        _release_video_encoder(codec);
+        return nullptr;
     }
     
     codec->context->width = settings->width;
@@ -56,12 +51,12 @@ VideoEncoder* create_video_encoder(VideoEncoderSettings* settings)
     codec->context->max_b_frames = settings->max_b_frames;
     codec->context->pix_fmt = AV_PIX_FMT_NV12;
     
-    if (strcmp(settings->codec_name, "h264_qsv") == 0)
+    if (codec->codec_name == "h264_qsv")
     {
         av_opt_set_int(codec->context->priv_data, "preset", 7, 0);
         av_opt_set_int(codec->context->priv_data, "profile", 66, 0);
     }
-    else if (strcmp(settings->codec_name, "h264_nvenc") == 0)
+    else if (codec->codec_name == "h264_nvenc")
     {
         av_opt_set_int(codec->context->priv_data, "zerolatency", 1, 0);
         av_opt_set_int(codec->context->priv_data, "b_adapt", 0, 0);
@@ -71,35 +66,35 @@ VideoEncoder* create_video_encoder(VideoEncoderSettings* settings)
         av_opt_set_int(codec->context->priv_data, "tune", 1, 0);
         av_opt_set_int(codec->context->priv_data, "cq", 30, 0);
     }
-    else if (strcmp(settings->codec_name, "libx264") == 0)
+    else if (codec->codec_name == "libx264")
     {
         av_opt_set(codec->context->priv_data, "tune", "zerolatency", 0);
     }
     
-    if (avcodec_open2(codec->context, codec->codec, NULL) != 0)
+    if (avcodec_open2(codec->context, codec->codec, nullptr) != 0)
     {
-        free(codec);
-        return NULL;
+        _release_video_encoder(codec);
+        return nullptr;
     }
     
     if (avcodec_is_open(codec->context) == 0)
     {
-        free(codec);
-        return NULL;
+        _release_video_encoder(codec);
+        return nullptr;
     }
     
     codec->packet = av_packet_alloc();
-    if (codec->packet == NULL)
+    if (codec->packet == nullptr)
     {
-        free(codec);
-        return NULL;
+        _release_video_encoder(codec);
+        return nullptr;
     }
     
     codec->frame = av_frame_alloc();
-    if (codec->frame == NULL)
+    if (codec->frame == nullptr)
     {
-        free(codec);
-        return NULL;
+        _release_video_encoder(codec);
+        return nullptr;
     }
     
     codec->frame_num = 0;
@@ -107,33 +102,22 @@ VideoEncoder* create_video_encoder(VideoEncoderSettings* settings)
     codec->frame->height = codec->context->height;
     codec->frame->format = codec->context->pix_fmt;
     
-    if (strcmp(settings->codec_name, "h264_qsv") == 0 || strcmp(settings->codec_name, "h264_nvenc") == 0)
+    int ret = av_image_alloc(codec->frame->data,
+                             codec->frame->linesize,
+                             codec->context->width,
+                             codec->context->height,
+                             codec->context->pix_fmt,
+                             32);
+    if (ret < 0)
     {
-        int ret = av_image_alloc(codec->frame->data,
-                                 codec->frame->linesize,
-                                 codec->context->width,
-                                 codec->context->height,
-                                 codec->context->pix_fmt,
-                                 32);
-        if (ret < 0)
-        {
-            free(codec);
-            return NULL;
-        }
-    }
-    else if (strcmp(settings->codec_name, "libx264") == 0)
-    {
-        if (av_frame_get_buffer(codec->frame, 32) < 0)
-        {
-            free(codec);
-            return NULL;
-        }
+        _release_video_encoder(codec);
+        return nullptr;
     }
     
     return codec;
 }
 
-int video_encoder_send_frame(VideoEncoder* codec, VideoFrame* frame)
+int _video_encoder_send_frame(VideoEncoder* codec, VideoFrame* frame)
 {
     if (av_frame_make_writable(codec->frame) != 0)
     {
@@ -146,8 +130,7 @@ int video_encoder_send_frame(VideoEncoder* codec, VideoFrame* frame)
                   frame->stride,
                   codec->context->pix_fmt,
                   codec->context->width,
-                  codec->context->height,
-                  1);
+                  codec->context->height);
     
     codec->frame->pts = av_rescale_q(codec->frame_num,
                                      codec->context->pkt_timebase,
@@ -164,21 +147,16 @@ int video_encoder_send_frame(VideoEncoder* codec, VideoFrame* frame)
     return 0;
 }
 
-VideoEncodePacket* video_encoder_read_packet(VideoEncoder* codec)
+VideoEncodePacket* _video_encoder_read_packet(VideoEncoder* codec)
 {
-    if (codec->output_packet == NULL)
+    if (codec->output_packet == nullptr)
     {
-        codec->output_packet = (VideoEncodePacket*)malloc(sizeof(VideoEncodePacket));
-    }
-    
-    if (codec->output_packet == NULL)
-    {
-        return NULL;
+        return nullptr;
     }
     
     if (avcodec_receive_packet(codec->context, codec->packet) != 0)
     {
-        return NULL;
+        return nullptr;
     }
     
     codec->output_packet->buffer = codec->packet->data;
@@ -188,17 +166,29 @@ VideoEncodePacket* video_encoder_read_packet(VideoEncoder* codec)
     return codec->output_packet;
 }
 
-void release_video_encoder_packet(VideoEncoder* codec)
+void _unref_video_encoder_packet(VideoEncoder* codec)
 {
     av_packet_unref(codec->packet);
 }
 
-void release_video_encoder(VideoEncoder* codec)
+void _release_video_encoder(VideoEncoder* codec)
 {
-    avcodec_send_frame(codec->context, NULL);
-    avcodec_free_context(&codec->context);
-    av_packet_free(&codec->packet);
-    av_frame_free(&codec->frame);
-    free(codec->output_packet);
-    free(codec);
+    if (codec->context != nullptr)
+    {
+        avcodec_send_frame(codec->context, nullptr);
+        avcodec_free_context(&codec->context);
+    }
+
+    if (codec->packet != nullptr)
+    {
+        av_packet_free(&codec->packet);
+    }
+    
+    if (codec->frame != nullptr)
+    {
+        av_frame_free(&codec->frame);
+    }
+    
+    delete codec->output_packet;
+    delete codec;
 }

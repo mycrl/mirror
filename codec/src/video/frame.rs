@@ -1,14 +1,8 @@
-#![cfg(feature = "frame")]
+#[cfg(any(target_os = "windows", target_os = "linux"))]
 
-use bytes::Bytes;
+use std::ffi::c_int;
 
-use crate::{
-    api::{
-        create_video_encoder, release_video_encoder, release_video_encoder_packet,
-        video_encoder_read_packet, video_encoder_send_frame,
-    },
-    free_cstring, to_c_str,
-};
+use crate::{to_c_str, api};
 
 pub struct VideoEncoderSettings {
     pub codec_name: String,
@@ -35,18 +29,25 @@ impl VideoEncoderSettings {
 }
 
 pub struct VideoFrame<'a> {
-    pub buffer: &'a [u8],
-    pub stride_y: u32,
-    pub stride_uv: u32,
+    pub buffer: [&'a [u8]; 4],
+    pub stride: [u32; 4],
 }
 
 impl<'a> VideoFrame<'a> {
     fn as_raw(&self) -> crate::api::VideoFrame {
         crate::api::VideoFrame {
-            buffer: self.buffer.as_ptr(),
-            len: self.buffer.len(),
-            stride_y: self.stride_y,
-            stride_uv: self.stride_uv,
+            buffer: [
+                self.buffer[0].as_ptr(),
+                self.buffer[1].as_ptr(),
+                self.buffer[2].as_ptr(),
+                self.buffer[3].as_ptr(),
+            ],
+            stride: [
+                self.stride[0] as c_int,
+                self.stride[1] as c_int,
+                self.stride[2] as c_int,
+                self.stride[3] as c_int,
+            ],
         }
     }
 }
@@ -60,7 +61,7 @@ pub struct VideoEncodePacket<'a> {
 
 impl Drop for VideoEncodePacket<'_> {
     fn drop(&mut self) {
-        unsafe { release_video_encoder_packet(self.codec) }
+        unsafe { api::_unref_video_encoder_packet(self.codec) }
     }
 }
 
@@ -88,9 +89,7 @@ unsafe impl Sync for VideoFrameSenderProcesser {}
 impl VideoFrameSenderProcesser {
     pub fn new(settings: &VideoEncoderSettings) -> Option<Self> {
         let settings = settings.as_raw();
-        let codec = unsafe { create_video_encoder(&settings) };
-        free_cstring(settings.codec_name);
-
+        let codec = unsafe { api::_create_video_encoder(&settings) };
         if !codec.is_null() {
             Some(Self { codec })
         } else {
@@ -98,28 +97,22 @@ impl VideoFrameSenderProcesser {
         }
     }
 
-    pub fn encode(&self, frame: &VideoFrame) -> Vec<Bytes> {
-        if unsafe { video_encoder_send_frame(self.codec, &frame.as_raw()) } != 0 {
-            return Vec::new();
-        }
+    pub fn push_frame(&self, frame: &VideoFrame) -> bool {
+        unsafe { api::_video_encoder_send_frame(self.codec, &frame.as_raw()) == 0 }
+    }
 
-        let mut ret = Vec::with_capacity(10);
-        loop {
-            let packet = unsafe { video_encoder_read_packet(self.codec) };
-            if !packet.is_null() {
-                let pkt = VideoEncodePacket::from_raw(self.codec, packet);
-                ret.push(Bytes::copy_from_slice(pkt.buffer))
-            } else {
-                break;
-            }
+    pub fn read_packet(&self) -> Option<VideoEncodePacket> {
+        let packet = unsafe { api::_video_encoder_read_packet(self.codec) };
+        if !packet.is_null() {
+            Some(VideoEncodePacket::from_raw(self.codec, packet))
+        } else {
+            None
         }
-
-        ret
     }
 }
 
 impl Drop for VideoFrameSenderProcesser {
     fn drop(&mut self) {
-        unsafe { release_video_encoder(self.codec) }
+        unsafe { api::_release_video_encoder(self.codec) }
     }
 }
