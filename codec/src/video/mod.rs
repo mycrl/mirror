@@ -1,6 +1,6 @@
 mod frame;
 mod stream;
 
-#[cfg(any(target_os = "windows", target_os = "linux"))]
+#[cfg(feature = "frame")]
 pub use frame::*;
 pub use stream::*;

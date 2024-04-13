@@ -11,7 +11,7 @@ use devices::{Device, DeviceKind, DeviceManager, DeviceManagerOptions, VideoForm
 use once_cell::sync::Lazy;
 use tokio::runtime;
 use transport::{
-    adapter::{StreamBufferInfo, StreamSenderAdapter},
+    adapter::{StreamBufferInfo, StreamReceiverAdapter, StreamSenderAdapter},
     Transport,
 };
 
@@ -247,6 +247,30 @@ extern "C" fn create_sender(
             .write()
             .unwrap()
             .replace(adapter);
+        Ok::<(), anyhow::Error>(())
+    };
+
+    func().is_ok()
+}
+
+#[no_mangle]
+extern "C" fn create_receiver(mirror: *const RawMirror, bind: *const c_char) -> bool {
+    assert!(!mirror.is_null());
+    assert!(!bind.is_null());
+
+    let func = || {
+        let adapter = StreamReceiverAdapter::new();
+        RUNTIME.block_on(
+            unsafe { &*mirror }
+                .transport
+                .create_receiver(unsafe { CStr::from_ptr(bind) }.to_str()?.parse()?, &adapter),
+        )?;
+
+        RUNTIME.spawn(async move {
+            while let Some((packet, kind)) = adapter.next().await {
+
+        } });
+
         Ok::<(), anyhow::Error>(())
     };
 

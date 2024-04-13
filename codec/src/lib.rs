@@ -13,7 +13,7 @@ pub enum BufferFlag {
     Partial = 8,
 }
 
-#[cfg(any(target_os = "windows", target_os = "linux"))]
+#[cfg(feature = "frame")]
 mod api {
     use std::ffi::{c_char, c_int, c_void};
 
@@ -60,12 +60,12 @@ mod api {
     }
 }
 
-#[cfg(any(target_os = "windows", target_os = "linux"))]
+#[cfg(feature = "frame")]
 pub(crate) fn to_c_str(str: &str) -> *const c_char {
     CString::new(str).unwrap().into_raw()
 }
 
-#[cfg(any(target_os = "windows", target_os = "linux"))]
+#[cfg(feature = "frame")]
 pub(crate) fn free_cstring(str: *const c_char) {
     if !str.is_null() {
         drop(unsafe { CString::from_raw(str as *mut c_char) })

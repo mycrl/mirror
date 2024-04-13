@@ -1,8 +1,8 @@
-#[cfg(any(target_os = "windows", target_os = "linux"))]
+#![cfg(feature = "frame")]
 
 use std::ffi::c_int;
 
-use crate::{to_c_str, api};
+use crate::{api, to_c_str};
 
 pub struct VideoEncoderSettings {
     pub codec_name: String,

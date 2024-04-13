@@ -62,7 +62,8 @@ fn main() -> anyhow::Result<()> {
         .target(&settings.target)
         .warnings(false)
         .out_dir(&settings.out_dir)
-        .file("./lib/video_encoder.cpp")
+        .file("./lib/video/encoder.cpp")
+        .file("./lib/video/encoder.cpp")
         .includes(&settings.ffmpeg_include_prefix)
         .compile("codec");
 

@@ -1,11 +1,11 @@
 //
-//  video_encoder.c
+//  video_encoder.cpp
 //  codec
 //
 //  Created by Mr.Panda on 2024/2/14.
 //
 
-#include "codec.h"
+#include "../codec.h"
 
 extern "C"
 {

@@ -9,9 +9,9 @@ name = "mirror"
 
 [dependencies]
 bytes = "1.5"
-transport = { path = "../../transport" }
 devices = { path = "../../devices" }
-codec = { path = "../../codec"}
+codec = { path = "../../codec", features = ["frame"]}
+transport = { path = "../../transport", features = ["codec"]}
 tokio = { version = "1.37.0", features = ["rt"]}
 log = "0.4.21"
 anyhow = "1.0.82"
