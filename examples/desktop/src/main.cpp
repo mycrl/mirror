@@ -5,6 +5,8 @@
 //  Created by Panda on 2024/4/13.
 //
 
+#include <thread>
+
 #ifdef WIN32
 #include <windows.h>
 #endif
@@ -14,6 +16,9 @@
 #include <SDL_video.h>
 #include <SDL_render.h>
 #include <SDL_rect.h>
+
+static std::string BIND = std::string("0.0.0.0:2300");
+static int MTU = 1500;
 
 #ifdef WIN32
 int WinMain(HINSTANCE _instance,
@@ -78,27 +83,42 @@ int main()
                                     sdl_rect.w,
                                     sdl_rect.h);
 
-    SDL_UpdateYUVTexture(sdl_texture,                   // sdl texture
-                            &sdl_rect,                     // sdl rect
-                            p_frm_yuv->data[0],            // y plane
-                            p_frm_yuv->linesize[0],        // y pitch
-                            p_frm_yuv->data[1],            // u plane
-                            p_frm_yuv->linesize[1],        // u pitch
-                            p_frm_yuv->data[2],            // v plane
-                            p_frm_yuv->linesize[2]         // v pitch
-                            );
-    
-    // B6. 使用特定颜色清空当前渲染目标
-    SDL_RenderClear(sdl_renderer);
-    // B7. 使用部分图像数据(texture)更新当前渲染目标
-    SDL_RenderCopy(sdl_renderer,                        // sdl renderer
-                    sdl_texture,                         // sdl texture
-                    NULL,                                // src rect, if NULL copy texture
-                    &sdl_rect                            // dst rect
-                    );
-    // B8. 执行渲染，更新屏幕显示
-    SDL_RenderPresent(sdl_renderer); 
+    mirror->CreateReceiver(BIND, std::string("libx1264"), [&](void* _, VideoFrame* frame) {
+        SDL_UpdateNVTexture(sdl_texture, 
+            &sdl_rect, 
+            frame->data[0], 
+            frame->linesize[0], 
+            frame->data[1], 
+            frame->linesize[1]);
+        SDL_RenderClear(sdl_renderer);
+        SDL_RenderCopy(sdl_renderer, sdl_texture, nullptr, &sdl_rect);
+        SDL_RenderPresent(sdl_renderer);
 
+        return true;
+    }, nullptr);
+
+    bool created = false;
+    SDL_Event event;
+    while (SDL_PollEvent(&event))
+    {
+        if (event.type == SDL_KEYDOWN && event.key.keysym.scancode == SDL_SCANCODE_KP_ENTER) 
+        {
+            if (created)
+            {
+                continue;
+            }
+
+            auto devices = device_manager->GetDevices();
+            device_manager->SetInputDevice(devices.device_list[0]);
+            if (!mirror->CreateSender(device_manager, MTU, BIND)) {
+                break;
+            }
+            else
+            {
+                created = true;
+            }
+        }
+    }
     
     SDL_Quit();
     return 0;

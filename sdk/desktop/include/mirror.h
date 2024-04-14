@@ -15,6 +15,8 @@
 #define EXPORT
 #endif
 
+#include <frame.h>
+
 #ifdef __cplusplus
 
 #include <stdexcept>
@@ -68,12 +70,6 @@ struct Devices
 	const struct Device* devices;
 	size_t capacity;
 	size_t size;
-};
-
-struct VideoFrame
-{
-    uint8_t* buffer[4];
-    int stride[4];
 };
 
 typedef const void* DeviceManager;
@@ -205,12 +201,12 @@ namespace mirror
 			}
 		}
 
-		bool CreateSender(DeviceManagerService& device_manager, 
+		bool CreateSender(DeviceManagerService* device_manager, 
 						  size_t mtu, 
 			              std::string& bind)
 		{
 			return create_sender(_mirror, 
-								 device_manager.AsRaw(), 
+								 device_manager->AsRaw(), 
 				                 mtu, 
 				                 const_cast<char*>(bind.c_str()));
 		}
