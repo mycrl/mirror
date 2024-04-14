@@ -15,11 +15,11 @@ typedef struct
 {
     size_t width;
     size_t height;
-} FrameRect;
+} VideoFrameRect;
 
 typedef struct
 {
-    FrameRect rect;
+    VideoFrameRect rect;
     uint8_t* data[2];
     size_t linesize[2];
 } VideoFrame;

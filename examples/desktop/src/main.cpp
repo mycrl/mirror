@@ -32,8 +32,8 @@ int main()
     SDL_Rect sdl_rect;
     sdl_rect.x = 0;
     sdl_rect.y = 0;
-    sdl_rect.w = 1920;
-    sdl_rect.h = 1080;
+    sdl_rect.w = 1280;
+    sdl_rect.h = 720;
 
     DeviceManagerOptions options;
     options.device.width = sdl_rect.w;
@@ -83,7 +83,8 @@ int main()
                                     sdl_rect.w,
                                     sdl_rect.h);
 
-    mirror->CreateReceiver(BIND, std::string("libx1264"), [&](void* _, VideoFrame* frame) {
+    std::string deocder = std::string("libx1264");
+    mirror->CreateReceiver(BIND, deocder, [&](void* _, VideoFrame* frame) {
         SDL_UpdateNVTexture(sdl_texture, 
             &sdl_rect, 
             frame->data[0], 

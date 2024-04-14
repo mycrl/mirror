@@ -30,7 +30,7 @@ impl std::fmt::Display for DeviceError {
 mod api {
     use std::ffi::{c_char, c_int, c_void};
 
-    use frame::{FrameRect, VideoFrame};
+    use frame::{VideoFrameRect, VideoFrame};
 
     pub type DeviceManager = *const c_void;
 
@@ -77,7 +77,7 @@ mod api {
 
         pub fn _set_video_output_callback(
             proc: extern "C" fn(ctx: *const c_void, frame: VideoFrame),
-            rect: FrameRect,
+            rect: VideoFrameRect,
             ctx: *const c_void,
         );
     }

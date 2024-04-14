@@ -50,7 +50,8 @@ endif()
 
 target_link_directories(example PRIVATE "${THIRD_PARTY_DIR}")
 include_directories("../../sdk/desktop/include"
-                    "${THIRD_PARTY_DIR}/sdl/include")
+                    "${THIRD_PARTY_DIR}/sdl/include"
+                    "../../frame/include")
 
 # If it is WIN32, you need to set the runtime library.
 if(MSVC)

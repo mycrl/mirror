@@ -1,6 +1,6 @@
 use std::{ffi::c_void, sync::Arc};
 
-use frame::{FrameRect, VideoFrame};
+use frame::{VideoFrameRect, VideoFrame};
 
 use crate::{api, device::Device, DeviceError, DeviceKind, VideoInfo};
 
@@ -28,7 +28,7 @@ impl DeviceManager {
         unsafe {
             api::_set_video_output_callback(
                 video_sink_proc,
-                FrameRect {
+                VideoFrameRect {
                     width: opt.video.width as usize,
                     height: opt.video.height as usize,
                 },

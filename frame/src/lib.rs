@@ -4,7 +4,7 @@ use std::slice::from_raw_parts;
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
-pub struct FrameRect {
+pub struct VideoFrameRect {
     pub width: usize,
     pub height: usize,
 }
@@ -12,13 +12,13 @@ pub struct FrameRect {
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct VideoFrame {
-    pub rect: FrameRect,
+    pub rect: VideoFrameRect,
     pub data: [*const u8; 2],
     pub linesize: [usize; 2],
 }
 
 impl VideoFrame {
-    pub fn new(data: [&[u8]; 2], linesize: [usize; 2], rect: FrameRect) -> Self {
+    pub fn new(data: [&[u8]; 2], linesize: [usize; 2], rect: VideoFrameRect) -> Self {
         Self {
             rect,
             linesize,

@@ -247,7 +247,7 @@ namespace mirror
         static bool _frameProc(void* ctx, VideoFrame* frame)
         {
             FrameProcContext* context = (FrameProcContext*)ctx;
-            context->On(frame);
+            return context->On(frame);
         }
 
 		Mirror _mirror = nullptr;

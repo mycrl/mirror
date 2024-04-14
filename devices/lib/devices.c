@@ -10,7 +10,7 @@
 typedef struct
 {
     VideoOutputCallback proc;
-    FrameRect rect;
+    VideoFrameRect rect;
     void* param;
 } RawVideoCallbackContext;
 
@@ -27,7 +27,7 @@ void raw_video_callback(void *param, struct video_data *frame)
     ctx->proc(ctx->param, video_frame);
 }
 
-void _set_video_output_callback(VideoOutputCallback proc, FrameRect rect, void* ctx)
+void _set_video_output_callback(VideoOutputCallback proc, VideoFrameRect rect, void* ctx)
 {
     RawVideoCallbackContext* param = (RawVideoCallbackContext*)malloc(sizeof(RawVideoCallbackContext));
     param->proc = proc;
