@@ -13,7 +13,7 @@ VideoDecoder* _create_video_decoder(const char* codec_name)
     decoder->output_frame = new VideoFrame;
     
     decoder->codec = avcodec_find_decoder_by_name(codec_name);
-    if (!decoder->codec)
+    if (decoder->codec == nullptr)
     {
         _release_video_decoder(decoder);
         return nullptr;
@@ -66,7 +66,6 @@ void _release_video_decoder(VideoDecoder* decoder)
 {
     if (decoder->context != nullptr)
     {
-        avcodec_send_frame(decoder->context, nullptr);
         avcodec_free_context(&decoder->context);
     }
     

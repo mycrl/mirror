@@ -21,7 +21,7 @@ VideoEncoder* _create_video_encoder(VideoEncoderSettings* settings)
     codec->codec_name = std::string(settings->codec_name);
     
     codec->codec = avcodec_find_encoder_by_name(settings->codec_name);
-    if (!codec->codec)
+    if (codec->codec == nullptr)
     {
         _release_video_encoder(codec);
         return nullptr;
@@ -170,7 +170,6 @@ void _release_video_encoder(VideoEncoder* codec)
 {
     if (codec->context != nullptr)
     {
-        avcodec_send_frame(codec->context, nullptr);
         avcodec_free_context(&codec->context);
     }
     

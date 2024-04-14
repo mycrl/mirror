@@ -83,7 +83,8 @@ int main()
                                                  sdl_rect.w,
                                                  sdl_rect.h);
     
-    mirror->CreateReceiver(BIND, std::string("libx1264"), [&](void* _, VideoFrame* frame) {
+    std::string decoder = std::string("h264");
+    mirror->CreateReceiver(BIND, decoder, [&](void* _, VideoFrame* frame) {
         SDL_UpdateNVTexture(sdl_texture,
                             &sdl_rect,
                             frame->data[0],
