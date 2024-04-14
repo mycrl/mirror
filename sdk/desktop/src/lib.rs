@@ -6,13 +6,11 @@ use std::{
 
 use anyhow::anyhow;
 use bytes::Bytes;
-use codec::{
-    video::{
-        VideoEncoderSettings, VideoFrame, VideoFrameReceiverProcesser, VideoFrameSenderProcesser,
-    },
-    RawVideoFrame,
+use codec::video::{
+    VideoEncoderSettings, VideoFrameReceiverProcesser, VideoFrameSenderProcesser,
 };
-use devices::{Device, DeviceKind, DeviceManager, DeviceManagerOptions, VideoFormat, VideoInfo};
+use devices::{Device, DeviceKind, DeviceManager, DeviceManagerOptions, VideoInfo};
+use frame::VideoFrame;
 use once_cell::sync::Lazy;
 use tokio::runtime;
 use transport::{
@@ -70,12 +68,9 @@ impl DeviceManagerObserver {
 }
 
 impl devices::Observer for DeviceManagerObserver {
-    fn video_sink(&self, frame: devices::Frame) {
+    fn video_sink(&self, frame: &VideoFrame) {
         if let Some(adapter) = self.adapter.read().unwrap().as_ref() {
-            if self.video_encoder.push_frame(&VideoFrame {
-                buffer: frame.data,
-                stride: frame.linesize,
-            }) {
+            if self.video_encoder.push_frame(frame) {
                 while let Some(packet) = self.video_encoder.read_packet() {
                     adapter.send(
                         Bytes::copy_from_slice(packet.buffer),
@@ -127,7 +122,6 @@ extern "C" fn create_device_manager(options: RawDeviceManagerOptions) -> *const 
                         fps: options.device.fps,
                         width: options.device.width,
                         height: options.device.height,
-                        format: VideoFormat::VIDEO_FORMAT_NV12,
                     },
                 },
                 DeviceManagerObserver::new(options, adapter.clone())?,
@@ -263,7 +257,7 @@ extern "C" fn create_receiver(
     mirror: *const RawMirror,
     bind: *const c_char,
     codec: *const c_char,
-    frame_proc: extern "C" fn(context: *const c_void, frame: *const RawVideoFrame) -> bool,
+    frame_proc: extern "C" fn(context: *const c_void, frame: *const VideoFrame) -> bool,
     context: *const c_void,
 ) -> bool {
     assert!(!mirror.is_null());
@@ -289,7 +283,7 @@ extern "C" fn create_receiver(
                     }
 
                     while let Some(frame) = decoder.read_frame() {
-                        if !frame_proc(context as *const _, &frame.as_raw()) {
+                        if !frame_proc(context as *const _, frame) {
                             break 'a;
                         }
                     }

@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+frame = { path = "../frame" }
 
 [dev-dependencies]
 anyhow = "1.0.80"

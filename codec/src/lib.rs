@@ -1,8 +1,6 @@
 pub mod audio;
 pub mod video;
 
-pub type RawVideoFrame = api::VideoFrame;
-
 #[repr(i32)]
 #[derive(Clone, Copy)]
 pub enum BufferFlag {
@@ -15,6 +13,8 @@ pub enum BufferFlag {
 #[cfg(feature = "frame")]
 mod api {
     use std::ffi::{c_char, c_int, c_void, CString};
+
+    use frame::VideoFrame;
 
     pub type VideoEncoder = *const c_void;
     pub type VideoDecoder = *const c_void;
@@ -34,12 +34,6 @@ mod api {
         fn drop(&mut self) {
             drop(unsafe { CString::from_raw(self.codec_name as *mut _) })
         }
-    }
-
-    #[repr(C)]
-    pub struct VideoFrame {
-        pub buffer: [*const u8; 4],
-        pub stride: [c_int; 4],
     }
 
     #[repr(C)]

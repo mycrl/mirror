@@ -126,28 +126,18 @@ bool _video_decoder_send_packet(VideoDecoder* decoder,
     return true;
 }
 
-VideoFrame* _video_decoder_read_frame(VideoDecoder* decoder, 
-                                      uint32_t* width, 
-                                      uint32_t* height)
+VideoFrame* _video_decoder_read_frame(VideoDecoder* decoder)
 {
     if (avcodec_receive_frame(decoder->context, decoder->frame) != 0)
 	{
 		return nullptr;
 	}
 
-    if (width != nullptr)
-    {
-        *width = decoder->frame->width;
-    }
-
-    if (height != nullptr)
-    {
-        *height = decoder->frame->height;
-    }
-    
-    decoder->output_frame->stride[0] = decoder->frame->linesize[0];
-    decoder->output_frame->stride[1] = decoder->frame->linesize[1];
-    decoder->output_frame->buffer[0] = decoder->frame->data[0];
-    decoder->output_frame->buffer[1] = decoder->frame->data[1];
+    decoder->output_frame->rect.width = decoder->frame->width;
+    decoder->output_frame->rect.height = decoder->frame->height;
+    decoder->output_frame->data[0] = decoder->frame->data[0];
+    decoder->output_frame->data[1] = decoder->frame->data[1];
+    decoder->output_frame->linesize[0] = decoder->frame->linesize[0];
+    decoder->output_frame->linesize[1] = decoder->frame->linesize[1];
 	return decoder->output_frame;
 }

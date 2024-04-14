@@ -17,13 +17,13 @@
 
 #include <libobs/obs.h>
 #include <stdio.h>
+#include <frame.h>
 
 typedef struct
 {
     uint8_t fps;
     uint32_t width;
     uint32_t height;
-    enum video_format format;
 } VideoInfo;
 
 typedef struct
@@ -53,7 +53,7 @@ typedef struct
     size_t size;
 } DeviceList;
 
-typedef void (*VideoOutputCallback)(void* ctx, struct video_data* frame);
+typedef void (*VideoOutputCallback)(void* ctx, VideoFrame frame);
 
 EXPORT int _init(VideoInfo* info);
 EXPORT DeviceManager* _create_device_manager();
@@ -61,6 +61,6 @@ EXPORT void _device_manager_release(DeviceManager* manager);
 EXPORT DeviceList _get_device_list(DeviceManager* manager, DeviceType type);
 EXPORT void _release_device_description(DeviceDescription* description);
 EXPORT void _set_video_input(DeviceManager* manager, DeviceDescription* description, VideoInfo* info);
-EXPORT void _set_video_output_callback(VideoOutputCallback proc, void* ctx);
+EXPORT void _set_video_output_callback(VideoOutputCallback proc, FrameRect rect, void* ctx);
 
 #endif /* devices_h */

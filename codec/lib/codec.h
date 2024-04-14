@@ -23,6 +23,8 @@ extern "C"
     #include <libavcodec/avcodec.h>
 }
 
+#include <frame.h>
+
 typedef struct
 {
     uint8_t* buffer;
@@ -54,12 +56,6 @@ typedef struct
 
 typedef struct
 {
-    uint8_t* buffer[4];
-    int stride[4];
-} VideoFrame;
-
-typedef struct
-{
     const AVCodec* codec;
     AVCodecContext* context;
     AVCodecParserContext* parser;
@@ -78,7 +74,7 @@ extern "C"
     EXPORT VideoDecoder* _create_video_decoder(const char* codec_name);
     EXPORT void _release_video_decoder(VideoDecoder* decoder);
     EXPORT bool _video_decoder_send_packet(VideoDecoder* decoder, uint8_t* buf, size_t size);
-    EXPORT VideoFrame* _video_decoder_read_frame(VideoDecoder* decoder, uint32_t* width, uint32_t* height);
+    EXPORT VideoFrame* _video_decoder_read_frame(VideoDecoder* decoder);
 }
 
 #endif /* codec_h */

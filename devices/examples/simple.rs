@@ -5,6 +5,7 @@ use std::{
 };
 
 use devices::*;
+use frame::VideoFrame;
 use minifb::{Window, WindowOptions};
 
 struct SimpleObserver {
@@ -12,8 +13,8 @@ struct SimpleObserver {
 }
 
 impl Observer for SimpleObserver {
-    fn video_sink(&self, frmae: Frame) {
-        self.frame.write().unwrap().copy_from_slice(frmae.data[0]);
+    fn video_sink(&self, frmae: &VideoFrame) {
+        self.frame.write().unwrap().copy_from_slice(frmae.get_y_planar());
     }
 }
 
@@ -34,7 +35,6 @@ fn main() -> anyhow::Result<()> {
                 fps: 30,
                 width: WIDTH as u32,
                 height: HEIGHT as u32,
-                format: VideoFormat::VIDEO_FORMAT_RGBA,
             },
         },
         SimpleObserver {

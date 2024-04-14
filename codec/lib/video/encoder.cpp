@@ -116,11 +116,14 @@ bool _video_encoder_send_frame(VideoEncoder* codec, VideoFrame* frame)
     {
         return false;
     }
+
+    uint8_t* data[4] = { frame->data[0], frame->data[1], nullptr, nullptr };
+    int linesize[4] = { frame->linesize[0], frame->linesize[1], 0, 0 };
     
     av_image_copy(codec->frame->data,
                   codec->frame->linesize,
-                  frame->buffer,
-                  frame->stride,
+                  data,
+                  linesize,
                   codec->context->pix_fmt,
                   codec->context->width,
                   codec->context->height);

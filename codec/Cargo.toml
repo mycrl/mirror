@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 bytes = "1.5"
+frame = { path = "../frame" }
 sync = { path = "../sync" }
 
 [build-dependencies]

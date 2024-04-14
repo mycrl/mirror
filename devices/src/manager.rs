@@ -1,10 +1,8 @@
 use std::{ffi::c_void, sync::Arc};
 
-use crate::{
-    api::{self, VideoFrame},
-    device::Device,
-    DeviceError, DeviceKind, Frame, VideoInfo,
-};
+use frame::{FrameRect, VideoFrame};
+
+use crate::{api, device::Device, DeviceError, DeviceKind, VideoInfo};
 
 #[derive(Debug, Clone)]
 pub struct DeviceManagerOptions {
@@ -26,13 +24,16 @@ impl DeviceManager {
             return Err(DeviceError::InitializeFailed);
         }
 
-        let ctx = Box::into_raw(Box::new(Context {
-            observer: Arc::new(observer),
-            opt: opt.clone(),
-        })) as *const _;
-
+        let ctx = Box::into_raw(Box::new(Context(Arc::new(observer)))) as *const _;
         unsafe {
-            api::_set_video_output_callback(video_sink_proc, ctx as *const c_void);
+            api::_set_video_output_callback(
+                video_sink_proc,
+                FrameRect {
+                    width: opt.video.width as usize,
+                    height: opt.video.height as usize,
+                },
+                ctx as *const c_void,
+            );
         }
 
         let ptr = unsafe { api::_create_device_manager() };
@@ -66,16 +67,11 @@ impl Drop for DeviceManager {
 }
 
 pub trait Observer {
-    fn video_sink(&self, frmae: Frame);
+    fn video_sink(&self, frmae: &VideoFrame);
 }
 
-struct Context {
-    observer: Arc<dyn Observer>,
-    opt: DeviceManagerOptions,
-}
+struct Context(Arc<dyn Observer>);
 
-extern "C" fn video_sink_proc(ctx: *const c_void, frame: *const VideoFrame) {
-    let ctx = unsafe { &*(ctx as *const Context) };
-    let frame = Frame::from_raw(frame, &ctx.opt.video);
-    ctx.observer.video_sink(frame);
+extern "C" fn video_sink_proc(ctx: *const c_void, frame: VideoFrame) {
+    unsafe { &*(ctx as *const Context) }.0.video_sink(&frame);
 }

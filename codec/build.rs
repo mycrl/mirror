@@ -65,6 +65,7 @@ fn main() -> anyhow::Result<()> {
         .file("./lib/video/encoder.cpp")
         .file("./lib/video/encoder.cpp")
         .includes(&settings.ffmpeg_include_prefix)
+        .include("../frame/include")
         .compile("codec");
 
     println!("cargo:rustc-link-search=all={}", &settings.out_dir);

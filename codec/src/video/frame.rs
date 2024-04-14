@@ -1,9 +1,11 @@
 #![cfg(feature = "frame")]
 
 use std::{
-    ffi::{c_int, CString},
+    ffi::CString,
     ptr::null_mut,
 };
+
+use frame::VideoFrame;
 
 use crate::api;
 
@@ -28,58 +30,6 @@ impl VideoEncoderSettings {
             bit_rate: self.bit_rate,
             key_frame_interval: self.key_frame_interval,
             codec_name: CString::new(self.codec_name.as_str()).unwrap().into_raw(),
-        }
-    }
-}
-
-pub struct VideoFrame<'a> {
-    pub buffer: [&'a [u8]; 4],
-    pub stride: [u32; 4],
-}
-
-impl<'a> VideoFrame<'a> {
-    pub fn as_raw(&self) -> api::VideoFrame {
-        api::VideoFrame {
-            buffer: [
-                self.buffer[0].as_ptr(),
-                self.buffer[1].as_ptr(),
-                self.buffer[2].as_ptr(),
-                self.buffer[3].as_ptr(),
-            ],
-            stride: [
-                self.stride[0] as c_int,
-                self.stride[1] as c_int,
-                self.stride[2] as c_int,
-                self.stride[3] as c_int,
-            ],
-        }
-    }
-
-    fn from_raw(raw: *const api::VideoFrame, height: u32) -> Self {
-        let frame = unsafe { &*raw };
-        Self {
-            buffer: [
-                unsafe {
-                    std::slice::from_raw_parts(
-                        frame.buffer[0],
-                        frame.stride[0] as usize * height as usize,
-                    )
-                },
-                unsafe {
-                    std::slice::from_raw_parts(
-                        frame.buffer[1],
-                        frame.stride[1] as usize * height as usize,
-                    )
-                },
-                &[],
-                &[],
-            ],
-            stride: [
-                frame.stride[0] as u32,
-                frame.stride[1] as u32,
-                frame.stride[2] as u32,
-                frame.stride[3] as u32,
-            ],
         }
     }
 }
@@ -127,7 +77,7 @@ impl VideoFrameSenderProcesser {
     }
 
     pub fn push_frame(&self, frame: &VideoFrame) -> bool {
-        unsafe { api::_video_encoder_send_frame(self.codec, &frame.as_raw()) }
+        unsafe { api::_video_encoder_send_frame(self.codec, frame) }
     }
 
     pub fn read_packet(&self) -> Option<VideoEncodePacket> {
@@ -170,11 +120,11 @@ impl VideoFrameReceiverProcesser {
         unsafe { api::_video_decoder_send_packet(self.codec, pkt.as_ptr(), pkt.len()) }
     }
 
-    pub fn read_frame(&self) -> Option<VideoFrame> {
+    pub fn read_frame(&self) -> Option<&VideoFrame> {
         let mut height = 0;
         let frame = unsafe { api::_video_decoder_read_frame(self.codec, null_mut(), &mut height) };
         if !frame.is_null() {
-            Some(VideoFrame::from_raw(frame, height))
+            Some(unsafe { &*frame })
         } else {
             None
         }

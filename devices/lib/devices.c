@@ -7,6 +7,36 @@
 
 #include "devices.h"
 
+typedef struct
+{
+    VideoOutputCallback proc;
+    FrameRect rect;
+    void* param;
+} RawVideoCallbackContext;
+
+void raw_video_callback(void *param, struct video_data *frame)
+{
+    RawVideoCallbackContext* ctx = (RawVideoCallbackContext*)param;
+
+    VideoFrame video_frame;
+    video_frame.rect = ctx->rect;
+    video_frame.data[0] = frame->data[0];
+    video_frame.data[1] = frame->data[1];
+    video_frame.linesize[0] = frame->linesize[0];
+    video_frame.linesize[1] = frame->linesize[1];
+    ctx->proc(ctx->param, video_frame);
+}
+
+void _set_video_output_callback(VideoOutputCallback proc, FrameRect rect, void* ctx)
+{
+    RawVideoCallbackContext* param = (RawVideoCallbackContext*)malloc(sizeof(RawVideoCallbackContext));
+    param->proc = proc;
+    param->param = ctx;
+    param->rect = rect;
+    
+    obs_add_raw_video_callback(NULL, raw_video_callback, (void*)param);
+}
+
 int _init(VideoInfo* info)
 {
     if (obs_initialized())
@@ -28,10 +58,10 @@ int _init(VideoInfo* info)
     video_info.base_height = info->height;
     video_info.output_width = info->width;
     video_info.output_height = info->height;
-    video_info.output_format = info->format;
     video_info.colorspace = VIDEO_CS_DEFAULT;
     video_info.range = VIDEO_RANGE_DEFAULT;
     video_info.scale_type = OBS_SCALE_DISABLE;
+    video_info.output_format = VIDEO_FORMAT_NV12;
     video_info.adapter = 0;
 
     if (obs_reset_video(&video_info) != OBS_VIDEO_SUCCESS)
@@ -42,11 +72,6 @@ int _init(VideoInfo* info)
     obs_load_all_modules();
 	obs_post_load_modules();
     return 0;
-}
-
-void _set_video_output_callback(VideoOutputCallback proc, void* ctx)
-{
-    obs_add_raw_video_callback(NULL, proc, ctx);
 }
 
 DeviceManager* _create_device_manager()
