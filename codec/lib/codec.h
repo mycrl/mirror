@@ -20,7 +20,7 @@
 
 extern "C"
 {
-    #include <libavcodec/avcodec.h>
+#include <libavcodec/avcodec.h>
 }
 
 #include <frame.h>
@@ -66,15 +66,15 @@ typedef struct
 
 extern "C"
 {
-    EXPORT VideoEncoder* _create_video_encoder(VideoEncoderSettings* settings);
-    EXPORT bool _video_encoder_send_frame(VideoEncoder* codec, VideoFrame* frame);
-    EXPORT VideoEncodePacket* _video_encoder_read_packet(VideoEncoder* codec);
-    EXPORT void _unref_video_encoder_packet(VideoEncoder* codec);
-    EXPORT void _release_video_encoder(VideoEncoder* codec);
-    EXPORT VideoDecoder* _create_video_decoder(const char* codec_name);
-    EXPORT void _release_video_decoder(VideoDecoder* decoder);
-    EXPORT bool _video_decoder_send_packet(VideoDecoder* decoder, uint8_t* buf, size_t size);
-    EXPORT VideoFrame* _video_decoder_read_frame(VideoDecoder* decoder);
+EXPORT VideoEncoder* _create_video_encoder(VideoEncoderSettings* settings);
+EXPORT bool _video_encoder_send_frame(VideoEncoder* codec, VideoFrame* frame);
+EXPORT VideoEncodePacket* _video_encoder_read_packet(VideoEncoder* codec);
+EXPORT void _unref_video_encoder_packet(VideoEncoder* codec);
+EXPORT void _release_video_encoder(VideoEncoder* codec);
+EXPORT VideoDecoder* _create_video_decoder(const char* codec_name);
+EXPORT void _release_video_decoder(VideoDecoder* decoder);
+EXPORT bool _video_decoder_send_packet(VideoDecoder* decoder, uint8_t* buf, size_t size);
+EXPORT VideoFrame* _video_decoder_read_frame(VideoDecoder* decoder);
 }
 
 #endif /* codec_h */

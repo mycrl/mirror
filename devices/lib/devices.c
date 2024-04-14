@@ -17,7 +17,7 @@ typedef struct
 void raw_video_callback(void *param, struct video_data *frame)
 {
     RawVideoCallbackContext* ctx = (RawVideoCallbackContext*)param;
-
+    
     VideoFrame video_frame;
     video_frame.rect = ctx->rect;
     video_frame.data[0] = frame->data[0];
@@ -48,7 +48,7 @@ int _init(VideoInfo* info)
     {
         return -2;
     }
-
+    
     struct obs_video_info video_info;
     video_info.graphics_module = "libobs-d3d11";
     video_info.fps_num = info->fps;
@@ -63,14 +63,14 @@ int _init(VideoInfo* info)
     video_info.scale_type = OBS_SCALE_DISABLE;
     video_info.output_format = VIDEO_FORMAT_NV12;
     video_info.adapter = 0;
-
+    
     if (obs_reset_video(&video_info) != OBS_VIDEO_SUCCESS)
     {
         return -3;
     }
-
+    
     obs_load_all_modules();
-	obs_post_load_modules();
+    obs_post_load_modules();
     return 0;
 }
 
@@ -81,36 +81,36 @@ DeviceManager* _create_device_manager()
     {
         return NULL;
     }
-
+    
     manager->scene = obs_scene_create("mirror");
-	if (manager->scene == NULL)
-	{
+    if (manager->scene == NULL)
+    {
         _device_manager_release(manager);
-		return NULL;
-	}
-
-	manager->video_source = obs_source_create("dshow_input", "mirror video input", NULL, NULL);
-	if (manager->video_source == NULL)
-	{
+        return NULL;
+    }
+    
+    manager->video_source = obs_source_create("dshow_input", "mirror video input", NULL, NULL);
+    if (manager->video_source == NULL)
+    {
         _device_manager_release(manager);
-		return NULL;
-	}
+        return NULL;
+    }
     else
     {
         obs_set_output_source(0, manager->video_source);
     }
-
-	manager->video_scene_item = obs_scene_add(manager->scene, manager->video_source);
-	if (manager->video_scene_item == NULL)
-	{
+    
+    manager->video_scene_item = obs_scene_add(manager->scene, manager->video_source);
+    if (manager->video_scene_item == NULL)
+    {
         _device_manager_release(manager);
-		return NULL;
-	}
-	else
-	{
-		obs_sceneitem_set_visible(manager->video_scene_item, true);
-	}
-
+        return NULL;
+    }
+    else
+    {
+        obs_sceneitem_set_visible(manager->video_scene_item, true);
+    }
+    
     return manager;
 }
 
@@ -120,17 +120,17 @@ void _device_manager_release(DeviceManager* manager)
     {
         obs_scene_release(manager->scene);
     }
-
-    if (manager->video_source != NULL) 
+    
+    if (manager->video_source != NULL)
     {
         obs_source_release(manager->video_source);
     }
-
+    
     if (manager->video_scene_item != NULL)
     {
         obs_sceneitem_release(manager->video_scene_item);
     }
-
+    
     free(manager);
 }
 
@@ -139,10 +139,10 @@ void _set_video_input(DeviceManager* manager, DeviceDescription* description, Vi
     obs_data_t* settings = obs_data_create();
     obs_data_t* cur_settings = obs_source_get_settings(manager->video_source);
     obs_data_apply(settings, cur_settings);
-
+    
     char resolution[20];
     sprintf(resolution, "%dx%d", info->width, info->height);
-
+    
     obs_data_set_int(settings, "res_type", 1);
     obs_data_set_bool(settings, "hw_decode", true);
     obs_data_set_string(settings, "resolution", &resolution);
@@ -156,16 +156,16 @@ DeviceList _get_device_list(DeviceManager* manager, DeviceType type)
     DeviceList list;
     list.size = 0;
     list.devices = (DeviceDescription**)malloc(sizeof(DeviceDescription*) * 50);
-
+    
     obs_properties_t* properties = obs_source_properties(manager->video_source);
-	obs_property_t* property = obs_properties_first(properties);
-	while (property)
-	{
-		const char* name = obs_property_name(property);
-		if (strcmp(name, "video_device_id") == 0)
-		{
-			for (size_t i = 0; i < obs_property_list_item_count(property); i++)
-			{
+    obs_property_t* property = obs_properties_first(properties);
+    while (property)
+    {
+        const char* name = obs_property_name(property);
+        if (strcmp(name, "video_device_id") == 0)
+        {
+            for (size_t i = 0; i < obs_property_list_item_count(property); i++)
+            {
                 DeviceDescription* device = (DeviceDescription*)malloc(sizeof(DeviceDescription));
                 if (device != NULL)
                 {
@@ -175,12 +175,12 @@ DeviceList _get_device_list(DeviceManager* manager, DeviceType type)
                     list.devices[list.size] = device;
                     list.size ++;
                 }
-			}
-		}
-
-		obs_property_next(&property);
-	}
-
+            }
+        }
+        
+        obs_property_next(&property);
+    }
+    
     return list;
 }
 

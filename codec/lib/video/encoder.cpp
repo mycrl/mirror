@@ -9,9 +9,9 @@
 
 extern "C"
 {
-    #include "libavutil/imgutils.h"
-    #include "libavutil/frame.h"
-    #include "libavutil/opt.h"
+#include "libavutil/imgutils.h"
+#include "libavutil/frame.h"
+#include "libavutil/opt.h"
 }
 
 VideoEncoder* _create_video_encoder(VideoEncoderSettings* settings)
@@ -19,7 +19,7 @@ VideoEncoder* _create_video_encoder(VideoEncoderSettings* settings)
     VideoEncoder* codec = new VideoEncoder;
     codec->output_packet = new VideoEncodePacket;
     codec->codec_name = std::string(settings->codec_name);
-
+    
     codec->codec = avcodec_find_encoder_by_name(settings->codec_name);
     if (!codec->codec)
     {
@@ -116,7 +116,7 @@ bool _video_encoder_send_frame(VideoEncoder* codec, VideoFrame* frame)
     {
         return false;
     }
-
+    
     uint8_t* data[4] = { frame->data[0], frame->data[1], nullptr, nullptr };
     int linesize[4] = { frame->linesize[0], frame->linesize[1], 0, 0 };
     
@@ -173,7 +173,7 @@ void _release_video_encoder(VideoEncoder* codec)
         avcodec_send_frame(codec->context, nullptr);
         avcodec_free_context(&codec->context);
     }
-
+    
     if (codec->packet != nullptr)
     {
         av_packet_free(&codec->packet);
