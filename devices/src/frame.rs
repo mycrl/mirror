@@ -4,7 +4,6 @@ use crate::{api::VideoFrame, VideoFormat, VideoInfo};
 pub struct Frame<'a> {
     pub data: [&'a [u8]; 4],
     pub linesize: [u32; 4],
-    pub timestamp: u64,
 }
 
 impl<'a> Frame<'a> {
@@ -22,33 +21,44 @@ impl<'a> Frame<'a> {
                 )
             };
         } else if info.format == VideoFormat::VIDEO_FORMAT_NV12 {
-            data[0] = unsafe { std::slice::from_raw_parts(frame.data[0], info.width as usize) };
+            data[0] = unsafe {
+                std::slice::from_raw_parts(
+                    frame.data[0],
+                    info.width as usize * info.height as usize,
+                )
+            };
+
             data[1] = unsafe {
                 std::slice::from_raw_parts(
                     frame.data[1],
-                    (info.width as usize / 2) * (info.height as usize / 2) * 2,
+                    info.width as usize * info.height as usize,
                 )
             };
         } else if info.format == VideoFormat::VIDEO_FORMAT_I420 {
-            data[0] = unsafe { std::slice::from_raw_parts(frame.data[0], info.width as usize) };
+            data[0] = unsafe {
+                std::slice::from_raw_parts(
+                    frame.data[0],
+                    info.width as usize * info.height as usize,
+                )
+            };
+
             data[1] = unsafe {
                 std::slice::from_raw_parts(
                     frame.data[1],
-                    (info.width as usize / 2) * (info.height as usize / 2),
+                    info.width as usize * info.height as usize / 2,
                 )
             };
 
             data[2] = unsafe {
                 std::slice::from_raw_parts(
                     frame.data[2],
-                    (info.width as usize / 2) * (info.height as usize / 2),
+                    info.width as usize * info.height as usize / 2,
                 )
             };
         }
 
         Self {
             data,
-            timestamp: frame.timestamp,
             linesize: [
                 frame.linesize[0],
                 frame.linesize[1],

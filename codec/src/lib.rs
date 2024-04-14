@@ -1,8 +1,7 @@
 pub mod audio;
 pub mod video;
 
-#[allow(unused_imports)]
-use std::ffi::{c_char, CString};
+pub type RawVideoFrame = api::VideoFrame;
 
 #[repr(i32)]
 #[derive(Clone, Copy)]
@@ -15,11 +14,10 @@ pub enum BufferFlag {
 
 #[cfg(feature = "frame")]
 mod api {
-    use std::ffi::{c_char, c_int, c_void};
-
-    use crate::free_cstring;
+    use std::ffi::{c_char, c_int, c_void, CString};
 
     pub type VideoEncoder = *const c_void;
+    pub type VideoDecoder = *const c_void;
 
     #[repr(C)]
     pub struct VideoEncoderSettings {
@@ -34,7 +32,7 @@ mod api {
 
     impl Drop for VideoEncoderSettings {
         fn drop(&mut self) {
-            free_cstring(self.codec_name);
+            drop(unsafe { CString::from_raw(self.codec_name as *mut _) })
         }
     }
 
@@ -53,21 +51,18 @@ mod api {
 
     extern "C" {
         pub fn _create_video_encoder(settings: *const VideoEncoderSettings) -> VideoEncoder;
-        pub fn _video_encoder_send_frame(codec: VideoEncoder, frame: *const VideoFrame) -> c_int;
+        pub fn _video_encoder_send_frame(codec: VideoEncoder, frame: *const VideoFrame) -> bool;
         pub fn _video_encoder_read_packet(codec: VideoEncoder) -> *const VideoEncodePacket;
         pub fn _unref_video_encoder_packet(codec: VideoEncoder);
         pub fn _release_video_encoder(codec: VideoEncoder);
-    }
-}
-
-#[cfg(feature = "frame")]
-pub(crate) fn to_c_str(str: &str) -> *const c_char {
-    CString::new(str).unwrap().into_raw()
-}
-
-#[cfg(feature = "frame")]
-pub(crate) fn free_cstring(str: *const c_char) {
-    if !str.is_null() {
-        drop(unsafe { CString::from_raw(str as *mut c_char) })
+        pub fn _create_video_decoder(codec_name: *const c_char) -> VideoDecoder;
+        pub fn _video_decoder_send_packet(codec: VideoDecoder, buf: *const u8, size: usize)
+            -> bool;
+        pub fn _video_decoder_read_frame(
+            codec: VideoDecoder,
+            width: *mut u32,
+            height: *mut u32,
+        ) -> *const VideoFrame;
+        pub fn _release_video_decoder(codec: VideoDecoder);
     }
 }

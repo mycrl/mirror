@@ -17,16 +17,9 @@ extern "C"
 VideoEncoder* _create_video_encoder(VideoEncoderSettings* settings)
 {
     VideoEncoder* codec = new VideoEncoder;
-    if (codec == nullptr)
-    {
-        return nullptr;
-    }
-    else
-    {
-        codec->codec_name = std::string(settings->codec_name);
-        codec->output_packet = new VideoEncodePacket;
-    }
-    
+    codec->output_packet = new VideoEncodePacket;
+    codec->codec_name = std::string(settings->codec_name);
+
     codec->codec = avcodec_find_encoder_by_name(settings->codec_name);
     if (!codec->codec)
     {
@@ -117,11 +110,11 @@ VideoEncoder* _create_video_encoder(VideoEncoderSettings* settings)
     return codec;
 }
 
-int _video_encoder_send_frame(VideoEncoder* codec, VideoFrame* frame)
+bool _video_encoder_send_frame(VideoEncoder* codec, VideoFrame* frame)
 {
     if (av_frame_make_writable(codec->frame) != 0)
     {
-        return -1;
+        return false;
     }
     
     av_image_copy(codec->frame->data,
@@ -137,14 +130,14 @@ int _video_encoder_send_frame(VideoEncoder* codec, VideoFrame* frame)
                                      codec->context->time_base);
     if (avcodec_send_frame(codec->context, codec->frame) != 0)
     {
-        return -1;
+        return false;
     }
     else
     {
         codec->frame_num++;
     }
     
-    return 0;
+    return true;
 }
 
 VideoEncodePacket* _video_encoder_read_packet(VideoEncoder* codec)
@@ -162,7 +155,6 @@ VideoEncodePacket* _video_encoder_read_packet(VideoEncoder* codec)
     codec->output_packet->buffer = codec->packet->data;
     codec->output_packet->len = codec->packet->size;
     codec->output_packet->flags = codec->packet->flags;
-    
     return codec->output_packet;
 }
 

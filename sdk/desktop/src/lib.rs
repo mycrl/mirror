@@ -1,17 +1,22 @@
 use std::{
-    ffi::{c_char, CStr},
+    ffi::{c_char, c_void, CStr},
     ptr::null_mut,
     sync::{Arc, RwLock},
 };
 
 use anyhow::anyhow;
 use bytes::Bytes;
-use codec::video::{VideoEncoderSettings, VideoFrame, VideoFrameSenderProcesser};
+use codec::{
+    video::{
+        VideoEncoderSettings, VideoFrame, VideoFrameReceiverProcesser, VideoFrameSenderProcesser,
+    },
+    RawVideoFrame,
+};
 use devices::{Device, DeviceKind, DeviceManager, DeviceManagerOptions, VideoFormat, VideoInfo};
 use once_cell::sync::Lazy;
 use tokio::runtime;
 use transport::{
-    adapter::{StreamBufferInfo, StreamReceiverAdapter, StreamSenderAdapter},
+    adapter::{StreamBufferInfo, StreamKind, StreamReceiverAdapter, StreamSenderAdapter},
     Transport,
 };
 
@@ -254,7 +259,13 @@ extern "C" fn create_sender(
 }
 
 #[no_mangle]
-extern "C" fn create_receiver(mirror: *const RawMirror, bind: *const c_char) -> bool {
+extern "C" fn create_receiver(
+    mirror: *const RawMirror,
+    bind: *const c_char,
+    codec: *const c_char,
+    frame_proc: extern "C" fn(context: *const c_void, frame: *const RawVideoFrame) -> bool,
+    context: *const c_void,
+) -> bool {
     assert!(!mirror.is_null());
     assert!(!bind.is_null());
 
@@ -266,10 +277,25 @@ extern "C" fn create_receiver(mirror: *const RawMirror, bind: *const c_char) -> 
                 .create_receiver(unsafe { CStr::from_ptr(bind) }.to_str()?.parse()?, &adapter),
         )?;
 
-        RUNTIME.spawn(async move {
-            while let Some((packet, kind)) = adapter.next().await {
+        let decoder = VideoFrameReceiverProcesser::new(unsafe { CStr::from_ptr(codec) }.to_str()?)
+            .ok_or_else(|| anyhow!("Failed to create video decoder."))?;
 
-        } });
+        let context = context as usize;
+        RUNTIME.spawn(async move {
+            'a: while let Some((packet, kind)) = adapter.next().await {
+                if kind == StreamKind::Video {
+                    if !decoder.push_packet(&packet) {
+                        break;
+                    }
+
+                    while let Some(frame) = decoder.read_frame() {
+                        if !frame_proc(context as *const _, &frame.as_raw()) {
+                            break 'a;
+                        }
+                    }
+                }
+            }
+        });
 
         Ok::<(), anyhow::Error>(())
     };

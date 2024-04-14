@@ -55,16 +55,30 @@ typedef struct
 typedef struct
 {
     uint8_t* buffer[4];
-    const int stride[4];
+    int stride[4];
 } VideoFrame;
+
+typedef struct
+{
+    const AVCodec* codec;
+    AVCodecContext* context;
+    AVCodecParserContext* parser;
+    AVPacket* packet;
+    AVFrame* frame;
+    VideoFrame* output_frame;
+} VideoDecoder;
 
 extern "C"
 {
     EXPORT VideoEncoder* _create_video_encoder(VideoEncoderSettings* settings);
-    EXPORT int _video_encoder_send_frame(VideoEncoder* codec, VideoFrame* frame);
+    EXPORT bool _video_encoder_send_frame(VideoEncoder* codec, VideoFrame* frame);
     EXPORT VideoEncodePacket* _video_encoder_read_packet(VideoEncoder* codec);
     EXPORT void _unref_video_encoder_packet(VideoEncoder* codec);
     EXPORT void _release_video_encoder(VideoEncoder* codec);
+    EXPORT VideoDecoder* _create_video_decoder(const char* codec_name);
+    EXPORT void _release_video_decoder(VideoDecoder* decoder);
+    EXPORT bool _video_decoder_send_packet(VideoDecoder* decoder, uint8_t* buf, size_t size);
+    EXPORT VideoFrame* _video_decoder_read_frame(VideoDecoder* decoder, uint32_t* width, uint32_t* height);
 }
 
 #endif /* codec_h */

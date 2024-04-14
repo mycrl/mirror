@@ -21,6 +21,9 @@
 #include <vector>
 #include <string>
 #include <optional>
+#include <functional>
+#include <memory>
+#include <tuple>
 
 #endif
 
@@ -67,8 +70,16 @@ struct Devices
 	size_t size;
 };
 
+struct VideoFrame
+{
+    uint8_t* buffer[4];
+    int stride[4];
+};
+
 typedef const void* DeviceManager;
 typedef const void* Mirror;
+
+typedef bool (*FrameProc)(void* ctx, VideoFrame* frame);
 
 extern "C"
 {
@@ -82,6 +93,7 @@ extern "C"
 	EXPORT Mirror create_mirror(char* multicast);
 	EXPORT void drop_mirror(Mirror mirror);
 	EXPORT bool create_sender(Mirror mirror, DeviceManager device_manager, size_t mtu, char* bind);
+    EXPORT bool create_receiver(Mirror mirror, char* bind, char* codec, FrameProc proc, void* ctx);
 }
 
 #ifdef __cplusplus
@@ -202,7 +214,46 @@ namespace mirror
 				                 mtu, 
 				                 const_cast<char*>(bind.c_str()));
 		}
+
+        class FrameProcContext
+        {
+        public:
+            typedef std::function<bool (void*, VideoFrame*)> FrameCallback;
+
+            FrameProcContext(FrameCallback callback, void* ctx)
+                : _callback(callback), _ctx(ctx)
+            {
+            }
+
+            bool On(VideoFrame* frame)
+            {
+                return _callback(_ctx, frame);
+            }
+        private:
+            FrameCallback _callback;
+            void* _ctx;
+        };
+
+        bool CreateReceiver(std::string& bind, 
+                            std::string& codec, 
+                            FrameProcContext::FrameCallback callback, 
+                            void* ctx)
+        {
+            return create_receiver(_mirror,
+                                   const_cast<char*>(bind.c_str()),
+                                   const_cast<char*>(codec.c_str()),
+                                   _frameProc,
+                                   // There is a memory leak, but don't bother caring, 
+                                   // it's an infrequently called interface.
+                                   new FrameProcContext(callback, ctx));
+        }
 	private:
+        static bool _frameProc(void* ctx, VideoFrame* frame)
+        {
+            FrameProcContext* context = (FrameProcContext*)ctx;
+            context->On(frame);
+        }
+
 		Mirror _mirror = nullptr;
 	};
 }

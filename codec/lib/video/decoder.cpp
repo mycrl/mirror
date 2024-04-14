@@ -7,54 +7,147 @@
 
 #include "../codec.h"
 
-typedef struct
-{
-    const char* codec_name;
-} VideoEncoderSettings;
-
-typedef struct
-{
-    
-} VideoDecoder;
-
-void create_video_decoder()
+VideoDecoder* _create_video_decoder(const char* codec_name)
 {
     VideoDecoder* decoder = new VideoDecoder;
-;
-	_codec = avcodec_find_decoder_by_name(codec_name.c_str());
-	if (!_codec)
+    decoder->output_frame = new VideoFrame;
+
+	decoder->codec = avcodec_find_decoder_by_name(codec_name);
+	if (!decoder->codec)
 	{
-		return false;
+        _release_video_decoder(decoder);
+		return nullptr;
 	}
 
-	_ctx = avcodec_alloc_context3(_codec);
-	if (_ctx == nullptr)
+	decoder->context = avcodec_alloc_context3(decoder->codec);
+	if (decoder->context == nullptr)
 	{
-		return false;
+        _release_video_decoder(decoder);
+		return nullptr;
 	}
 
-	if (avcodec_open2(_ctx, _codec, nullptr) != 0)
+	if (avcodec_open2(decoder->context, decoder->codec, nullptr) != 0)
 	{
-		return false;
+        _release_video_decoder(decoder);
+		return nullptr;
 	}
 
-	if (avcodec_is_open(_ctx) == 0)
+	if (avcodec_is_open(decoder->context) == 0)
 	{
-		return false;
+        _release_video_decoder(decoder);
+		return nullptr;
 	}
 
-	_parser = av_parser_init(_codec->id);
-	if (!_parser)
+	decoder->parser = av_parser_init(decoder->codec->id);
+	if (!decoder->parser)
 	{
-		return false;
+        _release_video_decoder(decoder);
+		return nullptr;
 	}
 
-	_packet = av_packet_alloc();
-	if (_packet == nullptr)
+	decoder->packet = av_packet_alloc();
+	if (decoder->packet == nullptr)
 	{
-		return false;
+        _release_video_decoder(decoder);
+		return nullptr;
 	}
 
-	_frame = av_frame_alloc();
-	return _frame != nullptr;
+	decoder->frame = av_frame_alloc();
+    if (decoder->frame == nullptr)
+	{
+        _release_video_decoder(decoder);
+		return nullptr;
+	}
+
+	return decoder;
+}
+
+void _release_video_decoder(VideoDecoder* decoder)
+{
+    if (decoder->context != nullptr)
+    {
+        avcodec_send_frame(decoder->context, nullptr);
+	    avcodec_free_context(&decoder->context);
+    }
+
+    if (decoder->parser != nullptr)
+    {
+        av_parser_close(decoder->parser);
+    }
+	
+	if (decoder->packet != nullptr)
+    {
+        av_packet_free(&decoder->packet);
+    }
+
+	if (decoder->frame != nullptr)
+    {
+        av_frame_free(&decoder->frame);
+    }
+
+    delete decoder->output_frame;
+    delete decoder;
+}
+
+bool _video_decoder_send_packet(VideoDecoder* decoder, 
+                               uint8_t* buf, 
+                               size_t size)
+{
+	while (size > 0)
+	{
+		int ret = av_parser_parse2(decoder->parser,
+								   decoder->context,
+								   &decoder->packet->data,
+								   &decoder->packet->size,
+								   buf,
+								   size,
+								   AV_NOPTS_VALUE,
+								   AV_NOPTS_VALUE,
+								   0);
+		if (ret < 0)
+		{
+			return false;
+		}
+
+		buf += ret;
+		size -= ret;
+
+		if (decoder->packet->size == 0)
+		{
+			continue;
+		}
+
+		if (avcodec_send_packet(decoder->context, decoder->packet) != 0)
+		{
+			return false;
+		}
+	}
+
+    return true;
+}
+
+VideoFrame* _video_decoder_read_frame(VideoDecoder* decoder, 
+                                      uint32_t* width, 
+                                      uint32_t* height)
+{
+    if (avcodec_receive_frame(decoder->context, decoder->frame) != 0)
+	{
+		return nullptr;
+	}
+
+    if (width != nullptr)
+    {
+        *width = decoder->frame->width;
+    }
+
+    if (height != nullptr)
+    {
+        *height = decoder->frame->height;
+    }
+    
+    decoder->output_frame->stride[0] = decoder->frame->linesize[0];
+    decoder->output_frame->stride[1] = decoder->frame->linesize[1];
+    decoder->output_frame->buffer[0] = decoder->frame->data[0];
+    decoder->output_frame->buffer[1] = decoder->frame->data[1];
+	return decoder->output_frame;
 }
