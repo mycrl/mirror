@@ -59,13 +59,13 @@ fn main() -> anyhow::Result<()> {
 
     cc::Build::new()
         .cpp(false)
-        .std("c17")
+        .std("c++20")
         .debug(is_debug)
         .static_crt(true)
         .target(&target)
         .warnings(false)
         .out_dir(&out_dir)
-        .file("./lib/devices.c")
+        .file("./lib/devices.cpp")
         .include(&join(&out_dir, "./obs-studio")?)
         .include("../common/include")
         .compile("devices");

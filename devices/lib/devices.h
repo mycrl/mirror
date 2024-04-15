@@ -48,11 +48,14 @@ typedef struct
 
 typedef void (*VideoOutputCallback)(void* ctx, VideoFrame* frame);
 
+extern "C"
+{
 EXPORT int _init(VideoInfo* info);
 EXPORT void _quit();
 EXPORT DeviceList _get_device_list(DeviceType type);
 EXPORT void _release_device_description(DeviceDescription* description);
 EXPORT void _set_video_input(DeviceDescription* description);
 EXPORT void* _set_video_output_callback(VideoOutputCallback proc, void* ctx);
+}
 
 #endif /* devices_h */

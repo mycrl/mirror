@@ -141,7 +141,7 @@ void _set_video_input(DeviceDescription* description)
     
     obs_data_set_int(settings, "res_type", 1);
     obs_data_set_bool(settings, "hw_decode", true);
-    obs_data_set_string(settings, "resolution", &resolution);
+    obs_data_set_string(settings, "resolution", (const char*)&resolution);
     obs_data_set_string(settings, "video_device_id", description->id);
     obs_source_update(GLOBAL.video_source, settings);
     obs_data_release(settings);
