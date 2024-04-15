@@ -29,6 +29,11 @@ int WinMain(HINSTANCE _instance,
 int main()
 #endif
 {
+
+#ifdef WIN32
+    AttachConsole(-1);
+#endif
+
     SDL_Rect sdl_rect;
     sdl_rect.x = 0;
     sdl_rect.y = 0;
@@ -100,23 +105,26 @@ int main()
     
     bool created = false;
     SDL_Event event;
-    while (SDL_PollEvent(&event))
+    for (;;)
     {
-        if (event.type == SDL_KEYDOWN && event.key.keysym.scancode == SDL_SCANCODE_KP_ENTER)
+        if (SDL_PollEvent(&event))
         {
-            if (created)
+            if (event.type == SDL_KEYDOWN && event.key.keysym.scancode == SDL_SCANCODE_KP_ENTER)
             {
-                continue;
-            }
-            
-            auto devices = device_manager->GetDevices();
-            device_manager->SetInputDevice(devices.device_list[0]);
-            if (!mirror->CreateSender(device_manager, MTU, BIND)) {
-                break;
-            }
-            else
-            {
-                created = true;
+                if (created)
+                {
+                    continue;
+                }
+                
+                auto devices = device_manager->GetDevices();
+                device_manager->SetInputDevice(devices.device_list[0]);
+                if (!mirror->CreateSender(device_manager, MTU, BIND)) {
+                    break;
+                }
+                else
+                {
+                    created = true;
+                }
             }
         }
     }
