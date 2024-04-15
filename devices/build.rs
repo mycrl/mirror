@@ -59,7 +59,7 @@ fn main() -> anyhow::Result<()> {
 
     cc::Build::new()
         .cpp(false)
-        .std("c17")
+        .std("c++20")
         .debug(is_debug)
         .static_crt(true)
         .target(&target)

@@ -25,14 +25,14 @@ extern "C"
 
 #include <frame.h>
 
-typedef struct
+struct VideoEncodePacket
 {
     uint8_t* buffer;
     size_t len;
     int flags;
-} VideoEncodePacket;
+};
 
-typedef struct
+struct VideoEncoderSettings
 {
     const char* codec_name;
     uint8_t max_b_frames;
@@ -41,9 +41,9 @@ typedef struct
     uint32_t height;
     uint64_t bit_rate;
     uint32_t key_frame_interval;
-} VideoEncoderSettings;
+};
 
-typedef struct
+struct VideoEncoder
 {
     std::string codec_name;
     const AVCodec* codec;
@@ -51,30 +51,30 @@ typedef struct
     AVPacket* packet;
     AVFrame* frame;
     uint64_t frame_num;
-    VideoEncodePacket* output_packet;
-} VideoEncoder;
+    struct VideoEncodePacket* output_packet;
+};
 
-typedef struct
+struct VideoDecoder
 {
     const AVCodec* codec;
     AVCodecContext* context;
     AVCodecParserContext* parser;
     AVPacket* packet;
     AVFrame* frame;
-    VideoFrame* output_frame;
-} VideoDecoder;
+    struct VideoFrame* output_frame;
+};
 
 extern "C"
 {
-EXPORT VideoEncoder* _create_video_encoder(VideoEncoderSettings* settings);
-EXPORT bool _video_encoder_send_frame(VideoEncoder* codec, VideoFrame* frame);
-EXPORT VideoEncodePacket* _video_encoder_read_packet(VideoEncoder* codec);
-EXPORT void _unref_video_encoder_packet(VideoEncoder* codec);
-EXPORT void _release_video_encoder(VideoEncoder* codec);
-EXPORT VideoDecoder* _create_video_decoder(const char* codec_name);
-EXPORT void _release_video_decoder(VideoDecoder* decoder);
-EXPORT bool _video_decoder_send_packet(VideoDecoder* decoder, uint8_t* buf, size_t size);
-EXPORT VideoFrame* _video_decoder_read_frame(VideoDecoder* decoder);
+EXPORT struct VideoEncoder* _create_video_encoder(struct VideoEncoderSettings* settings);
+EXPORT bool _video_encoder_send_frame(struct VideoEncoder* codec, struct VideoFrame* frame);
+EXPORT struct VideoEncodePacket* _video_encoder_read_packet(struct VideoEncoder* codec);
+EXPORT void _unref_video_encoder_packet(struct VideoEncoder* codec);
+EXPORT void _release_video_encoder(struct VideoEncoder* codec);
+EXPORT struct VideoDecoder* _create_video_decoder(const char* codec_name);
+EXPORT void _release_video_decoder(struct VideoDecoder* decoder);
+EXPORT bool _video_decoder_send_packet(struct VideoDecoder* decoder, uint8_t* buf, size_t size);
+EXPORT struct VideoFrame* _video_decoder_read_frame(struct VideoDecoder* decoder);
 }
 
 #endif /* codec_h */

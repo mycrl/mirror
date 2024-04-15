@@ -7,10 +7,10 @@
 
 #include "../codec.h"
 
-VideoDecoder* _create_video_decoder(const char* codec_name)
+struct VideoDecoder* _create_video_decoder(const char* codec_name)
 {
-    VideoDecoder* decoder = new VideoDecoder;
-    decoder->output_frame = new VideoFrame;
+    struct VideoDecoder* decoder = new struct VideoDecoder;
+    decoder->output_frame = new struct VideoFrame;
     
     decoder->codec = avcodec_find_decoder_by_name(codec_name);
     if (decoder->codec == nullptr)
@@ -62,7 +62,7 @@ VideoDecoder* _create_video_decoder(const char* codec_name)
     return decoder;
 }
 
-void _release_video_decoder(VideoDecoder* decoder)
+void _release_video_decoder(struct VideoDecoder* decoder)
 {
     if (decoder->context != nullptr)
     {
@@ -88,7 +88,7 @@ void _release_video_decoder(VideoDecoder* decoder)
     delete decoder;
 }
 
-bool _video_decoder_send_packet(VideoDecoder* decoder,
+bool _video_decoder_send_packet(struct VideoDecoder* decoder,
                                 uint8_t* buf,
                                 size_t size)
 {
@@ -125,7 +125,7 @@ bool _video_decoder_send_packet(VideoDecoder* decoder,
     return true;
 }
 
-VideoFrame* _video_decoder_read_frame(VideoDecoder* decoder)
+struct VideoFrame* _video_decoder_read_frame(struct VideoDecoder* decoder)
 {
     if (avcodec_receive_frame(decoder->context, decoder->frame) != 0)
     {

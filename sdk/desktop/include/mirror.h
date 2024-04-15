@@ -76,12 +76,12 @@ EXPORT void quit();
 EXPORT bool init(struct DeviceOptions options);
 EXPORT const char* get_device_name(const struct Device* device);
 EXPORT enum DeviceKind get_device_kind(const struct Device* device);
-EXPORT struct Devices get_devices(DeviceKind kind);
+EXPORT struct Devices get_devices(enum DeviceKind kind);
 EXPORT void drop_devices(struct Devices* devices);
 EXPORT void set_input_device(const struct Device* device);
 EXPORT Mirror create_mirror(char* multicast);
 EXPORT void drop_mirror(Mirror mirror);
-EXPORT bool create_sender(Mirror mirror, size_t mtu, char* bind, VideoEncoderOptions options);
+EXPORT bool create_sender(Mirror mirror, size_t mtu, char* bind, struct VideoEncoderOptions options);
 EXPORT bool create_receiver(Mirror mirror, char* bind, FrameProc proc, void* ctx, char* codec);
 }
 
@@ -118,7 +118,7 @@ private:
 class DeviceList
 {
 public:
-    DeviceList(Devices devices): _devices(devices)
+    DeviceList(struct Devices devices): _devices(devices)
     {
         for (size_t i = 0; i < devices.size; i++)
         {
@@ -133,13 +133,13 @@ public:
     
     std::vector<DeviceService> device_list = {};
 private:
-    Devices _devices;
+    struct Devices _devices;
 };
 
 class DeviceManagerService
 {
 public:
-    static DeviceList GetDevices(DeviceKind kind)
+    static DeviceList GetDevices(enum DeviceKind kind)
     {
         return DeviceList(get_devices(kind));
     }
@@ -182,7 +182,7 @@ public:
     
     bool CreateSender(size_t mtu,
                       std::string& bind,
-                      VideoEncoderOptions& options)
+                      struct VideoEncoderOptions& options)
     {
         return create_sender(_mirror,
                              mtu,
@@ -193,14 +193,14 @@ public:
     class FrameProcContext
     {
     public:
-        typedef std::function<bool (void*, VideoFrame*)> FrameCallback;
+        typedef std::function<bool (void*, struct VideoFrame*)> FrameCallback;
         
         FrameProcContext(FrameCallback callback, void* ctx)
         : _callback(callback), _ctx(ctx)
         {
         }
         
-        bool On(VideoFrame* frame)
+        bool On(struct VideoFrame* frame)
         {
             return _callback(_ctx, frame);
         }
@@ -223,7 +223,7 @@ public:
                                const_cast<char*>(codec.c_str()));
     }
 private:
-    static bool _frameProc(void* ctx, VideoFrame* frame)
+    static bool _frameProc(void* ctx, struct VideoFrame* frame)
     {
         FrameProcContext* context = (FrameProcContext*)ctx;
         return context->On(frame);

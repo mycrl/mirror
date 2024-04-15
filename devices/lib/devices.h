@@ -19,40 +19,40 @@
 #include <stdio.h>
 #include <frame.h>
 
-typedef struct
+struct VideoInfo
 {
     uint8_t fps;
     uint32_t width;
     uint32_t height;
-} VideoInfo;
+};
 
-typedef enum
+enum DeviceType
 {
     kDeviceTypeVideo,
     kDeviceTypeAudio,
     kDeviceTypeScreen,
-} DeviceType;
+};
 
-typedef struct
+struct DeviceDescription
 {
-    DeviceType type;
+    enum DeviceType type;
     const char* id;
     const char* name;
-} DeviceDescription;
+};
 
-typedef struct
+struct DeviceList
 {
-    DeviceDescription** devices;
+    struct DeviceDescription** devices;
     size_t size;
-} DeviceList;
+};
 
-typedef void (*VideoOutputCallback)(void* ctx, VideoFrame* frame);
+typedef void (*VideoOutputCallback)(void* ctx, struct VideoFrame* frame);
 
-EXPORT int _init(VideoInfo* info);
+EXPORT int _init(struct VideoInfo* info);
 EXPORT void _quit();
-EXPORT DeviceList _get_device_list(DeviceType type);
-EXPORT void _release_device_description(DeviceDescription* description);
-EXPORT void _set_video_input(DeviceDescription* description);
+EXPORT struct DeviceList _get_device_list(enum DeviceType type);
+EXPORT void _release_device_description(struct DeviceDescription* description);
+EXPORT void _set_video_input(struct DeviceDescription* description);
 EXPORT void* _set_video_output_callback(VideoOutputCallback proc, void* ctx);
 
 #endif /* devices_h */
