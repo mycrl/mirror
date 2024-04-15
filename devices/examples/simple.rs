@@ -18,7 +18,7 @@ fn main() -> anyhow::Result<()> {
     }
 
     let frame = Arc::new(RwLock::new(vec![0u8; (WIDTH * HEIGHT * 4) as usize]));
-    let manager = DeviceManager::new(DeviceManagerOptions {
+    init(DeviceManagerOptions {
         video: VideoInfo {
             fps: 30,
             width: WIDTH as u32,
@@ -26,8 +26,8 @@ fn main() -> anyhow::Result<()> {
         },
     })?;
 
-    let devices = manager.get_devices(DeviceKind::Video);
-    manager.set_input(&devices[0]);
+    let devices = get_devices(DeviceKind::Video);
+    set_input(&devices[0]);
 
     let mut window = Window::new("simple", WIDTH, HEIGHT, WindowOptions::default())?;
     window.limit_update_rate(Some(Duration::from_millis(1000 / 30)));

@@ -1,12 +1,10 @@
-mod device;
-mod manager;
-
-use std::{ffi::c_void, sync::Arc};
+use std::{
+    ffi::{c_char, c_void},
+    sync::Arc,
+};
 
 pub use api::{DeviceKind, VideoInfo};
-use common::frame::{VideoFrame, VideoFrameRect};
-pub use device::Device;
-pub use manager::{DeviceManager, DeviceManagerOptions};
+use common::{frame::VideoFrame, strings::Strings};
 
 #[derive(Debug)]
 pub enum DeviceError {
@@ -35,17 +33,16 @@ pub trait VideoSink {
 
 struct Context(Arc<dyn VideoSink>);
 
-extern "C" fn video_sink_proc(ctx: *const c_void, frame: VideoFrame) {
-    unsafe { &*(ctx as *const Context) }.0.sink(&frame);
+extern "C" fn video_sink_proc(ctx: *const c_void, frame: *const VideoFrame) {
+    unsafe { &*(ctx as *const Context) }
+        .0
+        .sink(unsafe { &*frame });
 }
 
-pub fn set_video_sink<S: VideoSink + 'static>(rect: VideoFrameRect, sink: S) {
-    log::info!("set video sink for devices.");
-
+pub fn set_video_sink<S: VideoSink + 'static>(sink: S) {
     let previous = unsafe {
         api::_set_video_output_callback(
             video_sink_proc,
-            rect,
             Box::into_raw(Box::new(Context(Arc::new(sink)))) as *const c_void,
         )
     };
@@ -55,12 +52,77 @@ pub fn set_video_sink<S: VideoSink + 'static>(rect: VideoFrameRect, sink: S) {
     }
 }
 
+pub struct Device {
+    description: *const api::DeviceDescription,
+}
+
+impl Device {
+    pub(crate) fn new(description: *const api::DeviceDescription) -> Self {
+        Self { description }
+    }
+
+    pub(crate) fn as_ptr(&self) -> *const api::DeviceDescription {
+        self.description
+    }
+
+    pub fn name(&self) -> Option<String> {
+        Strings::from(unsafe { &*self.description }.name).to_string()
+    }
+
+    pub fn c_name(&self) -> *const c_char {
+        unsafe { &*self.description }.name
+    }
+
+    pub fn kind(&self) -> DeviceKind {
+        unsafe { &*self.description }.kind
+    }
+}
+
+impl Drop for Device {
+    fn drop(&mut self) {
+        unsafe { api::_release_device_description(self.description) }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct DeviceManagerOptions {
+    pub video: VideoInfo,
+}
+
+pub fn init(options: DeviceManagerOptions) -> Result<(), DeviceError> {
+    if unsafe { api::_init(&options.video) } != 0 {
+        Err(DeviceError::InitializeFailed)
+    } else {
+        Ok(())
+    }
+}
+
+pub fn quit() {
+    unsafe { api::_quit() }
+}
+
+pub fn get_devices(kind: DeviceKind) -> Vec<Device> {
+    log::info!("DeviceManager get devices");
+
+    let list = unsafe { api::_get_device_list(kind) };
+    unsafe { std::slice::from_raw_parts(list.devices, list.size) }
+        .into_iter()
+        .map(|item| Device::new(*item))
+        .collect()
+}
+
+pub fn set_input(device: &Device) {
+    log::info!("DeviceManager set input device");
+
+    if device.kind() == DeviceKind::Video {
+        unsafe { api::_set_video_input(device.as_ptr()) }
+    }
+}
+
 mod api {
     use std::ffi::{c_char, c_int, c_void};
 
-    use common::frame::{VideoFrame, VideoFrameRect};
-
-    pub type DeviceManager = *const c_void;
+    use common::frame::VideoFrame;
 
     #[repr(C)]
     #[derive(Debug, Clone)]
@@ -92,20 +154,13 @@ mod api {
     }
 
     extern "C" {
+        pub fn _quit();
         pub fn _init(info: *const VideoInfo) -> c_int;
-        pub fn _create_device_manager() -> DeviceManager;
-        pub fn _device_manager_release(manager: DeviceManager);
-        pub fn _get_device_list(manager: DeviceManager, kind: DeviceKind) -> DeviceList;
+        pub fn _get_device_list(kind: DeviceKind) -> DeviceList;
         pub fn _release_device_description(description: *const DeviceDescription);
-        pub fn _set_video_input(
-            manager: DeviceManager,
-            description: *const DeviceDescription,
-            info: *const VideoInfo,
-        );
-
+        pub fn _set_video_input(description: *const DeviceDescription);
         pub fn _set_video_output_callback(
-            proc: extern "C" fn(ctx: *const c_void, frame: VideoFrame),
-            rect: VideoFrameRect,
+            proc: extern "C" fn(ctx: *const c_void, frame: *const VideoFrame),
             ctx: *const c_void,
         ) -> *const c_void;
     }

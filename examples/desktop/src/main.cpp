@@ -36,28 +36,26 @@ int main()
     freopen("CONOUT$", "w+t", stdout);
 #endif
 
-    mirror_init();
-
     SDL_Rect sdl_rect;
     sdl_rect.x = 0;
     sdl_rect.y = 0;
     sdl_rect.w = 1280;
     sdl_rect.h = 720;
 
-    DeviceManagerOptions options;
-    options.device.width = sdl_rect.w;
-    options.device.height = sdl_rect.h;
-    options.device.fps = 30;
-    options.video_encoder.codec_name = const_cast<char*>("libx264");
-    options.video_encoder.width = sdl_rect.w;
-    options.video_encoder.height = sdl_rect.h;
-    options.video_encoder.frame_rate = 30;
-    options.video_encoder.bit_rate = 500 * 1024 * 8;
-    options.video_encoder.max_b_frames = 0;
-    options.video_encoder.key_frame_interval = 10;
-    
-    mirror::DeviceManagerService* device_manager = new mirror::DeviceManagerService(options);
-    mirror::MirrorService* mirror = new mirror::MirrorService("239.0.0.1");
+    DeviceOptions device_options;
+    device_options.fps = 30;
+    device_options.width = sdl_rect.w;
+    device_options.height = sdl_rect.h;
+    mirror::Init(device_options);
+
+    VideoEncoderOptions video_e_options;
+    video_e_options.codec_name = const_cast<char*>("libx264");
+    video_e_options.width = sdl_rect.w;
+    video_e_options.height = sdl_rect.h;
+    video_e_options.frame_rate = 30;
+    video_e_options.bit_rate = 500 * 1024 * 8;
+    video_e_options.max_b_frames = 0;
+    video_e_options.key_frame_interval = 10;
     
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER))
     {
@@ -82,8 +80,10 @@ int main()
                                                  sdl_rect.w,
                                                  sdl_rect.h);
     
+    mirror::MirrorService* mirror = new mirror::MirrorService("239.0.0.1");
     bool created = false;
     SDL_Event event;
+
     while (SDL_WaitEvent(&event))
     {
         if (event.type == SDL_KEYDOWN)
@@ -96,14 +96,14 @@ int main()
             // R: 21, S: 22
             if (event.key.keysym.scancode == 22)
             {
-                auto devices = device_manager->GetDevices();
-                device_manager->SetInputDevice(devices.device_list[0]);
-                created = mirror->CreateSender(device_manager, MTU, BIND);
+                auto devices = mirror::DeviceManagerService::GetDevices(DeviceKind::Video);
+                mirror::DeviceManagerService::SetInputDevice(devices.device_list[0]);
+                created = mirror->CreateSender(MTU, BIND, video_e_options);
             }
             else if (event.key.keysym.scancode == 21)
             {
                 std::string decoder = std::string("h264");
-                created = mirror->CreateReceiver(BIND, decoder, [&](void* _, VideoFrame* frame) {
+                created = mirror->CreateReceiver(BIND, [&](void* _, VideoFrame* frame) {
                     SDL_UpdateNVTexture(sdl_texture,
                                         &sdl_rect,
                                         frame->data[0],
@@ -115,7 +115,7 @@ int main()
                     SDL_RenderPresent(sdl_renderer);
                     
                     return true;
-                }, nullptr);
+                }, nullptr, decoder);
             }
         }
         else if (event.type == SDL_QUIT)

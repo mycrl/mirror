@@ -7,24 +7,14 @@ use std::{
 use anyhow::anyhow;
 use bytes::Bytes;
 use codec::video::{VideoEncoderSettings, VideoFrameReceiverProcesser, VideoFrameSenderProcesser};
-use common::frame::{VideoFrame, VideoFrameRect};
-use devices::{
-    set_video_sink, Device, DeviceKind, DeviceManager, DeviceManagerOptions, VideoInfo, VideoSink,
-};
+use common::frame::VideoFrame;
+use devices::{Device, DeviceKind, DeviceManagerOptions, VideoInfo, VideoSink};
 use once_cell::sync::Lazy;
 use tokio::runtime;
 use transport::{
     adapter::{StreamBufferInfo, StreamKind, StreamReceiverAdapter, StreamSenderAdapter},
     Transport,
 };
-
-#[no_mangle]
-extern "C" fn mirror_init() {
-    #[cfg(debug_assertions)]
-    {
-        simple_logger::init_with_level(log::Level::Info).expect("Failed to create logger.");
-    }
-}
 
 static RUNTIME: Lazy<runtime::Runtime> = Lazy::new(|| {
     runtime::Builder::new_multi_thread()
@@ -34,18 +24,6 @@ static RUNTIME: Lazy<runtime::Runtime> = Lazy::new(|| {
             "Unable to initialize the internal asynchronous runtime, this is a very serious error.",
         )
 });
-
-#[repr(C)]
-#[derive(Debug, Clone, Copy)]
-pub struct RawVideoEncoderOptions {
-    codec_name: *const c_char,
-    max_b_frames: u8,
-    frame_rate: u8,
-    width: u32,
-    height: u32,
-    bit_rate: u64,
-    key_frame_interval: u32,
-}
 
 #[repr(C)]
 pub struct RawDevices {
@@ -62,48 +40,39 @@ pub struct RawDeviceOptions {
     height: u32,
 }
 
-#[repr(C)]
-#[derive(Debug, Clone, Copy)]
-pub struct RawDeviceManagerOptions {
-    device: RawDeviceOptions,
-    video_encoder: RawVideoEncoderOptions,
-}
-
-#[repr(C)]
-pub struct RawDeviceManager {
-    device_manager: DeviceManager,
-    options: RawDeviceManagerOptions,
-}
-
 #[no_mangle]
-extern "C" fn create_device_manager(options: RawDeviceManagerOptions) -> *const RawDeviceManager {
+extern "C" fn init(options: RawDeviceOptions) -> bool {
     log::info!("create device manager: options={:?}", options);
 
+    #[cfg(debug_assertions)]
+    {
+        simple_logger::init_with_level(log::Level::Info).expect("Failed to create logger.");
+    }
+
     let func = || {
-        Ok::<RawDeviceManager, anyhow::Error>(RawDeviceManager {
-            device_manager: DeviceManager::new(DeviceManagerOptions {
-                video: VideoInfo {
-                    fps: options.device.fps,
-                    width: options.device.width,
-                    height: options.device.height,
-                },
-            })?,
-            options,
-        })
+        {
+            let mut path = std::env::current_exe()?;
+            path.pop();
+            std::env::set_current_dir(path)?;
+        }
+
+        Ok::<(), anyhow::Error>(devices::init(DeviceManagerOptions {
+            video: VideoInfo {
+                fps: options.fps,
+                width: options.width,
+                height: options.height,
+            },
+        })?)
     };
 
-    func()
-        .map(|it| Box::into_raw(Box::new(it)))
-        .unwrap_or_else(|_| null_mut()) as *const _
+    func().is_ok()
 }
 
 #[no_mangle]
-extern "C" fn drop_device_manager(raw: *const RawDeviceManager) {
-    assert!(!raw.is_null());
-
+extern "C" fn quit() {
     log::info!("close device manager");
 
-    drop(unsafe { Box::from_raw(raw as *mut RawDeviceManager) })
+    devices::quit();
 }
 
 #[no_mangle]
@@ -121,18 +90,13 @@ extern "C" fn get_device_kind(device: *const Device) -> DeviceKind {
 }
 
 #[no_mangle]
-extern "C" fn get_devices(raw: *const RawDeviceManager, kind: DeviceKind) -> RawDevices {
-    assert!(!raw.is_null());
-
-    let raw = unsafe { &*raw };
-    let devices = raw.device_manager.get_devices(kind);
+extern "C" fn get_devices(kind: DeviceKind) -> RawDevices {
+    let devices = devices::get_devices(kind);
     let raw_devices = RawDevices {
         capacity: devices.capacity(),
         list: devices.as_ptr(),
         size: devices.len(),
     };
-
-    log::info!("get devices: {:?}", devices);
 
     std::mem::forget(devices);
     raw_devices
@@ -147,14 +111,13 @@ extern "C" fn drop_devices(devices: *const RawDevices) {
 }
 
 #[no_mangle]
-extern "C" fn set_input_device(raw: *const RawDeviceManager, device: *const Device) {
+extern "C" fn set_input_device(device: *const Device) {
     assert!(!device.is_null());
-    assert!(!raw.is_null());
 
     let device = unsafe { &*device };
-    log::info!("set input to device manager: device={}", device.name());
+    devices::set_input(device);
 
-    unsafe { &*raw }.device_manager.set_input(device)
+    log::info!("set input to device manager: device={:?}", device.name());
 }
 
 #[repr(C)]
@@ -166,10 +129,11 @@ pub struct RawMirror {
 extern "C" fn create_mirror(multicast: *const c_char) -> *const RawMirror {
     assert!(!multicast.is_null());
 
-    let multicast = unsafe { CStr::from_ptr(multicast) }.to_str()?.parse()?;
-    log::info!("create mirror: multicast={}", multicast);
-
     let func = || {
+        let multicast = unsafe { CStr::from_ptr(multicast) }.to_str()?.parse()?;
+
+        log::info!("create mirror: multicast={}", multicast);
+
         Ok::<RawMirror, anyhow::Error>(RawMirror {
             transport: RUNTIME.block_on(Transport::new::<()>(multicast, None))?,
         })
@@ -230,24 +194,34 @@ impl VideoSink for SenderObserver {
     }
 }
 
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct RawVideoEncoderOptions {
+    codec_name: *const c_char,
+    max_b_frames: u8,
+    frame_rate: u8,
+    width: u32,
+    height: u32,
+    bit_rate: u64,
+    key_frame_interval: u32,
+}
+
 #[no_mangle]
 extern "C" fn create_sender(
     mirror: *const RawMirror,
-    device_manager: *const RawDeviceManager,
     mtu: usize,
     bind: *const c_char,
+    codec_options: RawVideoEncoderOptions,
 ) -> bool {
-    assert!(!device_manager.is_null());
     assert!(!mirror.is_null());
     assert!(!bind.is_null());
 
-    let bind = unsafe { CStr::from_ptr(bind) }.to_str()?.parse()?;
-    log::info!("create sender: mtu={}, bind={}", mtu, bind);
-
     let func = || {
         let adapter = StreamSenderAdapter::new();
-        let device_manager = unsafe { &*device_manager };
+        let bind = unsafe { CStr::from_ptr(bind) }.to_str()?.parse()?;
         let mirror = unsafe { &*mirror };
+
+        log::info!("create sender: mtu={}, bind={}", mtu, bind);
 
         RUNTIME.block_on(
             mirror
@@ -255,14 +229,7 @@ extern "C" fn create_sender(
                 .create_sender(0, mtu, bind, Vec::new(), &adapter),
         )?;
 
-        set_video_sink(
-            VideoFrameRect {
-                width: device_manager.options.device.width as usize,
-                height: device_manager.options.device.height as usize,
-            },
-            SenderObserver::new(device_manager.options.video_encoder, adapter)?,
-        );
-
+        devices::set_video_sink(SenderObserver::new(codec_options, adapter)?);
         Ok::<(), anyhow::Error>(())
     };
 
@@ -280,12 +247,13 @@ extern "C" fn create_receiver(
     assert!(!mirror.is_null());
     assert!(!bind.is_null());
 
-    let codec = unsafe { CStr::from_ptr(codec) }.to_str()?;
-    let bind = unsafe { CStr::from_ptr(bind) }.to_str()?.parse()?;
-    log::info!("create receiver: codec={}, bind={}", codec, bind);
-
     let func = || {
         let adapter = StreamReceiverAdapter::new();
+        let bind = unsafe { CStr::from_ptr(bind) }.to_str()?.parse()?;
+        let codec = unsafe { CStr::from_ptr(codec) }.to_str()?;
+
+        log::info!("create receiver: codec={}, bind={}", codec, bind);
+
         RUNTIME.block_on(
             unsafe { &*mirror }
                 .transport

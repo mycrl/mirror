@@ -54,12 +54,6 @@ struct DeviceOptions
     uint32_t height;
 };
 
-struct DeviceManagerOptions
-{
-    struct DeviceOptions device;
-    struct VideoEncoderOptions video_encoder;
-};
-
 struct Device
 {
     const void* description;
@@ -72,115 +66,99 @@ struct Devices
     size_t size;
 };
 
-typedef const void* DeviceManager;
 typedef const void* Mirror;
 
 typedef bool (*FrameProc)(void* ctx, VideoFrame* frame);
 
 extern "C"
 {
-EXPORT void mirror_init();
-EXPORT DeviceManager create_device_manager(struct DeviceManagerOptions options);
-EXPORT void drop_device_manager(DeviceManager device_manager);
+EXPORT void quit();
+EXPORT bool init(struct DeviceOptions options);
 EXPORT const char* get_device_name(const struct Device* device);
 EXPORT enum DeviceKind get_device_kind(const struct Device* device);
-EXPORT struct Devices get_devices(DeviceManager device_manager);
+EXPORT struct Devices get_devices(DeviceKind kind);
 EXPORT void drop_devices(struct Devices* devices);
-EXPORT void set_input_device(DeviceManager device_manager, const struct Device* device);
+EXPORT void set_input_device(const struct Device* device);
 EXPORT Mirror create_mirror(char* multicast);
 EXPORT void drop_mirror(Mirror mirror);
-EXPORT bool create_sender(Mirror mirror, DeviceManager device_manager, size_t mtu, char* bind);
-EXPORT bool create_receiver(Mirror mirror, char* bind, char* codec, FrameProc proc, void* ctx);
+EXPORT bool create_sender(Mirror mirror, size_t mtu, char* bind, VideoEncoderOptions options);
+EXPORT bool create_receiver(Mirror mirror, char* bind, FrameProc proc, void* ctx, char* codec);
 }
 
 #ifdef __cplusplus
 
 namespace mirror
 {
+class DeviceService
+{
+public:
+    DeviceService(struct Device device): _device(device)
+    {
+    }
+    
+    std::optional<std::string> GetName()
+    {
+        auto name = get_device_name(&_device);
+        return name ? std::optional(std::string(name)) : std::nullopt;
+    }
+    
+    enum DeviceKind GetKind()
+    {
+        return get_device_kind(&_device);
+    }
+    
+    struct Device* AsRaw()
+    {
+        return &_device;
+    }
+private:
+    struct Device _device;
+};
+
+class DeviceList
+{
+public:
+    DeviceList(Devices devices): _devices(devices)
+    {
+        for (size_t i = 0; i < devices.size; i++)
+        {
+            device_list.push_back(DeviceService(devices.devices[i]));
+        }
+    }
+    
+    ~DeviceList()
+    {
+        drop_devices(&_devices);
+    }
+    
+    std::vector<DeviceService> device_list = {};
+private:
+    Devices _devices;
+};
+
 class DeviceManagerService
 {
 public:
-    class DeviceService
+    static DeviceList GetDevices(DeviceKind kind)
     {
-    public:
-        DeviceService(struct Device device): _device(device)
-        {
-        }
-        
-        std::optional<std::string> GetName()
-        {
-            auto name = get_device_name(&_device);
-            return name ? std::optional(std::string(name)) : std::nullopt;
-        }
-        
-        enum DeviceKind GetKind()
-        {
-            return get_device_kind(&_device);
-        }
-        
-        struct Device* AsRaw()
-        {
-            return &_device;
-        }
-    private:
-        struct Device _device;
-    };
-    
-    class DeviceList
-    {
-    public:
-        DeviceList(Devices devices): _devices(devices)
-        {
-            for (size_t i = 0; i < devices.size; i++)
-            {
-                device_list.push_back(DeviceService(devices.devices[i]));
-            }
-        }
-        
-        ~DeviceList()
-        {
-            drop_devices(&_devices);
-        }
-        
-        std::vector<DeviceService> device_list = {};
-    private:
-        Devices _devices;
-    };
-    
-    DeviceManagerService(struct DeviceManagerOptions options)
-    {
-        _device_manager = create_device_manager(options);
-        if (_device_manager == nullptr)
-        {
-            throw std::runtime_error("Failed to create mirror");
-        }
+        return DeviceList(get_devices(kind));
     }
     
-    ~DeviceManagerService()
+    static void SetInputDevice(DeviceService& device)
     {
-        if (_device_manager != nullptr)
-        {
-            drop_device_manager(_device_manager);
-        }
+        set_input_device(device.AsRaw());
     }
-    
-    DeviceList GetDevices()
-    {
-        return DeviceList(get_devices(_device_manager));
-    }
-    
-    void SetInputDevice(DeviceService& device)
-    {
-        set_input_device(_device_manager, device.AsRaw());
-    }
-    
-    DeviceManager AsRaw()
-    {
-        return _device_manager;
-    }
-private:
-    DeviceManager _device_manager = nullptr;
 };
+
+bool Init(struct DeviceOptions options)
+{
+    return init(options);
+}
+
+void Quit()
+{
+    quit();
+}
 
 class MirrorService
 {
@@ -202,14 +180,14 @@ public:
         }
     }
     
-    bool CreateSender(DeviceManagerService* device_manager,
-                      size_t mtu,
-                      std::string& bind)
+    bool CreateSender(size_t mtu,
+                      std::string& bind,
+                      VideoEncoderOptions& options)
     {
         return create_sender(_mirror,
-                             device_manager->AsRaw(),
                              mtu,
-                             const_cast<char*>(bind.c_str()));
+                             const_cast<char*>(bind.c_str()),
+                             options);
     }
     
     class FrameProcContext
@@ -232,17 +210,17 @@ public:
     };
     
     bool CreateReceiver(std::string& bind,
-                        std::string& codec, 
                         FrameProcContext::FrameCallback callback,
-                        void* ctx)
+                        void* ctx,
+                        std::string& codec)
     {
         return create_receiver(_mirror,
                                const_cast<char*>(bind.c_str()),
-                               const_cast<char*>(codec.c_str()),
                                _frameProc,
                                // There is a memory leak, but don't bother caring,
                                // it's an infrequently called interface.
-                               new FrameProcContext(callback, ctx));
+                               new FrameProcContext(callback, ctx),
+                               const_cast<char*>(codec.c_str()));
     }
 private:
     static bool _frameProc(void* ctx, VideoFrame* frame)

@@ -26,13 +26,6 @@ typedef struct
     uint32_t height;
 } VideoInfo;
 
-typedef struct
-{
-    obs_scene_t* scene;
-    obs_source_t* video_source;
-    obs_sceneitem_t* video_scene_item;
-} DeviceManager;
-
 typedef enum
 {
     kDeviceTypeVideo,
@@ -53,14 +46,13 @@ typedef struct
     size_t size;
 } DeviceList;
 
-typedef void (*VideoOutputCallback)(void* ctx, VideoFrame frame);
+typedef void (*VideoOutputCallback)(void* ctx, VideoFrame* frame);
 
 EXPORT int _init(VideoInfo* info);
-EXPORT DeviceManager* _create_device_manager();
-EXPORT void _device_manager_release(DeviceManager* manager);
-EXPORT DeviceList _get_device_list(DeviceManager* manager, DeviceType type);
+EXPORT void _quit();
+EXPORT DeviceList _get_device_list(DeviceType type);
 EXPORT void _release_device_description(DeviceDescription* description);
-EXPORT void _set_video_input(DeviceManager* manager, DeviceDescription* description, VideoInfo* info);
-EXPORT void* _set_video_output_callback(VideoOutputCallback proc, VideoFrameRect rect, void* ctx);
+EXPORT void _set_video_input(DeviceDescription* description);
+EXPORT void* _set_video_output_callback(VideoOutputCallback proc, void* ctx);
 
 #endif /* devices_h */
