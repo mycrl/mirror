@@ -15,7 +15,7 @@ static struct
     obs_sceneitem_t* video_scene_item;
     VideoOutputCallback raw_video_callback;
     void* raw_video_callback_context;
-    VideoFrame video_frame;
+    struct VideoFrame video_frame;
 } GLOBAL;
 
 void raw_video_callback(void* _, struct video_data *frame)
@@ -40,7 +40,7 @@ void* _set_video_output_callback(VideoOutputCallback proc, void* current_ctx)
     return previous_ctx;
 }
 
-int _init(VideoInfo* info)
+int _init(struct VideoInfo* info)
 {
     if (obs_initialized())
     {
@@ -127,7 +127,7 @@ void _quit()
     }
 }
 
-void _set_video_input(DeviceDescription* description)
+void _set_video_input(struct DeviceDescription* description)
 {
     obs_data_t* settings = obs_data_create();
     obs_data_t* cur_settings = obs_source_get_settings(GLOBAL.video_source);
@@ -147,11 +147,11 @@ void _set_video_input(DeviceDescription* description)
     obs_data_release(settings);
 }
 
-DeviceList _get_device_list(DeviceType type)
+struct DeviceList _get_device_list(enum DeviceType type)
 {
     DeviceList list;
     list.size = 0;
-    list.devices = (DeviceDescription**)malloc(sizeof(DeviceDescription*) * 50);
+    list.devices = (struct DeviceDescription**)malloc(sizeof(struct DeviceDescription*) * 50);
     
     obs_properties_t* properties = obs_source_properties(GLOBAL.video_source);
     obs_property_t* property = obs_properties_first(properties);
@@ -162,7 +162,7 @@ DeviceList _get_device_list(DeviceType type)
         {
             for (size_t i = 0; i < obs_property_list_item_count(property); i++)
             {
-                DeviceDescription* device = (DeviceDescription*)malloc(sizeof(DeviceDescription));
+                struct DeviceDescription* device = (struct DeviceDescription*)malloc(sizeof(struct DeviceDescription));
                 if (device != NULL)
                 {
                     device->type = type;
@@ -180,7 +180,7 @@ DeviceList _get_device_list(DeviceType type)
     return list;
 }
 
-void _release_device_description(DeviceDescription* description)
+void _release_device_description(struct DeviceDescription* description)
 {
     free(description);
 }

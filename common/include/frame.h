@@ -11,17 +11,17 @@
 
 #include <stdint.h>
 
-typedef struct
+ struct VideoFrameRect
 {
     size_t width;
     size_t height;
-} VideoFrameRect;
+};
 
-typedef struct
+struct VideoFrame
 {
-    VideoFrameRect rect;
+    struct VideoFrameRect rect;
     uint8_t* data[2];
     size_t linesize[2];
-} VideoFrame;
+};
 
 #endif /* FRAME_H */

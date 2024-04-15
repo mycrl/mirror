@@ -14,10 +14,10 @@ extern "C"
 #include "libavutil/opt.h"
 }
 
-VideoEncoder* _create_video_encoder(VideoEncoderSettings* settings)
+struct VideoEncoder* _create_video_encoder(struct VideoEncoderSettings* settings)
 {
-    VideoEncoder* codec = new VideoEncoder;
-    codec->output_packet = new VideoEncodePacket;
+    struct VideoEncoder* codec = new struct VideoEncoder;
+    codec->output_packet = new struct VideoEncodePacket;
     codec->codec_name = std::string(settings->codec_name);
     
     codec->codec = avcodec_find_encoder_by_name(settings->codec_name);
@@ -110,7 +110,7 @@ VideoEncoder* _create_video_encoder(VideoEncoderSettings* settings)
     return codec;
 }
 
-bool _video_encoder_send_frame(VideoEncoder* codec, VideoFrame* frame)
+bool _video_encoder_send_frame(struct VideoEncoder* codec, struct VideoFrame* frame)
 {
     if (av_frame_make_writable(codec->frame) != 0)
     {
@@ -143,7 +143,7 @@ bool _video_encoder_send_frame(VideoEncoder* codec, VideoFrame* frame)
     return true;
 }
 
-VideoEncodePacket* _video_encoder_read_packet(VideoEncoder* codec)
+struct VideoEncodePacket* _video_encoder_read_packet(struct VideoEncoder* codec)
 {
     if (codec->output_packet == nullptr)
     {
@@ -161,12 +161,12 @@ VideoEncodePacket* _video_encoder_read_packet(VideoEncoder* codec)
     return codec->output_packet;
 }
 
-void _unref_video_encoder_packet(VideoEncoder* codec)
+void _unref_video_encoder_packet(struct VideoEncoder* codec)
 {
     av_packet_unref(codec->packet);
 }
 
-void _release_video_encoder(VideoEncoder* codec)
+void _release_video_encoder(struct VideoEncoder* codec)
 {
     if (codec->context != nullptr)
     {
