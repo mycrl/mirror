@@ -133,6 +133,9 @@ impl StreamReceiverAdapter {
     }
 
     pub fn loss_pkt(&self) {
+        self.video.loss_pkt();
+
+        #[cfg(feature = "real-time")]
         if let Some(buf) = self.video.get_key_frame() {
             let _ = self.tx.send(Some((buf, StreamKind::Video)));
         }

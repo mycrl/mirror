@@ -30,6 +30,7 @@ impl VideoStreamSenderProcesser {
             self.config.swap(Some(buf.clone()));
         }
 
+        // Add SPS and PPS units in front of each keyframe.
         if flags == BufferFlag::KeyFrame as i32 {
             if !handle(
                 self.config
@@ -54,6 +55,9 @@ impl VideoStreamSenderProcesser {
 pub struct VideoStreamReceiverProcesser {
     key_frame: AtomicOption<Bytes>,
     cfg_ready: AtomicBool,
+
+    #[cfg(feature = "pause-on-loss")]
+    loss: AtomicBool,
 }
 
 impl VideoStreamReceiverProcesser {
@@ -61,6 +65,9 @@ impl VideoStreamReceiverProcesser {
         Self {
             key_frame: AtomicOption::new(None),
             cfg_ready: AtomicBool::new(false),
+
+            #[cfg(feature = "pause-on-loss")]
+            loss: AtomicBool::new(false),
         }
     }
 
@@ -68,14 +75,41 @@ impl VideoStreamReceiverProcesser {
         self.key_frame.get().cloned()
     }
 
-    // As soon as a keyframe is received, the keyframe is cached, and when a
-    // packet loss occurs, the previous keyframe is retransmitted directly into
-    // the decoder.
+    /// Marks that the video packet has been lost.
+    pub fn loss_pkt(&self) {
+        #[cfg(feature = "pause-on-loss")]
+        self.loss.update(true);
+    }
+
+    /// As soon as a keyframe is received, the keyframe is cached, and when a
+    /// packet loss occurs, the previous keyframe is retransmitted directly into
+    /// the decoder.
     pub fn process(&self, buf: Bytes, flags: u8, handle: impl Fn(Bytes) -> bool) -> bool {
+        // Get whether a packet has been dropped.
+        #[cfg(feature = "pause-on-loss")]
+        let mut is_loss = self.loss.get();
+        
         if flags == BufferFlag::KeyFrame as u8 {
             self.key_frame.swap(Some(buf.clone()));
+
+            // When keyframes are received, the video stream can be played back 
+            // normally without corruption.
+            #[cfg(feature = "pause-on-loss")]
+            if is_loss {
+                self.loss.update(false);
+                is_loss = false;
+            }
         }
 
+        // In case of packet loss, no packet is sent to the decoder.
+        #[cfg(feature = "pause-on-loss")]
+        if is_loss {
+            return true;
+        }
+
+        // Send packets to the decoder only when PPS and SPS units are received, 
+        // sending other units to the decoder without configuration information 
+        // will generate an error.
         if !self.cfg_ready.get() {
             if flags == BufferFlag::Config as u8 {
                 self.cfg_ready.update(true);

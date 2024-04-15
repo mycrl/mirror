@@ -28,3 +28,4 @@ simple_logger = "4"
 
 [features]
 android = ["codec/android"]
+real-time = ["codec/pause-on-loss"]
