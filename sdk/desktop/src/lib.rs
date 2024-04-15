@@ -7,10 +7,10 @@ use std::{
 use anyhow::anyhow;
 use bytes::Bytes;
 use codec::video::{VideoEncoderSettings, VideoFrameReceiverProcesser, VideoFrameSenderProcesser};
+use common::frame::{VideoFrame, VideoFrameRect};
 use devices::{
     set_video_sink, Device, DeviceKind, DeviceManager, DeviceManagerOptions, VideoInfo, VideoSink,
 };
-use common::frame::{VideoFrame, VideoFrameRect};
 use once_cell::sync::Lazy;
 use tokio::runtime;
 use transport::{
@@ -151,9 +151,10 @@ extern "C" fn set_input_device(raw: *const RawDeviceManager, device: *const Devi
     assert!(!device.is_null());
     assert!(!raw.is_null());
 
-    unsafe { &*raw }
-        .device_manager
-        .set_input(unsafe { &*device })
+    let device = unsafe { &*device };
+    log::info!("set input to device manager: device={}", device.name());
+
+    unsafe { &*raw }.device_manager.set_input(device)
 }
 
 #[repr(C)]
@@ -165,12 +166,12 @@ pub struct RawMirror {
 extern "C" fn create_mirror(multicast: *const c_char) -> *const RawMirror {
     assert!(!multicast.is_null());
 
+    let multicast = unsafe { CStr::from_ptr(multicast) }.to_str()?.parse()?;
+    log::info!("create mirror: multicast={}", multicast);
+
     let func = || {
         Ok::<RawMirror, anyhow::Error>(RawMirror {
-            transport: RUNTIME.block_on(Transport::new::<()>(
-                unsafe { CStr::from_ptr(multicast) }.to_str()?.parse()?,
-                None,
-            ))?,
+            transport: RUNTIME.block_on(Transport::new::<()>(multicast, None))?,
         })
     };
 
@@ -182,6 +183,8 @@ extern "C" fn create_mirror(multicast: *const c_char) -> *const RawMirror {
 #[no_mangle]
 extern "C" fn drop_mirror(mirror: *const RawMirror) {
     assert!(!mirror.is_null());
+
+    log::info!("close mirror");
 
     drop(unsafe { Box::from_raw(mirror as *mut RawMirror) })
 }
@@ -238,18 +241,19 @@ extern "C" fn create_sender(
     assert!(!mirror.is_null());
     assert!(!bind.is_null());
 
+    let bind = unsafe { CStr::from_ptr(bind) }.to_str()?.parse()?;
+    log::info!("create sender: mtu={}, bind={}", mtu, bind);
+
     let func = || {
         let adapter = StreamSenderAdapter::new();
         let device_manager = unsafe { &*device_manager };
         let mirror = unsafe { &*mirror };
 
-        RUNTIME.block_on(mirror.transport.create_sender(
-            0,
-            mtu,
-            unsafe { CStr::from_ptr(bind) }.to_str()?.parse()?,
-            Vec::new(),
-            &adapter,
-        ))?;
+        RUNTIME.block_on(
+            mirror
+                .transport
+                .create_sender(0, mtu, bind, Vec::new(), &adapter),
+        )?;
 
         set_video_sink(
             VideoFrameRect {
@@ -276,15 +280,19 @@ extern "C" fn create_receiver(
     assert!(!mirror.is_null());
     assert!(!bind.is_null());
 
+    let codec = unsafe { CStr::from_ptr(codec) }.to_str()?;
+    let bind = unsafe { CStr::from_ptr(bind) }.to_str()?.parse()?;
+    log::info!("create receiver: codec={}, bind={}", codec, bind);
+
     let func = || {
         let adapter = StreamReceiverAdapter::new();
         RUNTIME.block_on(
             unsafe { &*mirror }
                 .transport
-                .create_receiver(unsafe { CStr::from_ptr(bind) }.to_str()?.parse()?, &adapter),
+                .create_receiver(bind, &adapter),
         )?;
 
-        let decoder = VideoFrameReceiverProcesser::new(unsafe { CStr::from_ptr(codec) }.to_str()?)
+        let decoder = VideoFrameReceiverProcesser::new(codec)
             .ok_or_else(|| anyhow!("Failed to create video decoder."))?;
 
         let context = context as usize;

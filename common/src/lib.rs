@@ -15,5 +15,5 @@
 /// assert!(opt.is_some());
 /// ```
 pub mod atomic;
-pub mod strings;
 pub mod frame;
+pub mod strings;

@@ -4,8 +4,8 @@ mod manager;
 use std::{ffi::c_void, sync::Arc};
 
 pub use api::{DeviceKind, VideoInfo};
-pub use device::Device;
 use common::frame::{VideoFrame, VideoFrameRect};
+pub use device::Device;
 pub use manager::{DeviceManager, DeviceManagerOptions};
 
 #[derive(Debug)]
