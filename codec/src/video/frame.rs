@@ -1,11 +1,8 @@
 #![cfg(feature = "frame")]
 
-use std::{
-    ffi::CString,
-    ptr::null_mut,
-};
+use std::{ffi::CString, ptr::null_mut};
 
-use frame::VideoFrame;
+use common::frame::VideoFrame;
 
 use crate::api;
 
@@ -67,22 +64,30 @@ unsafe impl Sync for VideoFrameSenderProcesser {}
 
 impl VideoFrameSenderProcesser {
     pub fn new(settings: &VideoEncoderSettings) -> Option<Self> {
+        log::info!("create VideoFrameSenderProcesser: settings={:?}", settings);
+
         let settings = settings.as_raw();
         let codec = unsafe { api::_create_video_encoder(&settings) };
         if !codec.is_null() {
             Some(Self { codec })
         } else {
+            log::error!("Failed to create VideoFrameSenderProcesser.");
+
             None
         }
     }
 
     pub fn push_frame(&self, frame: &VideoFrame) -> bool {
+        log::debug!("send frame to VideoFrameSenderProcesser");
+
         unsafe { api::_video_encoder_send_frame(self.codec, frame) }
     }
 
     pub fn read_packet(&self) -> Option<VideoEncodePacket> {
         let packet = unsafe { api::_video_encoder_read_packet(self.codec) };
         if !packet.is_null() {
+            log::debug!("read packet from VideoFrameSenderProcesser");
+
             Some(VideoEncodePacket::from_raw(self.codec, packet))
         } else {
             None
@@ -92,6 +97,8 @@ impl VideoFrameSenderProcesser {
 
 impl Drop for VideoFrameSenderProcesser {
     fn drop(&mut self) {
+        log::info!("close VideoFrameSenderProcesser");
+
         unsafe { api::_release_video_encoder(self.codec) }
     }
 }
@@ -105,6 +112,11 @@ unsafe impl Sync for VideoFrameReceiverProcesser {}
 
 impl VideoFrameReceiverProcesser {
     pub fn new(codec_name: &str) -> Option<Self> {
+        log::info!(
+            "create VideoFrameReceiverProcesser: codec name={:?}",
+            codec_name
+        );
+
         let codec_name = CString::new(codec_name).unwrap().into_raw();
         let codec = unsafe { api::_create_video_decoder(codec_name) };
         drop(unsafe { CString::from_raw(codec_name) });
@@ -112,11 +124,15 @@ impl VideoFrameReceiverProcesser {
         if !codec.is_null() {
             Some(Self { codec })
         } else {
+            log::error!("Failed to create VideoFrameReceiverProcesser.");
+
             None
         }
     }
 
     pub fn push_packet(&self, pkt: &[u8]) -> bool {
+        log::debug!("send packet to VideoFrameReceiverProcesser");
+
         unsafe { api::_video_decoder_send_packet(self.codec, pkt.as_ptr(), pkt.len()) }
     }
 
@@ -124,6 +140,8 @@ impl VideoFrameReceiverProcesser {
         let mut height = 0;
         let frame = unsafe { api::_video_decoder_read_frame(self.codec, null_mut(), &mut height) };
         if !frame.is_null() {
+            log::debug!("read frame from VideoFrameReceiverProcesser");
+
             Some(unsafe { &*frame })
         } else {
             None
@@ -133,6 +151,8 @@ impl VideoFrameReceiverProcesser {
 
 impl Drop for VideoFrameReceiverProcesser {
     fn drop(&mut self) {
+        log::info!("close VideoFrameReceiverProcesser");
+
         unsafe { api::_release_video_decoder(self.codec) }
     }
 }

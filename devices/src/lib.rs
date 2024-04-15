@@ -1,10 +1,12 @@
 mod device;
 mod manager;
-mod strings;
+
+use std::{ffi::c_void, sync::Arc};
 
 pub use api::{DeviceKind, VideoInfo};
 pub use device::Device;
-pub use manager::{DeviceManager, DeviceManagerOptions, Observer};
+use common::frame::{VideoFrame, VideoFrameRect};
+pub use manager::{DeviceManager, DeviceManagerOptions};
 
 #[derive(Debug)]
 pub enum DeviceError {
@@ -27,10 +29,36 @@ impl std::fmt::Display for DeviceError {
     }
 }
 
+pub trait VideoSink {
+    fn sink(&self, frmae: &VideoFrame);
+}
+
+struct Context(Arc<dyn VideoSink>);
+
+extern "C" fn video_sink_proc(ctx: *const c_void, frame: VideoFrame) {
+    unsafe { &*(ctx as *const Context) }.0.sink(&frame);
+}
+
+pub fn set_video_sink<S: VideoSink + 'static>(rect: VideoFrameRect, sink: S) {
+    log::info!("set video sink for devices.");
+
+    let previous = unsafe {
+        api::_set_video_output_callback(
+            video_sink_proc,
+            rect,
+            Box::into_raw(Box::new(Context(Arc::new(sink)))) as *const c_void,
+        )
+    };
+
+    if !previous.is_null() {
+        drop(unsafe { Box::from_raw(previous as *mut Context) })
+    }
+}
+
 mod api {
     use std::ffi::{c_char, c_int, c_void};
 
-    use frame::{VideoFrameRect, VideoFrame};
+    use common::frame::{VideoFrame, VideoFrameRect};
 
     pub type DeviceManager = *const c_void;
 
@@ -79,6 +107,6 @@ mod api {
             proc: extern "C" fn(ctx: *const c_void, frame: VideoFrame),
             rect: VideoFrameRect,
             ctx: *const c_void,
-        );
+        ) -> *const c_void;
     }
 }

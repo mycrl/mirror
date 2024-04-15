@@ -14,6 +14,8 @@ typedef struct
     void* param;
 } RawVideoCallbackContext;
 
+static RawVideoCallbackContext* RAW_VIDEO_CALLBACK_CTX = NULL;
+
 void raw_video_callback(void *param, struct video_data *frame)
 {
     RawVideoCallbackContext* ctx = (RawVideoCallbackContext*)param;
@@ -27,14 +29,24 @@ void raw_video_callback(void *param, struct video_data *frame)
     ctx->proc(ctx->param, video_frame);
 }
 
-void _set_video_output_callback(VideoOutputCallback proc, VideoFrameRect rect, void* ctx)
+void* _set_video_output_callback(VideoOutputCallback proc, VideoFrameRect rect, void* current_ctx)
 {
     RawVideoCallbackContext* param = (RawVideoCallbackContext*)malloc(sizeof(RawVideoCallbackContext));
+    param->param = current_ctx;
     param->proc = proc;
-    param->param = ctx;
     param->rect = rect;
     
     obs_add_raw_video_callback(NULL, raw_video_callback, (void*)param);
+
+    void* previous_ctx = NULL;
+    if (RAW_VIDEO_CALLBACK_CTX != NULL)
+    {
+        previous_ctx = RAW_VIDEO_CALLBACK_CTX->param;
+        free(RAW_VIDEO_CALLBACK_CTX);
+    }
+    
+    RAW_VIDEO_CALLBACK_CTX = param;
+    return previous_ctx;
 }
 
 int _init(VideoInfo* info)

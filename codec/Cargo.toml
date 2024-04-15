@@ -5,8 +5,8 @@ edition = "2021"
 
 [dependencies]
 bytes = "1.5"
-frame = { path = "../frame" }
-sync = { path = "../sync" }
+log = "0.4.20"
+common = { path = "../common" }
 
 [build-dependencies]
 cc = "1.0.88"

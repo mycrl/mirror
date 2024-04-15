@@ -31,8 +31,12 @@ int main()
 {
 
 #ifdef WIN32
-    AttachConsole(-1);
+    AttachConsole(ATTACH_PARENT_PROCESS);
+    freopen("CONIN$", "r+t", stdin);
+    freopen("CONOUT$", "w+t", stdout);
 #endif
+
+    mirror_init();
 
     SDL_Rect sdl_rect;
     sdl_rect.x = 0;
@@ -55,17 +59,14 @@ int main()
     mirror::DeviceManagerService* device_manager = new mirror::DeviceManagerService(options);
     mirror::MirrorService* mirror = new mirror::MirrorService("239.0.0.1");
     
-    // B1. 初始化SDL子系统：缺省(事件处理、文件IO、线程)、视频、音频、定时器
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER))
     {
         return -1;
     }
     
-    // B2. 创建SDL窗口，SDL 2.0支持多窗口
-    //     SDL_Window即运行程序后弹出的视频窗口，同SDL 1.x中的SDL_Surface
     SDL_Window* screen = SDL_CreateWindow("simple",
-                                          SDL_WINDOWPOS_UNDEFINED,// 不关心窗口X坐标
-                                          SDL_WINDOWPOS_UNDEFINED,// 不关心窗口Y坐标
+                                          SDL_WINDOWPOS_UNDEFINED,
+                                          SDL_WINDOWPOS_UNDEFINED,
                                           sdl_rect.w,
                                           sdl_rect.h,
                                           SDL_WINDOW_OPENGL);
@@ -74,61 +75,55 @@ int main()
         return -2;
     }
     
-    // B3. 创建SDL_Renderer
-    //     SDL_Renderer：渲染器
     SDL_Renderer* sdl_renderer = SDL_CreateRenderer(screen, -1, 0);
-    
-    // B4. 创建SDL_Texture
-    //     一个SDL_Texture对应一帧YUV数据，同SDL 1.x中的SDL_Overlay
-    //     此处第2个参数使用的是SDL中的像素格式，对比参考注释A7
-    //     FFmpeg中的像素格式AV_PIX_FMT_YUV420P对应SDL中的像素格式SDL_PIXELFORMAT_IYUV
     SDL_Texture* sdl_texture = SDL_CreateTexture(sdl_renderer,
                                                  SDL_PIXELFORMAT_IYUV,
                                                  SDL_TEXTUREACCESS_STREAMING,
                                                  sdl_rect.w,
                                                  sdl_rect.h);
     
-    std::string decoder = std::string("h264");
-    mirror->CreateReceiver(BIND, decoder, [&](void* _, VideoFrame* frame) {
-        SDL_UpdateNVTexture(sdl_texture,
-                            &sdl_rect,
-                            frame->data[0],
-                            frame->linesize[0],
-                            frame->data[1],
-                            frame->linesize[1]);
-        SDL_RenderClear(sdl_renderer);
-        SDL_RenderCopy(sdl_renderer, sdl_texture, nullptr, &sdl_rect);
-        SDL_RenderPresent(sdl_renderer);
-        
-        return true;
-    }, nullptr);
-    
     bool created = false;
     SDL_Event event;
-    for (;;)
+    while (SDL_WaitEvent(&event))
     {
-        if (SDL_PollEvent(&event))
+        if (event.type == SDL_KEYDOWN)
         {
-            if (event.type == SDL_KEYDOWN && event.key.keysym.scancode == SDL_SCANCODE_KP_ENTER)
+            if (created)
             {
-                if (created)
-                {
-                    continue;
-                }
-                
+                continue;
+            }
+
+            // R: 21, S: 22
+            if (event.key.keysym.scancode == 22)
+            {
                 auto devices = device_manager->GetDevices();
                 device_manager->SetInputDevice(devices.device_list[0]);
-                if (!mirror->CreateSender(device_manager, MTU, BIND)) {
-                    break;
-                }
-                else
-                {
-                    created = true;
-                }
+                created = mirror->CreateSender(device_manager, MTU, BIND);
+            }
+            else if (event.key.keysym.scancode == 21)
+            {
+                std::string decoder = std::string("h264");
+                created = mirror->CreateReceiver(BIND, decoder, [&](void* _, VideoFrame* frame) {
+                    SDL_UpdateNVTexture(sdl_texture,
+                                        &sdl_rect,
+                                        frame->data[0],
+                                        frame->linesize[0],
+                                        frame->data[1],
+                                        frame->linesize[1]);
+                    SDL_RenderClear(sdl_renderer);
+                    SDL_RenderCopy(sdl_renderer, sdl_texture, nullptr, &sdl_rect);
+                    SDL_RenderPresent(sdl_renderer);
+                    
+                    return true;
+                }, nullptr);
             }
         }
+        else if (event.type == SDL_QUIT)
+        {
+            break;
+        }
     }
-    
+
     SDL_Quit();
     return 0;
 }

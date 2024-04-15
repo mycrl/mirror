@@ -1,5 +1,5 @@
 use bytes::Bytes;
-use sync::atomic::AtomicOption;
+use common::atomic::AtomicOption;
 
 use crate::BufferFlag;
 

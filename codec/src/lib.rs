@@ -14,7 +14,7 @@ pub enum BufferFlag {
 mod api {
     use std::ffi::{c_char, c_int, c_void, CString};
 
-    use frame::VideoFrame;
+    use common::frame::VideoFrame;
 
     pub type VideoEncoder = *const c_void;
     pub type VideoDecoder = *const c_void;

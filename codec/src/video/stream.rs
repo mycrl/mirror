@@ -1,7 +1,7 @@
 use std::sync::atomic::AtomicBool;
 
 use bytes::Bytes;
-use sync::atomic::{AtomicOption, EasyAtomic};
+use common::atomic::{AtomicOption, EasyAtomic};
 
 use crate::BufferFlag;
 
@@ -26,6 +26,12 @@ impl VideoStreamSenderProcesser {
     // should be noted that the configuration frames will only be
     // generated once.
     pub fn process(&self, buf: Bytes, flags: i32, handle: impl Fn(Bytes, u8) -> bool) -> bool {
+        log::debug!(
+            "VideoStreamSenderProcesser process: size={}, flags={}",
+            buf.len(),
+            flags
+        );
+
         if flags == BufferFlag::Config as i32 {
             self.config.swap(Some(buf.clone()));
         }
@@ -72,6 +78,12 @@ impl VideoStreamReceiverProcesser {
     // packet loss occurs, the previous keyframe is retransmitted directly into
     // the decoder.
     pub fn process(&self, buf: Bytes, flags: u8, handle: impl Fn(Bytes) -> bool) -> bool {
+        log::debug!(
+            "VideoStreamReceiverProcesser process: size={}, flags={}",
+            buf.len(),
+            flags
+        );
+
         if flags == BufferFlag::KeyFrame as u8 {
             self.key_frame.swap(Some(buf.clone()));
         }

@@ -1,6 +1,8 @@
 use std::ffi::c_char;
 
-use crate::{api, strings::Strings, DeviceKind};
+use common::strings::Strings;
+
+use crate::{api, DeviceKind};
 
 pub struct Device {
     description: *const api::DeviceDescription,

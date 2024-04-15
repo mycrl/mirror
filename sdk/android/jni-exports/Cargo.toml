@@ -15,7 +15,8 @@ tokio = { version = "1.35.1", features = ["rt", "rt-multi-thread"] }
 log = { version = "0.4.20", features = ["std"]}
 num_cpus = "1.16.0"
 jni = "0.21.1"
-jni-macro = { path = "../../../jni-macro"}
+common = { path = "../../../common"}
 codec = { path = "../../../codec"}
 anyhow = "1.0.79"
 mimalloc = { version = "*", default-features = false }
+jni-macro = { path = "../../../jni-macro" }

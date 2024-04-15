@@ -79,6 +79,7 @@ typedef bool (*FrameProc)(void* ctx, VideoFrame* frame);
 
 extern "C"
 {
+EXPORT void mirror_init();
 EXPORT DeviceManager create_device_manager(struct DeviceManagerOptions options);
 EXPORT void drop_device_manager(DeviceManager device_manager);
 EXPORT const char* get_device_name(const struct Device* device);

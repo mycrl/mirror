@@ -1,22 +1,30 @@
 use std::{
     ffi::{c_char, c_void, CStr},
     ptr::null_mut,
-    sync::{Arc, RwLock},
+    sync::Arc,
 };
 
 use anyhow::anyhow;
 use bytes::Bytes;
-use codec::video::{
-    VideoEncoderSettings, VideoFrameReceiverProcesser, VideoFrameSenderProcesser,
+use codec::video::{VideoEncoderSettings, VideoFrameReceiverProcesser, VideoFrameSenderProcesser};
+use devices::{
+    set_video_sink, Device, DeviceKind, DeviceManager, DeviceManagerOptions, VideoInfo, VideoSink,
 };
-use devices::{Device, DeviceKind, DeviceManager, DeviceManagerOptions, VideoInfo};
-use frame::VideoFrame;
+use common::frame::{VideoFrame, VideoFrameRect};
 use once_cell::sync::Lazy;
 use tokio::runtime;
 use transport::{
     adapter::{StreamBufferInfo, StreamKind, StreamReceiverAdapter, StreamSenderAdapter},
     Transport,
 };
+
+#[no_mangle]
+extern "C" fn mirror_init() {
+    #[cfg(debug_assertions)]
+    {
+        simple_logger::init_with_level(log::Level::Info).expect("Failed to create logger.");
+    }
+}
 
 static RUNTIME: Lazy<runtime::Runtime> = Lazy::new(|| {
     runtime::Builder::new_multi_thread()
@@ -37,49 +45,6 @@ pub struct RawVideoEncoderOptions {
     height: u32,
     bit_rate: u64,
     key_frame_interval: u32,
-}
-
-struct DeviceManagerObserver {
-    video_encoder: VideoFrameSenderProcesser,
-    adapter: Arc<RwLock<Option<Arc<StreamSenderAdapter>>>>,
-}
-
-impl DeviceManagerObserver {
-    fn new(
-        options: RawDeviceManagerOptions,
-        adapter: Arc<RwLock<Option<Arc<StreamSenderAdapter>>>>,
-    ) -> anyhow::Result<Self> {
-        Ok(Self {
-            adapter,
-            video_encoder: VideoFrameSenderProcesser::new(&VideoEncoderSettings {
-                codec_name: unsafe { CStr::from_ptr(options.video_encoder.codec_name) }
-                    .to_str()?
-                    .to_string(),
-                width: options.video_encoder.width,
-                height: options.video_encoder.height,
-                bit_rate: options.video_encoder.bit_rate,
-                frame_rate: options.video_encoder.frame_rate,
-                max_b_frames: options.video_encoder.max_b_frames,
-                key_frame_interval: options.video_encoder.key_frame_interval,
-            })
-            .ok_or_else(|| anyhow!("Failed to create video encoder."))?,
-        })
-    }
-}
-
-impl devices::Observer for DeviceManagerObserver {
-    fn video_sink(&self, frame: &VideoFrame) {
-        if let Some(adapter) = self.adapter.read().unwrap().as_ref() {
-            if self.video_encoder.push_frame(frame) {
-                while let Some(packet) = self.video_encoder.read_packet() {
-                    adapter.send(
-                        Bytes::copy_from_slice(packet.buffer),
-                        StreamBufferInfo::Video(packet.flags),
-                    );
-                }
-            }
-        }
-    }
 }
 
 #[repr(C)]
@@ -107,26 +72,23 @@ pub struct RawDeviceManagerOptions {
 #[repr(C)]
 pub struct RawDeviceManager {
     device_manager: DeviceManager,
-    adapter: Arc<RwLock<Option<Arc<StreamSenderAdapter>>>>,
+    options: RawDeviceManagerOptions,
 }
 
 #[no_mangle]
 extern "C" fn create_device_manager(options: RawDeviceManagerOptions) -> *const RawDeviceManager {
-    let func = || {
-        let adapter = Arc::new(RwLock::new(None));
+    log::info!("create device manager: options={:?}", options);
 
+    let func = || {
         Ok::<RawDeviceManager, anyhow::Error>(RawDeviceManager {
-            device_manager: DeviceManager::new(
-                DeviceManagerOptions {
-                    video: VideoInfo {
-                        fps: options.device.fps,
-                        width: options.device.width,
-                        height: options.device.height,
-                    },
+            device_manager: DeviceManager::new(DeviceManagerOptions {
+                video: VideoInfo {
+                    fps: options.device.fps,
+                    width: options.device.width,
+                    height: options.device.height,
                 },
-                DeviceManagerObserver::new(options, adapter.clone())?,
-            )?,
-            adapter,
+            })?,
+            options,
         })
     };
 
@@ -138,6 +100,8 @@ extern "C" fn create_device_manager(options: RawDeviceManagerOptions) -> *const 
 #[no_mangle]
 extern "C" fn drop_device_manager(raw: *const RawDeviceManager) {
     assert!(!raw.is_null());
+
+    log::info!("close device manager");
 
     drop(unsafe { Box::from_raw(raw as *mut RawDeviceManager) })
 }
@@ -167,6 +131,8 @@ extern "C" fn get_devices(raw: *const RawDeviceManager, kind: DeviceKind) -> Raw
         list: devices.as_ptr(),
         size: devices.len(),
     };
+
+    log::info!("get devices: {:?}", devices);
 
     std::mem::forget(devices);
     raw_devices
@@ -220,6 +186,47 @@ extern "C" fn drop_mirror(mirror: *const RawMirror) {
     drop(unsafe { Box::from_raw(mirror as *mut RawMirror) })
 }
 
+struct SenderObserver {
+    video_encoder: VideoFrameSenderProcesser,
+    adapter: Arc<StreamSenderAdapter>,
+}
+
+impl SenderObserver {
+    fn new(
+        options: RawVideoEncoderOptions,
+        adapter: Arc<StreamSenderAdapter>,
+    ) -> anyhow::Result<Self> {
+        Ok(Self {
+            adapter,
+            video_encoder: VideoFrameSenderProcesser::new(&VideoEncoderSettings {
+                codec_name: unsafe { CStr::from_ptr(options.codec_name) }
+                    .to_str()?
+                    .to_string(),
+                width: options.width,
+                height: options.height,
+                bit_rate: options.bit_rate,
+                frame_rate: options.frame_rate,
+                max_b_frames: options.max_b_frames,
+                key_frame_interval: options.key_frame_interval,
+            })
+            .ok_or_else(|| anyhow!("Failed to create video encoder."))?,
+        })
+    }
+}
+
+impl VideoSink for SenderObserver {
+    fn sink(&self, frame: &VideoFrame) {
+        if self.video_encoder.push_frame(frame) {
+            while let Some(packet) = self.video_encoder.read_packet() {
+                self.adapter.send(
+                    Bytes::copy_from_slice(packet.buffer),
+                    StreamBufferInfo::Video(packet.flags),
+                );
+            }
+        }
+    }
+}
+
 #[no_mangle]
 extern "C" fn create_sender(
     mirror: *const RawMirror,
@@ -233,7 +240,10 @@ extern "C" fn create_sender(
 
     let func = || {
         let adapter = StreamSenderAdapter::new();
-        RUNTIME.block_on(unsafe { &*mirror }.transport.create_sender(
+        let device_manager = unsafe { &*device_manager };
+        let mirror = unsafe { &*mirror };
+
+        RUNTIME.block_on(mirror.transport.create_sender(
             0,
             mtu,
             unsafe { CStr::from_ptr(bind) }.to_str()?.parse()?,
@@ -241,11 +251,14 @@ extern "C" fn create_sender(
             &adapter,
         ))?;
 
-        unsafe { &*device_manager }
-            .adapter
-            .write()
-            .unwrap()
-            .replace(adapter);
+        set_video_sink(
+            VideoFrameRect {
+                width: device_manager.options.device.width as usize,
+                height: device_manager.options.device.height as usize,
+            },
+            SenderObserver::new(device_manager.options.video_encoder, adapter)?,
+        );
+
         Ok::<(), anyhow::Error>(())
     };
 

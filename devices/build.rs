@@ -67,7 +67,7 @@ fn main() -> anyhow::Result<()> {
         .out_dir(&out_dir)
         .file("./lib/devices.c")
         .include(&join(&out_dir, "./obs-studio")?)
-        .include("../frame/include")
+        .include("../common/include")
         .compile("devices");
 
     println!("cargo:rustc-link-search=all={}", &out_dir);
