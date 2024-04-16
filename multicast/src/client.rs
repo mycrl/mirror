@@ -40,13 +40,13 @@ impl Client {
             socket.join_multicast_v4(multicast, bind)?;
 
             log::info!(
-                "udp socket join multicast {}, interface {}",
+                "udp socket join: multicast={}, interface={}",
                 multicast,
                 bind
             );
         }
 
-        log::info!("udp socket bind to {}", bind);
+        log::info!("udp socket bind to: bind={}", bind);
 
         Ok(Self {
             remuxer: Remuxer::new(timeout),

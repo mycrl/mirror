@@ -36,9 +36,10 @@ enum DeviceKind
     Screem,
 };
 
-struct VideoEncoderOptions
+struct VideoOptions
 {
-    char* codec_name;
+    char* encoder;
+    char* decoder;
     uint8_t max_b_frames;
     uint8_t frame_rate;
     uint32_t width;
@@ -47,11 +48,11 @@ struct VideoEncoderOptions
     uint32_t key_frame_interval;
 };
 
-struct DeviceOptions
+struct MirrorOptions
 {
-    uint8_t fps;
-    uint32_t width;
-    uint32_t height;
+    VideoOptions video;
+    char* multicast;
+    size_t mtu;
 };
 
 struct Device
@@ -73,16 +74,16 @@ typedef bool (*FrameProc)(void* ctx, VideoFrame* frame);
 extern "C"
 {
 EXPORT void quit();
-EXPORT bool init(struct DeviceOptions options);
+EXPORT bool init(struct MirrorOptions options);
 EXPORT const char* get_device_name(const struct Device* device);
 EXPORT enum DeviceKind get_device_kind(const struct Device* device);
 EXPORT struct Devices get_devices(enum DeviceKind kind);
 EXPORT void drop_devices(struct Devices* devices);
 EXPORT void set_input_device(const struct Device* device);
-EXPORT Mirror create_mirror(char* multicast);
+EXPORT Mirror create_mirror();
 EXPORT void drop_mirror(Mirror mirror);
-EXPORT bool create_sender(Mirror mirror, size_t mtu, char* bind, struct VideoEncoderOptions options);
-EXPORT bool create_receiver(Mirror mirror, char* bind, FrameProc proc, void* ctx, char* codec);
+EXPORT bool create_sender(Mirror mirror, char* bind);
+EXPORT bool create_receiver(Mirror mirror, char* bind, FrameProc proc, void* ctx);
 }
 
 #ifdef __cplusplus
@@ -150,7 +151,7 @@ public:
     }
 };
 
-bool Init(struct DeviceOptions options)
+bool Init(struct MirrorOptions options)
 {
     return init(options);
 }
@@ -163,9 +164,9 @@ void Quit()
 class MirrorService
 {
 public:
-    MirrorService(std::string multicast)
+    MirrorService()
     {
-        _mirror = create_mirror(const_cast<char*>(multicast.c_str()));
+        _mirror = create_mirror();
         if (_mirror == nullptr)
         {
             throw std::runtime_error("Failed to create mirror");
@@ -180,14 +181,9 @@ public:
         }
     }
     
-    bool CreateSender(size_t mtu,
-                      std::string& bind,
-                      struct VideoEncoderOptions& options)
+    bool CreateSender(std::string& bind)
     {
-        return create_sender(_mirror,
-                             mtu,
-                             const_cast<char*>(bind.c_str()),
-                             options);
+        return create_sender(_mirror, const_cast<char*>(bind.c_str()));
     }
     
     class FrameProcContext
@@ -211,16 +207,14 @@ public:
     
     bool CreateReceiver(std::string& bind,
                         FrameProcContext::FrameCallback callback,
-                        void* ctx,
-                        std::string& codec)
+                        void* ctx)
     {
         return create_receiver(_mirror,
                                const_cast<char*>(bind.c_str()),
                                _frameProc,
                                // There is a memory leak, but don't bother caring,
                                // it's an infrequently called interface.
-                               new FrameProcContext(callback, ctx),
-                               const_cast<char*>(codec.c_str()));
+                               new FrameProcContext(callback, ctx));
     }
 private:
     static bool _frameProc(void* ctx, struct VideoFrame* frame)

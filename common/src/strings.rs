@@ -1,4 +1,17 @@
-use std::ffi::{c_char, CString};
+use std::{
+    ffi::{c_char, CStr, CString},
+    str::Utf8Error,
+};
+
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum StringError {
+    #[error(transparent)]
+    Utf8Error(#[from] Utf8Error),
+    #[error("the string ptr is null")]
+    Null,
+}
 
 pub struct Strings {
     ptr: *const c_char,
@@ -29,14 +42,17 @@ impl From<&str> for Strings {
 }
 
 impl Strings {
-    pub fn to_string(&self) -> Option<String> {
+    pub fn to_string(&self) -> Result<String, StringError> {
         if !self.ptr.is_null() {
-            unsafe { std::ffi::CStr::from_ptr(self.ptr) }
+            Ok(unsafe { CStr::from_ptr(self.ptr) }
                 .to_str()
-                .map(|s| s.to_string())
-                .ok()
+                .map(|s| s.to_string())?)
         } else {
-            None
+            Err(StringError::Null)
         }
+    }
+
+    pub fn as_ptr(&self) -> *const c_char {
+        self.ptr
     }
 }

@@ -57,22 +57,29 @@ pub struct Device {
 }
 
 impl Device {
+    #[inline]
     pub(crate) fn new(description: *const api::DeviceDescription) -> Self {
         Self { description }
     }
 
+    #[inline]
     pub(crate) fn as_ptr(&self) -> *const api::DeviceDescription {
         self.description
     }
 
+    #[inline]
     pub fn name(&self) -> Option<String> {
-        Strings::from(unsafe { &*self.description }.name).to_string()
+        Strings::from(unsafe { &*self.description }.name)
+            .to_string()
+            .ok()
     }
 
+    #[inline]
     pub fn c_name(&self) -> *const c_char {
         unsafe { &*self.description }.name
     }
 
+    #[inline]
     pub fn kind(&self) -> DeviceKind {
         unsafe { &*self.description }.kind
     }
