@@ -28,4 +28,5 @@ simple_logger = "4"
 
 [features]
 default = []
-codec = ["codec/frame"]
+android = ["codec/android"]
+frame-drop = ["codec/frame-drop"]
