@@ -27,5 +27,6 @@ anyhow = "1.0.79"
 simple_logger = "4"
 
 [features]
+default = []
 android = ["codec/android"]
-real-time = ["codec/pause-on-loss"]
+frame-drop = ["codec/frame-drop"]

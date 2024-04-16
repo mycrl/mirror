@@ -56,7 +56,7 @@ pub struct VideoStreamReceiverProcesser {
     key_frame: AtomicOption<Bytes>,
     cfg_ready: AtomicBool,
 
-    #[cfg(feature = "pause-on-loss")]
+    #[cfg(feature = "frame-drop")]
     loss: AtomicBool,
 }
 
@@ -66,7 +66,7 @@ impl VideoStreamReceiverProcesser {
             key_frame: AtomicOption::new(None),
             cfg_ready: AtomicBool::new(false),
 
-            #[cfg(feature = "pause-on-loss")]
+            #[cfg(feature = "frame-drop")]
             loss: AtomicBool::new(false),
         }
     }
@@ -77,7 +77,7 @@ impl VideoStreamReceiverProcesser {
 
     /// Marks that the video packet has been lost.
     pub fn loss_pkt(&self) {
-        #[cfg(feature = "pause-on-loss")]
+        #[cfg(feature = "frame-drop")]
         self.loss.update(true);
     }
 
@@ -86,7 +86,7 @@ impl VideoStreamReceiverProcesser {
     /// the decoder.
     pub fn process(&self, buf: Bytes, flags: u8, handle: impl Fn(Bytes) -> bool) -> bool {
         // Get whether a packet has been dropped.
-        #[cfg(feature = "pause-on-loss")]
+        #[cfg(feature = "frame-drop")]
         let mut is_loss = self.loss.get();
         
         if flags == BufferFlag::KeyFrame as u8 {
@@ -94,7 +94,7 @@ impl VideoStreamReceiverProcesser {
 
             // When keyframes are received, the video stream can be played back 
             // normally without corruption.
-            #[cfg(feature = "pause-on-loss")]
+            #[cfg(feature = "frame-drop")]
             if is_loss {
                 self.loss.update(false);
                 is_loss = false;
@@ -102,7 +102,7 @@ impl VideoStreamReceiverProcesser {
         }
 
         // In case of packet loss, no packet is sent to the decoder.
-        #[cfg(feature = "pause-on-loss")]
+        #[cfg(feature = "frame-drop")]
         if is_loss {
             return true;
         }

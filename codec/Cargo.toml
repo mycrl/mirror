@@ -16,4 +16,4 @@ pkg-config = "0.3.30"
 [features]
 default = []
 android = []
-pause-on-loss = []
+frame-drop = []
