@@ -11,8 +11,8 @@ name = "mirror"
 bytes = "1.5"
 devices = { path = "../../devices" }
 common = { path = "../../common" }
-codec = { path = "../../codec", features = ["frame"]}
-transport = { path = "../../transport", features = ["codec"]}
+codec = { path = "../../codec"}
+transport = { path = "../../transport"}
 tokio = { version = "1.37.0", features = ["rt"]}
 log = "0.4.20"
 simple_logger = "4"
