@@ -16,4 +16,5 @@ pkg-config = "0.3.30"
 
 [features]
 default = []
-frame = []
+android = []
+frame-drop = []
