@@ -27,7 +27,7 @@ impl ReceiverAdapterFactory for SimpleReceiverAdapterFactory {
         _ip: SocketAddr,
         _description: &[u8],
     ) -> Option<Weak<StreamReceiverAdapter>> {
-        let adapter = StreamReceiverAdapter::new();
+        let adapter = StreamReceiverAdapter::new(false);
         let adapter_ = Arc::downgrade(&adapter);
         tokio::spawn(async move {
             let child = Command::new("ffplay")
@@ -92,7 +92,7 @@ async fn main() -> anyhow::Result<()> {
 
     if args.kind == "client" {
         args.addr.set_port(args.addr.port() + 1);
-        let adapter = StreamSenderAdapter::new();
+        let adapter = StreamSenderAdapter::new(false);
         transport
             .create_sender(0, 1500, args.addr, vec![], &adapter)
             .await?;

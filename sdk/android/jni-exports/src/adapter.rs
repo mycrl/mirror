@@ -140,7 +140,7 @@ impl ReceiverAdapterFactory for AndroidStreamReceiverAdapterFactory {
             .await
             .ok()??;
 
-        let stream_adapter = StreamReceiverAdapter::new();
+        let stream_adapter = StreamReceiverAdapter::new(true);
         let stream_adapter_ = Arc::downgrade(&stream_adapter);
         get_runtime().ok()?.spawn(async move {
             loop {

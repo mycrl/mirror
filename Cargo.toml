@@ -14,7 +14,7 @@ members = [
     "devices", 
     "multicast",
     "sdk/desktop",
-    # "sdk/android/jni-exports",
+    "sdk/android/jni-exports",
     "common/jni-macro",
     "common",
 ]

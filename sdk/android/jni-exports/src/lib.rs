@@ -373,7 +373,7 @@ impl Mirror {
                 callback: env.new_global_ref(callback)?,
             };
 
-            let stream_adapter = StreamReceiverAdapter::new();
+            let stream_adapter = StreamReceiverAdapter::new(true);
             let stream_adapter_ = Arc::downgrade(&stream_adapter);
             get_runtime()?.spawn(async move {
                 while let Some(stream_adapter) = stream_adapter_.upgrade() {
@@ -460,7 +460,7 @@ impl Mirror {
         _env: JNIEnv,
         _this: JClass,
     ) -> *const Arc<StreamSenderAdapter> {
-        Box::into_raw(Box::new(StreamSenderAdapter::new()))
+        Box::into_raw(Box::new(StreamSenderAdapter::new(true)))
     }
 
     /// /**

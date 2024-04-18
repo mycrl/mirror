@@ -83,14 +83,16 @@ pub struct StreamSenderAdapter {
     config: AtomicOption<Bytes>,
     tx: UnboundedSender<Option<(Bytes, StreamKind, u8)>>,
     rx: Mutex<UnboundedReceiver<Option<(Bytes, StreamKind, u8)>>>,
+    is_android: bool,
 }
 
 impl StreamSenderAdapter {
-    pub fn new() -> Arc<Self> {
+    pub fn new(is_android: bool) -> Arc<Self> {
         let (tx, rx) = unbounded_channel();
         Arc::new(Self {
             config: AtomicOption::new(None),
             rx: Mutex::new(rx),
+            is_android,
             tx,
         })
     }
@@ -113,19 +115,20 @@ impl StreamSenderAdapter {
             }
 
             // Add SPS and PPS units in front of each keyframe (only use android)
-            #[cfg(feature = "android")]
-            if flags == BufferFlag::KeyFrame as i32 {
-                if let Some(buf) = self.config.get() {
-                    if self
-                        .tx
-                        .send(Some((
-                            buf.clone(),
-                            StreamKind::Video,
-                            BufferFlag::Config as u8,
-                        )))
-                        .is_err()
-                    {
-                        return false;
+            if self.is_android {
+                if flags == BufferFlag::KeyFrame as i32 {
+                    if let Some(buf) = self.config.get() {
+                        if self
+                            .tx
+                            .send(Some((
+                                buf.clone(),
+                                StreamKind::Video,
+                                BufferFlag::Config as u8,
+                            )))
+                            .is_err()
+                        {
+                            return false;
+                        }
                     }
                 }
             }
@@ -152,14 +155,16 @@ pub struct StreamReceiverAdapter {
     readable: AtomicBool,
     tx: UnboundedSender<Option<(Bytes, StreamKind)>>,
     rx: Mutex<UnboundedReceiver<Option<(Bytes, StreamKind)>>>,
+    is_android: bool,
 }
 
 impl StreamReceiverAdapter {
-    pub fn new() -> Arc<Self> {
+    pub fn new(is_android: bool) -> Arc<Self> {
         let (tx, rx) = unbounded_channel();
         Arc::new(Self {
             readable: AtomicBool::new(false),
             rx: Mutex::new(rx),
+            is_android,
             tx,
         })
     }
@@ -184,7 +189,7 @@ impl StreamReceiverAdapter {
             // normally without corruption.
             let mut readable = self.readable.get();
             if flags
-                == if cfg!(feature = "android") {
+                == if self.is_android {
                     BufferFlag::Config as u8
                 } else {
                     BufferFlag::KeyFrame as u8

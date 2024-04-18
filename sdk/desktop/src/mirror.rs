@@ -162,7 +162,7 @@ impl Mirror {
         log::info!("create sender: bind={}", bind);
 
         let options = OPTIONS.read().unwrap();
-        let adapter = StreamSenderAdapter::new();
+        let adapter = StreamSenderAdapter::new(false);
         RUNTIME.block_on(self.0.create_sender(
             0,
             options.mtu,
@@ -182,7 +182,7 @@ impl Mirror {
         log::info!("create receiver: bind={}", bind);
 
         let options = OPTIONS.read().unwrap();
-        let adapter = StreamReceiverAdapter::new();
+        let adapter = StreamReceiverAdapter::new(false);
         RUNTIME.block_on(self.0.create_receiver(bind.parse()?, &adapter))?;
 
         let adapter_ = Arc::downgrade(&adapter);
