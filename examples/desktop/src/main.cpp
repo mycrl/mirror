@@ -70,7 +70,7 @@ int main()
     
     SDL_Renderer* sdl_renderer = SDL_CreateRenderer(screen, -1, 0);
     SDL_Texture* sdl_texture = SDL_CreateTexture(sdl_renderer,
-                                                 SDL_PIXELFORMAT_IYUV,
+                                                 SDL_PIXELFORMAT_NV12,
                                                  SDL_TEXTUREACCESS_STREAMING,
                                                  sdl_rect.w,
                                                  sdl_rect.h);
@@ -104,17 +104,24 @@ int main()
             {
                 std::string bind = "0.0.0.0:3200";
                 created = mirror->CreateReceiver(bind, [&](void* _, VideoFrame* frame) {
-                    SDL_UpdateNVTexture(sdl_texture,
+                    if (SDL_UpdateNVTexture(sdl_texture,
                                         &sdl_rect,
                                         frame->data[0],
                                         frame->linesize[0],
                                         frame->data[1],
-                                        frame->linesize[1]);
-                    SDL_RenderClear(sdl_renderer);
-                    SDL_RenderCopy(sdl_renderer, sdl_texture, nullptr, &sdl_rect);
-                    SDL_RenderPresent(sdl_renderer);
-                    
-                    return true;
+                                        frame->linesize[1]) == 0)
+                    {
+                        if (SDL_RenderClear(sdl_renderer) == 0)
+                        {
+                            if (SDL_RenderCopy(sdl_renderer, sdl_texture, nullptr, &sdl_rect) == 0)
+                            {
+                                SDL_RenderPresent(sdl_renderer);
+                                return true;
+                            }
+                        }                 
+                    }
+
+                    return false;
                 }, nullptr);
 
                 break;

@@ -68,8 +68,9 @@ struct Devices
 };
 
 typedef const void* Mirror;
-
-typedef bool (*FrameProc)(void* ctx, VideoFrame* frame);
+typedef const void* Sender;
+typedef const void* Receiver;
+typedef bool (*ReceiverFrameCallback)(void* ctx, VideoFrame* frame);
 
 extern "C"
 {
@@ -82,8 +83,10 @@ EXPORT void drop_devices(struct Devices* devices);
 EXPORT void set_input_device(const struct Device* device);
 EXPORT Mirror create_mirror();
 EXPORT void drop_mirror(Mirror mirror);
-EXPORT bool create_sender(Mirror mirror, char* bind);
-EXPORT bool create_receiver(Mirror mirror, char* bind, FrameProc proc, void* ctx);
+EXPORT Sender create_sender(Mirror mirror, char* bind);
+EXPORT void close_sender(Sender sender);
+EXPORT Receiver create_receiver(Mirror mirror, char* bind, ReceiverFrameCallback proc, void* ctx);
+EXPORT void close_receiver(Receiver receiver);
 }
 
 #ifdef __cplusplus
@@ -164,28 +167,6 @@ void Quit()
 class MirrorService
 {
 public:
-    MirrorService()
-    {
-        _mirror = create_mirror();
-        if (_mirror == nullptr)
-        {
-            throw std::runtime_error("Failed to create mirror");
-        }
-    }
-    
-    ~MirrorService()
-    {
-        if (_mirror != nullptr)
-        {
-            drop_mirror(_mirror);
-        }
-    }
-    
-    bool CreateSender(std::string& bind)
-    {
-        return create_sender(_mirror, const_cast<char*>(bind.c_str()));
-    }
-    
     class FrameProcContext
     {
     public:
@@ -204,23 +185,82 @@ public:
         FrameCallback _callback;
         void* _ctx;
     };
+
+    class MirrorSender
+    {
+    public:
+        MirrorSender(Sender sender): _sender(sender)
+        {
+        }
+
+        void Close()
+        {
+            close_sender(_sender);
+        }
+    private:
+        Sender _sender;
+    };
+
+    class MirrorReceiver
+    {
+    public:
+        MirrorReceiver(Receiver receiver, FrameProcContext* ctx)
+            : _receiver(receiver), _ctx(ctx)
+        {
+        }
+
+        ~MirrorReceiver()
+        {
+            if (_ctx != nullptr)
+            {
+                delete _ctx;
+            }
+        }
+
+        void Close()
+        {
+            close_receiver(_receiver);
+        }
+    private:
+        Receiver _receiver;
+        FrameProcContext* _ctx;
+    };
+
+    MirrorService()
+    {
+        _mirror = create_mirror();
+        if (_mirror == nullptr)
+        {
+            throw std::runtime_error("Failed to create mirror");
+        }
+    }
     
-    bool CreateReceiver(std::string& bind,
+    ~MirrorService()
+    {
+        if (_mirror != nullptr)
+        {
+            drop_mirror(_mirror);
+        }
+    }
+    
+    std::optional<MirrorSender> CreateSender(std::string& bind)
+    {
+        Sender sender = create_sender(_mirror, const_cast<char*>(bind.c_str()));
+        return sender ? std::optional(MirrorSender(sender)) : std::nullopt;
+    }
+    
+    std::optional<MirrorReceiver> CreateReceiver(std::string& bind,
                         FrameProcContext::FrameCallback callback,
                         void* ctx)
     {
-        return create_receiver(_mirror,
-                               const_cast<char*>(bind.c_str()),
-                               _frameProc,
-                               // There is a memory leak, but don't bother caring,
-                               // it's an infrequently called interface.
-                               new FrameProcContext(callback, ctx));
+        FrameProcContext* ctx_ = new FrameProcContext(callback, ctx);
+        Receiver receiver = create_receiver(_mirror, const_cast<char*>(bind.c_str()), _proc, ctx_);
+        return receiver ? std::optional(MirrorReceiver(receiver, ctx_)) : std::nullopt;
     }
 private:
-    static bool _frameProc(void* ctx, struct VideoFrame* frame)
+    static bool _proc(void* ctx, struct VideoFrame* frame)
     {
-        FrameProcContext* context = (FrameProcContext*)ctx;
-        return context->On(frame);
+        return ((FrameProcContext*)ctx)->On(frame);
     }
     
     Mirror _mirror = nullptr;

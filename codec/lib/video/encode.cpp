@@ -7,13 +7,6 @@
 
 #include "../codec.h"
 
-extern "C"
-{
-#include "libavutil/imgutils.h"
-#include "libavutil/frame.h"
-#include "libavutil/opt.h"
-}
-
 struct VideoEncoder* _create_video_encoder(struct VideoEncoderSettings* settings)
 {
     struct VideoEncoder* codec = new struct VideoEncoder;

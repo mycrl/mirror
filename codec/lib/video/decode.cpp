@@ -25,6 +25,8 @@ struct VideoDecoder* _create_video_decoder(const char* codec_name)
         _release_video_decoder(decoder);
         return nullptr;
     }
+
+    // codec->context->pix_fmt = AV_PIX_FMT_NV12;
     
     if (avcodec_open2(decoder->context, decoder->codec, nullptr) != 0)
     {
