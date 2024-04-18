@@ -7,7 +7,7 @@ use std::{
 
 use anyhow::anyhow;
 use bytes::Bytes;
-use codec::video::{VideoEncoderSettings, VideoFrameReceiverProcesser, VideoFrameSenderProcesser};
+use codec::{VideoDecoder, VideoEncoder, VideoEncoderSettings};
 use common::{
     frame::VideoFrame,
     strings::{StringError, Strings},
@@ -77,7 +77,7 @@ unsafe impl Sync for RawMirrorOptions {}
 extern "C" fn init(options: RawMirrorOptions) -> bool {
     #[cfg(debug_assertions)]
     {
-        simple_logger::init_with_level(log::Level::Info).expect("Failed to create logger.");
+        simple_logger::init_with_level(log::Level::Debug).expect("Failed to create logger.");
     }
 
     let _ = OPTIONS.write().unwrap().replace(options);
@@ -194,7 +194,7 @@ extern "C" fn drop_mirror(mirror: *const RawMirror) {
 }
 
 struct SenderObserver {
-    video_encoder: VideoFrameSenderProcesser,
+    video_encoder: VideoEncoder,
     adapter: Arc<StreamSenderAdapter>,
 }
 
@@ -203,7 +203,7 @@ impl SenderObserver {
         let options = OPTIONS.read().unwrap().expect("Not initialized yet!");
         Ok(Self {
             adapter,
-            video_encoder: VideoFrameSenderProcesser::new(&options.video.try_into()?)
+            video_encoder: VideoEncoder::new(&options.video.try_into()?)
                 .ok_or_else(|| anyhow!("Failed to create video encoder."))?,
         })
     }
@@ -211,8 +211,8 @@ impl SenderObserver {
 
 impl VideoSink for SenderObserver {
     fn sink(&self, frame: &VideoFrame) {
-        if self.video_encoder.push_frame(frame) {
-            while let Some(packet) = self.video_encoder.read_packet() {
+        if self.video_encoder.encode(frame) {
+            while let Some(packet) = self.video_encoder.read() {
                 self.adapter.send(
                     Bytes::copy_from_slice(packet.buffer),
                     StreamBufferInfo::Video(packet.flags),
@@ -274,18 +274,18 @@ extern "C" fn create_receiver(
                 .create_receiver(bind, &adapter),
         )?;
 
-        let decoder = VideoFrameReceiverProcesser::new(&codec)
-            .ok_or_else(|| anyhow!("Failed to create video decoder."))?;
+        let video_decoder =
+            VideoDecoder::new(&codec).ok_or_else(|| anyhow!("Failed to create video decoder."))?;
 
         let context = context as usize;
         RUNTIME.spawn(async move {
             'a: while let Some((packet, kind)) = adapter.next().await {
                 if kind == StreamKind::Video {
-                    if !decoder.push_packet(&packet) {
+                    if !video_decoder.decode(&packet) {
                         break;
                     }
 
-                    while let Some(frame) = decoder.read_frame() {
+                    while let Some(frame) = video_decoder.read() {
                         if !frame_proc(context as *const _, frame) {
                             break 'a;
                         }

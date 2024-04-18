@@ -6,7 +6,6 @@ edition = "2021"
 [dependencies]
 async-trait = "0.1.77"
 bytes = "1.5.0"
-codec = { path = "../codec" }
 log = "0.4.20"
 rmp-serde = "1.1.2"
 serde = { version = "1.0.195", features = ["derive"] }
@@ -28,5 +27,4 @@ simple_logger = "4"
 
 [features]
 default = []
-android = ["codec/android"]
-frame-drop = ["codec/frame-drop"]
+android = []

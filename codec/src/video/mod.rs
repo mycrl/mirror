@@ -1,6 +1,5 @@
-mod frame;
-mod stream;
+mod decode;
+mod encode;
 
-#[cfg(feature = "frame")]
-pub use frame::*;
-pub use stream::*;
+pub use decode::VideoDecoder;
+pub use encode::{VideoEncodePacket, VideoEncoder, VideoEncoderSettings};

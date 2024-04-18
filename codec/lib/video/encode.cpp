@@ -43,11 +43,13 @@ struct VideoEncoder* _create_video_encoder(struct VideoEncoderSettings* settings
     codec->context->gop_size = settings->key_frame_interval;
     codec->context->max_b_frames = settings->max_b_frames;
     codec->context->pix_fmt = AV_PIX_FMT_NV12;
+    codec->context->max_samples = 1;
     
     if (codec->codec_name == "h264_qsv")
     {
         av_opt_set_int(codec->context->priv_data, "preset", 7, 0);
         av_opt_set_int(codec->context->priv_data, "profile", 66, 0);
+        av_opt_set_int(codec->context->priv_data, "scenario", 4, 0);
     }
     else if (codec->codec_name == "h264_nvenc")
     {
@@ -61,7 +63,9 @@ struct VideoEncoder* _create_video_encoder(struct VideoEncoderSettings* settings
     }
     else if (codec->codec_name == "libx264")
     {
+        av_opt_set(codec->context->priv_data, "preset", "veryfast", 0);
         av_opt_set(codec->context->priv_data, "tune", "zerolatency", 0);
+        av_opt_set(codec->context->priv_data, "profile", "baseline", 0);
     }
     
     if (avcodec_open2(codec->context, codec->codec, nullptr) != 0)

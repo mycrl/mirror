@@ -1,10 +1,10 @@
 [profile.release]
+debug-assertions = false
 overflow-checks = false
 strip = "debuginfo"
 panic = "abort"
 debug = false
 lto = true
-debug-assertions = false
 
 [workspace]
 resolver = "2"
@@ -14,7 +14,7 @@ members = [
     "devices", 
     "multicast",
     "sdk/desktop",
-    "sdk/android/jni-exports",
+    # "sdk/android/jni-exports",
     "common/jni-macro",
     "common",
 ]
