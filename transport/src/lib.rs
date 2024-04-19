@@ -192,12 +192,13 @@ impl Transport {
         tokio::spawn(async move {
             let mut muxer = Muxer::new(server.max_packet_size());
 
-            while let Some(adapter) = adapter_.upgrade() {
+            'a: while let Some(adapter) = adapter_.upgrade() {
                 if let Some((buf, kind, flags)) = adapter.next().await {
                     if let Some(payloads) = muxer.mux(kind, flags, buf.as_ref()) {
                         for payload in payloads {
                             if let Err(e) = server.send(payload).await {
                                 log::error!("failed to send buf in socket, err={:?}", e);
+                                break 'a;
                             }
                         }
                     }

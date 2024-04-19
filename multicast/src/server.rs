@@ -40,6 +40,7 @@ impl Server {
 
         let socket = UdpSocket::bind(SocketAddr::new(bind.ip(), 0)).await?;
         if let IpAddr::V4(bind) = bind.ip() {
+            socket.leave_multicast_v4(multicast, bind)?;
             socket.join_multicast_v4(multicast, bind)?;
 
             log::info!(
