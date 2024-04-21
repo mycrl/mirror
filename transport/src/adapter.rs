@@ -111,6 +111,7 @@ impl StreamSenderAdapter {
     pub fn send(&self, buf: Bytes, info: StreamBufferInfo) -> bool {
         if let StreamBufferInfo::Video(flags) = info {
             if flags == BufferFlag::Config as i32 {
+                log::info!("============================== {}", buf.len());
                 self.config.swap(Some(buf.clone()));
             }
 

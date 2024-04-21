@@ -85,7 +85,7 @@ impl Transport {
                             );
 
                             let bind = SocketAddr::new(options.bind.ip(), service.port);
-                            match Client::new(multicast, bind, 20).await {
+                            match Client::new(multicast, bind, 50).await {
                                 Ok(mut socket) => {
                                     log::info!(
                                         "connected to remote service, ip={}, port={}",
@@ -228,7 +228,7 @@ impl Transport {
         bind: SocketAddr,
         adapter: &Arc<StreamReceiverAdapter>,
     ) -> Result<(), TransportError> {
-        let mut socket = Client::new(self.multicast, bind, 20).await?;
+        let mut socket = Client::new(self.multicast, bind, 50).await?;
         log::info!("receiver listening, port={}", bind.port(),);
 
         let adapter = Arc::downgrade(adapter);

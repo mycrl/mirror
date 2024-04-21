@@ -40,7 +40,6 @@ class Video {
             format.setInteger(MediaFormat.KEY_PROFILE, MediaCodecInfo.CodecProfileLevel.AVCProfileBaseline)
             format.setInteger(MediaFormat.KEY_LEVEL, MediaCodecInfo.CodecProfileLevel.AVCLevel1)
             format.setFloat(MediaFormat.KEY_MAX_FPS_TO_ENCODER, configure.frameRate.toFloat())
-            format.setInteger(MediaFormat.KEY_CREATE_INPUT_SURFACE_SUSPENDED, 1)
             format.setInteger(MediaFormat.KEY_LATENCY, configure.frameRate / 10)
             format.setInteger(MediaFormat.KEY_OPERATING_RATE, configure.frameRate)
             format.setInteger(MediaFormat.KEY_CAPTURE_RATE, configure.frameRate)

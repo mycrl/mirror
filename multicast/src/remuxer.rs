@@ -9,6 +9,8 @@ pub struct Remuxer {
     remove_keys: Vec<u16>,
     dequeue: Vec<Vec<u8>>,
     timeout: usize,
+
+    seq: u16,
 }
 
 impl Remuxer {
@@ -19,6 +21,8 @@ impl Remuxer {
             dequeue: Vec::with_capacity(10),
             packets: BTreeMap::new(),
             timeout,
+
+            seq: 0,
         }
     }
 
@@ -57,6 +61,12 @@ impl Remuxer {
 
         // Transfer all timeout packets to the outgoing queue.
         for seq in &self.remove_keys {
+            if self.seq + 1 != *seq {
+                log::info!("packet loss, old seq={}, seq={}", self.seq, seq);
+            }
+
+            self.seq = *seq;
+
             if let Some((packet, _)) = self.packets.remove(seq) {
                 self.dequeue.push(packet);
             }
