@@ -1,15 +1,16 @@
 use std::{
     net::SocketAddr,
     sync::{Arc, Weak},
+    thread,
 };
 
 use anyhow::anyhow;
-use async_trait::async_trait;
 use bytes::Bytes;
 use jni::objects::{GlobalRef, JValue, JValueGen};
+use thread_priority::{set_current_thread_priority, ThreadPriority};
 use transport::adapter::{ReceiverAdapterFactory, StreamKind, StreamReceiverAdapter};
 
-use crate::command::{catcher, get_current_env, get_runtime};
+use crate::command::{catcher, get_current_env};
 
 pub struct AndroidStreamReceiverAdapter {
     pub callback: GlobalRef,
@@ -30,15 +31,19 @@ impl AndroidStreamReceiverAdapter {
     //      */
     //     abstract fun sink(kind: Int, buf: ByteArray)
     // }
-    pub(crate) fn sink(&self, buf: Bytes, kind: StreamKind) -> bool {
+    pub(crate) fn sink(&self, buf: Bytes, kind: StreamKind, timestamp: u64) -> bool {
         let mut env = get_current_env();
         catcher(&mut env, |env| {
             let buf = env.byte_array_from_slice(&buf)?.into();
             let ret = env.call_method(
                 self.callback.as_obj(),
                 "sink",
-                "(I[B)Z",
-                &[JValue::Int(kind as i32), JValue::Object(&buf)],
+                "(IJ[B)Z",
+                &[
+                    JValue::Int(kind as i32),
+                    JValue::Long(timestamp as i64),
+                    JValue::Object(&buf),
+                ],
             );
 
             let _ = env.delete_local_ref(buf);
@@ -124,9 +129,8 @@ impl AndroidStreamReceiverAdapterFactory {
     }
 }
 
-#[async_trait]
 impl ReceiverAdapterFactory for AndroidStreamReceiverAdapterFactory {
-    async fn connect(
+    fn connect(
         &self,
         id: u8,
         addr: SocketAddr,
@@ -134,29 +138,25 @@ impl ReceiverAdapterFactory for AndroidStreamReceiverAdapterFactory {
     ) -> Option<Weak<StreamReceiverAdapter>> {
         let this = unsafe { std::mem::transmute::<&Self, &'static Self>(self) };
         let description = unsafe { std::mem::transmute::<&[u8], &'static [u8]>(description) };
-        let adapter = get_runtime()
-            .ok()?
-            .spawn_blocking(move || this.connect(id, addr.to_string(), description))
-            .await
-            .ok()??;
+        let adapter = this.connect(id, addr.to_string(), description)?;
 
-        let stream_adapter = StreamReceiverAdapter::new(true);
+        let stream_adapter = StreamReceiverAdapter::new();
         let stream_adapter_ = Arc::downgrade(&stream_adapter);
-        get_runtime().ok()?.spawn(async move {
-            loop {
-                if let Some((buf, kind)) = stream_adapter.next().await {
-                    if adapter.sink(buf, kind) {
-                        continue;
-                    } else {
-                        log::warn!("receiver adapter sink return false.")
-                    }
-                } else {
-                    log::warn!("receiver adapter next is none.")
-                }
+        thread::spawn(move || loop {
+            let _ = set_current_thread_priority(ThreadPriority::Max);
 
-                adapter.close();
-                break;
+            if let Some((buf, kind, timestamp)) = stream_adapter.next() {
+                if adapter.sink(buf, kind, timestamp) {
+                    continue;
+                } else {
+                    log::warn!("receiver adapter sink return false.")
+                }
+            } else {
+                log::warn!("receiver adapter next is none.")
             }
+
+            adapter.close();
+            break;
         });
 
         Some(stream_adapter_)

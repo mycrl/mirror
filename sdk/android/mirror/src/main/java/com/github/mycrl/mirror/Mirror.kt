@@ -8,7 +8,7 @@ class StreamKind {
 }
 
 abstract class ReceiverAdapter {
-    abstract fun sink(kind: Int, buf: ByteArray): Boolean
+    abstract fun sink(kind: Int, timestamp: Long, buf: ByteArray): Boolean
     abstract fun close()
 }
 
@@ -18,6 +18,7 @@ abstract class ReceiverAdapterFactory {
 
 data class StreamBufferInfo(val kind: Int) {
     var flags: Int = 0;
+    var timestamp: Long = 0;
 }
 
 class SenderAdapterWrapper constructor(

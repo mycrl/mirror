@@ -72,7 +72,8 @@ class Video {
                         if (index >= 0) {
                             val outputBuffer = codec.getOutputBuffer(index)
                             if (outputBuffer != null && bufferInfo.size > 0) {
-                                streamBufferInfo.flags = bufferInfo.flags;
+                                streamBufferInfo.flags = bufferInfo.flags
+                                streamBufferInfo.timestamp = bufferInfo.presentationTimeUs
                                 outputBuffer.get(buffer, 0, bufferInfo.size)
 
                                 sinker.sink(
@@ -180,13 +181,13 @@ class Video {
             }
         }
 
-        fun sink(buf: ByteArray) {
+        fun sink(buf: ByteArray, timestamp: Long) {
             try {
                 val index = codec.dequeueInputBuffer(-1)
                 if (index >= 0) {
                     codec.getInputBuffer(index)?.clear()
                     codec.getInputBuffer(index)?.put(buf)
-                    codec.queueInputBuffer(index, 0, buf.size, 0, 0)
+                    codec.queueInputBuffer(index, 0, buf.size, timestamp, 0)
                 }
             } catch (e: Exception) {
                 Log.w("com.github.mycrl.mirror", "VideoDecoder sink exception", e)
@@ -261,12 +262,12 @@ class Audio {
             }
         }
 
-        fun sink(buf: ByteArray) {
+        fun sink(buf: ByteArray, timestamp: Long) {
             val index = codec.dequeueInputBuffer(1000)
             if (index >= 0) {
                 codec.getInputBuffer(index)?.clear()
                 codec.getInputBuffer(index)?.put(buf)
-                codec.queueInputBuffer(index, 0, buf.size, 0, 0)
+                codec.queueInputBuffer(index, 0, buf.size, timestamp, 0)
             }
         }
 
@@ -337,7 +338,8 @@ class Audio {
                         if (index >= 0) {
                             val outputBuffer = codec.getOutputBuffer(index)
                             if (outputBuffer != null && bufferInfo.size > 0) {
-                                streamBufferInfo.flags = bufferInfo.flags;
+                                streamBufferInfo.flags = bufferInfo.flags
+                                streamBufferInfo.timestamp = bufferInfo.presentationTimeUs
                                 outputBuffer.get(buffer, 0, bufferInfo.size)
 
                                 sinker.sink(

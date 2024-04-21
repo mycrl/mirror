@@ -21,13 +21,19 @@ impl Muxer {
 
     /// The result of the encoding may be null, this is because an empty packet
     /// may be passed in from outside.
-    pub fn mux(&mut self, kind: StreamKind, flags: u8, buf: &[u8]) -> Option<&[Vec<u8>]> {
+    pub fn mux(
+        &mut self,
+        kind: StreamKind,
+        flags: u8,
+        timestamp: u64,
+        buf: &[u8],
+    ) -> Option<&[Vec<u8>]> {
         if buf.len() == 0 {
             return None;
         }
 
         let mut size = 0;
-        for (i, chunk) in buf.chunks(self.max_size - 9).enumerate() {
+        for (i, chunk) in buf.chunks(self.max_size - 20).enumerate() {
             {
                 if self.packets.get(i).is_none() {
                     self.packets.push(vec![0u8; self.max_size]);
@@ -40,6 +46,7 @@ impl Muxer {
                 buf.put_u8(i as u8);
                 buf.put_u8(kind as u8);
                 buf.put_u8(flags);
+                buf.put_u64(timestamp);
                 buf.put_u16(chunk.len() as u16);
                 buf.put(chunk);
 
@@ -56,7 +63,7 @@ impl Muxer {
 /// Packet decoder decoding results
 pub enum State {
     /// Decode the packet normally.
-    Pkt(Bytes, StreamKind, u8),
+    Pkt(Bytes, StreamKind, u8, u64),
     /// Need to wait for more data.
     Wait,
     /// There was a loss of transmitted packets.
@@ -66,7 +73,7 @@ pub enum State {
 /// Decode the packets received from the network and separate out the different
 /// types of data.
 pub struct Remuxer {
-    mark: Option<(StreamKind, u8)>,
+    mark: Option<(StreamKind, u8, u64)>,
     buf: BytesMut,
     throw: bool,
     seq: i8,
@@ -100,6 +107,7 @@ impl Remuxer {
         let seq = buf.get_u8() as i8;
         let kind = StreamKind::try_from(buf.get_u8()).unwrap();
         let flags = buf.get_u8();
+        let timestamp = buf.get_u64();
         let size = buf.get_u16() as usize;
         if self.throw {
             // It has entered discard mode, but when it encounters a new group
@@ -132,11 +140,11 @@ impl Remuxer {
         }
 
         self.seq = seq;
-        let previous = self.mark.replace((kind, flags));
+        let previous = self.mark.replace((kind, flags, timestamp));
         bytes
             .map(|it| {
-                let (kind, flags) = previous.unwrap();
-                State::Pkt(it, kind, flags)
+                let (kind, flags, timestamp) = previous.unwrap();
+                State::Pkt(it, kind, flags, timestamp)
             })
             .unwrap_or(State::Wait)
     }

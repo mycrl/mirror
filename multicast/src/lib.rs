@@ -1,10 +1,9 @@
-mod client;
-mod muxer;
-mod remuxer;
-mod server;
+mod receiver;
+mod reliable;
+mod sender;
 
-pub use client::Client;
-pub use server::Server;
+pub use receiver::Receiver;
+pub use sender::Sender;
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {

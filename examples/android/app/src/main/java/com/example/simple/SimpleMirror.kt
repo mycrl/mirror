@@ -120,7 +120,7 @@ class SimpleMirrorService : Service() {
         private val VideoConfigure = object : Video.VideoEncoder.VideoEncoderConfigure {
             override val format = MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface
             override val bitRate = 500 * 1024 * 8
-            override val frameRate = 30
+            override val frameRate = 60
             override var height = 0
             override var width = 0
         }

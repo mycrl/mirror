@@ -1,4 +1,7 @@
-use std::sync::{Arc, RwLock, Weak};
+use std::{
+    sync::{Arc, RwLock, Weak},
+    thread,
+};
 
 use anyhow::{anyhow, Result};
 use bytes::Bytes;
@@ -6,21 +9,12 @@ use codec::{VideoDecoder, VideoEncoder, VideoEncoderSettings};
 use common::frame::VideoFrame;
 use devices::{Device, DeviceManagerOptions, VideoInfo, VideoSink};
 use once_cell::sync::Lazy;
-use tokio::runtime;
 use transport::{
     adapter::{StreamBufferInfo, StreamKind, StreamReceiverAdapter, StreamSenderAdapter},
     Transport,
 };
 
 static OPTIONS: Lazy<RwLock<MirrorOptions>> = Lazy::new(|| Default::default());
-static RUNTIME: Lazy<runtime::Runtime> = Lazy::new(|| {
-    runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .expect(
-            "Unable to initialize the internal asynchronous runtime, this is a very serious error.",
-        )
-});
 
 #[derive(Debug, Clone)]
 pub struct VideoOptions {
@@ -139,7 +133,7 @@ impl VideoSink for SenderObserver {
                 while let Some(packet) = self.video_encoder.read() {
                     adapter.send(
                         Bytes::copy_from_slice(packet.buffer),
-                        StreamBufferInfo::Video(packet.flags),
+                        StreamBufferInfo::Video(packet.flags, 0),
                     );
                 }
             }
@@ -152,24 +146,19 @@ pub struct Mirror(Transport);
 impl Mirror {
     pub fn new() -> Result<Self> {
         let options = OPTIONS.read().unwrap();
-        Ok(Self(RUNTIME.block_on(Transport::new::<()>(
+        Ok(Self(Transport::new::<()>(
             options.multicast.parse()?,
             None,
-        ))?))
+        )?))
     }
 
     pub fn create_sender(&self, bind: &str) -> Result<Arc<StreamSenderAdapter>> {
         log::info!("create sender: bind={}", bind);
 
         let options = OPTIONS.read().unwrap();
-        let adapter = StreamSenderAdapter::new(false);
-        RUNTIME.block_on(self.0.create_sender(
-            0,
-            options.mtu,
-            bind.parse()?,
-            Vec::new(),
-            &adapter,
-        ))?;
+        let adapter = StreamSenderAdapter::new();
+        self.0
+            .create_sender(0, options.mtu, bind.parse()?, Vec::new(), &adapter)?;
 
         devices::set_video_sink(SenderObserver::new(&adapter)?);
         Ok(adapter)
@@ -182,16 +171,16 @@ impl Mirror {
         log::info!("create receiver: bind={}", bind);
 
         let options = OPTIONS.read().unwrap();
-        let adapter = StreamReceiverAdapter::new(false);
-        RUNTIME.block_on(self.0.create_receiver(bind.parse()?, &adapter))?;
+        let adapter = StreamReceiverAdapter::new();
+        self.0.create_receiver(bind.parse()?, &adapter)?;
 
         let adapter_ = Arc::downgrade(&adapter);
         let video_decoder = VideoDecoder::new(&options.video.decoder)
             .ok_or_else(|| anyhow!("Failed to create video decoder."))?;
 
-        RUNTIME.spawn(async move {
+        thread::spawn(move || {
             while let Some(adapter) = adapter_.upgrade().as_ref() {
-                'a: while let Some((packet, kind)) = adapter.next().await {
+                'a: while let Some((packet, kind, _)) = adapter.next() {
                     if kind == StreamKind::Video {
                         if !video_decoder.decode(&packet) {
                             break;

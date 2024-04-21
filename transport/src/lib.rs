@@ -5,13 +5,14 @@ mod payload;
 use std::{
     collections::HashSet,
     net::{Ipv4Addr, SocketAddr},
-    sync::Arc,
+    sync::{Arc, Mutex},
+    thread,
 };
 
 use adapter::StreamReceiverAdapter;
-use multicast::{Client, Server};
+use multicast::{Receiver, Sender};
 use thiserror::Error;
-use tokio::{runtime::Handle, sync::Mutex};
+use thread_priority::{set_current_thread_priority, ThreadPriority};
 
 use crate::{
     adapter::{ReceiverAdapterFactory, StreamSenderAdapter},
@@ -40,7 +41,7 @@ pub struct Transport {
 }
 
 impl Transport {
-    pub async fn new<T>(
+    pub fn new<T>(
         multicast: Ipv4Addr,
         options: Option<TransportOptions<T>>,
     ) -> Result<Self, TransportError>
@@ -49,104 +50,100 @@ impl Transport {
     {
         let mut discovery = None;
         if let Some(options) = options {
-            discovery = Some(Discovery::new(options.bind).await?);
+            discovery = Some(Discovery::new(options.bind)?);
             let discovery = discovery.as_ref().map(Arc::downgrade);
 
-            tokio::spawn(async move {
-                loop {
-                    let discovery = if let Some(discovery) =
-                        discovery.as_ref().map(|item| item.upgrade()).flatten()
-                    {
-                        discovery
-                    } else {
-                        log::info!("discovery is drop, maybe is released.");
+            thread::spawn(move || loop {
+                let discovery = if let Some(discovery) =
+                    discovery.as_ref().map(|item| item.upgrade()).flatten()
+                {
+                    discovery
+                } else {
+                    log::info!("discovery is drop, maybe is released.");
 
-                        break;
-                    };
+                    break;
+                };
 
-                    if let Some((service, addr)) = discovery.recv_online().await {
-                        log::info!(
-                            "discovery recv online service, id={}, port={}, addr={}",
-                            service.id,
-                            service.port,
-                            addr
-                        );
+                if let Some((service, addr)) = discovery.recv_online() {
+                    log::info!(
+                        "discovery recv online service, id={}, port={}, addr={}",
+                        service.id,
+                        service.port,
+                        addr
+                    );
 
-                        let bind = SocketAddr::new(addr.ip(), service.port);
-                        if let Some(adapter) = options
+                    let bind = SocketAddr::new(addr.ip(), service.port);
+                    if let Some(adapter) =
+                        options
                             .adapter_factory
                             .connect(service.id, bind, &service.description)
-                            .await
-                        {
-                            log::info!(
-                                "adapter factory created a adapter, ip={}, port={}",
-                                options.bind.ip(),
-                                service.port
-                            );
+                    {
+                        log::info!(
+                            "adapter factory created a adapter, ip={}, port={}",
+                            options.bind.ip(),
+                            service.port
+                        );
 
-                            let bind = SocketAddr::new(options.bind.ip(), service.port);
-                            match Client::new(multicast, bind, 50).await {
-                                Ok(mut socket) => {
-                                    log::info!(
-                                        "connected to remote service, ip={}, port={}",
-                                        addr.ip(),
-                                        service.port,
-                                    );
+                        let bind = SocketAddr::new(options.bind.ip(), service.port);
+                        match Receiver::new(multicast, bind, 50) {
+                            Ok(mut receiver) => {
+                                log::info!(
+                                    "connected to remote service, ip={}, port={}",
+                                    addr.ip(),
+                                    service.port,
+                                );
 
-                                    let runtime = Handle::current();
-                                    tokio::spawn(async move {
-                                        let mut remuxer = Remuxer::default();
+                                thread::spawn(move || {
+                                    let _ = set_current_thread_priority(ThreadPriority::Max);
 
-                                        'a: while let Ok(packets) = socket.read().await {
-                                            for pkt in packets {
-                                                if let Some(adapter) = adapter.upgrade() {
-                                                    match remuxer.remux(pkt) {
-                                                        State::Pkt(chunk, kind, flags) => {
-                                                            if !adapter.send(chunk, kind, flags) {
-                                                                log::error!(
-                                                                    "adapter on buf failed."
-                                                                );
+                                    let mut remuxer = Remuxer::default();
 
-                                                                break 'a;
-                                                            }
-                                                        }
-                                                        State::Loss => {
-                                                            adapter.loss_pkt();
-                                                        }
-                                                        _ => (),
-                                                    }
-                                                } else {
-                                                    log::warn!("adapter is droped!");
-                                                    break 'a;
-                                                }
-                                            }
-                                        }
-
-                                        log::warn!("socket is closed, ip={}", addr.ip());
-
-                                        runtime.block_on(discovery.remove(&addr));
+                                    'a: while let Ok(packet) = receiver.read() {
                                         if let Some(adapter) = adapter.upgrade() {
-                                            adapter.close();
+                                            match remuxer.remux(&packet) {
+                                                State::Pkt(chunk, kind, flags, timestamp) => {
+                                                    if !adapter.send(chunk, kind, flags, timestamp)
+                                                    {
+                                                        log::error!("adapter on buf failed.");
+
+                                                        break 'a;
+                                                    }
+                                                }
+                                                State::Loss => {
+                                                    adapter.loss_pkt();
+                                                }
+                                                _ => (),
+                                            }
+                                        } else {
+                                            log::warn!("adapter is droped!");
+                                            break 'a;
                                         }
-                                    });
-                                }
-                                Err(e) => {
-                                    log::error!(
-                                        "connect to remote service failed, ip={}, port={}, error={}",
-                                        addr.ip(),
-                                        service.port,
-                                        e,
-                                    );
-                                }
+                                    }
+
+                                    log::warn!("socket is closed, ip={}", addr.ip());
+
+                                    discovery.remove(&addr);
+                                    if let Some(adapter) = adapter.upgrade() {
+                                        adapter.close();
+                                    }
+                                });
                             }
-                        } else {
-                            log::info!("adapter factory not create adapter.");
+                            Err(e) => {
+                                log::error!(
+                                    "connect to remote service failed, ip={}, port={}, error={}",
+                                    addr.ip(),
+                                    service.port,
+                                    e,
+                                );
+                            }
                         }
                     } else {
-                        log::info!("discovery recv online a none, maybe is released.");
-
-                        break;
+                        log::info!("adapter factory not create adapter.");
                     }
+                } else {
+                    log::info!("discovery recv online a none, maybe is released.");
+
+                    break;
                 }
             });
         }
@@ -158,7 +155,7 @@ impl Transport {
         })
     }
 
-    pub async fn create_sender(
+    pub fn create_sender(
         &self,
         id: u8,
         mtu: usize,
@@ -166,7 +163,7 @@ impl Transport {
         description: Vec<u8>,
         adapter: &Arc<StreamSenderAdapter>,
     ) -> Result<(), TransportError> {
-        let mut server = Server::new(self.multicast, bind, mtu).await?;
+        let mut sender = Sender::new(self.multicast, bind, mtu)?;
         let service = Service {
             port: bind.port(),
             description,
@@ -176,27 +173,27 @@ impl Transport {
         log::info!("sender bind to port={}", bind.port());
 
         {
-            let mut services = self.services.lock().await;
+            let mut services = self.services.lock().unwrap();
             services.insert(service.clone());
 
             if let Some(discovery) = &self.discovery {
-                discovery
-                    .set_services(services.iter().map(|item| item.clone()).collect())
-                    .await;
+                discovery.set_services(services.iter().map(|item| item.clone()).collect());
             }
         }
 
         let services_ = Arc::downgrade(&self.services);
         let discovery_ = self.discovery.as_ref().map(Arc::downgrade);
         let adapter_ = Arc::downgrade(adapter);
-        tokio::spawn(async move {
-            let mut muxer = Muxer::new(server.max_packet_size());
+        thread::spawn(move || {
+            let _ = set_current_thread_priority(ThreadPriority::Max);
+
+            let mut muxer = Muxer::new(mtu);
 
             while let Some(adapter) = adapter_.upgrade() {
-                if let Some((buf, kind, flags)) = adapter.next().await {
-                    if let Some(payloads) = muxer.mux(kind, flags, buf.as_ref()) {
+                if let Some((buf, kind, flags, timestamp)) = adapter.next() {
+                    if let Some(payloads) = muxer.mux(kind, flags, timestamp, buf.as_ref()) {
                         for payload in payloads {
-                            if let Err(e) = server.send(payload).await {
+                            if let Err(e) = sender.send(payload) {
                                 log::error!("failed to send buf in socket, err={:?}", e);
                             }
                         }
@@ -210,12 +207,10 @@ impl Transport {
 
             if let Some(discovery) = discovery_.as_ref().map(|item| item.upgrade()).flatten() {
                 if let Some(services) = services_.upgrade() {
-                    let mut services = services.lock().await;
+                    let mut services = services.lock().unwrap();
                     services.remove(&service);
 
-                    discovery
-                        .set_services(services.iter().map(|item| item.clone()).collect())
-                        .await;
+                    discovery.set_services(services.iter().map(|item| item.clone()).collect());
                 }
             }
         });
@@ -223,37 +218,37 @@ impl Transport {
         Ok(())
     }
 
-    pub async fn create_receiver(
+    pub fn create_receiver(
         &self,
         bind: SocketAddr,
         adapter: &Arc<StreamReceiverAdapter>,
     ) -> Result<(), TransportError> {
-        let mut socket = Client::new(self.multicast, bind, 50).await?;
+        let mut receiver = Receiver::new(self.multicast, bind, 50)?;
         log::info!("receiver listening, port={}", bind.port(),);
 
         let adapter = Arc::downgrade(adapter);
-        tokio::spawn(async move {
+        thread::spawn(move || {
+            let _ = set_current_thread_priority(ThreadPriority::Max);
+
             let mut remuxer = Remuxer::default();
 
-            'a: while let Ok(packets) = socket.read().await {
-                for pkt in packets {
-                    if let Some(adapter) = adapter.upgrade() {
-                        match remuxer.remux(pkt) {
-                            State::Pkt(chunk, kind, flags) => {
-                                if !adapter.send(chunk, kind, flags) {
-                                    log::error!("adapter on buf failed.");
-                                    break 'a;
-                                }
+            'a: while let Ok(packet) = receiver.read() {
+                if let Some(adapter) = adapter.upgrade() {
+                    match remuxer.remux(&packet) {
+                        State::Pkt(chunk, kind, flags, timestamp) => {
+                            if !adapter.send(chunk, kind, flags, timestamp) {
+                                log::error!("adapter on buf failed.");
+                                break 'a;
                             }
-                            State::Loss => {
-                                adapter.loss_pkt();
-                            }
-                            _ => (),
                         }
-                    } else {
-                        log::warn!("adapter is droped!");
-                        break 'a;
+                        State::Loss => {
+                            adapter.loss_pkt();
+                        }
+                        _ => (),
                     }
+                } else {
+                    log::warn!("adapter is droped!");
+                    break 'a;
                 }
             }
 

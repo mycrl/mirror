@@ -10,7 +10,6 @@ fn join(root: &str, next: &str) -> anyhow::Result<String> {
         .to_string())
 }
 
-#[allow(unused)]
 fn is_exsit(dir: &str) -> bool {
     fs::metadata(dir).is_ok()
 }
@@ -31,7 +30,6 @@ fn exec(command: &str, work_dir: &str) -> anyhow::Result<String> {
 }
 
 fn main() -> anyhow::Result<()> {
-    println!("cargo:rerun-if-changed=./lib");
     println!("cargo:rerun-if-changed=./build.rs");
 
     let target = env::var("TARGET")?;
@@ -40,39 +38,27 @@ fn main() -> anyhow::Result<()> {
         .map(|label| label == "true")
         .unwrap_or(true);
 
-    #[cfg(target_os = "windows")]
-    {
-        if !is_exsit(&join(&out_dir, "obs.lib")?) {
-            exec(
-                "Invoke-WebRequest \
-                -Uri https://github.com/mycrl/mirror/releases/download/distributions/obs.lib \
-                -OutFile obs.lib",
-                &out_dir,
-            )?;
-        }
-    }
-
-    if !is_exsit(&join(&out_dir, "./obs-studio")?) {
+    let reliable_prefix = join(&out_dir, "./reliable")?;
+    if !is_exsit(&reliable_prefix) {
         exec(
-            "git clone --branch release/30.1 https://github.com/obsproject/obs-studio",
+            "git clone https://github.com/mas-bandwidth/reliable",
             &out_dir,
         )?;
     }
 
     cc::Build::new()
-        .cpp(true)
-        .std("c++20")
+        .cpp(false)
+        .std("c17")
         .debug(is_debug)
         .static_crt(true)
         .target(&target)
         .warnings(false)
         .out_dir(&out_dir)
-        .file("./lib/devices.cpp")
-        .include(&join(&out_dir, "./obs-studio")?)
-        .include("../common/include")
-        .compile("devices");
+        .file(&join(&reliable_prefix, "reliable.c")?)
+        .include(&reliable_prefix)
+        .compile("reliable");
 
     println!("cargo:rustc-link-search=all={}", &out_dir);
-    println!("cargo:rustc-link-lib=obs");
+    println!("cargo:rustc-link-lib=reliable");
     Ok(())
 }

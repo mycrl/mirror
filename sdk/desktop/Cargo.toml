@@ -13,7 +13,6 @@ devices = { path = "../../devices" }
 common = { path = "../../common" }
 codec = { path = "../../codec" }
 transport = { path = "../../transport" }
-tokio = { version = "1.37.0", features = ["rt-multi-thread"]}
 log = "0.4.20"
 simple_logger = "4"
 anyhow = "1.0.82"

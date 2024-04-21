@@ -1,24 +1,7 @@
-use std::cell::{OnceCell, RefCell};
+use std::{cell::RefCell, sync::Mutex};
 
-use anyhow::anyhow;
 use bytes::{Bytes, BytesMut};
-use jni::{objects::JByteArray, JNIEnv};
-use tokio::runtime::Runtime;
-
-// The Tokio runtime.
-//
-// Unlike other Rust programs, asynchronous applications require runtime
-// support. In particular, the following runtime services are necessary:
-//
-// An I/O event loop, called the driver, which drives I/O resources and
-// dispatches I/O events to tasks that depend on them.
-// A scheduler to execute tasks that use these I/O resources.
-// A timer for scheduling work to run after a set period of time.
-// Tokio’s Runtime bundles all of these services as a single type, allowing them
-// to be started, shut down, and configured together. However, often it is not
-// required to configure a Runtime manually, and a user may just use the
-// tokio::main attribute macro, which creates a Runtime under the hood.
-pub static mut RUNTIME: OnceCell<Runtime> = OnceCell::new();
+use jni::{objects::JByteArray, JNIEnv, JavaVM};
 
 // Each function is accessible at a fixed offset through the JNIEnv argument.
 // The JNIEnv type is a pointer to a structure storing all JNI function
@@ -35,12 +18,30 @@ thread_local! {
     pub static ENV: RefCell<Option<*mut jni::sys::JNIEnv>> = RefCell::new(None);
 }
 
-pub fn get_current_env<'local>() -> JNIEnv<'local> {
-    unsafe { JNIEnv::from_raw(ENV.with(|cell| *cell.borrow_mut()).unwrap()).unwrap() }
-}
+pub static JVM: Mutex<Option<JavaVM>> = Mutex::new(None);
 
-pub fn get_runtime() -> anyhow::Result<&'static Runtime> {
-    unsafe { RUNTIME.get() }.ok_or_else(|| anyhow!("not found runtime."))
+pub fn get_current_env<'local>() -> JNIEnv<'local> {
+    unsafe {
+        JNIEnv::from_raw(
+            ENV.with(|cell| {
+                let mut env = cell.borrow_mut();
+                if env.is_none() {
+                    let vm = JVM.lock().unwrap();
+                    env.replace(
+                        vm.as_ref()
+                            .unwrap()
+                            .attach_current_thread_as_daemon()
+                            .unwrap()
+                            .get_raw(),
+                    );
+                }
+
+                *env
+            })
+            .unwrap(),
+        )
+        .unwrap()
+    }
 }
 
 pub fn catcher<F, T>(env: &mut JNIEnv, func: F) -> Option<T>

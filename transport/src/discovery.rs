@@ -1,22 +1,18 @@
 use std::{
     collections::HashMap,
     io::ErrorKind::ConnectionReset,
-    net::{IpAddr, Ipv4Addr, SocketAddr},
-    sync::Arc,
+    net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
+    sync::{
+        mpsc::{channel, Receiver},
+        Arc, Mutex, RwLock,
+    },
+    thread::{self, sleep},
     time::{Duration, SystemTime},
 };
 
 use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tokio::{
-    net::UdpSocket,
-    sync::{
-        mpsc::{unbounded_channel, UnboundedReceiver},
-        Mutex, RwLock,
-    },
-    time::sleep,
-};
 
 #[derive(Debug, Error)]
 pub enum DiscoveryError {
@@ -28,16 +24,16 @@ pub enum DiscoveryError {
 pub struct Discovery {
     id: Uuid,
     services: Mutex<HashMap<SocketAddr, Services>>,
-    receiver: Mutex<UnboundedReceiver<(Service, SocketAddr)>>,
+    receiver: Mutex<Receiver<(Service, SocketAddr)>>,
     local_services: RwLock<Services>,
     socket: Arc<UdpSocket>,
     addr: SocketAddr,
 }
 
 impl Discovery {
-    pub async fn new(addr: SocketAddr) -> Result<Arc<Self>, DiscoveryError> {
-        let (tx, rx) = unbounded_channel();
-        let socket = Arc::new(UdpSocket::bind(addr).await?);
+    pub fn new(addr: SocketAddr) -> Result<Arc<Self>, DiscoveryError> {
+        let (tx, rx) = channel();
+        let socket = Arc::new(UdpSocket::bind(addr)?);
         socket.set_broadcast(true)?;
 
         log::info!("Discovery create udp socket, listening={}", addr);
@@ -52,11 +48,11 @@ impl Discovery {
         });
 
         let this_ = Arc::downgrade(&this);
-        tokio::spawn(async move {
+        thread::spawn(move || {
             let mut buf = [0u8; 2048];
 
             let tx_ = &tx;
-            let notify_service = |addr: SocketAddr, services: Vec<Service>| async move {
+            let notify_service = move |addr: SocketAddr, services: Vec<Service>| {
                 for service in services {
                     log::info!(
                         "Discovery recv a online service event, id={}, port={}",
@@ -81,7 +77,7 @@ impl Discovery {
                     break;
                 };
 
-                let (size, addr) = match this.socket.recv_from(&mut buf).await {
+                let (size, addr) = match this.socket.recv_from(&mut buf) {
                     Err(e) if e.kind() != ConnectionReset => break,
                     Ok(ret) => ret,
                     _ => continue,
@@ -108,15 +104,15 @@ impl Discovery {
                                 continue;
                             }
 
-                            let mut services_ = this.services.lock().await;
+                            let mut services_ = this.services.lock().unwrap();
                             if let Some(service) = services_.get_mut(&addr) {
                                 if let Some(diffs) = service.diff(&services) {
-                                    notify_service(addr, diffs).await;
+                                    notify_service(addr, diffs);
                                 }
 
                                 *service = Services(services);
                             } else {
-                                notify_service(addr, services.clone()).await;
+                                notify_service(addr, services.clone());
                                 services_.insert(addr, Services(services));
                             }
                         }
@@ -126,7 +122,7 @@ impl Discovery {
                             }
 
                             if let Ok(pkt) = rmp_serde::encode::to_vec(&Message::Notify {
-                                services: this.local_services.read().await.0.clone(),
+                                services: this.local_services.read().unwrap().0.clone(),
                                 id: this.id.0,
                             }) {
                                 this.broadcast(pkt, None);
@@ -146,10 +142,10 @@ impl Discovery {
         Ok(this)
     }
 
-    pub async fn set_services(&self, services: Vec<Service>) {
+    pub fn set_services(&self, services: Vec<Service>) {
         log::info!("Discovery set services, services={:?}", services);
 
-        self.local_services.write().await.0 = services.clone();
+        self.local_services.write().unwrap().0 = services.clone();
         if let Ok(pkt) = rmp_serde::encode::to_vec(&Message::Notify {
             id: self.id.0,
             services,
@@ -158,14 +154,14 @@ impl Discovery {
         }
     }
 
-    pub async fn recv_online(&self) -> Option<(Service, SocketAddr)> {
-        self.receiver.lock().await.recv().await
+    pub fn recv_online(&self) -> Option<(Service, SocketAddr)> {
+        self.receiver.lock().unwrap().recv().ok()
     }
 
-    pub async fn remove(&self, addr: &SocketAddr) {
+    pub fn remove(&self, addr: &SocketAddr) {
         log::info!("Discovery remove a remote service, addr={:?}", addr);
 
-        self.services.lock().await.remove(addr);
+        self.services.lock().unwrap().remove(addr);
     }
 
     fn broadcast(&self, pkt: Vec<u8>, count: Option<u8>) {
@@ -174,16 +170,16 @@ impl Discovery {
 
         log::info!("Discovery start broadcast, target={:?}", addr);
 
-        tokio::spawn(async move {
+        thread::spawn(move || {
             for _ in 0..count.unwrap_or(5) {
                 if let Some(socket) = socket.upgrade() {
-                    if let Err(e) = socket.send_to(&pkt, addr).await {
+                    if let Err(e) = socket.send_to(&pkt, addr) {
                         if e.kind() != ConnectionReset {
                             log::error!("udp socket error: {}, addr={}", e, addr);
                             break;
                         }
                     } else {
-                        sleep(Duration::from_millis(100)).await;
+                        sleep(Duration::from_millis(100));
                     }
                 } else {
                     break;
