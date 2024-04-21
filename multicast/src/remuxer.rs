@@ -62,7 +62,7 @@ impl Remuxer {
         // Transfer all timeout packets to the outgoing queue.
         for seq in &self.remove_keys {
             if self.seq + 1 != *seq {
-                log::info!("packet loss, old seq={}, seq={}", self.seq, seq);
+                log::info!("packet loss, size={}", seq - self.seq);
             }
 
             self.seq = *seq;
