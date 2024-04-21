@@ -17,7 +17,7 @@ use thread_priority::{set_current_thread_priority, ThreadPriority};
 use crate::{
     adapter::{ReceiverAdapterFactory, StreamSenderAdapter},
     discovery::{Discovery, DiscoveryError, Service},
-    payload::{Muxer, Remuxer, State},
+    payload::{Muxer, Remuxer},
 };
 
 #[derive(Debug, Error)]
@@ -96,23 +96,18 @@ impl Transport {
                                 thread::spawn(move || {
                                     let _ = set_current_thread_priority(ThreadPriority::Max);
 
-                                    let mut remuxer = Remuxer::default();
-
                                     'a: while let Ok(packet) = receiver.read() {
                                         if let Some(adapter) = adapter.upgrade() {
-                                            match remuxer.remux(&packet) {
-                                                State::Pkt(chunk, kind, flags, timestamp) => {
-                                                    if !adapter.send(chunk, kind, flags, timestamp)
-                                                    {
-                                                        log::error!("adapter on buf failed.");
+                                            if let Some((kind, flags, timestamp)) =
+                                                Remuxer::remux(&packet)
+                                            {
+                                                if !adapter.send(packet, kind, flags, timestamp) {
+                                                    log::error!("adapter on buf failed.");
 
-                                                        break 'a;
-                                                    }
+                                                    break 'a;
                                                 }
-                                                State::Loss => {
-                                                    adapter.loss_pkt();
-                                                }
-                                                _ => (),
+                                            } else {
+                                                adapter.loss_pkt();
                                             }
                                         } else {
                                             log::warn!("adapter is droped!");
@@ -187,15 +182,11 @@ impl Transport {
         thread::spawn(move || {
             let _ = set_current_thread_priority(ThreadPriority::Max);
 
-            let mut muxer = Muxer::new(mtu);
-
             while let Some(adapter) = adapter_.upgrade() {
                 if let Some((buf, kind, flags, timestamp)) = adapter.next() {
-                    if let Some(payloads) = muxer.mux(kind, flags, timestamp, buf.as_ref()) {
-                        for payload in payloads {
-                            if let Err(e) = sender.send(payload) {
-                                log::error!("failed to send buf in socket, err={:?}", e);
-                            }
+                    if let Some(payload) = Muxer::mux(kind, flags, timestamp, buf.as_ref()) {
+                        if let Err(e) = sender.send(payload) {
+                            log::error!("failed to send buf in socket, err={:?}", e);
                         }
                     }
                 } else {
@@ -230,21 +221,15 @@ impl Transport {
         thread::spawn(move || {
             let _ = set_current_thread_priority(ThreadPriority::Max);
 
-            let mut remuxer = Remuxer::default();
-
             'a: while let Ok(packet) = receiver.read() {
                 if let Some(adapter) = adapter.upgrade() {
-                    match remuxer.remux(&packet) {
-                        State::Pkt(chunk, kind, flags, timestamp) => {
-                            if !adapter.send(chunk, kind, flags, timestamp) {
-                                log::error!("adapter on buf failed.");
-                                break 'a;
-                            }
+                    if let Some((kind, flags, timestamp)) = Remuxer::remux(&packet) {
+                        if !adapter.send(packet, kind, flags, timestamp) {
+                            log::error!("adapter on buf failed.");
+                            break 'a;
                         }
-                        State::Loss => {
-                            adapter.loss_pkt();
-                        }
-                        _ => (),
+                    } else {
+                        adapter.loss_pkt();
                     }
                 } else {
                     log::warn!("adapter is droped!");

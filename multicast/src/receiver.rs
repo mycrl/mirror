@@ -81,7 +81,7 @@ impl Receiver {
 
             let mut buf = vec![0u8; 2048];
             let time = Instant::now();
-            
+
             loop {
                 if let Ok((size, addr)) = socket.recv_from(&mut buf[..]) {
                     if size == 0 {

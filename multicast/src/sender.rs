@@ -1,5 +1,12 @@
 use std::{
-    net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket}, sync::{atomic::AtomicBool, mpsc::{self, channel}, Arc, Mutex}, thread, time::Instant
+    net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
+    sync::{
+        atomic::AtomicBool,
+        mpsc::{self, channel},
+        Arc, Mutex,
+    },
+    thread,
+    time::Instant,
 };
 
 use crate::{
@@ -111,10 +118,7 @@ impl Sender {
             closed_.update(true);
         });
 
-        Ok(Self {
-            closed,
-            tx,
-        })
+        Ok(Self { closed, tx })
     }
 
     /// Sends data on the socket to the remote address to which it is connected.
