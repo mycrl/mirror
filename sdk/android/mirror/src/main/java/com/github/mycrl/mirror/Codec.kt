@@ -63,7 +63,7 @@ class Video {
             }
 
             worker = Thread {
-                val buffer = ByteArray(1024 * 1024)
+                val buffer = ByteArray(2 * 1024 * 1024)
                 val streamBufferInfo = StreamBufferInfo(StreamKind.Video);
 
                 while (isRunning) {
@@ -263,23 +263,23 @@ class Audio {
         }
 
         fun sink(buf: ByteArray, timestamp: Long) {
-            val index = codec.dequeueInputBuffer(1000)
-            if (index >= 0) {
-                codec.getInputBuffer(index)?.clear()
-                codec.getInputBuffer(index)?.put(buf)
-                codec.queueInputBuffer(index, 0, buf.size, timestamp, 0)
-            }
+//            val index = codec.dequeueInputBuffer(1000)
+//            if (index >= 0) {
+//                codec.getInputBuffer(index)?.clear()
+//                codec.getInputBuffer(index)?.put(buf)
+//                codec.queueInputBuffer(index, 0, buf.size, timestamp, 0)
+//            }
         }
 
         fun start() {
-            if (!isRunning) {
-                isRunning = true
-                worker.priority = MAX_PRIORITY
-
-                codec.start()
-                worker.start()
-                track.play()
-            }
+//            if (!isRunning) {
+//                isRunning = true
+//                worker.priority = MAX_PRIORITY
+//
+//                codec.start()
+//                worker.start()
+//                track.play()
+//            }
         }
 
         fun release() {

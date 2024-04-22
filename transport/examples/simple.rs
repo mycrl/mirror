@@ -80,6 +80,7 @@ fn main() -> anyhow::Result<()> {
 
     let mut args = Args::parse();
     let transport = Transport::new(
+        1400,
         "239.0.0.1".parse()?,
         Some(TransportOptions {
             adapter_factory: SimpleReceiverAdapterFactory,
@@ -90,7 +91,7 @@ fn main() -> anyhow::Result<()> {
     if args.kind == "client" {
         args.addr.set_port(args.addr.port() + 1);
         let adapter = StreamSenderAdapter::new();
-        transport.create_sender(0, 1500, args.addr, vec![], &adapter)?;
+        transport.create_sender(0, args.addr, vec![], &adapter)?;
 
         let buf = Bytes::from_static(&[0u8; 3000]);
         loop {

@@ -17,7 +17,7 @@ use thread_priority::{set_current_thread_priority, ThreadPriority};
 use crate::{
     adapter::{ReceiverAdapterFactory, StreamSenderAdapter},
     discovery::{Discovery, DiscoveryError, Service},
-    payload::{Muxer, Remuxer},
+    payload::{Muxer, PacketInfo, Remuxer},
 };
 
 #[derive(Debug, Error)]
@@ -38,10 +38,12 @@ pub struct Transport {
     services: Arc<Mutex<HashSet<Service>>>,
     discovery: Option<Arc<Discovery>>,
     multicast: Ipv4Addr,
+    mtu: usize,
 }
 
 impl Transport {
     pub fn new<T>(
+        mtu: usize,
         multicast: Ipv4Addr,
         options: Option<TransportOptions<T>>,
     ) -> Result<Self, TransportError>
@@ -85,7 +87,7 @@ impl Transport {
                         );
 
                         let bind = SocketAddr::new(options.bind.ip(), service.port);
-                        match Receiver::new(multicast, bind, 50) {
+                        match Receiver::new(multicast, bind, mtu) {
                             Ok(mut receiver) => {
                                 log::info!(
                                     "connected to remote service, ip={}, port={}",
@@ -96,12 +98,25 @@ impl Transport {
                                 thread::spawn(move || {
                                     let _ = set_current_thread_priority(ThreadPriority::Max);
 
+                                    let mut remuxer = Remuxer::default();
+
                                     'a: while let Ok(packet) = receiver.read() {
                                         if let Some(adapter) = adapter.upgrade() {
-                                            if let Some((kind, flags, timestamp)) =
-                                                Remuxer::remux(&packet)
-                                            {
-                                                if !adapter.send(packet, kind, flags, timestamp) {
+                                            if let Some((offset, info)) = remuxer.remux(&packet) {
+                                                log::trace!(
+                                                    "recv a packet, kind={:?}, flags={}, time={}, size={}",
+                                                    info.kind,
+                                                    info.flags,
+                                                    info.timestamp,
+                                                    packet.len() - offset,
+                                                );
+
+                                                if !adapter.send(
+                                                    packet.slice(offset..),
+                                                    info.kind,
+                                                    info.flags,
+                                                    info.timestamp,
+                                                ) {
                                                     log::error!("adapter on buf failed.");
 
                                                     break 'a;
@@ -147,18 +162,18 @@ impl Transport {
             services: Default::default(),
             multicast,
             discovery,
+            mtu,
         })
     }
 
     pub fn create_sender(
         &self,
         id: u8,
-        mtu: usize,
         bind: SocketAddr,
         description: Vec<u8>,
         adapter: &Arc<StreamSenderAdapter>,
     ) -> Result<(), TransportError> {
-        let mut sender = Sender::new(self.multicast, bind, mtu)?;
+        let mut sender = Sender::new(self.multicast, bind, self.mtu)?;
         let service = Service {
             port: bind.port(),
             description,
@@ -182,9 +197,25 @@ impl Transport {
         thread::spawn(move || {
             let _ = set_current_thread_priority(ThreadPriority::Max);
 
+            let mut muxer = Muxer::default();
+
             while let Some(adapter) = adapter_.upgrade() {
                 if let Some((buf, kind, flags, timestamp)) = adapter.next() {
-                    if let Some(payload) = Muxer::mux(kind, flags, timestamp, buf.as_ref()) {
+                    log::trace!(
+                        "send a packet, kind={:?}, flags={}, time={}",
+                        kind,
+                        flags,
+                        timestamp
+                    );
+
+                    if let Some(payload) = muxer.mux(
+                        PacketInfo {
+                            kind,
+                            flags,
+                            timestamp,
+                        },
+                        buf.as_ref(),
+                    ) {
                         if let Err(e) = sender.send(payload) {
                             log::error!("failed to send buf in socket, err={:?}", e);
                         }
@@ -214,17 +245,24 @@ impl Transport {
         bind: SocketAddr,
         adapter: &Arc<StreamReceiverAdapter>,
     ) -> Result<(), TransportError> {
-        let mut receiver = Receiver::new(self.multicast, bind, 50)?;
+        let mut receiver = Receiver::new(self.multicast, bind, self.mtu)?;
         log::info!("receiver listening, port={}", bind.port(),);
 
         let adapter = Arc::downgrade(adapter);
         thread::spawn(move || {
             let _ = set_current_thread_priority(ThreadPriority::Max);
 
+            let mut remuxer = Remuxer::default();
+
             'a: while let Ok(packet) = receiver.read() {
                 if let Some(adapter) = adapter.upgrade() {
-                    if let Some((kind, flags, timestamp)) = Remuxer::remux(&packet) {
-                        if !adapter.send(packet, kind, flags, timestamp) {
+                    if let Some((offset, info)) = remuxer.remux(&packet) {
+                        if !adapter.send(
+                            packet.slice(offset..),
+                            info.kind,
+                            info.flags,
+                            info.timestamp,
+                        ) {
                             log::error!("adapter on buf failed.");
                             break 'a;
                         }

@@ -84,6 +84,12 @@ impl Reliable {
         config.fragment_above = options.max_fragment_size as c_int;
         config.max_fragments = options.max_fragments as c_int;
         config.fragment_size = options.fragment_size as c_int;
+        config.rtt_smoothing_factor = 0.01;
+        config.packet_loss_smoothing_factor = 0.3;
+        config.ack_buffer_size = 256 * 2;
+        config.sent_packets_buffer_size = 256 * 2;
+        config.received_packets_buffer_size = 256 * 2;
+        config.fragment_reassembly_buffer_size = 64 * 2;
 
         unsafe {
             reliable_copy_string(

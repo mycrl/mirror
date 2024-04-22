@@ -64,7 +64,7 @@ impl Receiver {
             ReliableConfig {
                 name: socket.local_addr().unwrap().to_string(),
                 max_fragment_size: mtu - 100,
-                max_packet_size: 32 * 1024,
+                max_packet_size: 200 * 1024,
                 fragment_size: mtu - 200,
                 max_fragments: 255,
             },

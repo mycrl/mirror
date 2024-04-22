@@ -44,6 +44,7 @@ class ReceiverAdapterWrapper constructor(private val releaser: () -> Unit) {
 }
 
 class Mirror constructor(
+    private val mtu: Int,
     private val multicast: String,
     private val bind: String?,
     private val adapterFactory: ReceiverAdapterFactory?
@@ -52,7 +53,7 @@ class Mirror constructor(
 
     init {
         mirror = createMirror(
-            multicast, bind, if (adapterFactory != null) {
+            mtu, multicast, bind, if (adapterFactory != null) {
                 createStreamReceiverAdapterFactory(adapterFactory)
             } else {
                 0L
@@ -64,13 +65,13 @@ class Mirror constructor(
         }
     }
 
-    fun createSender(id: Int, mtu: Int, bind: String, description: ByteArray): SenderAdapterWrapper {
+    fun createSender(id: Int, bind: String, description: ByteArray): SenderAdapterWrapper {
         val sender = createStreamSenderAdapter()
         if (sender == 0L) {
             throw Exception("failed to create sender adapter!")
         }
 
-        createSender(mirror, id, mtu, bind, description, sender)
+        createSender(mirror, id, bind, description, sender)
         return SenderAdapterWrapper(
             { info, buf -> sendBufToSender(sender, info, buf) },
             { -> releaseStreamSenderAdapter(sender) },
@@ -114,6 +115,7 @@ class Mirror constructor(
     private external fun releaseStreamReceiverAdapter(adapter: Long)
 
     private external fun createMirror(
+        mtu: Int,
         multicast: String,
         bind: String?,
         adapterFactory: Long
@@ -128,7 +130,6 @@ class Mirror constructor(
     private external fun createSender(
         mirror: Long,
         id: Int,
-        mtu: Int,
         bind: String,
         description: ByteArray,
         adapter: Long

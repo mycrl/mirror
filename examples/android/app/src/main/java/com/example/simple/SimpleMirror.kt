@@ -136,7 +136,7 @@ class SimpleMirrorService : Service() {
 
     private var receiverAdapter: ReceiverAdapterWrapper? = null
     private val mirror: MirrorService =
-        MirrorService("239.0.0.1", "0.0.0.0:3200", object : MirrorServiceObserver() {
+        MirrorService(1400, "239.0.0.1", "0.0.0.0:3200", object : MirrorServiceObserver() {
             override fun accept(id: Int, ip: String): MirrorReceiver {
                 receivedHandler?.let { it(id, ip) }
 
@@ -236,7 +236,6 @@ class SimpleMirrorService : Service() {
         mediaProjection?.registerCallback(object : MediaProjection.Callback() {}, null)
         sender = mirror.createSender(
             0,
-            1024,
             "0.0.0.0:8080",
             object : MirrorAdapterConfigure {
                 override val video = VideoConfigure

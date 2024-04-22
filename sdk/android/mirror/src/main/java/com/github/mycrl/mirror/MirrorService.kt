@@ -59,11 +59,12 @@ abstract class MirrorServiceObserver {
  * automatically respond to any sender push.
  */
 class MirrorService constructor(
+    private val mtu: Int,
     private val multicast: String,
     private val bind: String?,
     private val observer: MirrorServiceObserver?
 ) {
-    private val mirror: Mirror = Mirror(multicast, bind, if (observer != null) {
+    private val mirror: Mirror = Mirror(mtu, multicast, bind, if (observer != null) {
         object : ReceiverAdapterFactory() {
             override fun connect(
                 id: Int,
@@ -171,7 +172,6 @@ class MirrorService constructor(
      */
     fun createSender(
         id: Int,
-        mtu: Int,
         bind: String,
         configure: MirrorAdapterConfigure,
         record: AudioRecord?
@@ -179,7 +179,6 @@ class MirrorService constructor(
         return MirrorSender(
             mirror.createSender(
                 id,
-                mtu,
                 bind,
                 CodecDescriptionFactory.encode(
                     CodecDescriptionFactory.CodecDescription(

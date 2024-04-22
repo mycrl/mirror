@@ -129,7 +129,7 @@ mod objects {
         let timestamp = if let JValueGen::Long(timestamp) = env.get_field(info, "timestamp", "J")? {
             timestamp as u64
         } else {
-            return Err(anyhow!("timestamp not a int."));
+            return Err(anyhow!("timestamp not a long."));
         };
 
         Ok(
@@ -402,6 +402,7 @@ impl Mirror {
     pub fn create_mirror(
         mut env: JNIEnv,
         _this: JClass,
+        mtu: i32,
         multicast: JString,
         bind: JString,
         adapter_factory: *const AndroidStreamReceiverAdapterFactory,
@@ -421,6 +422,7 @@ impl Mirror {
             };
 
             Ok(Box::into_raw(Box::new(Transport::new(
+                mtu as usize,
                 multicast.parse()?,
                 options,
             )?)))
@@ -477,7 +479,6 @@ impl Mirror {
         _this: JClass,
         mirror: *const Transport,
         id: i32,
-        mtu: i32,
         bind: JString,
         description: JByteArray,
         adapter: *const Arc<StreamSenderAdapter>,
@@ -485,13 +486,8 @@ impl Mirror {
         catcher(&mut env, |env| {
             let bind: String = env.get_string(&bind)?.into();
             let buf = env.convert_byte_array(&description)?;
-            Ok(unsafe { &*mirror }.create_sender(
-                id as u8,
-                mtu as usize,
-                bind.parse()?,
-                buf,
-                unsafe { &*adapter },
-            )?)
+            Ok(unsafe { &*mirror }
+                .create_sender(id as u8, bind.parse()?, buf, unsafe { &*adapter })?)
         });
     }
 

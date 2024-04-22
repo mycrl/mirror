@@ -147,6 +147,7 @@ impl Mirror {
     pub fn new() -> Result<Self> {
         let options = OPTIONS.read().unwrap();
         Ok(Self(Transport::new::<()>(
+            options.mtu,
             options.multicast.parse()?,
             None,
         )?))
@@ -155,10 +156,9 @@ impl Mirror {
     pub fn create_sender(&self, bind: &str) -> Result<Arc<StreamSenderAdapter>> {
         log::info!("create sender: bind={}", bind);
 
-        let options = OPTIONS.read().unwrap();
         let adapter = StreamSenderAdapter::new();
         self.0
-            .create_sender(0, options.mtu, bind.parse()?, Vec::new(), &adapter)?;
+            .create_sender(0, bind.parse()?, Vec::new(), &adapter)?;
 
         devices::set_video_sink(SenderObserver::new(&adapter)?);
         Ok(adapter)
