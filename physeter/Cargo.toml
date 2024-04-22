@@ -1,0 +1,8 @@
+[package]
+name = "physeter"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bytes = "1.6.0"
+crc = "3.0.1"

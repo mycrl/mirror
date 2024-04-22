@@ -9,6 +9,7 @@ use std::{
 };
 
 use bytes::Bytes;
+use socket2::Socket;
 use thread_priority::{set_current_thread_priority, ThreadPriority};
 
 use crate::{
@@ -45,7 +46,11 @@ impl Receiver {
     pub fn new(multicast: Ipv4Addr, bind: SocketAddr, mtu: usize) -> Result<Self, Error> {
         assert!(bind.is_ipv4());
 
-        let socket = Arc::new(UdpSocket::bind(bind)?);
+        let socket = UdpSocket::bind(bind)?;
+        let socket = Socket::from(socket);
+        socket.set_recv_buffer_size(1024 * 1024)?;
+
+        let socket: Arc<UdpSocket> = Arc::new(socket.into());
         if let IpAddr::V4(bind) = bind.ip() {
             socket.join_multicast_v4(&multicast, &bind)?;
 
