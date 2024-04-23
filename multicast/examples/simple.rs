@@ -3,13 +3,12 @@ use std::{
     time::Duration,
 };
 
-use bytes::Bytes;
 use multicast::{Receiver, Sender};
 
 fn main() -> anyhow::Result<()> {
     thread::spawn(|| {
         let mut index: i32 = -1;
-        let mut receiver = Receiver::new("239.0.0.2".parse()?, "0.0.0.0:8080".parse()?, 1400)?;
+        let receiver = Receiver::new("239.0.0.2".parse()?, "0.0.0.0:8080".parse()?)?;
         while let Ok(packet) = receiver.read() {
             let seq = u32::from_be_bytes([packet[0], packet[1], packet[2], packet[3]]);
 
@@ -30,7 +29,7 @@ fn main() -> anyhow::Result<()> {
     let mut index: u32 = 0;
     loop {
         (&mut buf[..4]).copy_from_slice(&index.to_be_bytes());
-        sender.send(Bytes::copy_from_slice(&buf))?;
+        sender.send(&buf)?;
         println!("send packet, seq={}", index);
 
         sleep(Duration::from_millis(5));

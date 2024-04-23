@@ -12,8 +12,6 @@ multicast = { path = "../multicast" }
 common = { path = "../common" }
 thiserror = "1.0.56"
 rand = "0.8"
-crc = "3.0.1"
-thread-priority = "0.16.0"
 
 [[example]]
 name = "simple"

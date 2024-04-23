@@ -2,18 +2,20 @@ use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
     sync::{
         mpsc::{self, channel},
-        Arc, RwLock,
+        Arc,
     },
     thread,
-    time::Instant,
+    time::Duration,
 };
 
 use bytes::Bytes;
+use common::atomic::AtomicOption;
 use socket2::Socket;
 use thread_priority::{set_current_thread_priority, ThreadPriority};
 
 use crate::{
-    reliable::{Reliable, ReliableConfig, ReliableObserver},
+    nack::Dequeue,
+    packet::{Packet, PacketDecoder},
     Error,
 };
 
@@ -33,6 +35,8 @@ use crate::{
 /// This client is only used to receive multicast packets and does not send
 /// multicast packets.
 pub struct Receiver {
+    #[allow(unused)]
+    socket: Arc<UdpSocket>,
     rx: mpsc::Receiver<Bytes>,
 }
 
@@ -43,7 +47,7 @@ impl Receiver {
     /// the specified multicast group.
     ///
     /// Note that only IPV4 is supported.
-    pub fn new(multicast: Ipv4Addr, bind: SocketAddr, mtu: usize) -> Result<Self, Error> {
+    pub fn new(multicast: Ipv4Addr, bind: SocketAddr) -> Result<Self, Error> {
         assert!(bind.is_ipv4());
 
         let socket = UdpSocket::bind(bind)?;
@@ -64,48 +68,83 @@ impl Receiver {
         log::info!("multicast receiver bind to: bind={}", bind);
 
         let (tx, rx) = channel();
-        let target = Arc::new(RwLock::new(None));
-        let mut reliable = Reliable::new(
-            ReliableConfig {
-                name: socket.local_addr().unwrap().to_string(),
-                max_fragment_size: mtu - 100,
-                max_packet_size: 200 * 1024,
-                fragment_size: mtu - 200,
-                max_fragments: 255,
-            },
-            0.0,
-            ReceiverObserver {
-                socket: socket.clone(),
-                target: target.clone(),
-                tx: Some(tx),
-            },
-        );
+        let target = Arc::new(AtomicOption::new(None));
 
+        let socket_ = Arc::downgrade(&socket);
+        let target_ = Arc::downgrade(&target);
+        let queue = Arc::new(Dequeue::new(50, move |range| {
+            if let (Some(socket), Some(target)) = (socket_.upgrade(), target_.upgrade()) {
+                if let Some(to) = target.get() {
+                    let bytes: Bytes = Packet::Nack { range }.into();
+                    let _ = socket.send_to(&bytes, to);
+                }
+            }
+        }));
+
+        let target_ = Arc::downgrade(&target);
+        let socket_ = Arc::downgrade(&socket);
+        let queue_ = Arc::downgrade(&queue);
         thread::spawn(move || {
             let _ = set_current_thread_priority(ThreadPriority::Max);
 
             let mut buf = vec![0u8; 2048];
-            let time = Instant::now();
+            let mut decoder = PacketDecoder::default();
 
-            loop {
+            'a: while let (Some(queue), Some(socket), Some(target)) =
+                (queue_.upgrade(), socket_.upgrade(), target_.upgrade())
+            {
                 if let Ok((size, addr)) = socket.recv_from(&mut buf[..]) {
                     if size == 0 {
                         break;
                     }
 
-                    if target.read().unwrap().is_none() {
-                        target.write().unwrap().replace(addr);
+                    if target.is_none() {
+                        target.swap(Some(addr));
                     }
 
-                    reliable.recv(&buf[..size]);
-                    reliable.update(time.elapsed().as_millis() as f64);
+                    if let Ok(packet) = Packet::try_from(&buf[..size]) {
+                        match packet {
+                            Packet::Pong { timestamp } => queue.update(timestamp),
+                            Packet::Bytes { sequence, chunk } => {
+                                queue.push(sequence, chunk);
+
+                                while let Some(bytes) = queue.pop() {
+                                    if let Some(payload) = decoder.decode(&bytes) {
+                                        if tx.send(payload).is_err() {
+                                            break 'a;
+                                        }
+                                    }
+                                }
+                            }
+                            _ => (),
+                        }
+                    }
                 } else {
                     break;
                 };
             }
         });
 
-        Ok(Self { rx })
+        let socket_ = Arc::downgrade(&socket);
+        let queue_ = Arc::downgrade(&queue);
+        thread::spawn(move || {
+            while let (Some(queue), Some(socket)) = (queue_.upgrade(), socket_.upgrade()) {
+                if let Some(to) = target.get() {
+                    let bytes: Bytes = Packet::Ping {
+                        timestamp: queue.get_time(),
+                    }
+                    .into();
+
+                    if socket.send_to(&bytes, to).is_err() {
+                        break;
+                    }
+                }
+
+                thread::sleep(Duration::from_secs(1));
+            }
+        });
+
+        Ok(Self { socket, rx })
     }
 
     /// Reads packets sent from the multicast server.
@@ -114,35 +153,7 @@ impl Receiver {
     /// one packet at a time.
     ///
     /// Note that there may be packet loss.
-    pub fn read(&mut self) -> Result<Bytes, Error> {
+    pub fn read(&self) -> Result<Bytes, Error> {
         self.rx.recv().map_err(|_| Error::Closed)
-    }
-}
-
-struct ReceiverObserver {
-    socket: Arc<UdpSocket>,
-    tx: Option<mpsc::Sender<Bytes>>,
-    target: Arc<RwLock<Option<SocketAddr>>>,
-}
-
-impl ReliableObserver for ReceiverObserver {
-    fn recv(&mut self, _id: u64, _sequence: u16, buf: &[u8]) -> bool {
-        if let Some(tx) = &self.tx {
-            if tx.send(Bytes::copy_from_slice(buf)).is_err() {
-                drop(self.tx.take())
-            }
-        }
-
-        true
-    }
-
-    fn send(&mut self, _id: u64, _sequence: u16, buf: &[u8]) {
-        if let Ok(target) = self.target.read() {
-            if let Some(addr) = target.as_ref() {
-                if self.socket.send_to(buf, addr).is_err() {
-                    drop(self.tx.take())
-                }
-            }
-        }
     }
 }

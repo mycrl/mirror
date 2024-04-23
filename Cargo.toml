@@ -16,6 +16,5 @@ members = [
     "sdk/desktop",
     "sdk/android/jni-exports",
     "common/jni-macro",
-    "common", 
-    "physeter",
+    "common",
 ]

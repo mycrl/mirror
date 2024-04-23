@@ -12,7 +12,6 @@ use std::{
 use adapter::StreamReceiverAdapter;
 use multicast::{Receiver, Sender};
 use thiserror::Error;
-use thread_priority::{set_current_thread_priority, ThreadPriority};
 
 use crate::{
     adapter::{ReceiverAdapterFactory, StreamSenderAdapter},
@@ -87,8 +86,8 @@ impl Transport {
                         );
 
                         let bind = SocketAddr::new(options.bind.ip(), service.port);
-                        match Receiver::new(multicast, bind, mtu) {
-                            Ok(mut receiver) => {
+                        match Receiver::new(multicast, bind) {
+                            Ok(receiver) => {
                                 log::info!(
                                     "connected to remote service, ip={}, port={}",
                                     addr.ip(),
@@ -96,8 +95,6 @@ impl Transport {
                                 );
 
                                 thread::spawn(move || {
-                                    let _ = set_current_thread_priority(ThreadPriority::Max);
-
                                     let mut remuxer = Remuxer::default();
 
                                     'a: while let Ok(packet) = receiver.read() {
@@ -195,8 +192,6 @@ impl Transport {
         let discovery_ = self.discovery.as_ref().map(Arc::downgrade);
         let adapter_ = Arc::downgrade(adapter);
         thread::spawn(move || {
-            let _ = set_current_thread_priority(ThreadPriority::Max);
-
             let mut muxer = Muxer::default();
 
             while let Some(adapter) = adapter_.upgrade() {
@@ -216,7 +211,7 @@ impl Transport {
                         },
                         buf.as_ref(),
                     ) {
-                        if let Err(e) = sender.send(payload) {
+                        if let Err(e) = sender.send(&payload) {
                             log::error!("failed to send buf in socket, err={:?}", e);
                         }
                     }
@@ -245,13 +240,11 @@ impl Transport {
         bind: SocketAddr,
         adapter: &Arc<StreamReceiverAdapter>,
     ) -> Result<(), TransportError> {
-        let mut receiver = Receiver::new(self.multicast, bind, self.mtu)?;
+        let receiver = Receiver::new(self.multicast, bind)?;
         log::info!("receiver listening, port={}", bind.port(),);
 
         let adapter = Arc::downgrade(adapter);
         thread::spawn(move || {
-            let _ = set_current_thread_priority(ThreadPriority::Max);
-
             let mut remuxer = Remuxer::default();
 
             'a: while let Ok(packet) = receiver.read() {

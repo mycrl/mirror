@@ -1,21 +1,16 @@
 use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
-    sync::{
-        atomic::AtomicBool,
-        mpsc::{self, channel},
-        Arc, Mutex,
-    },
+    sync::Arc,
     thread,
-    time::Instant,
 };
 
 use crate::{
-    reliable::{Reliable, ReliableConfig, ReliableObserver},
+    nack::Queue,
+    packet::{Packet, PacketEncoder},
     Error,
 };
 
 use bytes::Bytes;
-use common::atomic::EasyAtomic;
 use thread_priority::{set_current_thread_priority, ThreadPriority};
 
 /// A UDP server.
@@ -34,8 +29,11 @@ use thread_priority::{set_current_thread_priority, ThreadPriority};
 /// This server is used to send multicast packets to all members of a multicast
 /// group.
 pub struct Sender {
-    closed: Arc<AtomicBool>,
-    tx: mpsc::Sender<Bytes>,
+    target: SocketAddr,
+    socket: Arc<UdpSocket>,
+    encoder: PacketEncoder,
+    queue: Arc<Queue>,
+    sequence: u16,
 }
 
 impl Sender {
@@ -64,61 +62,55 @@ impl Sender {
 
         log::info!("multicast sender bind to: bind={}", bind);
 
-        let (tx, rx) = channel::<Bytes>();
-        let closed = Arc::new(AtomicBool::new(false));
-        let reliable = Arc::new(Mutex::new(Reliable::new(
-            ReliableConfig {
-                name: socket.local_addr()?.to_string(),
-                max_fragment_size: mtu - 100,
-                max_packet_size: 200 * 1024,
-                fragment_size: mtu - 200,
-                max_fragments: 256,
-            },
-            0.0,
-            SenderObserver {
-                target: SocketAddr::new(IpAddr::V4(multicast), bind.port()),
-                closed: closed.clone(),
-                socket: socket.clone(),
-            },
-        )));
+        let queue = Arc::new(Queue::new(50));
 
-        let closed_ = closed.clone();
-        let reliable_ = reliable.clone();
+        let queue_ = Arc::downgrade(&queue);
+        let socket_ = Arc::downgrade(&socket);
         thread::spawn(move || {
             let _ = set_current_thread_priority(ThreadPriority::Max);
 
             let mut buf = [0u8; 2048];
 
-            while let Ok((size, _addr)) = socket.recv_from(&mut buf) {
-                if size == 0 {
+            'a: while let (Some(socket), Some(queue)) = (socket_.upgrade(), queue_.upgrade()) {
+                if let Ok((size, addr)) = socket.recv_from(&mut buf) {
+                    if size == 0 {
+                        break;
+                    }
+
+                    if let Ok(packet) = Packet::try_from(&buf[..size]) {
+                        match packet {
+                            Packet::Ping { timestamp } => {
+                                let bytes: Bytes = Packet::Pong { timestamp }.into();
+                                if socket.send_to(&bytes, addr).is_err() {
+                                    break;
+                                }
+                            }
+                            Packet::Nack { range } => {
+                                for sequence in range {
+                                    if let Some(chunk) = queue.get(sequence) {
+                                        let bytes: Bytes = Packet::Bytes { sequence, chunk }.into();
+                                        if socket.send_to(&bytes, addr).is_err() {
+                                            break 'a;
+                                        }
+                                    }
+                                }
+                            }
+                            _ => (),
+                        }
+                    }
+                } else {
                     break;
                 }
-
-                if let Ok(mut reliable) = reliable_.lock() {
-                    reliable.recv(&buf[..]);
-                }
             }
-
-            closed_.update(true);
         });
 
-        let closed_ = closed.clone();
-        thread::spawn(move || {
-            let _ = set_current_thread_priority(ThreadPriority::Max);
-
-            let time = Instant::now();
-
-            while let Ok(buf) = rx.recv() {
-                if let Ok(mut reliable) = reliable.lock() {
-                    reliable.send(&buf[..]);
-                    reliable.update(time.elapsed().as_millis() as f64);
-                }
-            }
-
-            closed_.update(true);
-        });
-
-        Ok(Self { closed, tx })
+        Ok(Self {
+            target: SocketAddr::new(IpAddr::V4(multicast), bind.port()),
+            encoder: PacketEncoder::new(Packet::get_max_size(mtu)),
+            sequence: 0,
+            socket,
+            queue,
+        })
     }
 
     /// Sends data on the socket to the remote address to which it is connected.
@@ -126,25 +118,25 @@ impl Sender {
     /// Sends the packet to all members of the multicast group.
     ///
     /// Note that there may be packet loss.
-    pub fn send(&mut self, buf: Bytes) -> Result<(), Error> {
-        if self.closed.get() {
-            return Err(Error::Closed);
+    pub fn send(&mut self, bytes: &[u8]) -> Result<(), Error> {
+        for packet in self.encoder.encode(bytes) {
+            let chunk = packet.clone().freeze();
+            self.queue.push(self.sequence, chunk.clone());
+
+            let bytes: Bytes = Packet::Bytes {
+                sequence: self.sequence,
+                chunk,
+            }
+            .into();
+
+            self.socket.send_to(&bytes, self.target)?;
+            if self.sequence == u16::MAX {
+                self.sequence = 0;
+            } else {
+                self.sequence += 1;
+            }
         }
 
-        self.tx.send(buf).map_err(|_| Error::Closed)
-    }
-}
-
-struct SenderObserver {
-    target: SocketAddr,
-    socket: Arc<UdpSocket>,
-    closed: Arc<AtomicBool>,
-}
-
-impl ReliableObserver for SenderObserver {
-    fn send(&mut self, _id: u64, _sequence: u16, buf: &[u8]) {
-        if self.socket.send_to(buf, self.target).is_err() {
-            self.closed.update(true);
-        }
+        Ok(())
     }
 }
