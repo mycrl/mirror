@@ -126,9 +126,8 @@ impl Receiver {
         });
 
         let socket_ = Arc::downgrade(&socket);
-        let queue_ = Arc::downgrade(&queue);
         thread::spawn(move || {
-            while let (Some(queue), Some(socket)) = (queue_.upgrade(), socket_.upgrade()) {
+            while let Some(socket) = socket_.upgrade() {
                 if let Some(to) = target.get() {
                     let bytes: Bytes = Packet::Ping {
                         timestamp: queue.get_time(),
