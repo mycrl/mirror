@@ -33,7 +33,7 @@ pub struct Sender {
     socket: Arc<UdpSocket>,
     encoder: PacketEncoder,
     queue: Arc<Queue>,
-    sequence: u16,
+    sequence: u64,
 }
 
 impl Sender {
@@ -86,6 +86,8 @@ impl Sender {
                                 }
                             }
                             Packet::Nack { range } => {
+                                log::info!("recv a nack packet, range={:?}", range);
+
                                 for sequence in range {
                                     if let Some(chunk) = queue.get(sequence) {
                                         let bytes: Bytes = Packet::Bytes { sequence, chunk }.into();
@@ -119,6 +121,10 @@ impl Sender {
     ///
     /// Note that there may be packet loss.
     pub fn send(&mut self, bytes: &[u8]) -> Result<(), Error> {
+        if bytes.len() == 0 {
+            return Ok(())
+        }
+
         for packet in self.encoder.encode(bytes) {
             let chunk = packet.clone().freeze();
             self.queue.push(self.sequence, chunk.clone());
@@ -130,7 +136,7 @@ impl Sender {
             .into();
 
             self.socket.send_to(&bytes, self.target)?;
-            if self.sequence == u16::MAX {
+            if self.sequence == u64::MAX {
                 self.sequence = 0;
             } else {
                 self.sequence += 1;

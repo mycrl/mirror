@@ -83,7 +83,7 @@ class MirrorService constructor(
                                 override val width = codecDescription.video.width
                             })
 
-                        private val audioDecoder = if (receiver.track != null) {
+                        private var audioDecoder = if (receiver.track != null) {
                             Audio.AudioDecoder(
                                 receiver.track!!,
                                 object : Audio.AudioDecoder.AudioDecoderConfigure {
@@ -109,13 +109,29 @@ class MirrorService constructor(
                                 when (kind) {
                                     StreamKind.Video -> {
                                         if (videoDecoder.isRunning) {
-                                            videoDecoder.sink(buf, timestamp)
+                                            videoDecoder.sink(buf)
                                         }
                                     }
 
                                     StreamKind.Audio -> {
-                                        if (audioDecoder != null && audioDecoder.isRunning) {
-                                            audioDecoder.sink(buf, timestamp)
+                                        try {
+                                            if (audioDecoder != null && audioDecoder!!.isRunning) {
+                                                audioDecoder!!.sink(buf)
+                                            }
+                                        } catch (e: Exception) {
+                                            if (receiver.track != null) {
+                                                audioDecoder = Audio.AudioDecoder(
+                                                    receiver.track!!,
+                                                    object :
+                                                        Audio.AudioDecoder.AudioDecoderConfigure {
+                                                        override val sampleRate =
+                                                            codecDescription.audio.sampleRate
+                                                        override val channels =
+                                                            codecDescription.audio.channels
+                                                    })
+
+                                                audioDecoder?.start()
+                                            }
                                         }
                                     }
                                 }
@@ -245,13 +261,13 @@ class MirrorService constructor(
                     when (kind) {
                         StreamKind.Video -> {
                             if (videoDecoder.isRunning) {
-                                videoDecoder.sink(buf, timestamp)
+                                videoDecoder.sink(buf)
                             }
                         }
 
                         StreamKind.Audio -> {
                             if (audioDecoder != null && audioDecoder.isRunning) {
-                                audioDecoder.sink(buf, timestamp)
+                                audioDecoder.sink(buf)
                             }
                         }
                     }

@@ -10,8 +10,8 @@ use bytes::Bytes;
 use common::atomic::EasyAtomic;
 
 pub struct Dequeue {
-    queue: Arc<RwLock<BTreeMap<u16, (Bytes, Instant)>>>,
-    latency: Arc<AtomicU64>,
+    queue: Arc<RwLock<BTreeMap<u64, (Bytes, Instant)>>>,
+    rtt: Arc<AtomicU64>,
     time: Instant,
     delay: usize,
 }
@@ -19,35 +19,42 @@ pub struct Dequeue {
 impl Dequeue {
     pub fn new<F>(delay: usize, nack: F) -> Self
     where
-        F: Fn(Range<u16>) + Send + 'static,
+        F: Fn(Range<u64>) + Send + 'static,
     {
-        let latency = Arc::new(AtomicU64::new(delay as u64 / 2));
-        let queue: Arc<RwLock<BTreeMap<u16, (Bytes, Instant)>>> =
+        let rtt = Arc::new(AtomicU64::new(delay as u64 / 2));
+        let queue: Arc<RwLock<BTreeMap<u64, (Bytes, Instant)>>> =
             Arc::new(RwLock::new(BTreeMap::new()));
 
         let queue_ = Arc::downgrade(&queue);
-        let latency_ = Arc::downgrade(&latency);
+        let rtt_ = Arc::downgrade(&rtt);
         thread::spawn(move || {
-            while let (Some(queue), Some(latency)) = (queue_.upgrade(), latency_.upgrade()) {
-                thread::sleep(Duration::from_millis(latency.get()));
+            while let (Some(queue), Some(rtt)) = (queue_.upgrade(), rtt_.upgrade()) {
+                thread::sleep(Duration::from_millis(rtt.get()));
 
-                let mut index = 0;
+                let mut index: i64 = -1;
                 let mut range = 0..0;
                 let mut loss = false;
                 for seq in queue.read().unwrap().keys() {
-                    if index + 1 == *seq {
-                        if loss {
-                            range.end = index;
-                            break;
-                        }
-                    } else {
-                        if !loss {
-                            range.start = *seq;
-                            loss = true;
+                    let seq = *seq as i64;
+                    if index != -1 {
+                        if index + 1 == seq {
+                            if loss {
+                                range.end = index as u64;
+                                if range.start == range.end {
+                                    loss = false;
+                                }
+
+                                break;
+                            }
+                        } else {
+                            if !loss {
+                                range.start = seq as u64;
+                                loss = true;
+                            }
                         }
                     }
 
-                    index = *seq;
+                    index = seq;
                 }
 
                 if loss {
@@ -58,7 +65,7 @@ impl Dequeue {
 
         Self {
             time: Instant::now(),
-            latency,
+            rtt,
             queue,
             delay,
         }
@@ -69,16 +76,23 @@ impl Dequeue {
     }
 
     pub fn update(&self, time: u64) {
-        self.latency
-            .update((self.time.elapsed().as_millis() as u64 - time) / 2);
+        let rtt = self.time.elapsed().as_millis() as u64 - time;
+        self.rtt.update(rtt);
+
+        log::info!("Network latency detection, rtt={}", rtt);
     }
 
-    pub fn push(&self, sequence: u16, bytes: Bytes) {
+    pub fn push(&self, sequence: u64, bytes: Bytes) {
         if !self.queue.read().unwrap().contains_key(&sequence) {
             self.queue
                 .write()
                 .unwrap()
                 .insert(sequence, (bytes, Instant::now()));
+        } else {
+            log::info!(
+                "The retransmission packet is received, sequence={:?}",
+                sequence
+            );
         }
     }
 
@@ -103,7 +117,7 @@ impl Dequeue {
 }
 
 pub struct Queue {
-    queue: Mutex<BTreeMap<u16, (Bytes, Instant)>>,
+    queue: Mutex<BTreeMap<u64, (Bytes, Instant)>>,
     delay: usize,
 }
 
@@ -115,7 +129,7 @@ impl Queue {
         }
     }
 
-    pub fn push(&self, sequence: u16, bytes: Bytes) {
+    pub fn push(&self, sequence: u64, bytes: Bytes) {
         let mut queue = self.queue.lock().unwrap();
 
         queue.insert(sequence, (bytes, Instant::now()));
@@ -129,7 +143,7 @@ impl Queue {
         }
     }
 
-    pub fn get(&self, sequence: u16) -> Option<Bytes> {
+    pub fn get(&self, sequence: u64) -> Option<Bytes> {
         self.queue
             .lock()
             .unwrap()

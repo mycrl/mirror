@@ -65,7 +65,7 @@ impl Remuxer {
         let flags = buf.get_u8();
         let timestamp = buf.get_u64();
 
-        let is_loss = self.sequence + 1 != seq;
+        let is_loss = seq != 0 && self.sequence + 1 != seq;
         if is_loss {
             log::warn!(
                 "Packet loss, number of lost = {}, current seq={}, previous seq={}",

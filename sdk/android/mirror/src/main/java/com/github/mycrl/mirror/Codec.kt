@@ -19,15 +19,15 @@ import java.lang.Thread.MAX_PRIORITY
 import java.nio.ByteBuffer
 
 abstract class ByteArraySinker {
-    abstract fun sink(info: StreamBufferInfo, buf: ByteArray);
+    abstract fun sink(info: StreamBufferInfo, buf: ByteArray)
 }
 
 class Video {
-    class VideoEncoder constructor(
-        private val configure: VideoEncoderConfigure,
+    class VideoEncoder(
+        configure: VideoEncoderConfigure,
         private val sinker: ByteArraySinker
     ) {
-        public var isRunning: Boolean = false
+        private var isRunning: Boolean = false
 
         private val codec: MediaCodec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
         private val bufferInfo = MediaCodec.BufferInfo()
@@ -64,7 +64,7 @@ class Video {
 
             worker = Thread {
                 val buffer = ByteArray(2 * 1024 * 1024)
-                val streamBufferInfo = StreamBufferInfo(StreamKind.Video);
+                val streamBufferInfo = StreamBufferInfo(StreamKind.Video)
 
                 while (isRunning) {
                     try {
@@ -130,24 +130,24 @@ class Video {
             /**
              * [MediaCodecInfo.CodecCapabilities](https://developer.android.com/reference/android/media/MediaCodecInfo.CodecCapabilities)
              */
-            val format: Int;
-            val width: Int;
-            val height: Int;
+            val format: Int
+            val width: Int
+            val height: Int
 
             /**
              * [MediaFormat#KEY_BIT_RATE](https://developer.android.com/reference/android/media/MediaFormat#KEY_BIT_RATE)
              */
-            val bitRate: Int;
+            val bitRate: Int
 
             /**
              * [MediaFormat#KEY_FRAME_RATE](https://developer.android.com/reference/android/media/MediaFormat#KEY_FRAME_RATE)
              */
-            val frameRate: Int;
+            val frameRate: Int
         }
     }
 
-    class VideoDecoder constructor(private val surface: Surface, private val configure: VideoDecoderConfigure) {
-        public var isRunning: Boolean = false
+    class VideoDecoder(surface: Surface, configure: VideoDecoderConfigure) {
+        var isRunning: Boolean = false
 
         private var codec: MediaCodec = MediaCodec.createDecoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
         private val bufferInfo = MediaCodec.BufferInfo()
@@ -181,13 +181,13 @@ class Video {
             }
         }
 
-        fun sink(buf: ByteArray, timestamp: Long) {
+        fun sink(buf: ByteArray) {
             try {
                 val index = codec.dequeueInputBuffer(-1)
                 if (index >= 0) {
                     codec.getInputBuffer(index)?.clear()
                     codec.getInputBuffer(index)?.put(buf)
-                    codec.queueInputBuffer(index, 0, buf.size, timestamp, 0)
+                    codec.queueInputBuffer(index, 0, buf.size, 0, 0)
                 }
             } catch (e: Exception) {
                 Log.w("com.github.mycrl.mirror", "VideoDecoder sink exception", e)
@@ -216,15 +216,15 @@ class Video {
         }
 
         interface VideoDecoderConfigure {
-            val width: Int;
-            val height: Int;
+            val width: Int
+            val height: Int
         }
     }
 }
 
 class Audio {
-    class AudioDecoder constructor(private val track: AudioTrack, private val configure: AudioDecoderConfigure) {
-        public var isRunning: Boolean = false
+    class AudioDecoder(private val track: AudioTrack, configure: AudioDecoderConfigure) {
+        var isRunning: Boolean = false
 
         private val bufferInfo = MediaCodec.BufferInfo()
         private var codec: MediaCodec
@@ -262,24 +262,24 @@ class Audio {
             }
         }
 
-        fun sink(buf: ByteArray, timestamp: Long) {
-//            val index = codec.dequeueInputBuffer(1000)
-//            if (index >= 0) {
-//                codec.getInputBuffer(index)?.clear()
-//                codec.getInputBuffer(index)?.put(buf)
-//                codec.queueInputBuffer(index, 0, buf.size, timestamp, 0)
-//            }
+        fun sink(buf: ByteArray) {
+            val index = codec.dequeueInputBuffer(1000)
+            if (index >= 0) {
+                codec.getInputBuffer(index)?.clear()
+                codec.getInputBuffer(index)?.put(buf)
+                codec.queueInputBuffer(index, 0, buf.size, 0, 0)
+            }
         }
 
         fun start() {
-//            if (!isRunning) {
-//                isRunning = true
-//                worker.priority = MAX_PRIORITY
-//
-//                codec.start()
-//                worker.start()
-//                track.play()
-//            }
+            if (!isRunning) {
+                isRunning = true
+                worker.priority = MAX_PRIORITY
+
+                codec.start()
+                worker.start()
+                track.play()
+            }
         }
 
         fun release() {
@@ -294,17 +294,17 @@ class Audio {
         }
 
         interface AudioDecoderConfigure {
-            val sampleRate: Int;
-            val channels: Int;
+            val sampleRate: Int
+            val channels: Int
         }
     }
 
-    class AudioEncoder constructor(
+    class AudioEncoder(
         private val record: AudioRecord?,
-        private val configure: AudioEncoderConfigure,
+        configure: AudioEncoderConfigure,
         private val sinker: ByteArraySinker
     ) {
-        public var isRunning: Boolean = false
+        private var isRunning: Boolean = false
 
         private val bufferInfo = MediaCodec.BufferInfo()
         private var codec: MediaCodec
@@ -330,7 +330,7 @@ class Audio {
 
             worker = Thread {
                 val buffer = ByteArray(1024 * 1024)
-                val streamBufferInfo = StreamBufferInfo(StreamKind.Audio);
+                val streamBufferInfo = StreamBufferInfo(StreamKind.Audio)
 
                 while (isRunning) {
                     try {
@@ -418,27 +418,27 @@ class Audio {
             /**
              * [AudioFormat#ENCODING_PCM_16BIT](https://developer.android.com/reference/android/media/AudioFormat#ENCODING_PCM_16BIT)
              */
-            val sampleBits: Int;
+            val sampleBits: Int
 
             /**
              * [AudioFormat#SAMPLE_RATE_UNSPECIFIED](https://developer.android.com/reference/android/media/AudioFormat#SAMPLE_RATE_UNSPECIFIED)
              */
-            val sampleRate: Int;
+            val sampleRate: Int
 
             /**
              * [AudioFormat#CHANNEL_IN_MONO](https://developer.android.com/reference/android/media/AudioFormat#CHANNEL_IN_MONO)
              */
-            val channalConfig: Int;
+            val channalConfig: Int
 
             /**
              * Number of audio channels, such as mono or stereo (dual channel)
              */
-            val channels: Int;
+            val channels: Int
 
             /**
              * [MediaFormat#KEY_BIT_RATE](https://developer.android.com/reference/android/media/MediaFormat#KEY_BIT_RATE)
              */
-            val bitRate: Int;
+            val bitRate: Int
         }
     }
 }

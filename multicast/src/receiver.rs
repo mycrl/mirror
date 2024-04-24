@@ -52,7 +52,7 @@ impl Receiver {
 
         let socket = UdpSocket::bind(bind)?;
         let socket = Socket::from(socket);
-        socket.set_recv_buffer_size(1024 * 1024)?;
+        socket.set_recv_buffer_size(2 * 1024 * 1024)?;
 
         let socket: Arc<UdpSocket> = Arc::new(socket.into());
         if let IpAddr::V4(bind) = bind.ip() {
@@ -73,6 +73,8 @@ impl Receiver {
         let socket_ = Arc::downgrade(&socket);
         let target_ = Arc::downgrade(&target);
         let queue = Arc::new(Dequeue::new(50, move |range| {
+            log::info!("receiver packet loss, range={:?}", range);
+
             if let (Some(socket), Some(target)) = (socket_.upgrade(), target_.upgrade()) {
                 if let Some(to) = target.get() {
                     let bytes: Bytes = Packet::Nack { range }.into();
@@ -88,7 +90,7 @@ impl Receiver {
             let _ = set_current_thread_priority(ThreadPriority::Max);
 
             let mut buf = vec![0u8; 2048];
-            let mut decoder = PacketDecoder::default();
+            let mut decoder = PacketDecoder::new();
 
             'a: while let (Some(queue), Some(socket), Some(target)) =
                 (queue_.upgrade(), socket_.upgrade(), target_.upgrade())
