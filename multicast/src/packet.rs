@@ -172,11 +172,10 @@ impl PacketDecoder {
 
         let sequence = bytes.get_u16() as i16;
         let length = bytes.get_u32() as usize;
-        log::info!("========================== {}, {}", bytes.len(), length);
-
+        
         let mut results = None;
         if sequence != self.sequence {
-            if self.bytes.len() >= self.length {
+            if self.bytes.len() > 0 && self.bytes.len() >= self.length {
                 results = Some(Bytes::copy_from_slice(&self.bytes[..self.length]));
             }
 
