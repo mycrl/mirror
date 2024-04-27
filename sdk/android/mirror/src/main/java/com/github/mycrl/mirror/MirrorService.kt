@@ -59,11 +59,12 @@ abstract class MirrorServiceObserver {
  * automatically respond to any sender push.
  */
 class MirrorService constructor(
+    private val mtu: Int,
     private val multicast: String,
     private val bind: String?,
     private val observer: MirrorServiceObserver?
 ) {
-    private val mirror: Mirror = Mirror(multicast, bind, if (observer != null) {
+    private val mirror: Mirror = Mirror(mtu, multicast, bind, if (observer != null) {
         object : ReceiverAdapterFactory() {
             override fun connect(
                 id: Int,
@@ -82,7 +83,7 @@ class MirrorService constructor(
                                 override val width = codecDescription.video.width
                             })
 
-                        private val audioDecoder = if (receiver.track != null) {
+                        private var audioDecoder = if (receiver.track != null) {
                             Audio.AudioDecoder(
                                 receiver.track!!,
                                 object : Audio.AudioDecoder.AudioDecoderConfigure {
@@ -99,7 +100,7 @@ class MirrorService constructor(
                             receiver.onStart(ReceiverAdapterWrapper { -> close() })
                         }
 
-                        override fun sink(kind: Int, buf: ByteArray): Boolean {
+                        override fun sink(kind: Int, timestamp: Long, buf: ByteArray): Boolean {
                             try {
                                 if (isReleased) {
                                     return false
@@ -108,13 +109,13 @@ class MirrorService constructor(
                                 when (kind) {
                                     StreamKind.Video -> {
                                         if (videoDecoder.isRunning) {
-                                            videoDecoder.sink(buf)
+                                            videoDecoder.sink(buf, timestamp)
                                         }
                                     }
 
                                     StreamKind.Audio -> {
-                                        if (audioDecoder != null && audioDecoder.isRunning) {
-                                            audioDecoder.sink(buf)
+                                        if (audioDecoder != null && audioDecoder!!.isRunning) {
+                                            audioDecoder!!.sink(buf, timestamp)
                                         }
                                     }
                                 }
@@ -171,7 +172,6 @@ class MirrorService constructor(
      */
     fun createSender(
         id: Int,
-        mtu: Int,
         bind: String,
         configure: MirrorAdapterConfigure,
         record: AudioRecord?
@@ -179,7 +179,6 @@ class MirrorService constructor(
         return MirrorSender(
             mirror.createSender(
                 id,
-                mtu,
                 bind,
                 CodecDescriptionFactory.encode(
                     CodecDescriptionFactory.CodecDescription(
@@ -237,7 +236,7 @@ class MirrorService constructor(
                 observer.onStart(ReceiverAdapterWrapper { -> close() })
             }
 
-            override fun sink(kind: Int, buf: ByteArray): Boolean {
+            override fun sink(kind: Int, timestamp: Long, buf: ByteArray): Boolean {
                 try {
                     if (isReleased) {
                         return false
@@ -246,13 +245,13 @@ class MirrorService constructor(
                     when (kind) {
                         StreamKind.Video -> {
                             if (videoDecoder.isRunning) {
-                                videoDecoder.sink(buf)
+                                videoDecoder.sink(buf, timestamp)
                             }
                         }
 
                         StreamKind.Audio -> {
                             if (audioDecoder != null && audioDecoder.isRunning) {
-                                audioDecoder.sink(buf)
+                                audioDecoder.sink(buf, timestamp)
                             }
                         }
                     }

@@ -1,0 +1,19 @@
+[package]
+name = "desktop"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+name = "mirror"
+
+[dependencies]
+bytes = "1.5"
+devices = { path = "../../devices" }
+common = { path = "../../common" }
+codec = { path = "../../codec" }
+transport = { path = "../../transport" }
+log = "0.4.20"
+simple_logger = "4"
+anyhow = "1.0.82"
+once_cell = "1.19.0"

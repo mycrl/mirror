@@ -1,6 +1,5 @@
-mod frame;
-mod stream;
+mod decode;
+mod encode;
 
-#[cfg(not(feature = "android"))]
-pub use frame::*;
-pub use stream::*;
+pub use decode::VideoDecoder;
+pub use encode::{VideoEncodePacket, VideoEncoder, VideoEncoderSettings};

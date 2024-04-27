@@ -68,11 +68,11 @@ cargo {
     apiLevel = 29
     prebuiltToolchains = true
     pythonCommand = 'python3'
-    module = '../../../exports'
-    libname = 'mirror-exports'
+    module = '../jni-exports'
+    libname = 'mirror_android'
     targets = ['arm64']
     targetDirectory = '../../../target'
-    targetIncludes = ['libmirror_exports.so']
+    targetIncludes = ['libmirror_android.so']
     exec { spec, toolchain ->
         def absolutePath = project.file("../../../target").absolutePath
         spec.environment("CARGO_TARGET_DIR", "$absolutePath")
@@ -101,7 +101,7 @@ publishing {
         release(MavenPublication) {
             groupId = 'com.github.mycrl'
             artifactId = 'mirror'
-            version = '0.3.2'
+            version = '0.4.1'
 
             afterEvaluate {
                 from components.release

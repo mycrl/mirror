@@ -4,29 +4,19 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-async-trait = "0.1.77"
 bytes = "1.5.0"
-codec = { path = "../codec" }
 log = "0.4.20"
 rmp-serde = "1.1.2"
 serde = { version = "1.0.195", features = ["derive"] }
-broadcast = { path = "../broadcast" }
-sync = { path = "../sync" }
+multicast = { path = "../multicast" }
+common = { path = "../common" }
 thiserror = "1.0.56"
-tokio = { version = "1.35.1", features = ["net", "sync", "time"] }
 rand = "0.8"
-crc = "3.0.1"
 
 [[example]]
 name = "simple"
 
 [dev-dependencies]
-tokio = { version = "1.35.1", features = ["full"] }
 clap = { version = "4", features = ["derive", "env"] }
 anyhow = "1.0.79"
 simple_logger = "4"
-
-[features]
-default = []
-android = ["codec/android"]
-frame-drop = ["codec/frame-drop"]
