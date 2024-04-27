@@ -109,29 +109,13 @@ class MirrorService constructor(
                                 when (kind) {
                                     StreamKind.Video -> {
                                         if (videoDecoder.isRunning) {
-                                            videoDecoder.sink(buf)
+                                            videoDecoder.sink(buf, timestamp)
                                         }
                                     }
 
                                     StreamKind.Audio -> {
-                                        try {
-                                            if (audioDecoder != null && audioDecoder!!.isRunning) {
-                                                audioDecoder!!.sink(buf)
-                                            }
-                                        } catch (e: Exception) {
-                                            if (receiver.track != null) {
-                                                audioDecoder = Audio.AudioDecoder(
-                                                    receiver.track!!,
-                                                    object :
-                                                        Audio.AudioDecoder.AudioDecoderConfigure {
-                                                        override val sampleRate =
-                                                            codecDescription.audio.sampleRate
-                                                        override val channels =
-                                                            codecDescription.audio.channels
-                                                    })
-
-                                                audioDecoder?.start()
-                                            }
+                                        if (audioDecoder != null && audioDecoder!!.isRunning) {
+                                            audioDecoder!!.sink(buf, timestamp)
                                         }
                                     }
                                 }
@@ -261,13 +245,13 @@ class MirrorService constructor(
                     when (kind) {
                         StreamKind.Video -> {
                             if (videoDecoder.isRunning) {
-                                videoDecoder.sink(buf)
+                                videoDecoder.sink(buf, timestamp)
                             }
                         }
 
                         StreamKind.Audio -> {
                             if (audioDecoder != null && audioDecoder.isRunning) {
-                                audioDecoder.sink(buf)
+                                audioDecoder.sink(buf, timestamp)
                             }
                         }
                     }

@@ -100,14 +100,6 @@ impl Transport {
                                     'a: while let Ok(packet) = receiver.read() {
                                         if let Some(adapter) = adapter.upgrade() {
                                             if let Some((offset, info)) = remuxer.remux(&packet) {
-                                                log::trace!(
-                                                    "recv a packet, kind={:?}, flags={}, time={}, size={}",
-                                                    info.kind,
-                                                    info.flags,
-                                                    info.timestamp,
-                                                    packet.len() - offset,
-                                                );
-
                                                 if !adapter.send(
                                                     packet.slice(offset..),
                                                     info.kind,
@@ -196,13 +188,6 @@ impl Transport {
 
             while let Some(adapter) = adapter_.upgrade() {
                 if let Some((buf, kind, flags, timestamp)) = adapter.next() {
-                    log::trace!(
-                        "send a packet, kind={:?}, flags={}, time={}",
-                        kind,
-                        flags,
-                        timestamp
-                    );
-
                     if let Some(payload) = muxer.mux(
                         PacketInfo {
                             kind,

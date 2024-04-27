@@ -7,6 +7,7 @@ import android.media.MediaCodec
 import android.media.MediaCodecInfo
 import android.media.MediaFormat
 import android.os.Build
+import android.os.Process
 import android.util.Log
 import android.view.Surface
 import com.ensarsarajcic.kotlinx.serialization.msgpack.MsgPack
@@ -15,7 +16,6 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromByteArray
 import kotlinx.serialization.encodeToByteArray
 import java.lang.Exception
-import java.lang.Thread.MAX_PRIORITY
 import java.nio.ByteBuffer
 
 abstract class ByteArraySinker {
@@ -36,7 +36,7 @@ class Video {
 
         init {
             val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, configure.width, configure.height)
-            format.setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR)
+            format.setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR)
             format.setInteger(MediaFormat.KEY_PROFILE, MediaCodecInfo.CodecProfileLevel.AVCProfileBaseline)
             format.setInteger(MediaFormat.KEY_LEVEL, MediaCodecInfo.CodecProfileLevel.AVCLevel1)
             format.setFloat(MediaFormat.KEY_MAX_FPS_TO_ENCODER, configure.frameRate.toFloat())
@@ -63,6 +63,8 @@ class Video {
             }
 
             worker = Thread {
+                Process.setThreadPriority(Process.THREAD_PRIORITY_VIDEO)
+
                 val buffer = ByteArray(2 * 1024 * 1024)
                 val streamBufferInfo = StreamBufferInfo(StreamKind.Video)
 
@@ -109,7 +111,6 @@ class Video {
         fun start() {
             if (!isRunning) {
                 isRunning = true
-                worker.priority = MAX_PRIORITY
 
                 codec.start()
                 worker.start()
@@ -166,6 +167,8 @@ class Video {
 
             codec.configure(format, surface, null, 0)
             worker = Thread {
+                Process.setThreadPriority(Process.THREAD_PRIORITY_VIDEO)
+
                 while (isRunning) {
                     try {
                         val index = codec.dequeueOutputBuffer(bufferInfo, -1)
@@ -181,13 +184,13 @@ class Video {
             }
         }
 
-        fun sink(buf: ByteArray) {
+        fun sink(buf: ByteArray, timestamp: Long) {
             try {
                 val index = codec.dequeueInputBuffer(-1)
                 if (index >= 0) {
                     codec.getInputBuffer(index)?.clear()
                     codec.getInputBuffer(index)?.put(buf)
-                    codec.queueInputBuffer(index, 0, buf.size, 0, 0)
+                    codec.queueInputBuffer(index, 0, buf.size, timestamp, 0)
                 }
             } catch (e: Exception) {
                 Log.w("com.github.mycrl.mirror", "VideoDecoder sink exception", e)
@@ -199,7 +202,6 @@ class Video {
         fun start() {
             if (!isRunning) {
                 isRunning = true
-                worker.priority = MAX_PRIORITY
 
                 codec.start()
                 worker.start()
@@ -232,13 +234,15 @@ class Audio {
 
         init {
             val format = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_AMR_WB, configure.sampleRate, configure.channels)
-            format.setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR)
+            format.setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR)
             format.setInteger(MediaFormat.KEY_PCM_ENCODING, AudioFormat.ENCODING_PCM_16BIT)
 
             codec = MediaCodec.createDecoderByType(MediaFormat.MIMETYPE_AUDIO_AMR_WB)
             codec.configure(format, null, null, 0)
 
             worker = Thread {
+                Process.setThreadPriority(Process.THREAD_PRIORITY_URGENT_AUDIO)
+
                 val buf = ByteArray(1024 * 1024)
 
                 while (isRunning) {
@@ -262,19 +266,18 @@ class Audio {
             }
         }
 
-        fun sink(buf: ByteArray) {
+        fun sink(buf: ByteArray, timestamp: Long) {
             val index = codec.dequeueInputBuffer(1000)
             if (index >= 0) {
                 codec.getInputBuffer(index)?.clear()
                 codec.getInputBuffer(index)?.put(buf)
-                codec.queueInputBuffer(index, 0, buf.size, 0, 0)
+                codec.queueInputBuffer(index, 0, buf.size, timestamp, 0)
             }
         }
 
         fun start() {
             if (!isRunning) {
                 isRunning = true
-                worker.priority = MAX_PRIORITY
 
                 codec.start()
                 worker.start()
@@ -319,7 +322,7 @@ class Audio {
 
         init {
             val format = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_AMR_WB, configure.sampleRate, configure.channels)
-            format.setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR)
+            format.setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR)
             format.setInteger(MediaFormat.KEY_PCM_ENCODING, AudioFormat.ENCODING_PCM_16BIT)
             format.setInteger(MediaFormat.KEY_CHANNEL_COUNT, configure.channels)
             format.setInteger(MediaFormat.KEY_BIT_RATE, configure.bitRate)
@@ -329,6 +332,8 @@ class Audio {
             codec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
 
             worker = Thread {
+                Process.setThreadPriority(Process.THREAD_PRIORITY_URGENT_AUDIO)
+
                 val buffer = ByteArray(1024 * 1024)
                 val streamBufferInfo = StreamBufferInfo(StreamKind.Audio)
 
@@ -360,6 +365,8 @@ class Audio {
 
             if (record != null) {
                 recorder = Thread {
+                    Process.setThreadPriority(Process.THREAD_PRIORITY_URGENT_AUDIO)
+
                     while (isRunning) {
                         try {
                             val buf = ByteBuffer.allocateDirect(minBufferSize)
@@ -393,8 +400,6 @@ class Audio {
         fun start() {
             if (!isRunning) {
                 isRunning = true
-                worker.priority = MAX_PRIORITY
-                recorder?.priority = MAX_PRIORITY
 
                 codec.start()
                 worker.start()

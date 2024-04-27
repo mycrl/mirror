@@ -14,15 +14,14 @@ use jni::{
 
 use jni_macro::jni_exports;
 use logger::AndroidLogger;
-use thread_priority::{set_current_thread_priority, ThreadPriority};
 use transport::Transport;
 use transport::{
     adapter::{StreamReceiverAdapter, StreamSenderAdapter},
     TransportOptions,
 };
 
-#[global_allocator]
-static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+// #[global_allocator]
+// static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 /// JNI_OnLoad
 ///
@@ -359,18 +358,15 @@ impl Mirror {
             let stream_adapter = StreamReceiverAdapter::new();
             let stream_adapter_ = Arc::downgrade(&stream_adapter);
             thread::spawn(move || {
-                let _ = set_current_thread_priority(ThreadPriority::Max);
-
                 while let Some(stream_adapter) = stream_adapter_.upgrade() {
                     if let Some((buf, kind, timestamp)) = stream_adapter.next() {
-                        if adapter.sink(buf, kind, timestamp) {
-                            continue;
+                        if !adapter.sink(buf, kind, timestamp) {
+                            break;
                         }
                     }
-
-                    adapter.close();
-                    break;
                 }
+
+                adapter.close();
             });
 
             Ok(Box::into_raw(Box::new(stream_adapter)))

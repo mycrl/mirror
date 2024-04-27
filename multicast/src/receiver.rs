@@ -14,7 +14,7 @@ use socket2::Socket;
 use thread_priority::{set_current_thread_priority, ThreadPriority};
 
 use crate::{
-    nack::Dequeue,
+    dequeue::Dequeue,
     packet::{Packet, PacketDecoder},
     Error,
 };
@@ -52,7 +52,7 @@ impl Receiver {
 
         let socket = UdpSocket::bind(bind)?;
         let socket = Socket::from(socket);
-        socket.set_recv_buffer_size(2 * 1024 * 1024)?;
+        socket.set_recv_buffer_size(4 * 1024 * 1024)?;
 
         let socket: Arc<UdpSocket> = Arc::new(socket.into());
         if let IpAddr::V4(bind) = bind.ip() {
@@ -70,18 +70,7 @@ impl Receiver {
         let (tx, rx) = channel();
         let target = Arc::new(AtomicOption::new(None));
 
-        let socket_ = Arc::downgrade(&socket);
-        let target_ = Arc::downgrade(&target);
-        let queue = Arc::new(Dequeue::new(50, move |range| {
-            log::info!("receiver packet loss, range={:?}", range);
-
-            if let (Some(socket), Some(target)) = (socket_.upgrade(), target_.upgrade()) {
-                if let Some(to) = target.get() {
-                    let bytes: Bytes = Packet::Nack { range }.into();
-                    let _ = socket.send_to(&bytes, to);
-                }
-            }
-        }));
+        let queue = Arc::new(Dequeue::new(50));
 
         let target_ = Arc::downgrade(&target);
         let socket_ = Arc::downgrade(&socket);
@@ -108,7 +97,7 @@ impl Receiver {
                         match packet {
                             Packet::Pong { timestamp } => queue.update(timestamp),
                             Packet::Bytes { sequence, chunk } => {
-                                queue.push(sequence, chunk);
+                                queue.push(sequence, Bytes::copy_from_slice(chunk));
 
                                 while let Some(bytes) = queue.pop() {
                                     if let Some(payload) = decoder.decode(&bytes) {

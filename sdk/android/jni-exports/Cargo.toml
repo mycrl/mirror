@@ -17,4 +17,3 @@ common = { path = "../../../common"}
 anyhow = "1.0.79"
 mimalloc = { version = "*", default-features = false }
 jni-macro = { path = "../../../common/jni-macro" }
-thread-priority = "0.16.0"

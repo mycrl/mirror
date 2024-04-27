@@ -7,7 +7,6 @@ use std::{
 use anyhow::anyhow;
 use bytes::Bytes;
 use jni::objects::{GlobalRef, JValue, JValueGen};
-use thread_priority::{set_current_thread_priority, ThreadPriority};
 use transport::adapter::{ReceiverAdapterFactory, StreamKind, StreamReceiverAdapter};
 
 use crate::command::{catcher, get_current_env};
@@ -142,21 +141,14 @@ impl ReceiverAdapterFactory for AndroidStreamReceiverAdapterFactory {
 
         let stream_adapter = StreamReceiverAdapter::new();
         let stream_adapter_ = Arc::downgrade(&stream_adapter);
-        thread::spawn(move || loop {
-            let _ = set_current_thread_priority(ThreadPriority::Max);
-
-            if let Some((buf, kind, timestamp)) = stream_adapter.next() {
-                if adapter.sink(buf, kind, timestamp) {
-                    continue;
-                } else {
-                    log::warn!("receiver adapter sink return false.")
+        thread::spawn(move || {
+            while let Some((buf, kind, timestamp)) = stream_adapter.next() {
+                if !adapter.sink(buf, kind, timestamp) {
+                    break;
                 }
-            } else {
-                log::warn!("receiver adapter next is none.")
             }
 
             adapter.close();
-            break;
         });
 
         Some(stream_adapter_)

@@ -5,13 +5,11 @@ use std::{
 };
 
 use crate::{
-    nack::Queue,
     packet::{Packet, PacketEncoder},
     Error,
 };
 
 use bytes::Bytes;
-use thread_priority::{set_current_thread_priority, ThreadPriority};
 
 /// A UDP server.
 ///
@@ -32,7 +30,6 @@ pub struct Sender {
     target: SocketAddr,
     socket: Arc<UdpSocket>,
     encoder: PacketEncoder,
-    queue: Arc<Queue>,
     sequence: u64,
 }
 
@@ -62,16 +59,11 @@ impl Sender {
 
         log::info!("multicast sender bind to: bind={}", bind);
 
-        let queue = Arc::new(Queue::new(50));
-
-        let queue_ = Arc::downgrade(&queue);
         let socket_ = Arc::downgrade(&socket);
         thread::spawn(move || {
-            let _ = set_current_thread_priority(ThreadPriority::Max);
-
             let mut buf = [0u8; 2048];
 
-            'a: while let (Some(socket), Some(queue)) = (socket_.upgrade(), queue_.upgrade()) {
+            while let Some(socket) = socket_.upgrade() {
                 if let Ok((size, addr)) = socket.recv_from(&mut buf) {
                     if size == 0 {
                         break;
@@ -83,18 +75,6 @@ impl Sender {
                                 let bytes: Bytes = Packet::Pong { timestamp }.into();
                                 if socket.send_to(&bytes, addr).is_err() {
                                     break;
-                                }
-                            }
-                            Packet::Nack { range } => {
-                                log::info!("recv a nack packet, range={:?}", range);
-
-                                for sequence in range {
-                                    if let Some(chunk) = queue.get(sequence) {
-                                        let bytes: Bytes = Packet::Bytes { sequence, chunk }.into();
-                                        if socket.send_to(&bytes, addr).is_err() {
-                                            break 'a;
-                                        }
-                                    }
                                 }
                             }
                             _ => (),
@@ -111,7 +91,6 @@ impl Sender {
             encoder: PacketEncoder::new(Packet::get_max_size(mtu)),
             sequence: 0,
             socket,
-            queue,
         })
     }
 
@@ -126,12 +105,9 @@ impl Sender {
         }
 
         for packet in self.encoder.encode(bytes) {
-            let chunk = packet.clone().freeze();
-            self.queue.push(self.sequence, chunk.clone());
-
             let bytes: Bytes = Packet::Bytes {
                 sequence: self.sequence,
-                chunk,
+                chunk: packet,
             }
             .into();
 

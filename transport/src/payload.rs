@@ -12,7 +12,7 @@ pub struct PacketInfo {
 /// necessary to identify the type of packet, this encoder is used to packetize
 /// specific types of data for transmission over the network.
 pub struct Muxer {
-    sequence: u32,
+    sequence: u64,
 }
 
 impl Default for Muxer {
@@ -22,6 +22,8 @@ impl Default for Muxer {
 }
 
 impl Muxer {
+    const HEAD_SIZE: usize = 18;
+
     /// The result of the encoding may be null, this is because an empty packet
     /// may be passed in from outside.
     pub fn mux(&mut self, info: PacketInfo, buf: &[u8]) -> Option<Bytes> {
@@ -29,14 +31,14 @@ impl Muxer {
             return None;
         }
 
-        let mut bytes = BytesMut::with_capacity(buf.len() + 14);
-        bytes.put_u32(self.sequence);
+        let mut bytes = BytesMut::with_capacity(buf.len() + Self::HEAD_SIZE);
+        bytes.put_u64(self.sequence);
         bytes.put_u8(info.kind as u8);
         bytes.put_u8(info.flags);
         bytes.put_u64(info.timestamp);
         bytes.put(buf);
 
-        if self.sequence == u32::MAX {
+        if self.sequence == u64::MAX {
             self.sequence = 0;
         } else {
             self.sequence += 1;
@@ -49,7 +51,7 @@ impl Muxer {
 /// Decode the packets received from the network and separate out the different
 /// types of data.
 pub struct Remuxer {
-    sequence: i32,
+    sequence: i64,
 }
 
 impl Default for Remuxer {
@@ -60,8 +62,8 @@ impl Default for Remuxer {
 
 impl Remuxer {
     pub fn remux(&mut self, mut buf: &[u8]) -> Option<(usize, PacketInfo)> {
-        let seq = buf.get_u32() as i32;
-        let kind = StreamKind::try_from(buf.get_u8()).unwrap();
+        let seq = buf.get_u64() as i64;
+        let kind = StreamKind::try_from(buf.get_u8()).ok()?;
         let flags = buf.get_u8();
         let timestamp = buf.get_u64();
 
@@ -78,7 +80,7 @@ impl Remuxer {
         self.sequence = seq;
         if !is_loss {
             Some((
-                14,
+                Muxer::HEAD_SIZE,
                 PacketInfo {
                     kind,
                     flags,

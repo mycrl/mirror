@@ -3,20 +3,20 @@ use std::ops::Range;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use crc::{Crc, CRC_32_ISO_HDLC};
 
-pub enum Packet {
+pub enum Packet<'a> {
     Ping { timestamp: u64 },
     Pong { timestamp: u64 },
     Nack { range: Range<u64> },
-    Bytes { sequence: u64, chunk: Bytes },
+    Bytes { sequence: u64, chunk: &'a [u8] },
 }
 
-impl Packet {
+impl<'a> Packet<'a> {
     pub const fn get_max_size(size: usize) -> usize {
         size - 15
     }
 }
 
-impl Into<Bytes> for Packet {
+impl<'a> Into<Bytes> for Packet<'a> {
     fn into(self) -> Bytes {
         let mut bytes = BytesMut::with_capacity(
             5 + match &self {
@@ -55,10 +55,10 @@ impl Into<Bytes> for Packet {
     }
 }
 
-impl TryFrom<&[u8]> for Packet {
+impl<'a> TryFrom<&'a [u8]> for Packet<'a> {
     type Error = ();
 
-    fn try_from(mut bytes: &[u8]) -> Result<Self, Self::Error> {
+    fn try_from(mut bytes: &'a [u8]) -> Result<Self, Self::Error> {
         // Check if the current slice is damaged.
         let crc = bytes.get_u32();
         if crc != fingerprint(&bytes[..]) {
@@ -77,7 +77,7 @@ impl TryFrom<&[u8]> for Packet {
             },
             3 => Self::Bytes {
                 sequence: bytes.get_u64(),
-                chunk: Bytes::copy_from_slice(bytes),
+                chunk: bytes,
             },
             _ => return Err(()),
         })
