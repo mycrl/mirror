@@ -139,7 +139,7 @@ impl ReceiverAdapterFactory for AndroidStreamReceiverAdapterFactory {
         let description = unsafe { std::mem::transmute::<&[u8], &'static [u8]>(description) };
         let adapter = this.connect(id, addr.to_string(), description)?;
 
-        let stream_adapter = StreamReceiverAdapter::new(true);
+        let stream_adapter = StreamReceiverAdapter::new();
         let stream_adapter_ = Arc::downgrade(&stream_adapter);
         thread::spawn(move || {
             while let Some((buf, kind, timestamp)) = stream_adapter.next() {

@@ -20,15 +20,6 @@ pub enum BufferFlag {
     Partial = 8,
 }
 
-#[repr(i32)]
-#[derive(Debug, Clone, Copy)]
-pub enum BufferFlag {
-    KeyFrame = 1,
-    Config = 2,
-    EndOfStream = 4,
-    Partial = 8,
-}
-
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StreamKind {
@@ -97,7 +88,6 @@ impl StreamSenderAdapter {
         Arc::new(Self {
             config: AtomicOption::new(None),
             rx: Mutex::new(rx),
-            is_android,
             tx,
         })
     }
@@ -163,7 +153,6 @@ impl StreamReceiverAdapter {
         Arc::new(Self {
             readable: AtomicBool::new(false),
             rx: Mutex::new(rx),
-            is_android,
             tx,
         })
     }

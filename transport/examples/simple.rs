@@ -26,7 +26,7 @@ impl ReceiverAdapterFactory for SimpleReceiverAdapterFactory {
         _ip: SocketAddr,
         _description: &[u8],
     ) -> Option<Weak<StreamReceiverAdapter>> {
-        let adapter = StreamReceiverAdapter::new(false);
+        let adapter = StreamReceiverAdapter::new();
         let adapter_ = Arc::downgrade(&adapter);
         thread::spawn(move || {
             let child = Command::new("ffplay")
