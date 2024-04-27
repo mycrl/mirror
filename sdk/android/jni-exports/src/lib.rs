@@ -20,8 +20,8 @@ use transport::{
     TransportOptions,
 };
 
-// #[global_allocator]
-// static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+#[global_allocator]
+static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
 /// JNI_OnLoad
 ///
