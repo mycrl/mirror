@@ -2,10 +2,10 @@ mod adapter;
 mod command;
 mod logger;
 
-use std::{ffi::c_void, ptr::null_mut, sync::Arc};
+use std::{ffi::c_void, ptr::null_mut, sync::Arc, thread};
 
 use adapter::{AndroidStreamReceiverAdapter, AndroidStreamReceiverAdapterFactory};
-use command::{catcher, copy_from_byte_array, get_runtime, ENV, RUNTIME};
+use command::{catcher, copy_from_byte_array, JVM};
 use jni::{
     objects::{JByteArray, JClass, JObject, JString},
     sys::JNI_VERSION_1_6,
@@ -14,7 +14,6 @@ use jni::{
 
 use jni_macro::jni_exports;
 use logger::AndroidLogger;
-use tokio::runtime::Builder;
 use transport::Transport;
 use transport::{
     adapter::{StreamReceiverAdapter, StreamSenderAdapter},
@@ -22,7 +21,7 @@ use transport::{
 };
 
 #[global_allocator]
-static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
 /// JNI_OnLoad
 ///
@@ -53,24 +52,7 @@ static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 #[no_mangle]
 pub extern "system" fn JNI_OnLoad(vm: JavaVM, _: *mut c_void) -> i32 {
     AndroidLogger::init();
-
-    unsafe {
-        RUNTIME
-            .set(
-                Builder::new_multi_thread()
-                    .worker_threads(num_cpus::get())
-                    .on_thread_start(move || {
-                        ENV.with(|cell| {
-                            *cell.borrow_mut() =
-                                Some(vm.attach_current_thread_as_daemon().unwrap().get_raw());
-                        })
-                    })
-                    .enable_all()
-                    .build()
-                    .unwrap(),
-            )
-            .unwrap();
-    }
+    JVM.lock().unwrap().replace(vm);
 
     JNI_VERSION_1_6
 }
@@ -111,13 +93,7 @@ pub extern "system" fn JNI_OnLoad(vm: JavaVM, _: *mut c_void) -> i32 {
 /// LINKAGE:
 /// Exported from native libraries that contain native method implementation.
 #[no_mangle]
-pub extern "system" fn JNI_OnUnload(_: JavaVM, _: *mut c_void) {
-    unsafe {
-        if let Some(r) = RUNTIME.take() {
-            r.shutdown_background()
-        }
-    }
-}
+pub extern "system" fn JNI_OnUnload(_: JavaVM, _: *mut c_void) {}
 
 mod objects {
     use anyhow::{anyhow, Ok};
@@ -149,10 +125,16 @@ mod objects {
             return Err(anyhow!("flags not a int."));
         };
 
+        let timestamp = if let JValueGen::Long(timestamp) = env.get_field(info, "timestamp", "J")? {
+            timestamp as u64
+        } else {
+            return Err(anyhow!("timestamp not a long."));
+        };
+
         Ok(
             match StreamKind::try_from(kind as u8).map_err(|_| anyhow!("kind unreachable"))? {
-                StreamKind::Video => StreamBufferInfo::Video(flags),
-                StreamKind::Audio => StreamBufferInfo::Audio(flags),
+                StreamKind::Video => StreamBufferInfo::Video(flags, timestamp),
+                StreamKind::Audio => StreamBufferInfo::Audio(flags, timestamp),
             },
         )
     }
@@ -375,17 +357,16 @@ impl Mirror {
 
             let stream_adapter = StreamReceiverAdapter::new(true);
             let stream_adapter_ = Arc::downgrade(&stream_adapter);
-            get_runtime()?.spawn(async move {
+            thread::spawn(move || {
                 while let Some(stream_adapter) = stream_adapter_.upgrade() {
-                    if let Some((buf, kind)) = stream_adapter.next().await {
-                        if adapter.sink(buf, kind) {
-                            continue;
+                    if let Some((buf, kind, timestamp)) = stream_adapter.next() {
+                        if !adapter.sink(buf, kind, timestamp) {
+                            break;
                         }
                     }
-
-                    adapter.close();
-                    break;
                 }
+
+                adapter.close();
             });
 
             Ok(Box::into_raw(Box::new(stream_adapter)))
@@ -417,6 +398,7 @@ impl Mirror {
     pub fn create_mirror(
         mut env: JNIEnv,
         _this: JClass,
+        mtu: i32,
         multicast: JString,
         bind: JString,
         adapter_factory: *const AndroidStreamReceiverAdapterFactory,
@@ -435,9 +417,11 @@ impl Mirror {
                 })
             };
 
-            Ok(Box::into_raw(Box::new(
-                get_runtime()?.block_on(Transport::new(multicast.parse()?, options))?,
-            )))
+            Ok(Box::into_raw(Box::new(Transport::new(
+                mtu as usize,
+                multicast.parse()?,
+                options,
+            )?)))
         })
         .unwrap_or_else(null_mut)
     }
@@ -491,7 +475,6 @@ impl Mirror {
         _this: JClass,
         mirror: *const Transport,
         id: i32,
-        mtu: i32,
         bind: JString,
         description: JByteArray,
         adapter: *const Arc<StreamSenderAdapter>,
@@ -499,15 +482,8 @@ impl Mirror {
         catcher(&mut env, |env| {
             let bind: String = env.get_string(&bind)?.into();
             let buf = env.convert_byte_array(&description)?;
-            Ok(get_runtime()?.block_on(async move {
-                unsafe { &*mirror }
-                    .create_sender(id as u8, mtu as usize, bind.parse()?, buf, unsafe {
-                        &*adapter
-                    })
-                    .await?;
-
-                Ok::<(), anyhow::Error>(())
-            })?)
+            Ok(unsafe { &*mirror }
+                .create_sender(id as u8, bind.parse()?, buf, unsafe { &*adapter })?)
         });
     }
 
@@ -554,10 +530,7 @@ impl Mirror {
     ) -> i32 {
         catcher(&mut env, |env| {
             let bind: String = env.get_string(&bind)?.into();
-            get_runtime()?.block_on(
-                unsafe { &*mirror }.create_receiver(bind.parse()?, unsafe { &*adapter }),
-            )?;
-
+            unsafe { &*mirror }.create_receiver(bind.parse()?, unsafe { &*adapter })?;
             Ok(true)
         })
         .unwrap_or(false) as i32

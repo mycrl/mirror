@@ -22,9 +22,11 @@ fn exec(command: &str, work_dir: &str) -> anyhow::Result<String> {
         .current_dir(work_dir)
         .output()?;
     if !output.status.success() {
-        Err(anyhow!("{}", String::from_utf8(output.stderr)?))
+        Err(anyhow!("{}", unsafe {
+            String::from_utf8_unchecked(output.stderr)
+        }))
     } else {
-        Ok(String::from_utf8(output.stdout)?)
+        Ok(unsafe { String::from_utf8_unchecked(output.stdout) })
     }
 }
 
@@ -58,7 +60,7 @@ fn main() -> anyhow::Result<()> {
     }
 
     cc::Build::new()
-        .cpp(false)
+        .cpp(true)
         .std("c++20")
         .debug(is_debug)
         .static_crt(true)

@@ -115,7 +115,7 @@ bool _video_encoder_send_frame(struct VideoEncoder* codec, struct VideoFrame* fr
     }
     
     uint8_t* data[4] = { frame->data[0], frame->data[1], nullptr, nullptr };
-    int linesize[4] = { frame->linesize[0], frame->linesize[1], 0, 0 };
+    int linesize[4] = { (int)frame->linesize[0], (int)frame->linesize[1], 0, 0 };
     
     av_image_copy(codec->frame->data,
                   codec->frame->linesize,

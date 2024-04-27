@@ -1,25 +1,37 @@
-use std::time::Duration;
+use std::{
+    thread::{self, sleep},
+    time::Duration,
+};
 
-use multicast::{Client, Server};
-use tokio::time;
+use multicast::{Receiver, Sender};
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    tokio::spawn(async {
-        let mut receiver = Client::new("239.0.0.1".parse()?, "0.0.0.0:8080".parse()?, 20).await?;
-        while let Ok(packets) = receiver.read().await {
-            for packet in packets {
-                println!("{}", packet.len())
+fn main() -> anyhow::Result<()> {
+    thread::spawn(|| {
+        let mut index: i32 = -1;
+        let receiver = Receiver::new("239.0.0.2".parse()?, "0.0.0.0:8080".parse()?)?;
+        while let Ok(packet) = receiver.read() {
+            let seq = u32::from_be_bytes([packet[0], packet[1], packet[2], packet[3]]);
+
+            if index + 1 != seq as i32 {
+                println!("!!!!!!!!!!!! packet loss, seq={}", seq)
+            } else {
+                println!("recv packet, seq={}, size={}", seq, packet.len())
             }
+
+            index = seq as i32;
         }
 
         Ok::<(), anyhow::Error>(())
     });
 
-    let mut sender = Server::new("239.0.0.1".parse()?, "0.0.0.0:8080".parse()?, 1500).await?;
-    let buf = [0u8; 1000];
+    let mut sender = Sender::new("239.0.0.2".parse()?, "0.0.0.0:8080".parse()?, 1400)?;
+    let mut buf = [0u8; 10000];
+    let mut index: u32 = 0;
     loop {
-        sender.send(&buf).await?;
-        time::sleep(Duration::from_secs(1)).await;
+        (&mut buf[..4]).copy_from_slice(&index.to_be_bytes());
+        sender.send(&buf)?;
+
+        sleep(Duration::from_millis(5));
+        index += 1;
     }
 }

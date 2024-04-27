@@ -121,8 +121,8 @@ class SimpleMirrorService : Service() {
             override val format = MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface
             override val bitRate = 500 * 1024 * 8
             override val frameRate = 60
-            override var height = 0
-            override var width = 0
+            override var height = 1080
+            override var width = 1920
         }
 
         private val AudioConfigure = object : Audio.AudioEncoder.AudioEncoderConfigure {
@@ -136,7 +136,7 @@ class SimpleMirrorService : Service() {
 
     private var receiverAdapter: ReceiverAdapterWrapper? = null
     private val mirror: MirrorService =
-        MirrorService("239.0.0.1", "0.0.0.0:3200", object : MirrorServiceObserver() {
+        MirrorService(1400, "239.0.0.1", "0.0.0.0:3200", object : MirrorServiceObserver() {
             override fun accept(id: Int, ip: String): MirrorReceiver {
                 receivedHandler?.let { it(id, ip) }
 
@@ -225,8 +225,8 @@ class SimpleMirrorService : Service() {
 
         Log.i("simple", "create sender.")
 
-        VideoConfigure.width = displayMetrics.widthPixels
-        VideoConfigure.height = displayMetrics.heightPixels
+         VideoConfigure.width = displayMetrics.widthPixels
+         VideoConfigure.height = displayMetrics.heightPixels
         mediaProjection =
             (getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager).getMediaProjection(
                 Activity.RESULT_OK,
@@ -236,7 +236,6 @@ class SimpleMirrorService : Service() {
         mediaProjection?.registerCallback(object : MediaProjection.Callback() {}, null)
         sender = mirror.createSender(
             0,
-            1200,
             "0.0.0.0:8080",
             object : MirrorAdapterConfigure {
                 override val video = VideoConfigure

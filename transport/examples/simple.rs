@@ -1,14 +1,14 @@
 use std::{
+    io::Write,
     net::SocketAddr,
-    process::Stdio,
+    process::{Command, Stdio},
     sync::{Arc, Weak},
+    thread::{self, sleep},
     time::Duration,
 };
 
-use async_trait::async_trait;
 use bytes::Bytes;
 use clap::Parser;
-use tokio::{io::AsyncWriteExt, process::Command, time::sleep};
 use transport::{
     adapter::{
         ReceiverAdapterFactory, StreamBufferInfo, StreamKind, StreamReceiverAdapter,
@@ -19,9 +19,8 @@ use transport::{
 
 struct SimpleReceiverAdapterFactory;
 
-#[async_trait]
 impl ReceiverAdapterFactory for SimpleReceiverAdapterFactory {
-    async fn connect(
+    fn connect(
         &self,
         _id: u8,
         _ip: SocketAddr,
@@ -29,7 +28,7 @@ impl ReceiverAdapterFactory for SimpleReceiverAdapterFactory {
     ) -> Option<Weak<StreamReceiverAdapter>> {
         let adapter = StreamReceiverAdapter::new(false);
         let adapter_ = Arc::downgrade(&adapter);
-        tokio::spawn(async move {
+        thread::spawn(move || {
             let child = Command::new("ffplay")
                 .args(&[
                     "-vcodec",
@@ -46,9 +45,9 @@ impl ReceiverAdapterFactory for SimpleReceiverAdapterFactory {
                 .spawn()?;
 
             if let Some(mut stdin) = child.stdin {
-                while let Some((buf, kind)) = adapter.next().await {
+                while let Some((buf, kind, _)) = adapter.next() {
                     if kind == StreamKind::Video {
-                        if let Err(e) = stdin.write_all(&buf).await {
+                        if let Err(e) = stdin.write_all(&buf) {
                             println!("{:?}", e);
                             break;
                         }
@@ -76,36 +75,33 @@ struct Args {
     kind: String,
 }
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
+fn main() -> anyhow::Result<()> {
     simple_logger::init_with_level(log::Level::Info).unwrap();
 
     let mut args = Args::parse();
     let transport = Transport::new(
+        1400,
         "239.0.0.1".parse()?,
         Some(TransportOptions {
             adapter_factory: SimpleReceiverAdapterFactory,
             bind: args.addr,
         }),
-    )
-    .await?;
+    )?;
 
     if args.kind == "client" {
         args.addr.set_port(args.addr.port() + 1);
-        let adapter = StreamSenderAdapter::new(false);
-        transport
-            .create_sender(0, 1500, args.addr, vec![], &adapter)
-            .await?;
+        let adapter = StreamSenderAdapter::new();
+        transport.create_sender(0, args.addr, vec![], &adapter)?;
 
         let buf = Bytes::from_static(&[0u8; 3000]);
         loop {
-            sleep(Duration::from_millis(100)).await;
-            if !adapter.send(buf.clone(), StreamBufferInfo::Video(0)) {
+            sleep(Duration::from_millis(100));
+            if !adapter.send(buf.clone(), StreamBufferInfo::Video(0, 0)) {
                 break;
             }
         }
     } else {
-        std::future::pending::<()>().await;
+        sleep(Duration::from_secs(9999));
         drop(transport);
     }
 
