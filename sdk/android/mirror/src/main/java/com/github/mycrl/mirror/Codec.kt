@@ -49,7 +49,7 @@ class Video {
             format.setFloat(MediaFormat.KEY_I_FRAME_INTERVAL, 0.4F)
             format.setInteger(MediaFormat.KEY_MAX_B_FRAMES, 0)
             format.setInteger(MediaFormat.KEY_COMPLEXITY, 0)
-            format.setInteger(MediaFormat.KEY_PRIORITY, 1)
+            format.setInteger(MediaFormat.KEY_PRIORITY, 0)
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 format.setInteger(MediaFormat.KEY_ALLOW_FRAME_DROP, 1)
@@ -157,6 +157,7 @@ class Video {
         init {
             val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, configure.width, configure.height)
             format.setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
+            format.setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR)
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 if (codec.name.indexOf(".rk.") < 0 && codec.name.indexOf(".hisi.") < 0) {
