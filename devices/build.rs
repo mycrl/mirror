@@ -67,7 +67,7 @@ fn main() -> anyhow::Result<()> {
         .target(&target)
         .warnings(false)
         .out_dir(&out_dir)
-        .file("./lib/devices.cpp")
+        .file("./source/devices.cpp")
         .include(&join(&out_dir, "./obs-studio")?)
         .include("../common/include")
         .compile("devices");

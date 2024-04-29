@@ -69,15 +69,15 @@ struct VideoDecoder
 
 extern "C"
 {
-EXPORT struct VideoEncoder* _create_video_encoder(struct VideoEncoderSettings* settings);
-EXPORT bool _video_encoder_send_frame(struct VideoEncoder* codec, struct VideoFrame* frame);
-EXPORT struct VideoEncodePacket* _video_encoder_read_packet(struct VideoEncoder* codec);
-EXPORT void _unref_video_encoder_packet(struct VideoEncoder* codec);
-EXPORT void _release_video_encoder(struct VideoEncoder* codec);
-EXPORT struct VideoDecoder* _create_video_decoder(const char* codec_name);
-EXPORT void _release_video_decoder(struct VideoDecoder* decoder);
-EXPORT bool _video_decoder_send_packet(struct VideoDecoder* decoder, uint8_t* buf, size_t size);
-EXPORT struct VideoFrame* _video_decoder_read_frame(struct VideoDecoder* decoder);
+EXPORT struct VideoEncoder* codec_create_video_encoder(struct VideoEncoderSettings* settings);
+EXPORT bool codec_video_encoder_send_frame(struct VideoEncoder* codec, struct VideoFrame* frame);
+EXPORT struct VideoEncodePacket* codec_video_encoder_read_packet(struct VideoEncoder* codec);
+EXPORT void codec_unref_video_encoder_packet(struct VideoEncoder* codec);
+EXPORT void codec_release_video_encoder(struct VideoEncoder* codec);
+EXPORT struct VideoDecoder* codec_create_video_decoder(const char* codec_name);
+EXPORT void codec_release_video_decoder(struct VideoDecoder* decoder);
+EXPORT bool codec_video_decoder_send_packet(struct VideoDecoder* decoder, uint8_t* buf, size_t size);
+EXPORT struct VideoFrame* codec_video_decoder_read_frame(struct VideoDecoder* decoder);
 }
 
 #endif /* codec_h */

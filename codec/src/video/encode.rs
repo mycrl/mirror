@@ -3,11 +3,11 @@ use std::ffi::{c_char, c_int, c_void, CString};
 use common::frame::VideoFrame;
 
 extern "C" {
-    fn _create_video_encoder(settings: *const RawVideoEncoderSettings) -> *const c_void;
-    fn _video_encoder_send_frame(codec: *const c_void, frame: *const VideoFrame) -> bool;
-    fn _video_encoder_read_packet(codec: *const c_void) -> *const RawVideoEncodePacket;
-    fn _unref_video_encoder_packet(codec: *const c_void);
-    fn _release_video_encoder(codec: *const c_void);
+    fn codec_create_video_encoder(settings: *const RawVideoEncoderSettings) -> *const c_void;
+    fn codec_video_encoder_send_frame(codec: *const c_void, frame: *const VideoFrame) -> bool;
+    fn codec_video_encoder_read_packet(codec: *const c_void) -> *const RawVideoEncodePacket;
+    fn codec_unref_video_encoder_packet(codec: *const c_void);
+    fn codec_release_video_encoder(codec: *const c_void);
 }
 
 #[repr(C)]
@@ -68,7 +68,7 @@ pub struct VideoEncodePacket<'a> {
 
 impl Drop for VideoEncodePacket<'_> {
     fn drop(&mut self) {
-        unsafe { _unref_video_encoder_packet(self.codec) }
+        unsafe { codec_unref_video_encoder_packet(self.codec) }
     }
 }
 
@@ -95,7 +95,7 @@ impl VideoEncoder {
         log::info!("create VideoEncoder: settings={:?}", settings);
 
         let settings = settings.as_raw();
-        let codec = unsafe { _create_video_encoder(&settings) };
+        let codec = unsafe { codec_create_video_encoder(&settings) };
         if !codec.is_null() {
             Some(Self { codec })
         } else {
@@ -106,11 +106,11 @@ impl VideoEncoder {
     }
 
     pub fn encode(&self, frame: &VideoFrame) -> bool {
-        unsafe { _video_encoder_send_frame(self.codec, frame) }
+        unsafe { codec_video_encoder_send_frame(self.codec, frame) }
     }
 
     pub fn read(&self) -> Option<VideoEncodePacket> {
-        let packet = unsafe { _video_encoder_read_packet(self.codec) };
+        let packet = unsafe { codec_video_encoder_read_packet(self.codec) };
         if !packet.is_null() {
             Some(VideoEncodePacket::from_raw(self.codec, packet))
         } else {
@@ -123,6 +123,6 @@ impl Drop for VideoEncoder {
     fn drop(&mut self) {
         log::info!("close VideoEncoder");
 
-        unsafe { _release_video_encoder(self.codec) }
+        unsafe { codec_release_video_encoder(self.codec) }
     }
 }

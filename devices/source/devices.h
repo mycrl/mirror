@@ -51,12 +51,12 @@ typedef void (*VideoOutputCallback)(void* ctx, struct VideoFrame* frame);
 
 extern "C"
 {
-EXPORT void _quit();
-EXPORT int _init(VideoInfo* info);
-EXPORT struct DeviceList _get_device_list(enum DeviceType type);
-EXPORT void _release_device_description(struct DeviceDescription* description);
-EXPORT void _set_video_input(struct DeviceDescription* description);
-EXPORT void* _set_video_output_callback(VideoOutputCallback proc, void* ctx);
+EXPORT void devices_quit();
+EXPORT int devices_init(VideoInfo* info);
+EXPORT struct DeviceList devices_get_device_list(enum DeviceType type);
+EXPORT void devices_release_device_description(struct DeviceDescription* description);
+EXPORT void devices_set_video_input(struct DeviceDescription* description);
+EXPORT void* devices_set_video_output_callback(VideoOutputCallback proc, void* ctx);
 }
 
 #endif /* devices_h */

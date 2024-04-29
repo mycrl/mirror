@@ -7,7 +7,7 @@
 
 #include "../codec.h"
 
-struct VideoDecoder* _create_video_decoder(const char* codec_name)
+struct VideoDecoder* codec_create_video_decoder(const char* codec_name)
 {
     struct VideoDecoder* decoder = new struct VideoDecoder;
     decoder->output_frame = new struct VideoFrame;
@@ -15,14 +15,14 @@ struct VideoDecoder* _create_video_decoder(const char* codec_name)
     decoder->codec = avcodec_find_decoder_by_name(codec_name);
     if (decoder->codec == nullptr)
     {
-        _release_video_decoder(decoder);
+        codec_release_video_decoder(decoder);
         return nullptr;
     }
     
     decoder->context = avcodec_alloc_context3(decoder->codec);
     if (decoder->context == nullptr)
     {
-        _release_video_decoder(decoder);
+        codec_release_video_decoder(decoder);
         return nullptr;
     }
 
@@ -30,41 +30,41 @@ struct VideoDecoder* _create_video_decoder(const char* codec_name)
     
     if (avcodec_open2(decoder->context, decoder->codec, nullptr) != 0)
     {
-        _release_video_decoder(decoder);
+        codec_release_video_decoder(decoder);
         return nullptr;
     }
     
     if (avcodec_is_open(decoder->context) == 0)
     {
-        _release_video_decoder(decoder);
+        codec_release_video_decoder(decoder);
         return nullptr;
     }
     
     decoder->parser = av_parser_init(decoder->codec->id);
     if (!decoder->parser)
     {
-        _release_video_decoder(decoder);
+        codec_release_video_decoder(decoder);
         return nullptr;
     }
     
     decoder->packet = av_packet_alloc();
     if (decoder->packet == nullptr)
     {
-        _release_video_decoder(decoder);
+        codec_release_video_decoder(decoder);
         return nullptr;
     }
     
     decoder->frame = av_frame_alloc();
     if (decoder->frame == nullptr)
     {
-        _release_video_decoder(decoder);
+        codec_release_video_decoder(decoder);
         return nullptr;
     }
     
     return decoder;
 }
 
-void _release_video_decoder(struct VideoDecoder* decoder)
+void codec_release_video_decoder(struct VideoDecoder* decoder)
 {
     if (decoder->context != nullptr)
     {
@@ -90,7 +90,7 @@ void _release_video_decoder(struct VideoDecoder* decoder)
     delete decoder;
 }
 
-bool _video_decoder_send_packet(struct VideoDecoder* decoder,
+bool codec_video_decoder_send_packet(struct VideoDecoder* decoder,
                                 uint8_t* buf,
                                 size_t size)
 {
@@ -127,7 +127,7 @@ bool _video_decoder_send_packet(struct VideoDecoder* decoder,
     return true;
 }
 
-struct VideoFrame* _video_decoder_read_frame(struct VideoDecoder* decoder)
+struct VideoFrame* codec_video_decoder_read_frame(struct VideoDecoder* decoder)
 {
     if (avcodec_receive_frame(decoder->context, decoder->frame) != 0)
     {

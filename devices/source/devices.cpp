@@ -34,7 +34,7 @@ void raw_video_callback(void* _, struct video_data *frame)
     GLOBAL.raw_video_callback(GLOBAL.raw_video_callback_context, &GLOBAL.video_frame);
 }
 
-void* _set_video_output_callback(VideoOutputCallback proc, void* current_ctx)
+void* devices_set_video_output_callback(VideoOutputCallback proc, void* current_ctx)
 {
     void* previous_ctx = GLOBAL.raw_video_callback_context;
     GLOBAL.raw_video_callback_context = current_ctx;
@@ -42,7 +42,7 @@ void* _set_video_output_callback(VideoOutputCallback proc, void* current_ctx)
     return previous_ctx;
 }
 
-int _init(struct VideoInfo* info)
+int devices_init(struct VideoInfo* info)
 {
     if (obs_initialized())
     {
@@ -119,7 +119,7 @@ int _init(struct VideoInfo* info)
     return 0;
 }
 
-void _quit()
+void devices_quit()
 {
     if (GLOBAL.scene != NULL)
     {
@@ -147,7 +147,7 @@ void _quit()
     }
 }
 
-void _set_video_input(struct DeviceDescription* description)
+void devices_set_video_input(struct DeviceDescription* description)
 {
     obs_data_t* settings = obs_data_create();
 
@@ -183,7 +183,7 @@ void _set_video_input(struct DeviceDescription* description)
     obs_data_release(settings);
 }
 
-struct DeviceList _get_device_list(enum DeviceType type)
+struct DeviceList devices_get_device_list(enum DeviceType type)
 {
     DeviceList list;
     list.size = 0;
@@ -230,7 +230,7 @@ struct DeviceList _get_device_list(enum DeviceType type)
     return list;
 }
 
-void _release_device_description(struct DeviceDescription* description)
+void devices_release_device_description(struct DeviceDescription* description)
 {
     free(description);
 }

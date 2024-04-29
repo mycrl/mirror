@@ -34,14 +34,16 @@ pub trait VideoSink {
 struct Context(Arc<dyn VideoSink>);
 
 extern "C" fn video_sink_proc(ctx: *const c_void, frame: *const VideoFrame) {
-    unsafe { &*(ctx as *const Context) }
+    if !ctx.is_null() {
+        unsafe { &*(ctx as *const Context) }
         .0
         .sink(unsafe { &*frame });
+    }
 }
 
 pub fn set_video_sink<S: VideoSink + 'static>(sink: S) {
     let previous = unsafe {
-        api::_set_video_output_callback(
+        api::devices_set_video_output_callback(
             video_sink_proc,
             Box::into_raw(Box::new(Context(Arc::new(sink)))) as *const c_void,
         )
@@ -87,7 +89,7 @@ impl Device {
 
 impl Drop for Device {
     fn drop(&mut self) {
-        unsafe { api::_release_device_description(self.description) }
+        unsafe { api::devices_release_device_description(self.description) }
     }
 }
 
@@ -97,7 +99,7 @@ pub struct DeviceManagerOptions {
 }
 
 pub fn init(options: DeviceManagerOptions) -> Result<(), DeviceError> {
-    if unsafe { api::_init(&options.video) } != 0 {
+    if unsafe { api::devices_init(&options.video) } != 0 {
         Err(DeviceError::InitializeFailed)
     } else {
         Ok(())
@@ -105,13 +107,13 @@ pub fn init(options: DeviceManagerOptions) -> Result<(), DeviceError> {
 }
 
 pub fn quit() {
-    unsafe { api::_quit() }
+    unsafe { api::devices_quit() }
 }
 
 pub fn get_devices(kind: DeviceKind) -> Vec<Device> {
     log::info!("DeviceManager get devices");
 
-    let list = unsafe { api::_get_device_list(kind) };
+    let list = unsafe { api::devices_get_device_list(kind) };
     unsafe { std::slice::from_raw_parts(list.devices, list.size) }
         .into_iter()
         .map(|item| Device::new(*item))
@@ -122,7 +124,7 @@ pub fn set_input(device: &Device) {
     log::info!("DeviceManager set input device");
 
     if device.kind() == DeviceKind::Video {
-        unsafe { api::_set_video_input(device.as_ptr()) }
+        unsafe { api::devices_set_video_input(device.as_ptr()) }
     }
 }
 
@@ -161,12 +163,12 @@ mod api {
     }
 
     extern "C" {
-        pub fn _quit();
-        pub fn _init(info: *const VideoInfo) -> c_int;
-        pub fn _get_device_list(kind: DeviceKind) -> DeviceList;
-        pub fn _release_device_description(description: *const DeviceDescription);
-        pub fn _set_video_input(description: *const DeviceDescription);
-        pub fn _set_video_output_callback(
+        pub fn devices_quit();
+        pub fn devices_init(info: *const VideoInfo) -> c_int;
+        pub fn devices_get_device_list(kind: DeviceKind) -> DeviceList;
+        pub fn devices_release_device_description(description: *const DeviceDescription);
+        pub fn devices_set_video_input(description: *const DeviceDescription);
+        pub fn devices_set_video_output_callback(
             proc: extern "C" fn(ctx: *const c_void, frame: *const VideoFrame),
             ctx: *const c_void,
         ) -> *const c_void;

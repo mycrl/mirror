@@ -7,7 +7,7 @@
 
 #include "../codec.h"
 
-struct VideoEncoder* _create_video_encoder(struct VideoEncoderSettings* settings)
+struct VideoEncoder* codec_create_video_encoder(struct VideoEncoderSettings* settings)
 {
     struct VideoEncoder* codec = new struct VideoEncoder;
     codec->output_packet = new struct VideoEncodePacket;
@@ -16,14 +16,14 @@ struct VideoEncoder* _create_video_encoder(struct VideoEncoderSettings* settings
     codec->codec = avcodec_find_encoder_by_name(settings->codec_name);
     if (codec->codec == nullptr)
     {
-        _release_video_encoder(codec);
+        codec_release_video_encoder(codec);
         return nullptr;
     }
     
     codec->context = avcodec_alloc_context3(codec->codec);
     if (!codec->context)
     {
-        _release_video_encoder(codec);
+        codec_release_video_encoder(codec);
         return nullptr;
     }
     
@@ -63,27 +63,27 @@ struct VideoEncoder* _create_video_encoder(struct VideoEncoderSettings* settings
     
     if (avcodec_open2(codec->context, codec->codec, nullptr) != 0)
     {
-        _release_video_encoder(codec);
+        codec_release_video_encoder(codec);
         return nullptr;
     }
     
     if (avcodec_is_open(codec->context) == 0)
     {
-        _release_video_encoder(codec);
+        codec_release_video_encoder(codec);
         return nullptr;
     }
     
     codec->packet = av_packet_alloc();
     if (codec->packet == nullptr)
     {
-        _release_video_encoder(codec);
+        codec_release_video_encoder(codec);
         return nullptr;
     }
     
     codec->frame = av_frame_alloc();
     if (codec->frame == nullptr)
     {
-        _release_video_encoder(codec);
+        codec_release_video_encoder(codec);
         return nullptr;
     }
     
@@ -100,14 +100,14 @@ struct VideoEncoder* _create_video_encoder(struct VideoEncoderSettings* settings
                              32);
     if (ret < 0)
     {
-        _release_video_encoder(codec);
+        codec_release_video_encoder(codec);
         return nullptr;
     }
     
     return codec;
 }
 
-bool _video_encoder_send_frame(struct VideoEncoder* codec, struct VideoFrame* frame)
+bool codec_video_encoder_send_frame(struct VideoEncoder* codec, struct VideoFrame* frame)
 {
     if (av_frame_make_writable(codec->frame) != 0)
     {
@@ -140,7 +140,7 @@ bool _video_encoder_send_frame(struct VideoEncoder* codec, struct VideoFrame* fr
     return true;
 }
 
-struct VideoEncodePacket* _video_encoder_read_packet(struct VideoEncoder* codec)
+struct VideoEncodePacket* codec_video_encoder_read_packet(struct VideoEncoder* codec)
 {
     if (codec->output_packet == nullptr)
     {
@@ -158,12 +158,12 @@ struct VideoEncodePacket* _video_encoder_read_packet(struct VideoEncoder* codec)
     return codec->output_packet;
 }
 
-void _unref_video_encoder_packet(struct VideoEncoder* codec)
+void codec_unref_video_encoder_packet(struct VideoEncoder* codec)
 {
     av_packet_unref(codec->packet);
 }
 
-void _release_video_encoder(struct VideoEncoder* codec)
+void codec_release_video_encoder(struct VideoEncoder* codec)
 {
     if (codec->context != nullptr)
     {
