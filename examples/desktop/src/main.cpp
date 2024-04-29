@@ -96,7 +96,7 @@ int main()
                 mirror::DeviceManagerService::SetInputDevice(devices.device_list[0]);
 
                 std::string bind = "0.0.0.0:3200";
-                created = mirror->CreateSender(bind);
+                created = mirror->CreateSender(bind).has_value();
 
                 break;
             }
@@ -122,7 +122,7 @@ int main()
                     }
 
                     return false;
-                }, nullptr);
+                }, nullptr).has_value();
 
                 break;
             }

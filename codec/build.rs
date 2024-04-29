@@ -138,7 +138,9 @@ fn find_ffmpeg_prefix(out_dir: &str) -> anyhow::Result<(Vec<String>, Vec<String>
     let ffmpeg_prefix = join(&out_dir, "ffmpeg-6.1.1-full_build-shared").unwrap();
     if !is_exsit(&ffmpeg_prefix) {
         exec(
-            "Invoke-WebRequest -Uri https://github.com/mycrl/mirror/releases/download/distributions/ffmpeg-6.1.1-full_build-shared.7z -OutFile ffmpeg.7z; \
+            "Invoke-WebRequest \
+                        -Uri https://github.com/mycrl/distributions/releases/download/distributions/ffmpeg-6.1.1-full_build-shared.7z \
+                        -OutFile ffmpeg.7z; \
                      ./7z.exe x ffmpeg.7z -aoa; \
                      del ffmpeg.7z",
             &out_dir,

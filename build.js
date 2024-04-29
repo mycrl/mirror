@@ -23,7 +23,7 @@ async function build(Args) {
 
     if (!fs.existsSync(path.join(distributionsPath, './distributions'))) {
         await spawn('Invoke-WebRequest \
-            -Uri https://github.com/mycrl/mirror/releases/download/distributions/distributions-windows.zip \
+            -Uri https://github.com/mycrl/distributions/releases/download/distributions/distributions-windows.zip \
             -OutFile distributions-windows.zip', { cwd: distributionsPath, shell: 'powershell.exe' })
 
         await spawn('Expand-Archive \

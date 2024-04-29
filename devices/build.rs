@@ -45,7 +45,7 @@ fn main() -> anyhow::Result<()> {
         if !is_exsit(&join(&out_dir, "obs.lib")?) {
             exec(
                 "Invoke-WebRequest \
-                -Uri https://github.com/mycrl/mirror/releases/download/distributions/obs.lib \
+                -Uri https://github.com/mycrl/distributions/releases/download/distributions/obs.lib \
                 -OutFile obs.lib",
                 &out_dir,
             )?;
