@@ -75,6 +75,8 @@ int main()
                                                  sdl_rect.w,
                                                  sdl_rect.h);
     
+    std::optional<mirror::MirrorService::MirrorReceiver> receiver = std::nullopt;
+    std::optional<mirror::MirrorService::MirrorSender> sender = std::nullopt;
     mirror::MirrorService* mirror = new mirror::MirrorService();
     bool created = false;
     SDL_Event event;
@@ -92,18 +94,22 @@ int main()
             {
             case SDL_SCANCODE_S:
             {
-                auto devices = mirror::DeviceManagerService::GetDevices(DeviceKind::Video);
+                auto devices = mirror::DeviceManagerService::GetDevices(DeviceKind::Screen);
                 mirror::DeviceManagerService::SetInputDevice(devices.device_list[0]);
 
                 std::string bind = "0.0.0.0:3200";
-                created = mirror->CreateSender(bind).has_value();
+                sender = mirror->CreateSender(bind);
+                if (sender.has_value())
+                {
+                    created = true;
+                }
 
                 break;
             }
             case SDL_SCANCODE_R:
             {
                 std::string bind = "0.0.0.0:3200";
-                created = mirror->CreateReceiver(bind, [&](void* _, VideoFrame* frame) {
+                receiver = mirror->CreateReceiver(bind, [&](void* _, VideoFrame* frame) {
                     if (SDL_UpdateNVTexture(sdl_texture,
                                         &sdl_rect,
                                         frame->data[0],
@@ -122,7 +128,11 @@ int main()
                     }
 
                     return false;
-                }, nullptr).has_value();
+                }, nullptr);
+                if (receiver.has_value())
+                {
+                    created = true;
+                }
 
                 break;
             }

@@ -12,7 +12,9 @@ static struct
     struct obs_video_info video_info;
     obs_scene_t* scene;
     obs_source_t* video_source;
+    obs_source_t* monitor_source;
     obs_sceneitem_t* video_scene_item;
+    obs_sceneitem_t* monitor_scene_item;
     VideoOutputCallback raw_video_callback;
     void* raw_video_callback_context;
     struct VideoFrame video_frame;
@@ -91,20 +93,28 @@ int _init(struct VideoInfo* info)
     {
         return -5;
     }
-    else
-    {
-        obs_set_output_source(0, GLOBAL.video_source);
-    }
     
     GLOBAL.video_scene_item = obs_scene_add(GLOBAL.scene, GLOBAL.video_source);
     if (GLOBAL.video_scene_item == NULL)
     {
         return -6;
     }
-    else
+
+    GLOBAL.monitor_source = obs_source_create("monitor_capture",
+                                            "mirror monitor input", 
+                                            NULL, 
+                                            NULL);
+    if (GLOBAL.monitor_source == NULL)
     {
-        obs_sceneitem_set_visible(GLOBAL.video_scene_item, true);
+        return -5;
     }
+
+    GLOBAL.monitor_scene_item = obs_scene_add(GLOBAL.scene, GLOBAL.monitor_source);
+    if (GLOBAL.monitor_scene_item == NULL)
+    {
+        return -6;
+    }
+
 
     return 0;
 }
@@ -125,25 +135,51 @@ void _quit()
     {
         obs_sceneitem_release(GLOBAL.video_scene_item);
     }
+
+    if (GLOBAL.monitor_source != NULL)
+    {
+        obs_source_release(GLOBAL.monitor_source);
+    }
+    
+    if (GLOBAL.monitor_scene_item != NULL)
+    {
+        obs_sceneitem_release(GLOBAL.monitor_scene_item);
+    }
 }
 
 void _set_video_input(struct DeviceDescription* description)
 {
     obs_data_t* settings = obs_data_create();
-    obs_data_t* cur_settings = obs_source_get_settings(GLOBAL.video_source);
-    obs_data_apply(settings, cur_settings);
+
+    if (description->type == DeviceType::kDeviceTypeVideo)
+    {
+        obs_data_t* cur_settings = obs_source_get_settings(GLOBAL.video_source);
+        obs_data_apply(settings, cur_settings);
+        
+        char resolution[20];
+        sprintf(resolution, 
+                "%dx%d", 
+                GLOBAL.video_info.base_width, 
+                GLOBAL.video_info.base_height);
+        
+        obs_data_set_int(settings, "res_type", 1);
+        obs_data_set_bool(settings, "hw_decode", true);
+        obs_data_set_string(settings, "resolution", (const char*)&resolution);
+        obs_data_set_string(settings, "video_device_id", description->id);
+        obs_source_update(GLOBAL.video_source, settings);
+        obs_set_output_source(0, GLOBAL.video_source);
+        obs_sceneitem_set_visible(GLOBAL.video_scene_item, true);
+        obs_sceneitem_set_visible(GLOBAL.monitor_scene_item, false);
+    }
+    else if (description->type == DeviceType::kDeviceTypeScreen)
+    {
+        obs_data_set_int(settings, "monitor", description->index);
+        obs_source_update(GLOBAL.video_source, settings);
+        obs_set_output_source(0, GLOBAL.video_source);
+        obs_sceneitem_set_visible(GLOBAL.video_scene_item, false);
+        obs_sceneitem_set_visible(GLOBAL.monitor_scene_item, true);
+    }
     
-    char resolution[20];
-    sprintf(resolution, 
-            "%dx%d", 
-            GLOBAL.video_info.base_width, 
-            GLOBAL.video_info.base_height);
-    
-    obs_data_set_int(settings, "res_type", 1);
-    obs_data_set_bool(settings, "hw_decode", true);
-    obs_data_set_string(settings, "resolution", (const char*)&resolution);
-    obs_data_set_string(settings, "video_device_id", description->id);
-    obs_source_update(GLOBAL.video_source, settings);
     obs_data_release(settings);
 }
 
@@ -152,13 +188,26 @@ struct DeviceList _get_device_list(enum DeviceType type)
     DeviceList list;
     list.size = 0;
     list.devices = (struct DeviceDescription**)malloc(sizeof(struct DeviceDescription*) * 50);
+
+    const char* key = nullptr;
+    obs_source_t* source = nullptr;
+    if (type == DeviceType::kDeviceTypeVideo)
+    {
+        source = GLOBAL.video_source;
+        key = "video_device_id";
+    }
+    else if (type == DeviceType::kDeviceTypeScreen)
+    {
+        source = GLOBAL.monitor_source;
+        key = "monitor";
+    }
     
-    obs_properties_t* properties = obs_source_properties(GLOBAL.video_source);
+    obs_properties_t* properties = obs_source_properties(source);
     obs_property_t* property = obs_properties_first(properties);
     while (property)
     {
         const char* name = obs_property_name(property);
-        if (strcmp(name, "video_device_id") == 0)
+        if (strcmp(name, key) == 0)
         {
             for (size_t i = 0; i < obs_property_list_item_count(property); i++)
             {
@@ -168,6 +217,7 @@ struct DeviceList _get_device_list(enum DeviceType type)
                     device->type = type;
                     device->id = obs_property_list_item_string(property, i);
                     device->name = obs_property_list_item_name(property, i);
+                    device->index = (int)obs_property_list_item_int(property, i);
                     list.devices[list.size] = device;
                     list.size ++;
                 }

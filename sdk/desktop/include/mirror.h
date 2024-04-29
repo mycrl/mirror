@@ -33,7 +33,7 @@ enum DeviceKind
 {
     Video,
     Audio,
-    Screem,
+    Screen,
 };
 
 struct VideoOptions
@@ -173,7 +173,7 @@ public:
         typedef std::function<bool (void*, struct VideoFrame*)> FrameCallback;
         
         FrameProcContext(FrameCallback callback, void* ctx)
-        : _callback(callback), _ctx(ctx)
+            : _callback(callback), _ctx(ctx)
         {
         }
         
@@ -209,17 +209,10 @@ public:
         {
         }
 
-        ~MirrorReceiver()
-        {
-            if (_ctx != nullptr)
-            {
-                delete _ctx;
-            }
-        }
-
         void Close()
         {
             close_receiver(_receiver);
+            delete _ctx;
         }
     private:
         Receiver _receiver;
