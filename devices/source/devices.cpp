@@ -93,10 +93,6 @@ int devices_init(struct VideoInfo* info)
 	{
 		return -5;
 	}
-	else
-	{
-		obs_set_output_source(0, GLOBAL.video_source);
-	}
 
 	GLOBAL.video_scene_item = obs_scene_add(GLOBAL.scene, GLOBAL.video_source);
 	if (GLOBAL.video_scene_item == NULL)
@@ -111,10 +107,6 @@ int devices_init(struct VideoInfo* info)
 	if (GLOBAL.monitor_source == NULL)
 	{
 		return -5;
-	}
-	else
-	{
-		obs_set_output_source(0, GLOBAL.monitor_source);
 	}
 
 	GLOBAL.monitor_scene_item = obs_scene_add(GLOBAL.scene, GLOBAL.monitor_source);
@@ -177,6 +169,7 @@ void devices_set_video_input(struct DeviceDescription* description)
 		obs_source_update(GLOBAL.video_source, settings);
 		obs_sceneitem_set_visible(GLOBAL.video_scene_item, true);
 		obs_sceneitem_set_visible(GLOBAL.monitor_scene_item, false);
+        obs_set_output_source(0, GLOBAL.video_source);
 	}
 	else if (description->type == DeviceType::kDeviceTypeScreen)
 	{
@@ -184,6 +177,7 @@ void devices_set_video_input(struct DeviceDescription* description)
 		obs_source_update(GLOBAL.monitor_source, settings);
 		obs_sceneitem_set_visible(GLOBAL.video_scene_item, false);
 		obs_sceneitem_set_visible(GLOBAL.monitor_scene_item, true);
+        obs_set_output_source(0, GLOBAL.monitor_source);
 	}
 
 	obs_data_release(settings);

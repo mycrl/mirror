@@ -36,7 +36,7 @@ if (NOT EXISTS "${THIRD_PARTY_DIR}/SDL2.lib")
         execute_process(
             WORKING_DIRECTORY "${THIRD_PARTY_DIR}"
             COMMAND powershell.exe -Command "Invoke-WebRequest \
-                                            -Uri https://github.com/mycrl/mirror/releases/download/distributions/SDL2.lib \
+                                            -Uri https://github.com/mycrl/distributions/releases/download/distributions/SDL2.lib \
                                             -OutFile ./SDL2.lib")
     else()
     endif()

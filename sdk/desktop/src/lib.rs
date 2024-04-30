@@ -101,6 +101,8 @@ pub struct RawDevices {
 
 #[no_mangle]
 extern "C" fn get_devices(kind: DeviceKind) -> RawDevices {
+    log::info!("get devices: kind={:?}", kind);
+
     let devices = devices::get_devices(kind);
     let raw_devices = RawDevices {
         capacity: devices.capacity(),
