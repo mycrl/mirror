@@ -1,5 +1,6 @@
 use std::{
     ffi::{c_char, c_void},
+    ptr::null,
     sync::Arc,
 };
 
@@ -36,8 +37,8 @@ struct Context(Arc<dyn VideoSink>);
 extern "C" fn video_sink_proc(ctx: *const c_void, frame: *const VideoFrame) {
     if !ctx.is_null() {
         unsafe { &*(ctx as *const Context) }
-        .0
-        .sink(unsafe { &*frame });
+            .0
+            .sink(unsafe { &*frame });
     }
 }
 
@@ -108,6 +109,11 @@ pub fn init(options: DeviceManagerOptions) -> Result<(), DeviceError> {
 
 pub fn quit() {
     unsafe { api::devices_quit() }
+
+    let previous = unsafe { api::devices_set_video_output_callback(video_sink_proc, null()) };
+    if !previous.is_null() {
+        drop(unsafe { Box::from_raw(previous as *mut Context) })
+    }
 }
 
 pub fn get_devices(kind: DeviceKind) -> Vec<Device> {

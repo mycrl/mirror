@@ -98,7 +98,26 @@ int main()
                 mirror::DeviceManagerService::SetInputDevice(devices.device_list[0]);
 
                 std::string bind = "0.0.0.0:3200";
-                sender = mirror->CreateSender(bind);
+                sender = mirror->CreateSender(bind, [&](void* _, VideoFrame* frame) {
+                    if (SDL_UpdateNVTexture(sdl_texture,
+                                        &sdl_rect,
+                                        frame->data[0],
+                                        frame->linesize[0],
+                                        frame->data[1],
+                                        frame->linesize[1]) == 0)
+                    {
+                        if (SDL_RenderClear(sdl_renderer) == 0)
+                        {
+                            if (SDL_RenderCopy(sdl_renderer, sdl_texture, nullptr, &sdl_rect) == 0)
+                            {
+                                SDL_RenderPresent(sdl_renderer);
+                                return true;
+                            }
+                        }                 
+                    }
+
+                    return false;
+                }, nullptr);
                 if (sender.has_value())
                 {
                     created = true;

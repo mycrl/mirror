@@ -83,7 +83,7 @@ EXPORT void drop_devices(struct Devices* devices);
 EXPORT void set_input_device(const struct Device* device);
 EXPORT Mirror create_mirror();
 EXPORT void drop_mirror(Mirror mirror);
-EXPORT Sender create_sender(Mirror mirror, char* bind);
+EXPORT Sender create_sender(Mirror mirror, char* bind, ReceiverFrameCallback proc, void* ctx);
 EXPORT void close_sender(Sender sender);
 EXPORT Receiver create_receiver(Mirror mirror, char* bind, ReceiverFrameCallback proc, void* ctx);
 EXPORT void close_receiver(Receiver receiver);
@@ -236,10 +236,13 @@ public:
         }
     }
     
-    std::optional<MirrorSender> CreateSender(std::string& bind)
+    std::optional<MirrorSender> CreateSender(std::string& bind,
+            std::optional<FrameProcContext::FrameCallback> callback,
+                        void* ctx)
     {
-        Sender sender = create_sender(_mirror, const_cast<char*>(bind.c_str()));
-        return sender ? std::optional(MirrorSender(sender)) : std::nullopt;
+        FrameProcContext* ctx_ = callback.has_value() ? new FrameProcContext(callback.value(), ctx) : nullptr;
+        Sender sender = create_sender(_mirror, const_cast<char*>(bind.c_str()), callback.has_value() ? _proc : nullptr, ctx_);
+        return sender != nullptr ? std::optional(MirrorSender(sender)) : std::nullopt;
     }
     
     std::optional<MirrorReceiver> CreateReceiver(std::string& bind,
@@ -248,7 +251,7 @@ public:
     {
         FrameProcContext* ctx_ = new FrameProcContext(callback, ctx);
         Receiver receiver = create_receiver(_mirror, const_cast<char*>(bind.c_str()), _proc, ctx_);
-        return receiver ? std::optional(MirrorReceiver(receiver, ctx_)) : std::nullopt;
+        return receiver != nullptr ? std::optional(MirrorReceiver(receiver, ctx_)) : std::nullopt;
     }
 private:
     static bool _proc(void* ctx, struct VideoFrame* frame)

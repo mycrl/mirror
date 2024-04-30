@@ -154,14 +154,21 @@ pub struct RawSender {
 }
 
 #[no_mangle]
-extern "C" fn create_sender(mirror: *const RawMirror, bind: *const c_char) -> *const RawSender {
+extern "C" fn create_sender(
+    mirror: *const RawMirror,
+    bind: *const c_char,
+    callback: Option<extern "C" fn(ctx: *const c_void, frame: *const VideoFrame) -> bool>,
+    ctx: *const c_void,
+) -> *const RawSender {
     assert!(!mirror.is_null());
     assert!(!bind.is_null());
 
+    let ctx = ctx as usize;
     checker((|| {
-        unsafe { &*mirror }
-            .mirror
-            .create_sender(&Strings::from(bind).to_string()?)
+        unsafe { &*mirror }.mirror.create_sender(
+            &Strings::from(bind).to_string()?,
+            callback.map(|callback| move |frame: &VideoFrame| callback(ctx as *const _, frame)),
+        )
     })())
     .map(|adapter| Box::into_raw(Box::new(RawSender { adapter })))
     .unwrap_or_else(|_| null_mut())

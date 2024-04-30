@@ -124,7 +124,8 @@ impl PacketEncoder {
         for (i, chunk) in bytes.chunks(self.max_size).enumerate() {
             {
                 if self.packets.get(i).is_none() {
-                    self.packets.push(BytesMut::with_capacity(self.max_size * 2));
+                    self.packets
+                        .push(BytesMut::with_capacity(self.max_size * 2));
                 }
             }
 
@@ -172,7 +173,7 @@ impl PacketDecoder {
 
         let sequence = bytes.get_u16() as i16;
         let length = bytes.get_u32() as usize;
-        
+
         let mut results = None;
         if sequence != self.sequence {
             if self.bytes.len() > 0 && self.bytes.len() >= self.length {

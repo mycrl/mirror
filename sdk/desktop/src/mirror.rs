@@ -110,15 +110,20 @@ pub fn set_input_device(device: &Device) {
     log::info!("set input to device manager: device={:?}", device.name());
 }
 
-struct SenderObserver {
+struct SenderObserver<F> {
     video_encoder: VideoEncoder,
     adapter: Weak<StreamSenderAdapter>,
+    callback: Option<F>,
 }
 
-impl SenderObserver {
-    fn new(adapter: &Arc<StreamSenderAdapter>) -> anyhow::Result<Self> {
+impl<F> SenderObserver<F>
+where
+    F: Fn(&VideoFrame) -> bool + Send + 'static,
+{
+    fn new(adapter: &Arc<StreamSenderAdapter>, callback: Option<F>) -> anyhow::Result<Self> {
         let options = OPTIONS.read().unwrap();
         Ok(Self {
+            callback,
             adapter: Arc::downgrade(adapter),
             video_encoder: VideoEncoder::new(&options.video.clone().try_into()?)
                 .ok_or_else(|| anyhow!("Failed to create video encoder."))?,
@@ -126,8 +131,13 @@ impl SenderObserver {
     }
 }
 
-impl VideoSink for SenderObserver {
+impl<F> VideoSink for SenderObserver<F>
+where
+    F: Fn(&VideoFrame) -> bool + Send + 'static,
+{
     fn sink(&self, frame: &VideoFrame) {
+        self.callback.as_ref().map(|it| it(frame));
+
         if let Some(adapter) = self.adapter.upgrade().as_ref() {
             if self.video_encoder.encode(frame) {
                 while let Some(packet) = self.video_encoder.read() {
@@ -153,14 +163,21 @@ impl Mirror {
         )?))
     }
 
-    pub fn create_sender(&self, bind: &str) -> Result<Arc<StreamSenderAdapter>> {
+    pub fn create_sender<F>(
+        &self,
+        bind: &str,
+        callback: Option<F>,
+    ) -> Result<Arc<StreamSenderAdapter>>
+    where
+        F: Fn(&VideoFrame) -> bool + Send + 'static,
+    {
         log::info!("create sender: bind={}", bind);
 
         let adapter = StreamSenderAdapter::new();
         self.0
             .create_sender(0, bind.parse()?, Vec::new(), &adapter)?;
 
-        devices::set_video_sink(SenderObserver::new(&adapter)?);
+        devices::set_video_sink(SenderObserver::new(&adapter, callback)?);
         Ok(adapter)
     }
 

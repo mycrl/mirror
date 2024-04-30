@@ -101,7 +101,7 @@ impl Sender {
     /// Note that there may be packet loss.
     pub fn send(&mut self, bytes: &[u8]) -> Result<(), Error> {
         if bytes.len() == 0 {
-            return Ok(())
+            return Ok(());
         }
 
         for packet in self.encoder.encode(bytes) {
