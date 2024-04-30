@@ -31,7 +31,7 @@ fn exec(command: &str, work_dir: &str) -> anyhow::Result<String> {
 }
 
 fn main() -> anyhow::Result<()> {
-    println!("cargo:rerun-if-changed=./lib");
+    println!("cargo:rerun-if-changed=./source");
     println!("cargo:rerun-if-changed=./build.rs");
 
     let target = env::var("TARGET")?;

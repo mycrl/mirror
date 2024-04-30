@@ -26,7 +26,11 @@ fn main() -> anyhow::Result<()> {
         },
     })?;
 
-    let devices = get_devices(DeviceKind::Video);
+    let devices = get_devices(DeviceKind::Screen);
+    for device in &devices {
+        println!("device: name={:?}, id={:?}", device.name(), device.id());
+    }
+
     set_input(&devices[0]);
 
     let mut window = Window::new("simple", WIDTH, HEIGHT, WindowOptions::default())?;

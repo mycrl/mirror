@@ -52,7 +52,7 @@ fn find_library(name: &str) -> (Vec<String>, Vec<String>) {
 }
 
 fn main() -> anyhow::Result<()> {
-    println!("cargo:rerun-if-changed=./lib");
+    println!("cargo:rerun-if-changed=./source");
     println!("cargo:rerun-if-changed=./build.rs");
 
     let settings = Settings::build()?;

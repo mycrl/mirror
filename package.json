@@ -1,0 +1,20 @@
+{
+    "name": "mirror",
+    "version": "1.0.0",
+    "description": "",
+    "main": "build.js",
+    "scripts": {
+        "build": "node ./build.js -- --release",
+        "build:example": "node ./build.js -- --example"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/mycrl/mirror.git"
+    },
+    "author": "Mr.Panda",
+    "license": "MIT",
+    "bugs": {
+        "url": "https://github.com/mycrl/mirror/issues"
+    },
+    "homepage": "https://github.com/mycrl/mirror#readme"
+}

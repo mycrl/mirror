@@ -55,6 +55,7 @@ pub fn set_video_sink<S: VideoSink + 'static>(sink: S) {
     }
 }
 
+#[derive(Debug)]
 pub struct Device {
     description: *const api::DeviceDescription,
 }
@@ -75,6 +76,13 @@ impl Device {
         Strings::from(unsafe { &*self.description }.name)
             .to_string()
             .ok()
+    }
+
+    #[inline]
+    pub fn id(&self) -> Option<String> {
+        Strings::from(unsafe { &*self.description }.id)
+        .to_string()
+        .ok()
     }
 
     #[inline]
@@ -160,6 +168,7 @@ mod api {
         pub kind: DeviceKind,
         pub id: *const c_char,
         pub name: *const c_char,
+        pub index: c_int,
     }
 
     #[repr(C)]
