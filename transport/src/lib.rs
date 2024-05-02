@@ -11,8 +11,8 @@ use std::{
 };
 
 use adapter::StreamReceiverAdapter;
-use transfer::{Receiver, Sender};
 use thiserror::Error;
+use transfer::{Receiver, Sender};
 
 use crate::{
     adapter::{ReceiverAdapterFactory, StreamSenderAdapter},

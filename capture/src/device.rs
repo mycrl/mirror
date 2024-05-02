@@ -17,8 +17,8 @@ pub struct RawDeviceList {
 }
 
 extern "C" {
-    pub fn devices_release_device_list(list: *const RawDeviceList);
-    pub fn devices_release_device_description(description: *const RawDeviceDescription);
+    pub fn capture_release_device_list(list: *const RawDeviceList);
+    pub fn capture_release_device_description(description: *const RawDeviceDescription);
 }
 
 #[repr(C)]
@@ -79,7 +79,7 @@ impl Device {
 
 impl Drop for Device {
     fn drop(&mut self) {
-        unsafe { devices_release_device_description(self.0) }
+        unsafe { capture_release_device_description(self.0) }
     }
 }
 
@@ -104,6 +104,6 @@ impl DeviceList {
 
 impl Drop for DeviceList {
     fn drop(&mut self) {
-        unsafe { devices_release_device_list(self.0) }
+        unsafe { capture_release_device_list(self.0) }
     }
 }

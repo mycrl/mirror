@@ -11,7 +11,7 @@ resolver = "2"
 members = [
     "codec", 
     "transport", 
-    "devices", 
+    "capture", 
     "sdk/desktop",
     "sdk/android/jni-exports",
     "common/jni-macro",

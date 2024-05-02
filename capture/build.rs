@@ -31,7 +31,7 @@ fn exec(command: &str, work_dir: &str) -> anyhow::Result<String> {
 }
 
 fn main() -> anyhow::Result<()> {
-    println!("cargo:rerun-if-changed=./source");
+    println!("cargo:rerun-if-changed=./lib");
     println!("cargo:rerun-if-changed=./build.rs");
 
     let target = env::var("TARGET")?;
@@ -68,7 +68,7 @@ fn main() -> anyhow::Result<()> {
         .target(&target)
         .warnings(false)
         .out_dir(&out_dir)
-        .file("./source/devices.cpp")
+        .file("./lib/capture.cpp")
         .include(&join(&out_dir, "./obs-studio")?)
         .include("../common/include");
 
@@ -78,7 +78,7 @@ fn main() -> anyhow::Result<()> {
     #[cfg(target_os = "linux")]
     compiler.define("LINUX", None);
 
-    compiler.compile("devices");
+    compiler.compile("capture");
 
     println!("cargo:rustc-link-search=all={}", &out_dir);
     println!("cargo:rustc-link-lib=obs");

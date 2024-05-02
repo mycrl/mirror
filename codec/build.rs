@@ -52,7 +52,7 @@ fn find_library(name: &str) -> (Vec<String>, Vec<String>) {
 }
 
 fn main() -> anyhow::Result<()> {
-    println!("cargo:rerun-if-changed=./source");
+    println!("cargo:rerun-if-changed=./lib");
     println!("cargo:rerun-if-changed=./build.rs");
 
     let settings = Settings::build()?;
@@ -64,8 +64,8 @@ fn main() -> anyhow::Result<()> {
         .target(&settings.target)
         .warnings(false)
         .out_dir(&settings.out_dir)
-        .file("./source/video/encode.cpp")
-        .file("./source/video/decode.cpp")
+        .file("./lib/video/encode.cpp")
+        .file("./lib/video/decode.cpp")
         .includes(&settings.ffmpeg_include_prefix)
         .include("../common/include")
         .compile("codec");

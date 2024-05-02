@@ -5,9 +5,9 @@ use std::{
 
 use anyhow::{anyhow, Result};
 use bytes::Bytes;
+use capture::{AudioInfo, Device, DeviceManager, DeviceManagerOptions, VideoInfo, VideoSink};
 use codec::{VideoDecoder, VideoEncoder, VideoEncoderSettings};
 use common::frame::VideoFrame;
-use devices::{Device, DeviceManager, DeviceManagerOptions, VideoInfo, VideoSink};
 use once_cell::sync::Lazy;
 use transport::{
     adapter::{StreamBufferInfo, StreamKind, StreamReceiverAdapter, StreamSenderAdapter},
@@ -15,6 +15,19 @@ use transport::{
 };
 
 static OPTIONS: Lazy<RwLock<MirrorOptions>> = Lazy::new(|| Default::default());
+
+/// Audio Codec Configuration.
+#[derive(Debug, Clone)]
+pub struct AudioOptions {
+    /// The sample rate of the audio, in seconds.
+    pub samples: u32,
+}
+
+impl Default for AudioOptions {
+    fn default() -> Self {
+        Self { samples: 48000 }
+    }
+}
 
 /// Video Codec Configuration.
 #[derive(Debug, Clone)]
@@ -74,6 +87,8 @@ impl Into<VideoEncoderSettings> for VideoOptions {
 pub struct MirrorOptions {
     /// Video Codec Configuration.
     pub video: VideoOptions,
+    /// Audio Codec Configuration.
+    pub audio: AudioOptions,
     /// Multicast address, e.g. `239.0.0.1`.
     pub multicast: String,
     /// The size of the maximum transmission unit of the network, which is
@@ -87,6 +102,7 @@ impl Default for MirrorOptions {
         Self {
             multicast: "239.0.0.1".to_string(),
             video: Default::default(),
+            audio: Default::default(),
             mtu: 1500,
         }
     }
@@ -111,11 +127,14 @@ pub fn init(options: MirrorOptions) -> Result<()> {
     *OPTIONS.write().unwrap() = options.clone();
     log::info!("mirror init: options={:?}", options);
 
-    Ok(devices::init(DeviceManagerOptions {
+    Ok(capture::init(DeviceManagerOptions {
         video: VideoInfo {
             width: options.video.width,
             height: options.video.height,
             fps: options.video.frame_rate,
+        },
+        audio: AudioInfo {
+            samples_per_sec: options.audio.samples,
         },
     })?)
 }
@@ -123,7 +142,7 @@ pub fn init(options: MirrorOptions) -> Result<()> {
 /// Cleans up the environment when the SDK exits, and is recommended to be
 /// called when the application exits.
 pub fn quit() {
-    devices::quit();
+    capture::quit();
 
     log::info!("close mirror");
 }
@@ -206,7 +225,7 @@ impl Mirror {
         self.0
             .create_sender(0, bind.parse()?, Vec::new(), &adapter)?;
 
-        devices::set_video_sink(SenderObserver::new(&adapter, callback)?);
+        capture::set_video_sink(SenderObserver::new(&adapter, callback)?);
         Ok(adapter)
     }
 

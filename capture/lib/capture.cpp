@@ -1,11 +1,11 @@
 //
-//  devices.c
-//  devices
+//  capture.cpp
+//  capture
 //
 //  Created by Mr.Panda on 2024/2/14.
 //
 
-#include "devices.h"
+#include "capture.h"
 
 static struct
 {
@@ -75,7 +75,7 @@ void raw_video_callback(void* _, struct video_data* frame)
 	GLOBAL.raw_video_callback(GLOBAL.raw_video_callback_context, &GLOBAL.video_frame);
 }
 
-void* devices_set_video_output_callback(VideoOutputCallback proc, void* current_ctx)
+void* capture_set_video_output_callback(VideoOutputCallback proc, void* current_ctx)
 {
 	void* previous_ctx = GLOBAL.raw_video_callback_context;
 	GLOBAL.raw_video_callback_context = current_ctx;
@@ -83,7 +83,12 @@ void* devices_set_video_output_callback(VideoOutputCallback proc, void* current_
 	return previous_ctx;
 }
 
-int devices_init(struct VideoInfo* info)
+void raw_audio_callback(void* _, size_t mix_idx, struct audio_data* data)
+{
+
+}
+
+int capture_init(VideoInfo* video_info, AudioInfo* audio_info)
 {
 	if (obs_initialized())
 	{
@@ -99,21 +104,20 @@ int devices_init(struct VideoInfo* info)
 	GLOBAL.video_info.graphics_module = "libobs-d3d11";
 #endif
 
-	GLOBAL.video_info.fps_num = info->fps;
+	GLOBAL.video_info.fps_num = video_info->fps;
 	GLOBAL.video_info.fps_den = 1;
 	GLOBAL.video_info.gpu_conversion = true;
-	GLOBAL.video_info.base_width = info->width;
-	GLOBAL.video_info.base_height = info->height;
-	GLOBAL.video_info.output_width = info->width;
-	GLOBAL.video_info.output_height = info->height;
+	GLOBAL.video_info.base_width = video_info->width;
+	GLOBAL.video_info.base_height = video_info->height;
+	GLOBAL.video_info.output_width = video_info->width;
+	GLOBAL.video_info.output_height = video_info->height;
 	GLOBAL.video_info.colorspace = VIDEO_CS_DEFAULT;
 	GLOBAL.video_info.range = VIDEO_RANGE_DEFAULT;
 	GLOBAL.video_info.scale_type = OBS_SCALE_DISABLE;
 	GLOBAL.video_info.output_format = VIDEO_FORMAT_NV12;
 	GLOBAL.video_info.adapter = 0;
-
-    GLOBAL.video_frame.rect.width = info->width;
-	GLOBAL.video_frame.rect.height = info->height;
+    GLOBAL.video_frame.rect.width = video_info->width;
+	GLOBAL.video_frame.rect.height = video_info->height;
 
 	if (obs_reset_video(&GLOBAL.video_info) != OBS_VIDEO_SUCCESS)
 	{
@@ -122,9 +126,20 @@ int devices_init(struct VideoInfo* info)
 
 	obs_load_all_modules();
 	obs_post_load_modules();
-	obs_add_raw_video_callback(nullptr, raw_video_callback, nullptr);
 
-	GLOBAL.scene = obs_scene_create("mirror");
+    struct video_scale_info video_scale_info;
+    video_scale_info.width = video_info->width;
+    video_scale_info.height = video_info->height;
+    video_scale_info.format = VIDEO_FORMAT_NV12;
+	obs_add_raw_video_callback(&video_scale_info, raw_video_callback, nullptr);
+
+    struct audio_convert_info audio_convert_info;
+    audio_convert_info.speakers = SPEAKERS_STEREO;
+    audio_convert_info.format = AUDIO_FORMAT_16BIT;
+    audio_convert_info.samples_per_sec = audio_info->samples_per_sec;
+    obs_add_raw_audio_callback(0, &audio_convert_info, raw_audio_callback, nullptr);
+
+	GLOBAL.scene = obs_scene_create("Default");
 	if (GLOBAL.scene == nullptr)
 	{
 		return -4;
@@ -169,7 +184,7 @@ int devices_init(struct VideoInfo* info)
 	return 0;
 }
 
-void devices_quit()
+void capture_quit()
 {
 	if (GLOBAL.scene != nullptr)
 	{
@@ -197,7 +212,7 @@ void devices_quit()
 	}
 }
 
-void devices_set_video_input(struct DeviceDescription* description)
+void capture_set_video_input(struct DeviceDescription* description)
 {
 	if (description->type == DeviceType::kDeviceTypeVideo)
 	{
@@ -209,7 +224,7 @@ void devices_set_video_input(struct DeviceDescription* description)
 	}
 }
 
-struct DeviceList* devices_get_device_list(enum DeviceType type)
+struct DeviceList* capture_get_device_list(enum DeviceType type)
 {
 	DeviceList* list = new struct DeviceList;
     list->devices = (struct DeviceDescription**)malloc(sizeof(struct DeviceDescription*) * 100);
@@ -262,12 +277,12 @@ struct DeviceList* devices_get_device_list(enum DeviceType type)
 	return list;
 }
 
-void devices_release_device_description(struct DeviceDescription* description)
+void capture_release_device_description(struct DeviceDescription* description)
 {
     delete description;
 }
 
-void devices_release_device_list(struct DeviceList* list)
+void capture_release_device_list(struct DeviceList* list)
 {
     free(list->devices);
     delete list;

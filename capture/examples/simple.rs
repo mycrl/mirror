@@ -4,8 +4,8 @@ use std::{
     time::Duration,
 };
 
+use capture::*;
 use common::frame::VideoFrame;
-use devices::*;
 use minifb::{Window, WindowOptions};
 
 const WIDTH: usize = 1280;
@@ -47,6 +47,9 @@ fn main() -> anyhow::Result<()> {
             fps: 30,
             width: WIDTH as u32,
             height: HEIGHT as u32,
+        },
+        audio: AudioInfo {
+            samples_per_sec: 48000,
         },
     })?;
 

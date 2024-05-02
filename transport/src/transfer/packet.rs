@@ -4,13 +4,30 @@ use bytes::{Buf, BufMut, Bytes, BytesMut};
 use crc::{Crc, CRC_32_ISO_HDLC};
 
 pub enum Packet<'a> {
-    Ping { timestamp: u64 },
-    Pong { timestamp: u64 },
-    Nack { range: Range<u64> },
-    Bytes { sequence: u64, chunk: &'a [u8] },
+    /// Ping packet, when receiving ping should reply pong, this is mainly used
+    /// for online status check and delay detection.
+    Ping {
+        timestamp: u64,
+    },
+    /// A pong should be replied to when a ping is received, this is mainly used
+    /// for online status checking and latency detection.
+    Pong {
+        timestamp: u64,
+    },
+    /// The packet loss list contains a range inside, and all packets within the
+    /// sequence number range have been lost.
+    Nack {
+        range: Range<u64>,
+    },
+    Bytes {
+        sequence: u64,
+        chunk: &'a [u8],
+    },
 }
 
 impl<'a> Packet<'a> {
+    /// Get the maximum length of a single packet, since packet encoding
+    /// requires adding packet headers.
     pub const fn get_max_size(size: usize) -> usize {
         size - 15
     }
@@ -26,7 +43,10 @@ impl<'a> Into<Bytes> for Packet<'a> {
             },
         );
 
+        // CRC check header.
         bytes.put_u32(0);
+
+        // Package type.
         bytes.put_u8(match &self {
             Self::Ping { .. } => 0,
             Self::Pong { .. } => 1,
@@ -48,6 +68,7 @@ impl<'a> Into<Bytes> for Packet<'a> {
             }
         }
 
+        // Calculate CRC.
         let crc = fingerprint(&bytes[4..]);
         (&mut bytes[0..4]).copy_from_slice(&crc.to_be_bytes());
 

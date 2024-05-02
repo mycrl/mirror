@@ -5,9 +5,9 @@ extern "C" {
     ///
     /// Callback function returns true to continue enumeration, or false to
     /// end enumeration.
-    pub fn devices_get_device_list(kind: DeviceKind) -> *const RawDeviceList;
+    pub fn capture_get_device_list(kind: DeviceKind) -> *const RawDeviceList;
     /// Sets the primary output source for a channel.
-    pub fn devices_set_video_input(description: *const RawDeviceDescription);
+    pub fn capture_set_video_input(description: *const RawDeviceDescription);
 }
 
 pub struct DeviceManager;
@@ -21,7 +21,7 @@ impl DeviceManager {
     pub fn get_devices(kind: DeviceKind) -> DeviceList {
         log::info!("DeviceManager get devices");
 
-        DeviceList(unsafe { devices_get_device_list(kind) })
+        DeviceList(unsafe { capture_get_device_list(kind) })
     }
 
     /// Setting up an input device, it is important to note that a device of the
@@ -38,6 +38,6 @@ impl DeviceManager {
     pub fn set_input(device: &Device) {
         log::info!("DeviceManager set input device");
 
-        unsafe { devices_set_video_input(device.as_ptr()) }
+        unsafe { capture_set_video_input(device.as_ptr()) }
     }
 }

@@ -60,10 +60,18 @@ struct VideoOptions
 	uint32_t key_frame_interval;
 };
 
+struct AudioOptions
+{
+    /// The sample rate of the audio, in seconds.
+    uint32_t samples;
+};
+
 struct MirrorOptions
 {
     /// Video Codec Configuration.
 	VideoOptions video;
+    /// Audio Codec Configuration.
+    AudioOptions audio;
     /// Multicast address, e.g. `239.0.0.1`.
 	char* multicast;
     /// The size of the maximum transmission unit of the network, which is

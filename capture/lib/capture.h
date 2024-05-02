@@ -1,12 +1,12 @@
 //
-//  devices.h
-//  devices
+//  capture.h
+//  capture
 //
 //  Created by Panda on 2024/2/14.
 //
 
-#ifndef devices_h
-#define devices_h
+#ifndef capture_h
+#define capture_h
 #pragma once
 
 #ifdef WINDOWS
@@ -24,6 +24,11 @@ struct VideoInfo
 	uint8_t fps;
 	uint32_t width;
 	uint32_t height;
+};
+
+struct AudioInfo
+{
+    uint32_t samples_per_sec;
 };
 
 enum DeviceType
@@ -52,21 +57,21 @@ typedef void (*VideoOutputCallback)(void* ctx, struct VideoFrame* frame);
 extern "C"
 {
     // Releases all data associated with OBS and terminates the OBS context.
-	EXPORT void devices_quit();
+	EXPORT void capture_quit();
     // Initializes the OBS core context.
-	EXPORT int devices_init(VideoInfo* info);
+	EXPORT int capture_init(VideoInfo* video_info, AudioInfo* audio_info);
     // Enumerates all input sources.
     //
     // Callback function returns true to continue enumeration, or false to end 
     // enumeration.
-	EXPORT struct DeviceList* devices_get_device_list(enum DeviceType type);
+	EXPORT struct DeviceList* capture_get_device_list(enum DeviceType type);
     // Sets the primary output source for a channel.
-	EXPORT void devices_set_video_input(struct DeviceDescription* description);
+	EXPORT void capture_set_video_input(struct DeviceDescription* description);
     // Adds/removes a raw video callback. Allows the ability to obtain raw video 
     // frames without necessarily using an output.
-	EXPORT void* devices_set_video_output_callback(VideoOutputCallback proc, void* ctx);
-    EXPORT void devices_release_device_description(struct DeviceDescription* description);
-	EXPORT void devices_release_device_list(struct DeviceList* list);
+	EXPORT void* capture_set_video_output_callback(VideoOutputCallback proc, void* ctx);
+    EXPORT void capture_release_device_description(struct DeviceDescription* description);
+	EXPORT void capture_release_device_list(struct DeviceList* list);
 }
 
-#endif /* devices_h */
+#endif /* capture_h */

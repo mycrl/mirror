@@ -27,7 +27,6 @@ if (NOT EXISTS "${THIRD_PARTY_DIR}/sdl")
         execute_process(
             WORKING_DIRECTORY "${THIRD_PARTY_DIR}"
             COMMAND powershell.exe -Command "git clone --branch SDL2 https://github.com/libsdl-org/SDL.git sdl")
-    else()
     endif()
 endif()
 
@@ -38,7 +37,6 @@ if (NOT EXISTS "${THIRD_PARTY_DIR}/SDL2.lib")
             COMMAND powershell.exe -Command "Invoke-WebRequest \
                                             -Uri https://github.com/mycrl/distributions/releases/download/distributions/SDL2.lib \
                                             -OutFile ./SDL2.lib")
-    else()
     endif()
 endif()
 

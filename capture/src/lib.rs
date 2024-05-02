@@ -13,22 +13,28 @@ pub use device::{Device, DeviceKind, DeviceList};
 pub use manager::DeviceManager;
 
 #[repr(C)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct VideoInfo {
     pub fps: u8,
     pub width: u32,
     pub height: u32,
 }
 
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct AudioInfo {
+    pub samples_per_sec: u32,
+}
+
 extern "C" {
     /// Releases all data associated with OBS and terminates the OBS
     /// context.
-    pub fn devices_quit();
+    pub fn capture_quit();
     /// Initializes the OBS core context.
-    pub fn devices_init(info: *const VideoInfo) -> c_int;
+    pub fn capture_init(video_info: *const VideoInfo, audio_info: *const AudioInfo) -> c_int;
     /// Adds/removes a raw video callback. Allows the ability to obtain raw
     /// video frames without necessarily using an output.
-    pub fn devices_set_video_output_callback(
+    pub fn capture_set_video_output_callback(
         proc: Option<extern "C" fn(ctx: *const c_void, frame: *const VideoFrame)>,
         ctx: *const c_void,
     ) -> *const c_void;
@@ -128,7 +134,7 @@ extern "C" fn video_sink_proc(ctx: *const c_void, frame: *const VideoFrame) {
 /// ```
 pub fn set_video_sink<S: VideoSink + 'static>(sink: S) {
     let previous = unsafe {
-        devices_set_video_output_callback(
+        capture_set_video_output_callback(
             Some(video_sink_proc),
             Box::into_raw(Box::new(Context(Arc::new(sink)))) as *const c_void,
         )
@@ -142,6 +148,7 @@ pub fn set_video_sink<S: VideoSink + 'static>(sink: S) {
 #[derive(Debug, Clone)]
 pub struct DeviceManagerOptions {
     pub video: VideoInfo,
+    pub audio: AudioInfo,
 }
 
 /// Initialize the OBS environment, this is a required step, before calling any
@@ -157,7 +164,7 @@ pub struct DeviceManagerOptions {
 /// })?;
 /// ```
 pub fn init(options: DeviceManagerOptions) -> Result<(), DeviceError> {
-    if unsafe { devices_init(&options.video) } != 0 {
+    if unsafe { capture_init(&options.video, &options.audio) } != 0 {
         Err(DeviceError::InitializeFailed)
     } else {
         Ok(())
@@ -167,9 +174,9 @@ pub fn init(options: DeviceManagerOptions) -> Result<(), DeviceError> {
 /// Cleans up the OBS environment, a step that needs to be called when the
 /// application exits.
 pub fn quit() {
-    unsafe { devices_quit() }
+    unsafe { capture_quit() }
 
-    let previous = unsafe { devices_set_video_output_callback(None, null()) };
+    let previous = unsafe { capture_set_video_output_callback(None, null()) };
     if !previous.is_null() {
         drop(unsafe { Box::from_raw(previous as *mut Context) })
     }

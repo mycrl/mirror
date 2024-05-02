@@ -7,11 +7,16 @@ use std::{
     sync::Arc,
 };
 
+use capture::{Device, DeviceKind, DeviceManager};
 use common::{frame::VideoFrame, strings::Strings};
-use devices::{Device, DeviceKind, DeviceManager};
-use mirror::{Mirror, MirrorOptions, VideoOptions};
+use mirror::{AudioOptions, Mirror, MirrorOptions, VideoOptions};
 use transport::adapter::{StreamReceiverAdapter, StreamSenderAdapter};
 
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
+/// Video Codec Configuration.
+///
 /// ```c
 /// struct VideoOptions
 /// {
@@ -70,6 +75,27 @@ impl TryInto<VideoOptions> for RawVideoOptions {
     }
 }
 
+/// Audio Codec Configuration.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct RawAudioOptions {
+    /// The sample rate of the audio, in seconds.
+    samples: u32,
+}
+
+unsafe impl Send for RawAudioOptions {}
+unsafe impl Sync for RawAudioOptions {}
+
+impl TryInto<AudioOptions> for RawAudioOptions {
+    type Error = anyhow::Error;
+
+    fn try_into(self) -> Result<AudioOptions, Self::Error> {
+        Ok(AudioOptions {
+            samples: self.samples,
+        })
+    }
+}
+
 /// ```c
 /// struct MirrorOptions
 /// {
@@ -83,6 +109,8 @@ impl TryInto<VideoOptions> for RawVideoOptions {
 pub struct RawMirrorOptions {
     /// Video Codec Configuration.
     video: RawVideoOptions,
+    /// Audio Codec Configuration.
+    audio: RawAudioOptions,
     /// Multicast address, e.g. `239.0.0.1`.
     multicast: *const c_char,
     /// The size of the maximum transmission unit of the network, which is
@@ -101,6 +129,7 @@ impl TryInto<MirrorOptions> for RawMirrorOptions {
         Ok(MirrorOptions {
             multicast: Strings::from(self.multicast).to_string()?,
             video: self.video.try_into()?,
+            audio: self.audio.try_into()?,
             mtu: self.mtu,
         })
     }
