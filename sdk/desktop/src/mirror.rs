@@ -16,15 +16,28 @@ use transport::{
 
 static OPTIONS: Lazy<RwLock<MirrorOptions>> = Lazy::new(|| Default::default());
 
+/// Video Codec Configuration.
 #[derive(Debug, Clone)]
 pub struct VideoOptions {
+    /// Video encoder settings, possible values are `h264_qsv”, `h264_nvenc”,
+    /// `libx264” and so on.
     pub encoder: String,
+    /// Video decoder settings, possible values are `h264_qsv”, `h264_cuvid”,
+    /// `h264”, etc.
     pub decoder: String,
+    /// Maximum number of B-frames, if low latency encoding is performed, it is
+    /// recommended to set it to 0 to indicate that no B-frames are encoded.
     pub max_b_frames: u8,
+    /// Frame rate setting in seconds.
     pub frame_rate: u8,
+    /// The width of the video.
     pub width: u32,
+    /// The height of the video.
     pub height: u32,
+    /// The bit rate of the video encoding.
     pub bit_rate: u64,
+    /// Keyframe Interval, used to specify how many frames apart to output a
+    /// keyframe.
     pub key_frame_interval: u32,
 }
 
@@ -59,8 +72,13 @@ impl Into<VideoEncoderSettings> for VideoOptions {
 
 #[derive(Debug, Clone)]
 pub struct MirrorOptions {
+    /// Video Codec Configuration.
     pub video: VideoOptions,
+    /// Multicast address, e.g. `239.0.0.1`.
     pub multicast: String,
+    /// The size of the maximum transmission unit of the network, which is
+    /// related to the settings of network devices such as routers or switches,
+    /// the recommended value is 1400.
     pub mtu: usize,
 }
 
@@ -74,7 +92,11 @@ impl Default for MirrorOptions {
     }
 }
 
+/// Initialize the environment, which must be initialized before using the SDK.
 pub fn init(options: MirrorOptions) -> Result<()> {
+    // Because of the path issues with OBS looking for plugins as well as data, the
+    // working directory has to be adjusted to the directory where the current
+    // executable is located.
     {
         let mut path = std::env::current_exe()?;
         path.pop();
@@ -98,12 +120,16 @@ pub fn init(options: MirrorOptions) -> Result<()> {
     })?)
 }
 
+/// Cleans up the environment when the SDK exits, and is recommended to be
+/// called when the application exits.
 pub fn quit() {
     devices::quit();
 
     log::info!("close mirror");
 }
 
+/// Setting up an input device, repeated settings for the same type of device
+/// will overwrite the previous device.
 pub fn set_input_device(device: &Device) {
     DeviceManager::set_input(device);
 
@@ -163,6 +189,9 @@ impl Mirror {
         )?))
     }
 
+    /// Create a sender, specify a bound NIC address, you can pass callback to
+    /// get the device screen or sound callback, callback can be null, if it is
+    /// null then it means no callback data is needed.
     pub fn create_sender<F>(
         &self,
         bind: &str,
@@ -181,6 +210,8 @@ impl Mirror {
         Ok(adapter)
     }
 
+    /// Create a receiver, specify a bound NIC address, you can pass callback to
+    /// get the sender's screen or sound callback, callback can not be null.
     pub fn create_receiver<F>(&self, bind: &str, callback: F) -> Result<Arc<StreamReceiverAdapter>>
     where
         F: Fn(&VideoFrame) -> bool + Send + 'static,

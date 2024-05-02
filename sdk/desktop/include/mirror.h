@@ -38,20 +38,37 @@ enum DeviceKind
 
 struct VideoOptions
 {
+    /// Video encoder settings, possible values are `h264_qsv”, `h264_nvenc”,
+    /// `libx264” and so on.
 	char* encoder;
+    /// Video decoder settings, possible values are `h264_qsv”, `h264_cuvid”,
+    /// `h264”, etc.
 	char* decoder;
+    /// Maximum number of B-frames, if low latency encoding is performed, it is
+    /// recommended to set it to 0 to indicate that no B-frames are encoded.
 	uint8_t max_b_frames;
+    /// Frame rate setting in seconds.
 	uint8_t frame_rate;
+    /// The width of the video.
 	uint32_t width;
+    /// The height of the video.
 	uint32_t height;
+    /// The bit rate of the video encoding.
 	uint64_t bit_rate;
+    /// Keyframe Interval, used to specify how many frames apart to output a
+    /// keyframe.
 	uint32_t key_frame_interval;
 };
 
 struct MirrorOptions
 {
+    /// Video Codec Configuration.
 	VideoOptions video;
+    /// Multicast address, e.g. `239.0.0.1`.
 	char* multicast;
+    /// The size of the maximum transmission unit of the network, which is
+    /// related to the settings of network devices such as routers or switches,
+    /// the recommended value is 1400.
 	size_t mtu;
 };
 
@@ -62,8 +79,11 @@ struct Device
 
 struct Devices
 {
+	/// device list.
 	const struct Device* devices;
+	/// device vector capacity.
 	size_t capacity;
+	/// device vector size.
 	size_t size;
 };
 
@@ -74,18 +94,36 @@ typedef bool (*ReceiverFrameCallback)(void* ctx, VideoFrame* frame);
 
 extern "C"
 {
+    /// Cleans up the environment when the SDK exits, and is recommended to be
+    /// called when the application exits.
 	EXPORT void quit();
+    /// Initialize the environment, which must be initialized before using the SDK.
 	EXPORT bool init(struct MirrorOptions options);
+    /// Get device name.
 	EXPORT const char* get_device_name(const struct Device* device);
+    /// Get device kind.
 	EXPORT enum DeviceKind get_device_kind(const struct Device* device);
+    /// Get devices from device manager.
 	EXPORT struct Devices get_devices(enum DeviceKind kind);
+    /// Release devices.
 	EXPORT void drop_devices(struct Devices* devices);
+    /// Setting up an input device, repeated settings for the same type of device
+    /// will overwrite the previous device.
 	EXPORT void set_input_device(const struct Device* device);
+    /// Create mirror.
 	EXPORT Mirror create_mirror();
+    /// Release mirror.
 	EXPORT void drop_mirror(Mirror mirror);
+    /// Create a sender, specify a bound NIC address, you can pass callback to
+    /// get the device screen or sound callback, callback can be null, if it is
+    /// null then it means no callback data is needed.
 	EXPORT Sender create_sender(Mirror mirror, char* bind, ReceiverFrameCallback proc, void* ctx);
+    /// Close sender.
 	EXPORT void close_sender(Sender sender);
+    /// Create a receiver, specify a bound NIC address, you can pass callback to
+    /// get the sender's screen or sound callback, callback can not be null.
 	EXPORT Receiver create_receiver(Mirror mirror, char* bind, ReceiverFrameCallback proc, void* ctx);
+    /// Close receiver.
 	EXPORT void close_receiver(Receiver receiver);
 }
 

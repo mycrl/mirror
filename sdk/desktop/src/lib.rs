@@ -12,16 +12,41 @@ use devices::{Device, DeviceKind, DeviceManager};
 use mirror::{Mirror, MirrorOptions, VideoOptions};
 use transport::adapter::{StreamReceiverAdapter, StreamSenderAdapter};
 
+/// ```c
+/// struct VideoOptions
+/// {
+/// 	char* encoder;
+/// 	char* decoder;
+/// 	uint8_t max_b_frames;
+/// 	uint8_t frame_rate;
+/// 	uint32_t width;
+/// 	uint32_t height;
+/// 	uint64_t bit_rate;
+/// 	uint32_t key_frame_interval;
+/// };
+/// ```
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct RawVideoOptions {
+    /// Video encoder settings, possible values are `h264_qsv”, `h264_nvenc”,
+    /// `libx264” and so on.
     encoder: *const c_char,
+    /// Video decoder settings, possible values are `h264_qsv”, `h264_cuvid”,
+    /// `h264”, etc.
     decoder: *const c_char,
+    /// Maximum number of B-frames, if low latency encoding is performed, it is
+    /// recommended to set it to 0 to indicate that no B-frames are encoded.
     max_b_frames: u8,
+    /// Frame rate setting in seconds.
     frame_rate: u8,
+    /// The width of the video.
     width: u32,
+    /// The height of the video.
     height: u32,
+    /// The bit rate of the video encoding.
     bit_rate: u64,
+    /// Keyframe Interval, used to specify how many frames apart to output a
+    /// keyframe.
     key_frame_interval: u32,
 }
 
@@ -45,11 +70,24 @@ impl TryInto<VideoOptions> for RawVideoOptions {
     }
 }
 
+/// ```c
+/// struct MirrorOptions
+/// {
+/// 	VideoOptions video;
+/// 	char* multicast;
+/// 	size_t mtu;
+/// };
+/// ```
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct RawMirrorOptions {
+    /// Video Codec Configuration.
     video: RawVideoOptions,
+    /// Multicast address, e.g. `239.0.0.1`.
     multicast: *const c_char,
+    /// The size of the maximum transmission unit of the network, which is
+    /// related to the settings of network devices such as routers or switches,
+    /// the recommended value is 1400.
     mtu: usize,
 }
 
@@ -68,16 +106,32 @@ impl TryInto<MirrorOptions> for RawMirrorOptions {
     }
 }
 
+/// Initialize the environment, which must be initialized before using the SDK.
+///
+/// ```c
+/// EXPORT bool init(struct MirrorOptions options);
+/// ```
 #[no_mangle]
 extern "C" fn init(options: RawMirrorOptions) -> bool {
     checker((|| mirror::init(options.try_into()?))()).is_ok()
 }
 
+/// Cleans up the environment when the SDK exits, and is recommended to be
+/// called when the application exits.
+///
+/// ```c
+/// EXPORT void quit();
+/// ```
 #[no_mangle]
 extern "C" fn quit() {
     mirror::quit()
 }
 
+/// Get device name.
+///
+/// ```c
+/// EXPORT const char* get_device_name(const struct Device* device);
+/// ```
 #[no_mangle]
 extern "C" fn get_device_name(device: *const Device) -> *const c_char {
     assert!(!device.is_null());
@@ -85,6 +139,11 @@ extern "C" fn get_device_name(device: *const Device) -> *const c_char {
     unsafe { &*device }.c_name()
 }
 
+/// Get device kind.
+///
+/// ```c
+/// EXPORT enum DeviceKind get_device_kind(const struct Device* device);
+/// ```
 #[no_mangle]
 extern "C" fn get_device_kind(device: *const Device) -> DeviceKind {
     assert!(!device.is_null());
@@ -99,6 +158,11 @@ pub struct RawDevices {
     pub size: usize,
 }
 
+/// Get devices from device manager.
+///
+/// ```c
+/// EXPORT struct Devices get_devices(enum DeviceKind kind);
+/// ```
 #[no_mangle]
 extern "C" fn get_devices(kind: DeviceKind) -> RawDevices {
     log::info!("get devices: kind={:?}", kind);
@@ -114,6 +178,11 @@ extern "C" fn get_devices(kind: DeviceKind) -> RawDevices {
     raw_devices
 }
 
+/// Release devices.
+///
+/// ```c
+/// EXPORT void drop_devices(struct Devices* devices);
+/// ```
 #[no_mangle]
 extern "C" fn drop_devices(devices: *const RawDevices) {
     assert!(!devices.is_null());
@@ -122,6 +191,12 @@ extern "C" fn drop_devices(devices: *const RawDevices) {
     drop(unsafe { Vec::from_raw_parts(devices.list as *mut Device, devices.size, devices.size) })
 }
 
+/// Setting up an input device, repeated settings for the same type of device
+/// will overwrite the previous device.
+///
+/// ```c
+/// EXPORT void set_input_device(const struct Device* device);
+/// ```
 #[no_mangle]
 extern "C" fn set_input_device(device: *const Device) {
     assert!(!device.is_null());
@@ -134,6 +209,11 @@ pub struct RawMirror {
     mirror: Mirror,
 }
 
+/// Create mirror.
+///
+/// ```c
+/// EXPORT Mirror create_mirror();
+/// ```
 #[no_mangle]
 extern "C" fn create_mirror() -> *const RawMirror {
     checker(Mirror::new())
@@ -141,6 +221,11 @@ extern "C" fn create_mirror() -> *const RawMirror {
         .unwrap_or_else(|_| null_mut()) as *const _
 }
 
+/// Release mirror.
+///
+/// ```c
+/// EXPORT void drop_mirror(Mirror mirror);
+/// ```
 #[no_mangle]
 extern "C" fn drop_mirror(mirror: *const RawMirror) {
     assert!(!mirror.is_null());
@@ -155,6 +240,13 @@ pub struct RawSender {
     adapter: Arc<StreamSenderAdapter>,
 }
 
+/// Create a sender, specify a bound NIC address, you can pass callback to
+/// get the device screen or sound callback, callback can be null, if it is
+/// null then it means no callback data is needed.
+///
+/// ```c
+/// EXPORT Sender create_sender(Mirror mirror, char* bind, ReceiverFrameCallback proc, void* ctx);
+/// ```
 #[no_mangle]
 extern "C" fn create_sender(
     mirror: *const RawMirror,
@@ -176,6 +268,11 @@ extern "C" fn create_sender(
     .unwrap_or_else(|_| null_mut())
 }
 
+/// Close sender.
+///
+/// ```c
+/// EXPORT void close_sender(Sender sender);
+/// ```
 #[no_mangle]
 extern "C" fn close_sender(sender: *const RawSender) {
     assert!(!sender.is_null());
@@ -190,6 +287,12 @@ pub struct RawReceiver {
     adapter: Arc<StreamReceiverAdapter>,
 }
 
+/// Create a receiver, specify a bound NIC address, you can pass callback to
+/// get the sender's screen or sound callback, callback can not be null.
+///
+/// ```c
+/// EXPORT Receiver create_receiver(Mirror mirror, char* bind, ReceiverFrameCallback proc, void* ctx);
+/// ```
 #[no_mangle]
 extern "C" fn create_receiver(
     mirror: *const RawMirror,
@@ -212,6 +315,11 @@ extern "C" fn create_receiver(
     .unwrap_or_else(|_| null_mut())
 }
 
+/// Close receiver.
+///
+/// ```c
+/// EXPORT void close_receiver(Receiver receiver);
+/// ```
 #[no_mangle]
 extern "C" fn close_receiver(receiver: *const RawReceiver) {
     assert!(!receiver.is_null());
