@@ -7,7 +7,7 @@ use anyhow::{anyhow, Result};
 use bytes::Bytes;
 use codec::{VideoDecoder, VideoEncoder, VideoEncoderSettings};
 use common::frame::VideoFrame;
-use devices::{Device, DeviceManagerOptions, VideoInfo, VideoSink};
+use devices::{Device, DeviceManager, DeviceManagerOptions, VideoInfo, VideoSink};
 use once_cell::sync::Lazy;
 use transport::{
     adapter::{StreamBufferInfo, StreamKind, StreamReceiverAdapter, StreamSenderAdapter},
@@ -105,7 +105,7 @@ pub fn quit() {
 }
 
 pub fn set_input_device(device: &Device) {
-    devices::set_input(device);
+    DeviceManager::set_input(device);
 
     log::info!("set input to device manager: device={:?}", device.name());
 }

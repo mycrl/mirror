@@ -93,11 +93,11 @@ struct VideoEncoder* codec_create_video_encoder(struct VideoEncoderSettings* set
 	codec->frame->format = codec->context->pix_fmt;
 
 	int ret = av_image_alloc(codec->frame->data,
-		codec->frame->linesize,
-		codec->context->width,
-		codec->context->height,
-		codec->context->pix_fmt,
-		32);
+							 codec->frame->linesize,
+							 codec->context->width,
+							 codec->context->height,
+							 codec->context->pix_fmt,
+							 32);
 	if (ret < 0)
 	{
 		codec_release_video_encoder(codec);
@@ -118,16 +118,16 @@ bool codec_video_encoder_send_frame(struct VideoEncoder* codec, struct VideoFram
 	int linesize[4] = { (int)frame->linesize[0], (int)frame->linesize[1], 0, 0 };
 
 	av_image_copy(codec->frame->data,
-		codec->frame->linesize,
-		data,
-		linesize,
-		codec->context->pix_fmt,
-		codec->context->width,
-		codec->context->height);
+				  codec->frame->linesize,
+				  data,
+				  linesize,
+				  codec->context->pix_fmt,
+				  codec->context->width,
+				  codec->context->height);
 
 	codec->frame->pts = av_rescale_q(codec->frame_num,
-		codec->context->pkt_timebase,
-		codec->context->time_base);
+									 codec->context->pkt_timebase,
+									 codec->context->time_base);
 	if (avcodec_send_frame(codec->context, codec->frame) != 0)
 	{
 		return false;

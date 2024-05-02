@@ -51,12 +51,22 @@ typedef void (*VideoOutputCallback)(void* ctx, struct VideoFrame* frame);
 
 extern "C"
 {
+    // Releases all data associated with OBS and terminates the OBS context.
 	EXPORT void devices_quit();
+    // Initializes the OBS core context.
 	EXPORT int devices_init(VideoInfo* info);
-	EXPORT struct DeviceList devices_get_device_list(enum DeviceType type);
-	EXPORT void devices_release_device_description(struct DeviceDescription* description);
+    // Enumerates all input sources.
+    //
+    // Callback function returns true to continue enumeration, or false to end 
+    // enumeration.
+	EXPORT struct DeviceList* devices_get_device_list(enum DeviceType type);
+    // Sets the primary output source for a channel.
 	EXPORT void devices_set_video_input(struct DeviceDescription* description);
+    // Adds/removes a raw video callback. Allows the ability to obtain raw video 
+    // frames without necessarily using an output.
 	EXPORT void* devices_set_video_output_callback(VideoOutputCallback proc, void* ctx);
+    EXPORT void devices_release_device_description(struct DeviceDescription* description);
+	EXPORT void devices_release_device_list(struct DeviceList* list);
 }
 
 #endif /* devices_h */

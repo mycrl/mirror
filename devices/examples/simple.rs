@@ -1,14 +1,38 @@
 use std::{
-    sync::{Arc, RwLock},
+    sync::{Arc, Mutex},
     thread,
     time::Duration,
 };
 
+use common::frame::VideoFrame;
 use devices::*;
 use minifb::{Window, WindowOptions};
 
 const WIDTH: usize = 1280;
 const HEIGHT: usize = 720;
+
+struct FrameSink {
+    frame: Arc<Mutex<Vec<u8>>>,
+}
+
+impl VideoSink for FrameSink {
+    fn sink(&self, frmae: &VideoFrame) {
+        let mut frame_ = self.frame.lock().unwrap();
+
+        unsafe {
+            libyuv::nv12_to_argb(
+                frmae.data[0],
+                frmae.linesize[0] as i32,
+                frmae.data[1],
+                frmae.linesize[1] as i32,
+                frame_.as_mut_ptr(),
+                WIDTH as i32 * 4,
+                WIDTH as i32,
+                HEIGHT as i32,
+            );
+        }
+    }
+}
 
 fn main() -> anyhow::Result<()> {
     {
@@ -17,7 +41,7 @@ fn main() -> anyhow::Result<()> {
         std::env::set_current_dir(path)?;
     }
 
-    let frame = Arc::new(RwLock::new(vec![0u8; (WIDTH * HEIGHT * 4) as usize]));
+    let frame = Arc::new(Mutex::new(vec![0u8; (WIDTH * HEIGHT * 4) as usize]));
     init(DeviceManagerOptions {
         video: VideoInfo {
             fps: 30,
@@ -26,19 +50,22 @@ fn main() -> anyhow::Result<()> {
         },
     })?;
 
-    let devices = get_devices(DeviceKind::Screen);
+    let devices = DeviceManager::get_devices(DeviceKind::Screen).to_vec();
     for device in &devices {
         println!("device: name={:?}, id={:?}", device.name(), device.id());
     }
 
-    set_input(&devices[0]);
+    DeviceManager::set_input(&devices[0]);
+    set_video_sink(FrameSink {
+        frame: frame.clone(),
+    });
 
     let mut window = Window::new("simple", WIDTH, HEIGHT, WindowOptions::default())?;
     window.limit_update_rate(Some(Duration::from_millis(1000 / 30)));
 
     loop {
         {
-            let g_frame = frame.read().unwrap();
+            let g_frame = frame.lock().unwrap();
             let (_, shorts, _) = unsafe { g_frame.align_to::<u32>() };
             window.update_with_buffer(shorts, WIDTH, HEIGHT)?;
             drop(g_frame);

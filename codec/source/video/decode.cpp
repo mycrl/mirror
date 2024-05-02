@@ -25,8 +25,10 @@ struct VideoDecoder* codec_create_video_decoder(const char* codec_name)
 		codec_release_video_decoder(decoder);
 		return nullptr;
 	}
-
-	// codec->context->pix_fmt = AV_PIX_FMT_NV12;
+    else
+    {
+        decoder->context->pix_fmt = AV_PIX_FMT_NV12;
+    }
 
 	if (avcodec_open2(decoder->context, decoder->codec, nullptr) != 0)
 	{
@@ -91,20 +93,20 @@ void codec_release_video_decoder(struct VideoDecoder* decoder)
 }
 
 bool codec_video_decoder_send_packet(struct VideoDecoder* decoder,
-	uint8_t* buf,
-	size_t size)
+									 uint8_t* buf,
+									 size_t size)
 {
 	while (size > 0)
 	{
 		int ret = av_parser_parse2(decoder->parser,
-			decoder->context,
-			&decoder->packet->data,
-			&decoder->packet->size,
-			buf,
-			size,
-			AV_NOPTS_VALUE,
-			AV_NOPTS_VALUE,
-			0);
+								   decoder->context,
+								   &decoder->packet->data,
+								   &decoder->packet->size,
+								   buf,
+								   size,
+								   AV_NOPTS_VALUE,
+								   AV_NOPTS_VALUE,
+								   0);
 		if (ret < 0)
 		{
 			return false;

@@ -8,7 +8,7 @@ use std::{
 };
 
 use common::{frame::VideoFrame, strings::Strings};
-use devices::{Device, DeviceKind};
+use devices::{Device, DeviceKind, DeviceManager};
 use mirror::{Mirror, MirrorOptions, VideoOptions};
 use transport::adapter::{StreamReceiverAdapter, StreamSenderAdapter};
 
@@ -103,7 +103,7 @@ pub struct RawDevices {
 extern "C" fn get_devices(kind: DeviceKind) -> RawDevices {
     log::info!("get devices: kind={:?}", kind);
 
-    let devices = devices::get_devices(kind);
+    let devices = DeviceManager::get_devices(kind).to_vec();
     let raw_devices = RawDevices {
         capacity: devices.capacity(),
         list: devices.as_ptr(),

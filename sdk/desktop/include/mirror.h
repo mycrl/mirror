@@ -97,8 +97,7 @@ namespace mirror
 	{
 	public:
 		DeviceService(struct Device device) : _device(device)
-		{
-		}
+		{}
 
 		std::optional<std::string> GetName()
 		{
@@ -174,8 +173,7 @@ namespace mirror
 
 			FrameProcContext(FrameCallback callback, void* ctx)
 				: _callback(callback), _ctx(ctx)
-			{
-			}
+			{}
 
 			bool On(struct VideoFrame* frame)
 			{
@@ -191,8 +189,7 @@ namespace mirror
 		public:
 			MirrorSender(Sender sender, FrameProcContext* ctx)
 				: _sender(sender), _ctx(ctx)
-			{
-			}
+			{}
 
 			void Close()
 			{
@@ -213,8 +210,7 @@ namespace mirror
 		public:
 			MirrorReceiver(Receiver receiver, FrameProcContext* ctx)
 				: _receiver(receiver), _ctx(ctx)
-			{
-			}
+			{}
 
 			void Close()
 			{
@@ -244,8 +240,8 @@ namespace mirror
 		}
 
 		std::optional<MirrorSender> CreateSender(std::string& bind,
-			std::optional<FrameProcContext::FrameCallback> callback,
-			void* ctx)
+												 std::optional<FrameProcContext::FrameCallback> callback,
+												 void* ctx)
 		{
 			FrameProcContext* ctx_ = callback.has_value() ? new FrameProcContext(callback.value(), ctx) : nullptr;
 			Sender sender = create_sender(_mirror, const_cast<char*>(bind.c_str()), callback.has_value() ? _proc : nullptr, ctx_);
@@ -253,8 +249,8 @@ namespace mirror
 		}
 
 		std::optional<MirrorReceiver> CreateReceiver(std::string& bind,
-			FrameProcContext::FrameCallback callback,
-			void* ctx)
+													 FrameProcContext::FrameCallback callback,
+													 void* ctx)
 		{
 			FrameProcContext* ctx_ = new FrameProcContext(callback, ctx);
 			Receiver receiver = create_receiver(_mirror, const_cast<char*>(bind.c_str()), _proc, ctx_);

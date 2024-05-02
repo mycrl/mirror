@@ -59,7 +59,8 @@ fn main() -> anyhow::Result<()> {
         )?;
     }
 
-    cc::Build::new()
+    let mut compiler = cc::Build::new();
+    compiler
         .cpp(true)
         .std("c++20")
         .debug(is_debug)
@@ -69,8 +70,15 @@ fn main() -> anyhow::Result<()> {
         .out_dir(&out_dir)
         .file("./source/devices.cpp")
         .include(&join(&out_dir, "./obs-studio")?)
-        .include("../common/include")
-        .compile("devices");
+        .include("../common/include");
+
+    #[cfg(target_os = "windows")]
+    compiler.define("WIN32", None);
+
+    #[cfg(target_os = "linux")]
+    compiler.define("LINUX", None);
+
+    compiler.compile("devices");
 
     println!("cargo:rustc-link-search=all={}", &out_dir);
     println!("cargo:rustc-link-lib=obs");

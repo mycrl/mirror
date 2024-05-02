@@ -1,11 +1,38 @@
+mod device;
+mod manager;
+
 use std::{
-    ffi::{c_char, c_void},
+    ffi::{c_int, c_void},
     ptr::null,
     sync::Arc,
 };
 
-pub use api::{DeviceKind, VideoInfo};
-use common::{frame::VideoFrame, strings::Strings};
+use common::frame::VideoFrame;
+
+pub use device::{Device, DeviceKind, DeviceList};
+pub use manager::DeviceManager;
+
+#[repr(C)]
+#[derive(Debug, Clone)]
+pub struct VideoInfo {
+    pub fps: u8,
+    pub width: u32,
+    pub height: u32,
+}
+
+extern "C" {
+    /// Releases all data associated with OBS and terminates the OBS
+    /// context.
+    pub fn devices_quit();
+    /// Initializes the OBS core context.
+    pub fn devices_init(info: *const VideoInfo) -> c_int;
+    /// Adds/removes a raw video callback. Allows the ability to obtain raw
+    /// video frames without necessarily using an output.
+    pub fn devices_set_video_output_callback(
+        proc: Option<extern "C" fn(ctx: *const c_void, frame: *const VideoFrame)>,
+        ctx: *const c_void,
+    ) -> *const c_void;
+}
 
 #[derive(Debug)]
 pub enum DeviceError {
@@ -29,6 +56,33 @@ impl std::fmt::Display for DeviceError {
 }
 
 pub trait VideoSink {
+    /// This function is called when obs pushes frames internally, and the
+    /// format of the video frame is fixed to NV12.
+    ///
+    /// ```
+    /// struct FrameSink {
+    ///     frame: Arc<Mutex<Vec<u8>>>,
+    /// }
+    ///
+    /// impl VideoSink for FrameSink {
+    ///     fn sink(&self, frmae: &VideoFrame) {
+    ///         let mut frame_ = self.frame.lock().unwrap();
+    ///
+    ///         unsafe {
+    ///             libyuv::nv12_to_argb(
+    ///                 frmae.data[0],
+    ///                 frmae.linesize[0] as i32,
+    ///                 frmae.data[1],
+    ///                 frmae.linesize[1] as i32,
+    ///                 frame_.as_mut_ptr(),
+    ///                 1920 * 4,
+    ///                 1920,
+    ///                 1080,
+    ///             );
+    ///         }
+    ///     }
+    /// }
+    /// ```
     fn sink(&self, frmae: &VideoFrame);
 }
 
@@ -42,10 +96,40 @@ extern "C" fn video_sink_proc(ctx: *const c_void, frame: *const VideoFrame) {
     }
 }
 
+/// This function is called when obs pushes frames internally, and the
+/// format of the video frame is fixed to NV12.
+///
+/// ```
+/// struct FrameSink {
+///     frame: Arc<Mutex<Vec<u8>>>,
+/// }
+///
+/// impl VideoSink for FrameSink {
+///     fn sink(&self, frmae: &VideoFrame) {
+///         let mut frame_ = self.frame.lock().unwrap();
+///
+///         unsafe {
+///             libyuv::nv12_to_argb(
+///                 frmae.data[0],
+///                 frmae.linesize[0] as i32,
+///                 frmae.data[1],
+///                 frmae.linesize[1] as i32,
+///                 frame_.as_mut_ptr(),
+///                 1920 * 4,
+///                 1920,
+///                 1080,
+///             );
+///         }
+///     }
+/// }
+///
+/// let frame = Arc::new(Mutex::new(vec![0u8; (1920 * 1080 * 4) as usize]));
+/// set_video_sink(FrameSink { frame });
+/// ```
 pub fn set_video_sink<S: VideoSink + 'static>(sink: S) {
     let previous = unsafe {
-        api::devices_set_video_output_callback(
-            video_sink_proc,
+        devices_set_video_output_callback(
+            Some(video_sink_proc),
             Box::into_raw(Box::new(Context(Arc::new(sink)))) as *const c_void,
         )
     };
@@ -55,137 +139,38 @@ pub fn set_video_sink<S: VideoSink + 'static>(sink: S) {
     }
 }
 
-#[derive(Debug)]
-pub struct Device {
-    description: *const api::DeviceDescription,
-}
-
-impl Device {
-    #[inline]
-    pub(crate) fn new(description: *const api::DeviceDescription) -> Self {
-        Self { description }
-    }
-
-    #[inline]
-    pub(crate) fn as_ptr(&self) -> *const api::DeviceDescription {
-        self.description
-    }
-
-    #[inline]
-    pub fn name(&self) -> Option<String> {
-        Strings::from(unsafe { &*self.description }.name)
-            .to_string()
-            .ok()
-    }
-
-    #[inline]
-    pub fn id(&self) -> Option<String> {
-        Strings::from(unsafe { &*self.description }.id)
-        .to_string()
-        .ok()
-    }
-
-    #[inline]
-    pub fn c_name(&self) -> *const c_char {
-        unsafe { &*self.description }.name
-    }
-
-    #[inline]
-    pub fn kind(&self) -> DeviceKind {
-        unsafe { &*self.description }.kind
-    }
-}
-
-impl Drop for Device {
-    fn drop(&mut self) {
-        unsafe { api::devices_release_device_description(self.description) }
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct DeviceManagerOptions {
     pub video: VideoInfo,
 }
 
+/// Initialize the OBS environment, this is a required step, before calling any
+/// function.
+///
+/// ```
+/// init(DeviceManagerOptions {
+///     video: VideoInfo {
+///         fps: 30,
+///         width: WIDTH as u32,
+///         height: HEIGHT as u32,
+///     },
+/// })?;
+/// ```
 pub fn init(options: DeviceManagerOptions) -> Result<(), DeviceError> {
-    if unsafe { api::devices_init(&options.video) } != 0 {
+    if unsafe { devices_init(&options.video) } != 0 {
         Err(DeviceError::InitializeFailed)
     } else {
         Ok(())
     }
 }
 
+/// Cleans up the OBS environment, a step that needs to be called when the
+/// application exits.
 pub fn quit() {
-    unsafe { api::devices_quit() }
+    unsafe { devices_quit() }
 
-    let previous = unsafe { api::devices_set_video_output_callback(video_sink_proc, null()) };
+    let previous = unsafe { devices_set_video_output_callback(None, null()) };
     if !previous.is_null() {
         drop(unsafe { Box::from_raw(previous as *mut Context) })
-    }
-}
-
-pub fn get_devices(kind: DeviceKind) -> Vec<Device> {
-    log::info!("DeviceManager get devices");
-
-    let list = unsafe { api::devices_get_device_list(kind) };
-    unsafe { std::slice::from_raw_parts(list.devices, list.size) }
-        .into_iter()
-        .map(|item| Device::new(*item))
-        .collect()
-}
-
-pub fn set_input(device: &Device) {
-    log::info!("DeviceManager set input device");
-
-    if device.kind() == DeviceKind::Video {
-        unsafe { api::devices_set_video_input(device.as_ptr()) }
-    }
-}
-
-mod api {
-    use std::ffi::{c_char, c_int, c_void};
-
-    use common::frame::VideoFrame;
-
-    #[repr(C)]
-    #[derive(Debug, Clone)]
-    pub struct VideoInfo {
-        pub fps: u8,
-        pub width: u32,
-        pub height: u32,
-    }
-
-    #[repr(C)]
-    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-    pub enum DeviceKind {
-        Video,
-        Audio,
-        Screen,
-    }
-
-    #[repr(C)]
-    pub struct DeviceDescription {
-        pub kind: DeviceKind,
-        pub id: *const c_char,
-        pub name: *const c_char,
-        pub index: c_int,
-    }
-
-    #[repr(C)]
-    pub struct DeviceList {
-        pub devices: *const *const DeviceDescription,
-        pub size: usize,
-    }
-
-    extern "C" {
-        pub fn devices_quit();
-        pub fn devices_init(info: *const VideoInfo) -> c_int;
-        pub fn devices_get_device_list(kind: DeviceKind) -> DeviceList;
-        pub fn devices_release_device_description(description: *const DeviceDescription);
-        pub fn devices_set_video_input(description: *const DeviceDescription);
-        pub fn devices_set_video_output_callback(
-            proc: extern "C" fn(ctx: *const c_void, frame: *const VideoFrame),
-            ctx: *const c_void,
-        ) -> *const c_void;
     }
 }
