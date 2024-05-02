@@ -12,7 +12,6 @@ members = [
     "codec", 
     "transport", 
     "devices", 
-    "multicast",
     "sdk/desktop",
     "sdk/android/jni-exports",
     "common/jni-macro",

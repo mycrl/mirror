@@ -1,6 +1,7 @@
 pub mod adapter;
 mod discovery;
 mod payload;
+mod transfer;
 
 use std::{
     collections::HashSet,
@@ -10,7 +11,7 @@ use std::{
 };
 
 use adapter::StreamReceiverAdapter;
-use multicast::{Receiver, Sender};
+use transfer::{Receiver, Sender};
 use thiserror::Error;
 
 use crate::{
@@ -22,7 +23,7 @@ use crate::{
 #[derive(Debug, Error)]
 pub enum TransportError {
     #[error(transparent)]
-    NetError(#[from] multicast::Error),
+    NetError(#[from] transfer::Error),
     #[error(transparent)]
     DiscoveryError(#[from] DiscoveryError),
 }

@@ -13,7 +13,7 @@ use common::atomic::AtomicOption;
 use socket2::Socket;
 use thread_priority::{set_current_thread_priority, ThreadPriority};
 
-use crate::{
+use super::{
     dequeue::Dequeue,
     packet::{Packet, PacketDecoder},
     Error,

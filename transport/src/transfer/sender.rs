@@ -4,7 +4,7 @@ use std::{
     thread,
 };
 
-use crate::{
+use super::{
     packet::{Packet, PacketEncoder},
     Error,
 };
