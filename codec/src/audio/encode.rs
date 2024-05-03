@@ -2,7 +2,7 @@ use std::ffi::{c_char, c_void, CString};
 
 use common::frame::AudioFrame;
 
-use crate::RawEncodePacket;
+use crate::{Error, RawEncodePacket};
 
 extern "C" {
     fn codec_create_audio_encoder(settings: *const RawAudioEncoderSettings) -> *const c_void;
@@ -72,17 +72,15 @@ unsafe impl Send for AudioEncoder {}
 unsafe impl Sync for AudioEncoder {}
 
 impl AudioEncoder {
-    pub fn new(settings: &AudioEncoderSettings) -> Option<Self> {
+    pub fn new(settings: &AudioEncoderSettings) -> Result<Self, Error> {
         log::info!("create AudioEncoder: settings={:?}", settings);
 
         let settings = settings.as_raw();
         let codec = unsafe { codec_create_audio_encoder(&settings) };
         if !codec.is_null() {
-            Some(Self(codec))
+            Ok(Self(codec))
         } else {
-            log::error!("Failed to create AudioEncoder");
-
-            None
+            Err(Error::AudioEncoder)
         }
     }
 

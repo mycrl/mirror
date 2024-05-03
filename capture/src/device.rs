@@ -17,8 +17,8 @@ pub struct RawDeviceList {
 }
 
 extern "C" {
-    pub fn capture_release_device_list(list: *const RawDeviceList);
-    pub fn capture_release_device_description(description: *const RawDeviceDescription);
+    fn capture_release_device_list(list: *const RawDeviceList);
+    fn capture_release_device_description(description: *const RawDeviceDescription);
 }
 
 #[repr(C)]

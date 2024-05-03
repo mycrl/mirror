@@ -15,8 +15,8 @@ struct FrameSink {
     frame: Arc<Mutex<Vec<u8>>>,
 }
 
-impl VideoSink for FrameSink {
-    fn sink(&self, frmae: &VideoFrame) {
+impl AVFrameSink for FrameSink {
+    fn video(&self, frmae: &VideoFrame) {
         let mut frame_ = self.frame.lock().unwrap();
 
         unsafe {
@@ -59,7 +59,7 @@ fn main() -> anyhow::Result<()> {
     }
 
     DeviceManager::set_input(&devices[0]);
-    set_video_sink(FrameSink {
+    set_frame_sink(FrameSink {
         frame: frame.clone(),
     });
 

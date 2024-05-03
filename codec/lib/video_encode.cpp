@@ -5,7 +5,7 @@
 //  Created by Mr.Panda on 2024/2/14.
 //
 
-#include "../codec.h"
+#include "./codec.h"
 
 extern "C"
 {
@@ -16,7 +16,7 @@ extern "C"
 struct VideoEncoder* codec_create_video_encoder(struct VideoEncoderSettings* settings)
 {
 	struct VideoEncoder* codec = new struct VideoEncoder;
-    codec->codec_name = std::string(settings->codec_name);
+	codec->codec_name = std::string(settings->codec_name);
 	codec->output_packet = new struct EncodePacket;
 
 	codec->codec = avcodec_find_encoder_by_name(settings->codec_name);

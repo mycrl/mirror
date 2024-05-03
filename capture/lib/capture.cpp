@@ -16,9 +16,9 @@ static struct
 	obs_source_t* monitor_source;
 	obs_sceneitem_t* video_scene_item;
 	obs_sceneitem_t* monitor_scene_item;
-	VideoOutputCallback raw_video_callback;
-	void* raw_video_callback_context;
+	struct OutputCallback output_callback;
 	struct VideoFrame video_frame;
+    struct AudioFrame audio_frame;
 } GLOBAL;
 
 void update_video_settings(struct DeviceDescription* description)
@@ -64,7 +64,7 @@ void update_monitor_settings(struct DeviceDescription* description)
 
 void raw_video_callback(void* _, struct video_data* frame)
 {
-	if (GLOBAL.raw_video_callback == nullptr || GLOBAL.raw_video_callback_context == nullptr)
+	if (GLOBAL.output_callback.video == nullptr || GLOBAL.output_callback.ctx == nullptr)
 	{
 		return;
 	}
@@ -73,20 +73,27 @@ void raw_video_callback(void* _, struct video_data* frame)
 	GLOBAL.video_frame.data[1] = frame->data[1];
 	GLOBAL.video_frame.linesize[0] = frame->linesize[0];
 	GLOBAL.video_frame.linesize[1] = frame->linesize[1];
-	GLOBAL.raw_video_callback(GLOBAL.raw_video_callback_context, &GLOBAL.video_frame);
-}
-
-void* capture_set_video_output_callback(VideoOutputCallback proc, void* current_ctx)
-{
-	void* previous_ctx = GLOBAL.raw_video_callback_context;
-	GLOBAL.raw_video_callback_context = current_ctx;
-	GLOBAL.raw_video_callback = proc;
-	return previous_ctx;
+	GLOBAL.output_callback.video(GLOBAL.output_callback.ctx, &GLOBAL.video_frame);
 }
 
 void raw_audio_callback(void* _, size_t mix_idx, struct audio_data* data)
 {
+    if (GLOBAL.output_callback.audio == nullptr || GLOBAL.output_callback.ctx == nullptr)
+	{
+		return;
+	}
 
+	GLOBAL.audio_frame.frames = data->frames;
+	GLOBAL.audio_frame.data[0] = data->data[0];
+	GLOBAL.audio_frame.data[1] = data->data[1];
+	GLOBAL.output_callback.audio(GLOBAL.output_callback.ctx, &GLOBAL.audio_frame);
+}
+
+void* capture_set_output_callback(struct OutputCallback proc)
+{
+	void* previous_ctx = GLOBAL.output_callback.ctx;
+	GLOBAL.output_callback = proc;
+	return previous_ctx;
 }
 
 int capture_init(VideoInfo* video_info, AudioInfo* audio_info)

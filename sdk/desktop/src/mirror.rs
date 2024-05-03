@@ -3,11 +3,14 @@ use std::{
     thread,
 };
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use bytes::Bytes;
-use capture::{AudioInfo, Device, DeviceManager, DeviceManagerOptions, VideoInfo, VideoSink};
-use codec::{VideoDecoder, VideoEncoder, VideoEncoderSettings};
-use common::frame::VideoFrame;
+use capture::{AVFrameSink, AudioInfo, Device, DeviceManager, DeviceManagerOptions, VideoInfo};
+use codec::{
+    AudioDecoder, AudioEncoder, AudioEncoderSettings, VideoDecoder, VideoEncoder,
+    VideoEncoderSettings,
+};
+use common::frame::{AudioFrame, VideoFrame};
 use once_cell::sync::Lazy;
 use transport::{
     adapter::{StreamBufferInfo, StreamKind, StreamReceiverAdapter, StreamSenderAdapter},
@@ -19,13 +22,36 @@ static OPTIONS: Lazy<RwLock<MirrorOptions>> = Lazy::new(|| Default::default());
 /// Audio Codec Configuration.
 #[derive(Debug, Clone)]
 pub struct AudioOptions {
+    /// Video encoder settings, possible values are `h264_qsv”, `h264_nvenc”,
+    /// `libx264” and so on.
+    pub encoder: String,
+    /// Video decoder settings, possible values are `h264_qsv”, `h264_cuvid”,
+    /// `h264”, etc.
+    pub decoder: String,
     /// The sample rate of the audio, in seconds.
-    pub samples: u32,
+    pub sample_rate: u64,
+    /// The bit rate of the video encoding.
+    pub bit_rate: u64,
 }
 
 impl Default for AudioOptions {
     fn default() -> Self {
-        Self { samples: 48000 }
+        Self {
+            encoder: "libopus".to_string(),
+            decoder: "libopus".to_string(),
+            sample_rate: 48000,
+            bit_rate: 64000,
+        }
+    }
+}
+
+impl Into<AudioEncoderSettings> for AudioOptions {
+    fn into(self) -> AudioEncoderSettings {
+        AudioEncoderSettings {
+            codec_name: self.encoder,
+            bit_rate: self.bit_rate,
+            sample_rate: self.sample_rate,
+        }
     }
 }
 
@@ -134,7 +160,7 @@ pub fn init(options: MirrorOptions) -> Result<()> {
             fps: options.video.frame_rate,
         },
         audio: AudioInfo {
-            samples_per_sec: options.audio.samples,
+            samples_per_sec: options.audio.sample_rate as u32,
         },
     })?)
 }
@@ -155,33 +181,41 @@ pub fn set_input_device(device: &Device) {
     log::info!("set input to device manager: device={:?}", device.name());
 }
 
-struct SenderObserver<F> {
-    video_encoder: VideoEncoder,
-    adapter: Weak<StreamSenderAdapter>,
-    callback: Option<F>,
+pub struct FrameSink<A, V> {
+    pub video: V,
+    pub audio: A,
 }
 
-impl<F> SenderObserver<F>
+struct SenderObserver<A, V> {
+    audio_encoder: AudioEncoder,
+    video_encoder: VideoEncoder,
+    adapter: Weak<StreamSenderAdapter>,
+    sink: FrameSink<A, V>,
+}
+
+impl<A, V> SenderObserver<A, V>
 where
-    F: Fn(&VideoFrame) -> bool + Send + 'static,
+    A: Fn(&AudioFrame) -> bool + Send + 'static,
+    V: Fn(&VideoFrame) -> bool + Send + 'static,
 {
-    fn new(adapter: &Arc<StreamSenderAdapter>, callback: Option<F>) -> anyhow::Result<Self> {
+    fn new(adapter: &Arc<StreamSenderAdapter>, sink: FrameSink<A, V>) -> anyhow::Result<Self> {
         let options = OPTIONS.read().unwrap();
         Ok(Self {
-            callback,
+            sink,
             adapter: Arc::downgrade(adapter),
-            video_encoder: VideoEncoder::new(&options.video.clone().try_into()?)
-                .ok_or_else(|| anyhow!("Failed to create video encoder."))?,
+            video_encoder: VideoEncoder::new(&options.video.clone().try_into()?)?,
+            audio_encoder: AudioEncoder::new(&options.audio.clone().try_into()?)?,
         })
     }
 }
 
-impl<F> VideoSink for SenderObserver<F>
+impl<A, V> AVFrameSink for SenderObserver<A, V>
 where
-    F: Fn(&VideoFrame) -> bool + Send + 'static,
+    A: Fn(&AudioFrame) -> bool + Send + 'static,
+    V: Fn(&VideoFrame) -> bool + Send + 'static,
 {
-    fn sink(&self, frame: &VideoFrame) {
-        self.callback.as_ref().map(|it| it(frame));
+    fn video(&self, frame: &VideoFrame) {
+        (self.sink.video)(frame);
 
         if let Some(adapter) = self.adapter.upgrade().as_ref() {
             if self.video_encoder.encode(frame) {
@@ -190,6 +224,23 @@ where
                         Bytes::copy_from_slice(packet.buffer),
                         StreamBufferInfo::Video(packet.flags, 0),
                     );
+                }
+            }
+        }
+    }
+
+    fn audio(&self, frame: &AudioFrame) {
+        (self.sink.audio)(frame);
+
+        if self.audio_encoder.encode(frame) {
+            if let Some(adapter) = self.adapter.upgrade().as_ref() {
+                if self.audio_encoder.encode(frame) {
+                    while let Some(packet) = self.audio_encoder.read() {
+                        adapter.send(
+                            Bytes::copy_from_slice(packet.buffer),
+                            StreamBufferInfo::Audio(packet.flags, 0),
+                        );
+                    }
                 }
             }
         }
@@ -211,13 +262,14 @@ impl Mirror {
     /// Create a sender, specify a bound NIC address, you can pass callback to
     /// get the device screen or sound callback, callback can be null, if it is
     /// null then it means no callback data is needed.
-    pub fn create_sender<F>(
+    pub fn create_sender<A, V>(
         &self,
         bind: &str,
-        callback: Option<F>,
+        sink: FrameSink<A, V>,
     ) -> Result<Arc<StreamSenderAdapter>>
     where
-        F: Fn(&VideoFrame) -> bool + Send + 'static,
+        A: Fn(&AudioFrame) -> bool + Send + 'static,
+        V: Fn(&VideoFrame) -> bool + Send + 'static,
     {
         log::info!("create sender: bind={}", bind);
 
@@ -225,15 +277,20 @@ impl Mirror {
         self.0
             .create_sender(0, bind.parse()?, Vec::new(), &adapter)?;
 
-        capture::set_video_sink(SenderObserver::new(&adapter, callback)?);
+        capture::set_frame_sink(SenderObserver::new(&adapter, sink)?);
         Ok(adapter)
     }
 
     /// Create a receiver, specify a bound NIC address, you can pass callback to
     /// get the sender's screen or sound callback, callback can not be null.
-    pub fn create_receiver<F>(&self, bind: &str, callback: F) -> Result<Arc<StreamReceiverAdapter>>
+    pub fn create_receiver<A, V>(
+        &self,
+        bind: &str,
+        sink: FrameSink<A, V>,
+    ) -> Result<Arc<StreamReceiverAdapter>>
     where
-        F: Fn(&VideoFrame) -> bool + Send + 'static,
+        A: Fn(&AudioFrame) -> bool + Send + 'static,
+        V: Fn(&VideoFrame) -> bool + Send + 'static,
     {
         log::info!("create receiver: bind={}", bind);
 
@@ -242,8 +299,8 @@ impl Mirror {
         self.0.create_receiver(bind.parse()?, &adapter)?;
 
         let adapter_ = Arc::downgrade(&adapter);
-        let video_decoder = VideoDecoder::new(&options.video.decoder)
-            .ok_or_else(|| anyhow!("Failed to create video decoder."))?;
+        let video_decoder = VideoDecoder::new(&options.video.decoder)?;
+        let audio_decoder = AudioDecoder::new(&options.audio.decoder)?;
 
         thread::spawn(move || {
             while let Some(adapter) = adapter_.upgrade().as_ref() {
@@ -254,7 +311,17 @@ impl Mirror {
                         }
 
                         while let Some(frame) = video_decoder.read() {
-                            if !callback(frame) {
+                            if !(sink.video)(frame) {
+                                break 'a;
+                            }
+                        }
+                    } else if kind == StreamKind::Audio {
+                        if !audio_decoder.decode(&packet) {
+                            break;
+                        }
+
+                        while let Some(frame) = audio_decoder.read() {
+                            if !(sink.audio)(frame) {
                                 break 'a;
                             }
                         }

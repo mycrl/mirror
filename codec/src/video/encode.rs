@@ -2,7 +2,7 @@ use std::ffi::{c_char, c_void, CString};
 
 use common::frame::VideoFrame;
 
-use crate::RawEncodePacket;
+use crate::{Error, RawEncodePacket};
 
 extern "C" {
     fn codec_create_video_encoder(settings: *const RawVideoEncoderSettings) -> *const c_void;
@@ -84,17 +84,15 @@ unsafe impl Send for VideoEncoder {}
 unsafe impl Sync for VideoEncoder {}
 
 impl VideoEncoder {
-    pub fn new(settings: &VideoEncoderSettings) -> Option<Self> {
+    pub fn new(settings: &VideoEncoderSettings) -> Result<Self, Error> {
         log::info!("create VideoEncoder: settings={:?}", settings);
 
         let settings = settings.as_raw();
         let codec = unsafe { codec_create_video_encoder(&settings) };
         if !codec.is_null() {
-            Some(Self(codec))
+            Ok(Self(codec))
         } else {
-            log::error!("Failed to create VideoEncoder");
-
-            None
+            Err(Error::VideoEncoder)
         }
     }
 

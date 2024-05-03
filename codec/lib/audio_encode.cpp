@@ -1,17 +1,17 @@
 //
-//  video_encoder.cpp
+//  audio_encoder.cpp
 //  codec
 //
 //  Created by Mr.Panda on 2024/2/14.
 //
 
-#include "../codec.h"
+#include "./codec.h"
 
 struct AudioEncoder* codec_create_audio_encoder(struct AudioEncoderSettings* settings)
 {
 	struct AudioEncoder* codec = new struct AudioEncoder;
 	codec->codec_name = std::string(settings->codec_name);
-    codec->output_packet = new struct EncodePacket;
+	codec->output_packet = new struct EncodePacket;
 
 	codec->codec = avcodec_find_encoder_by_name(settings->codec_name);
 	if (codec->codec == nullptr)
@@ -27,7 +27,7 @@ struct AudioEncoder* codec_create_audio_encoder(struct AudioEncoderSettings* set
 		return nullptr;
 	}
 
-    codec->context->channels = 2;
+	codec->context->channels = 2;
 	codec->context->bit_rate = settings->bit_rate;
 	codec->context->sample_rate = settings->sample_rate;
 	codec->context->channel_layout = AV_CH_LAYOUT_STEREO;
@@ -79,18 +79,18 @@ bool codec_audio_encoder_send_frame(struct AudioEncoder* codec, struct AudioFram
 		return false;
 	}
 
-    codec->frame->data[0] = frame->data[0];
-    codec->frame->data[1] = frame->data[1];
-    codec->frame->pts = codec->frame_num * codec->context->frame_size;
+	codec->frame->data[0] = frame->data[0];
+	codec->frame->data[1] = frame->data[1];
+	codec->frame->pts = codec->frame_num * codec->context->frame_size;
 
-    if (avcodec_send_frame(codec->context, codec->frame) != 0)
+	if (avcodec_send_frame(codec->context, codec->frame) != 0)
 	{
 		return false;
 	}
-    else
-    {
-        codec->frame_num += 1;
-    }
+	else
+	{
+		codec->frame_num += 1;
+	}
 
 	return true;
 }

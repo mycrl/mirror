@@ -7,7 +7,7 @@ use std::{
     sync::Arc,
 };
 
-use common::frame::VideoFrame;
+use common::frame::{AudioFrame, VideoFrame};
 
 pub use device::{Device, DeviceKind, DeviceList};
 pub use manager::DeviceManager;
@@ -26,18 +26,22 @@ pub struct AudioInfo {
     pub samples_per_sec: u32,
 }
 
+#[repr(C)]
+struct RawOutputCallback {
+    video: Option<extern "C" fn(ctx: *const c_void, frame: *const VideoFrame)>,
+    audio: Option<extern "C" fn(ctx: *const c_void, frame: *const AudioFrame)>,
+    ctx: *const c_void,
+}
+
 extern "C" {
     /// Releases all data associated with OBS and terminates the OBS
     /// context.
-    pub fn capture_quit();
+    fn capture_quit();
     /// Initializes the OBS core context.
-    pub fn capture_init(video_info: *const VideoInfo, audio_info: *const AudioInfo) -> c_int;
+    fn capture_init(video_info: *const VideoInfo, audio_info: *const AudioInfo) -> c_int;
     /// Adds/removes a raw video callback. Allows the ability to obtain raw
     /// video frames without necessarily using an output.
-    pub fn capture_set_video_output_callback(
-        proc: Option<extern "C" fn(ctx: *const c_void, frame: *const VideoFrame)>,
-        ctx: *const c_void,
-    ) -> *const c_void;
+    fn capture_set_output_callback(proc: RawOutputCallback) -> *const c_void;
 }
 
 #[derive(Debug)]
@@ -61,7 +65,7 @@ impl std::fmt::Display for DeviceError {
     }
 }
 
-pub trait VideoSink {
+pub trait AVFrameSink {
     /// This function is called when obs pushes frames internally, and the
     /// format of the video frame is fixed to NV12.
     ///
@@ -70,8 +74,8 @@ pub trait VideoSink {
     ///     frame: Arc<Mutex<Vec<u8>>>,
     /// }
     ///
-    /// impl VideoSink for FrameSink {
-    ///     fn sink(&self, frmae: &VideoFrame) {
+    /// impl AVFrameSink for FrameSink {
+    ///     fn video(&self, frmae: &VideoFrame) {
     ///         let mut frame_ = self.frame.lock().unwrap();
     ///
     ///         unsafe {
@@ -89,16 +93,44 @@ pub trait VideoSink {
     ///     }
     /// }
     /// ```
-    fn sink(&self, frmae: &VideoFrame);
+    #[allow(unused_variables)]
+    fn video(&self, frmae: &VideoFrame) {}
+    /// This function is called when obs pushes frames internally, and the
+    /// format of the audio frame is fixed to PCM.
+    ///
+    /// ```
+    /// struct FrameSink {
+    ///     frame: Arc<Mutex<Vec<u8>>>,
+    /// }
+    ///
+    /// impl AVFrameSink for FrameSink {
+    ///     fn audio(&self, frmae: &AudioFrame) {
+    ///         let mut frame_ = self.frame.lock().unwrap();
+    ///         frame_.clear();
+    ///         frame.extend_from_slice(frame.data[0]);
+    ///         frame.extend_from_slice(frame.data[1]);
+    ///     }
+    /// }
+    /// ```
+    #[allow(unused_variables)]
+    fn audio(&self, frame: &AudioFrame) {}
 }
 
-struct Context(Arc<dyn VideoSink>);
+struct Context(Arc<dyn AVFrameSink>);
 
 extern "C" fn video_sink_proc(ctx: *const c_void, frame: *const VideoFrame) {
     if !ctx.is_null() {
         unsafe { &*(ctx as *const Context) }
             .0
-            .sink(unsafe { &*frame });
+            .video(unsafe { &*frame });
+    }
+}
+
+extern "C" fn audio_sink_proc(ctx: *const c_void, frame: *const AudioFrame) {
+    if !ctx.is_null() {
+        unsafe { &*(ctx as *const Context) }
+            .0
+            .audio(unsafe { &*frame });
     }
 }
 
@@ -110,8 +142,8 @@ extern "C" fn video_sink_proc(ctx: *const c_void, frame: *const VideoFrame) {
 ///     frame: Arc<Mutex<Vec<u8>>>,
 /// }
 ///
-/// impl VideoSink for FrameSink {
-///     fn sink(&self, frmae: &VideoFrame) {
+/// impl AVFrameSink for FrameSink {
+///     fn video(&self, frmae: &VideoFrame) {
 ///         let mut frame_ = self.frame.lock().unwrap();
 ///
 ///         unsafe {
@@ -130,14 +162,15 @@ extern "C" fn video_sink_proc(ctx: *const c_void, frame: *const VideoFrame) {
 /// }
 ///
 /// let frame = Arc::new(Mutex::new(vec![0u8; (1920 * 1080 * 4) as usize]));
-/// set_video_sink(FrameSink { frame });
+/// set_frame_sink(FrameSink { frame });
 /// ```
-pub fn set_video_sink<S: VideoSink + 'static>(sink: S) {
+pub fn set_frame_sink<S: AVFrameSink + 'static>(sink: S) {
     let previous = unsafe {
-        capture_set_video_output_callback(
-            Some(video_sink_proc),
-            Box::into_raw(Box::new(Context(Arc::new(sink)))) as *const c_void,
-        )
+        capture_set_output_callback(RawOutputCallback {
+            ctx: Box::into_raw(Box::new(Context(Arc::new(sink)))) as *const c_void,
+            video: Some(video_sink_proc),
+            audio: Some(audio_sink_proc),
+        })
     };
 
     if !previous.is_null() {
@@ -176,7 +209,14 @@ pub fn init(options: DeviceManagerOptions) -> Result<(), DeviceError> {
 pub fn quit() {
     unsafe { capture_quit() }
 
-    let previous = unsafe { capture_set_video_output_callback(None, null()) };
+    let previous = unsafe {
+        capture_set_output_callback(RawOutputCallback {
+            video: None,
+            audio: None,
+            ctx: null(),
+        })
+    };
+
     if !previous.is_null() {
         drop(unsafe { Box::from_raw(previous as *mut Context) })
     }

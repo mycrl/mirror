@@ -5,103 +5,103 @@
 //  Created by Mr.Panda on 2024/2/14.
 //
 
-#include "../codec.h"
+#include "./codec.h"
 
 struct VideoDecoder* codec_create_video_decoder(const char* codec_name)
 {
-	struct VideoDecoder* decoder = new struct VideoDecoder;
-	decoder->output_frame = new struct VideoFrame;
+	struct VideoDecoder* codec = new struct VideoDecoder;
+	codec->output_frame = new struct VideoFrame;
 
-	decoder->codec = avcodec_find_decoder_by_name(codec_name);
-	if (decoder->codec == nullptr)
+	codec->codec = avcodec_find_decoder_by_name(codec_name);
+	if (codec->codec == nullptr)
 	{
-		codec_release_video_decoder(decoder);
+		codec_release_video_decoder(codec);
 		return nullptr;
 	}
 
-	decoder->context = avcodec_alloc_context3(decoder->codec);
-	if (decoder->context == nullptr)
+	codec->context = avcodec_alloc_context3(codec->codec);
+	if (codec->context == nullptr)
 	{
-		codec_release_video_decoder(decoder);
+		codec_release_video_decoder(codec);
 		return nullptr;
 	}
-    else
-    {
-        decoder->context->pix_fmt = AV_PIX_FMT_NV12;
-    }
-
-	if (avcodec_open2(decoder->context, decoder->codec, nullptr) != 0)
+	else
 	{
-		codec_release_video_decoder(decoder);
-		return nullptr;
+		codec->context->pix_fmt = AV_PIX_FMT_NV12;
 	}
 
-	if (avcodec_is_open(decoder->context) == 0)
+	if (avcodec_open2(codec->context, codec->codec, nullptr) != 0)
 	{
-		codec_release_video_decoder(decoder);
+		codec_release_video_decoder(codec);
 		return nullptr;
 	}
 
-	decoder->parser = av_parser_init(decoder->codec->id);
-	if (!decoder->parser)
+	if (avcodec_is_open(codec->context) == 0)
 	{
-		codec_release_video_decoder(decoder);
+		codec_release_video_decoder(codec);
 		return nullptr;
 	}
 
-	decoder->packet = av_packet_alloc();
-	if (decoder->packet == nullptr)
+	codec->parser = av_parser_init(codec->codec->id);
+	if (!codec->parser)
 	{
-		codec_release_video_decoder(decoder);
+		codec_release_video_decoder(codec);
 		return nullptr;
 	}
 
-	decoder->frame = av_frame_alloc();
-	if (decoder->frame == nullptr)
+	codec->packet = av_packet_alloc();
+	if (codec->packet == nullptr)
 	{
-		codec_release_video_decoder(decoder);
+		codec_release_video_decoder(codec);
 		return nullptr;
 	}
 
-	return decoder;
+	codec->frame = av_frame_alloc();
+	if (codec->frame == nullptr)
+	{
+		codec_release_video_decoder(codec);
+		return nullptr;
+	}
+
+	return codec;
 }
 
-void codec_release_video_decoder(struct VideoDecoder* decoder)
+void codec_release_video_decoder(struct VideoDecoder* codec)
 {
-	if (decoder->context != nullptr)
+	if (codec->context != nullptr)
 	{
-		avcodec_free_context(&decoder->context);
+		avcodec_free_context(&codec->context);
 	}
 
-	if (decoder->parser != nullptr)
+	if (codec->parser != nullptr)
 	{
-		av_parser_close(decoder->parser);
+		av_parser_close(codec->parser);
 	}
 
-	if (decoder->packet != nullptr)
+	if (codec->packet != nullptr)
 	{
-		av_packet_free(&decoder->packet);
+		av_packet_free(&codec->packet);
 	}
 
-	if (decoder->frame != nullptr)
+	if (codec->frame != nullptr)
 	{
-		av_frame_free(&decoder->frame);
+		av_frame_free(&codec->frame);
 	}
 
-	delete decoder->output_frame;
-	delete decoder;
+	delete codec->output_frame;
+	delete codec;
 }
 
-bool codec_video_decoder_send_packet(struct VideoDecoder* decoder,
+bool codec_video_decoder_send_packet(struct VideoDecoder* codec,
 									 uint8_t* buf,
 									 size_t size)
 {
 	while (size > 0)
 	{
-		int ret = av_parser_parse2(decoder->parser,
-								   decoder->context,
-								   &decoder->packet->data,
-								   &decoder->packet->size,
+		int ret = av_parser_parse2(codec->parser,
+								   codec->context,
+								   &codec->packet->data,
+								   &codec->packet->size,
 								   buf,
 								   size,
 								   AV_NOPTS_VALUE,
@@ -115,12 +115,12 @@ bool codec_video_decoder_send_packet(struct VideoDecoder* decoder,
 		buf += ret;
 		size -= ret;
 
-		if (decoder->packet->size == 0)
+		if (codec->packet->size == 0)
 		{
 			continue;
 		}
 
-		if (avcodec_send_packet(decoder->context, decoder->packet) != 0)
+		if (avcodec_send_packet(codec->context, codec->packet) != 0)
 		{
 			return false;
 		}
@@ -129,18 +129,18 @@ bool codec_video_decoder_send_packet(struct VideoDecoder* decoder,
 	return true;
 }
 
-struct VideoFrame* codec_video_decoder_read_frame(struct VideoDecoder* decoder)
+struct VideoFrame* codec_video_decoder_read_frame(struct VideoDecoder* codec)
 {
-	if (avcodec_receive_frame(decoder->context, decoder->frame) != 0)
+	if (avcodec_receive_frame(codec->context, codec->frame) != 0)
 	{
 		return nullptr;
 	}
 
-	decoder->output_frame->rect.width = decoder->frame->width;
-	decoder->output_frame->rect.height = decoder->frame->height;
-	decoder->output_frame->data[0] = decoder->frame->data[0];
-	decoder->output_frame->data[1] = decoder->frame->data[1];
-	decoder->output_frame->linesize[0] = decoder->frame->linesize[0];
-	decoder->output_frame->linesize[1] = decoder->frame->linesize[1];
-	return decoder->output_frame;
+	codec->output_frame->rect.width = codec->frame->width;
+	codec->output_frame->rect.height = codec->frame->height;
+	codec->output_frame->data[0] = codec->frame->data[0];
+	codec->output_frame->data[1] = codec->frame->data[1];
+	codec->output_frame->linesize[0] = codec->frame->linesize[0];
+	codec->output_frame->linesize[1] = codec->frame->linesize[1];
+	return codec->output_frame;
 }

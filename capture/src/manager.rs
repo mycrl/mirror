@@ -5,9 +5,9 @@ extern "C" {
     ///
     /// Callback function returns true to continue enumeration, or false to
     /// end enumeration.
-    pub fn capture_get_device_list(kind: DeviceKind) -> *const RawDeviceList;
+    fn capture_get_device_list(kind: DeviceKind) -> *const RawDeviceList;
     /// Sets the primary output source for a channel.
-    pub fn capture_set_video_input(description: *const RawDeviceDescription);
+    fn capture_set_video_input(description: *const RawDeviceDescription);
 }
 
 pub struct DeviceManager;

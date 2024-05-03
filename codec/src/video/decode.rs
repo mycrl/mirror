@@ -2,6 +2,8 @@ use std::{ffi::c_char, os::raw::c_void};
 
 use common::{frame::VideoFrame, strings::Strings};
 
+use crate::Error;
+
 extern "C" {
     fn codec_create_video_decoder(codec_name: *const c_char) -> *const c_void;
     fn codec_video_decoder_send_packet(codec: *const c_void, buf: *const u8, size: usize) -> bool;
@@ -15,16 +17,14 @@ unsafe impl Send for VideoDecoder {}
 unsafe impl Sync for VideoDecoder {}
 
 impl VideoDecoder {
-    pub fn new(codec_name: &str) -> Option<Self> {
+    pub fn new(codec_name: &str) -> Result<Self, Error> {
         log::info!("create VideoDecoder: codec name={:?}", codec_name);
 
         let codec = unsafe { codec_create_video_decoder(Strings::from(codec_name).as_ptr()) };
         if !codec.is_null() {
-            Some(Self(codec))
+            Ok(Self(codec))
         } else {
-            log::error!("Failed to create VideoDecoder");
-
-            None
+            Err(Error::VideoDecoder)
         }
     }
 

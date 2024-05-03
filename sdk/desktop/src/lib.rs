@@ -8,9 +8,14 @@ use std::{
 };
 
 use capture::{Device, DeviceKind, DeviceManager};
-use common::{frame::VideoFrame, strings::Strings};
+use common::{
+    frame::{AudioFrame, VideoFrame},
+    strings::Strings,
+};
 use mirror::{AudioOptions, Mirror, MirrorOptions, VideoOptions};
 use transport::adapter::{StreamReceiverAdapter, StreamSenderAdapter};
+
+use crate::mirror::FrameSink;
 
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
@@ -79,8 +84,16 @@ impl TryInto<VideoOptions> for RawVideoOptions {
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct RawAudioOptions {
+    /// Video encoder settings, possible values are `h264_qsv”, `h264_nvenc”,
+    /// `libx264” and so on.
+    pub encoder: *const c_char,
+    /// Video decoder settings, possible values are `h264_qsv”, `h264_cuvid”,
+    /// `h264”, etc.
+    pub decoder: *const c_char,
     /// The sample rate of the audio, in seconds.
-    samples: u32,
+    pub sample_rate: u64,
+    /// The bit rate of the video encoding.
+    pub bit_rate: u64,
 }
 
 unsafe impl Send for RawAudioOptions {}
@@ -91,7 +104,10 @@ impl TryInto<AudioOptions> for RawAudioOptions {
 
     fn try_into(self) -> Result<AudioOptions, Self::Error> {
         Ok(AudioOptions {
-            samples: self.samples,
+            encoder: Strings::from(self.encoder).to_string()?,
+            decoder: Strings::from(self.decoder).to_string()?,
+            sample_rate: self.sample_rate,
+            bit_rate: self.bit_rate,
         })
     }
 }
@@ -265,6 +281,35 @@ extern "C" fn drop_mirror(mirror: *const RawMirror) {
 }
 
 #[repr(C)]
+#[derive(Clone, Copy)]
+struct RawFrameSink {
+    video: Option<extern "C" fn(ctx: *const c_void, frame: *const VideoFrame) -> bool>,
+    audio: Option<extern "C" fn(ctx: *const c_void, frame: *const AudioFrame) -> bool>,
+    ctx: *const c_void,
+}
+
+unsafe impl Send for RawFrameSink {}
+unsafe impl Sync for RawFrameSink {}
+
+impl RawFrameSink {
+    fn video(&self, frame: &VideoFrame) -> bool {
+        if let Some(callback) = &self.video {
+            callback(self.ctx, frame)
+        } else {
+            true
+        }
+    }
+
+    fn audio(&self, frame: &AudioFrame) -> bool {
+        if let Some(callback) = &self.audio {
+            callback(self.ctx, frame)
+        } else {
+            true
+        }
+    }
+}
+
+#[repr(C)]
 pub struct RawSender {
     adapter: Arc<StreamSenderAdapter>,
 }
@@ -280,17 +325,18 @@ pub struct RawSender {
 extern "C" fn create_sender(
     mirror: *const RawMirror,
     bind: *const c_char,
-    callback: Option<extern "C" fn(ctx: *const c_void, frame: *const VideoFrame) -> bool>,
-    ctx: *const c_void,
+    sink: RawFrameSink,
 ) -> *const RawSender {
     assert!(!mirror.is_null());
     assert!(!bind.is_null());
 
-    let ctx = ctx as usize;
     checker((|| {
         unsafe { &*mirror }.mirror.create_sender(
             &Strings::from(bind).to_string()?,
-            callback.map(|callback| move |frame: &VideoFrame| callback(ctx as *const _, frame)),
+            FrameSink {
+                video: move |frame: &VideoFrame| sink.video(frame),
+                audio: move |frame: &AudioFrame| sink.audio(frame),
+            },
         )
     })())
     .map(|adapter| Box::into_raw(Box::new(RawSender { adapter })))
@@ -326,19 +372,19 @@ pub struct RawReceiver {
 extern "C" fn create_receiver(
     mirror: *const RawMirror,
     bind: *const c_char,
-    callback: extern "C" fn(ctx: *const c_void, frame: *const VideoFrame) -> bool,
-    ctx: *const c_void,
+    sink: RawFrameSink,
 ) -> *const RawReceiver {
     assert!(!mirror.is_null());
     assert!(!bind.is_null());
 
-    let ctx = ctx as usize;
     checker((|| {
-        unsafe { &*mirror }
-            .mirror
-            .create_receiver(&Strings::from(bind).to_string()?, move |frame| {
-                callback(ctx as *const _, frame)
-            })
+        unsafe { &*mirror }.mirror.create_receiver(
+            &Strings::from(bind).to_string()?,
+            FrameSink {
+                video: move |frame: &VideoFrame| sink.video(frame),
+                audio: move |frame: &AudioFrame| sink.audio(frame),
+            },
+        )
     })())
     .map(|adapter| Box::into_raw(Box::new(RawReceiver { adapter })))
     .unwrap_or_else(|_| null_mut())
