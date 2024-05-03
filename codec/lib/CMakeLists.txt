@@ -47,9 +47,10 @@ if (NOT EXISTS "${THIRD_PARTY_DIR}/ffmpeg-6.1.1-full_build-shared")
 endif()
 
 add_library(codec STATIC 
-            video/decode.cpp
-            video/encode.cpp
-            audio/encode.cpp
+            video_decode.cpp
+            video_encode.cpp
+            audio_encode.cpp
+            audio_encode.app
             codec.h)
 
 include_directories("${THIRD_PARTY_DIR}/ffmpeg-6.1.1-full_build-shared/include"

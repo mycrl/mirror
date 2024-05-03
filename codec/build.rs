@@ -64,8 +64,10 @@ fn main() -> anyhow::Result<()> {
         .target(&settings.target)
         .warnings(false)
         .out_dir(&settings.out_dir)
-        .file("./lib/video/encode.cpp")
-        .file("./lib/video/decode.cpp")
+        .file("./lib/video_encode.cpp")
+        .file("./lib/video_decode.cpp")
+        .file("./lib/audio_encode.cpp")
+        .file("./lib/audio_decode.cpp")
         .includes(&settings.ffmpeg_include_prefix)
         .include("../common/include")
         .compile("codec");
