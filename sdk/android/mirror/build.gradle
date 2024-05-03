@@ -68,7 +68,7 @@ cargo {
     apiLevel = 29
     prebuiltToolchains = true
     pythonCommand = 'python3'
-    module = '../jni-exports'
+    module = '../native'
     libname = 'mirror_android'
     targets = ['arm64']
     targetDirectory = '../../../target'

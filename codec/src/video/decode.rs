@@ -9,9 +9,7 @@ extern "C" {
     fn codec_release_video_decoder(codec: *const c_void);
 }
 
-pub struct VideoDecoder {
-    codec: *const c_void,
-}
+pub struct VideoDecoder(*const c_void);
 
 unsafe impl Send for VideoDecoder {}
 unsafe impl Sync for VideoDecoder {}
@@ -22,7 +20,7 @@ impl VideoDecoder {
 
         let codec = unsafe { codec_create_video_decoder(Strings::from(codec_name).as_ptr()) };
         if !codec.is_null() {
-            Some(Self { codec })
+            Some(Self(codec))
         } else {
             log::error!("Failed to create VideoDecoder");
 
@@ -31,11 +29,11 @@ impl VideoDecoder {
     }
 
     pub fn decode(&self, pkt: &[u8]) -> bool {
-        unsafe { codec_video_decoder_send_packet(self.codec, pkt.as_ptr(), pkt.len()) }
+        unsafe { codec_video_decoder_send_packet(self.0, pkt.as_ptr(), pkt.len()) }
     }
 
     pub fn read(&self) -> Option<&VideoFrame> {
-        let frame = unsafe { codec_video_decoder_read_frame(self.codec) };
+        let frame = unsafe { codec_video_decoder_read_frame(self.0) };
         if !frame.is_null() {
             Some(unsafe { &*frame })
         } else {
@@ -48,6 +46,6 @@ impl Drop for VideoDecoder {
     fn drop(&mut self) {
         log::info!("close VideoDecoder");
 
-        unsafe { codec_release_video_decoder(self.codec) }
+        unsafe { codec_release_video_decoder(self.0) }
     }
 }

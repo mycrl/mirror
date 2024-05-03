@@ -9,6 +9,7 @@
 
 static struct
 {
+    struct obs_audio_info audio_info;
 	struct obs_video_info video_info;
 	obs_scene_t* scene;
 	obs_source_t* video_source;
@@ -123,6 +124,14 @@ int capture_init(VideoInfo* video_info, AudioInfo* audio_info)
 	{
 		return -3;
 	}
+
+    GLOBAL.audio_info.samples_per_sec = audio_info->samples_per_sec;
+    GLOBAL.audio_info.speakers = SPEAKERS_STEREO;
+
+    if (!obs_reset_audio(&GLOBAL.audio_info))
+    {
+        return -3;
+    }
 
 	obs_load_all_modules();
 	obs_post_load_modules();

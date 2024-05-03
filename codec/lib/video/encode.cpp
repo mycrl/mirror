@@ -7,11 +7,17 @@
 
 #include "../codec.h"
 
+extern "C"
+{
+#include <libavutil/imgutils.h>
+#include <libavutil/opt.h>
+}
+
 struct VideoEncoder* codec_create_video_encoder(struct VideoEncoderSettings* settings)
 {
 	struct VideoEncoder* codec = new struct VideoEncoder;
-	codec->output_packet = new struct VideoEncodePacket;
-	codec->codec_name = std::string(settings->codec_name);
+    codec->codec_name = std::string(settings->codec_name);
+	codec->output_packet = new struct EncodePacket;
 
 	codec->codec = avcodec_find_encoder_by_name(settings->codec_name);
 	if (codec->codec == nullptr)
@@ -140,7 +146,7 @@ bool codec_video_encoder_send_frame(struct VideoEncoder* codec, struct VideoFram
 	return true;
 }
 
-struct VideoEncodePacket* codec_video_encoder_read_packet(struct VideoEncoder* codec)
+struct EncodePacket* codec_video_encoder_read_packet(struct VideoEncoder* codec)
 {
 	if (codec->output_packet == nullptr)
 	{

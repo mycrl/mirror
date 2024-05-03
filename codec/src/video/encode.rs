@@ -1,11 +1,13 @@
-use std::ffi::{c_char, c_int, c_void, CString};
+use std::ffi::{c_char, c_void, CString};
 
 use common::frame::VideoFrame;
+
+use crate::RawEncodePacket;
 
 extern "C" {
     fn codec_create_video_encoder(settings: *const RawVideoEncoderSettings) -> *const c_void;
     fn codec_video_encoder_send_frame(codec: *const c_void, frame: *const VideoFrame) -> bool;
-    fn codec_video_encoder_read_packet(codec: *const c_void) -> *const RawVideoEncodePacket;
+    fn codec_video_encoder_read_packet(codec: *const c_void) -> *const RawEncodePacket;
     fn codec_unref_video_encoder_packet(codec: *const c_void);
     fn codec_release_video_encoder(codec: *const c_void);
 }
@@ -25,13 +27,6 @@ impl Drop for RawVideoEncoderSettings {
     fn drop(&mut self) {
         drop(unsafe { CString::from_raw(self.codec_name as *mut _) })
     }
-}
-
-#[repr(C)]
-pub struct RawVideoEncodePacket {
-    pub buffer: *const u8,
-    pub len: usize,
-    pub flags: c_int,
 }
 
 #[derive(Debug, Clone)]
@@ -73,7 +68,7 @@ impl Drop for VideoEncodePacket<'_> {
 }
 
 impl<'a> VideoEncodePacket<'a> {
-    fn from_raw(codec: *const c_void, ptr: *const RawVideoEncodePacket) -> Self {
+    fn from_raw(codec: *const c_void, ptr: *const RawEncodePacket) -> Self {
         let raw = unsafe { &*ptr };
         Self {
             buffer: unsafe { std::slice::from_raw_parts(raw.buffer, raw.len) },
@@ -83,9 +78,7 @@ impl<'a> VideoEncodePacket<'a> {
     }
 }
 
-pub struct VideoEncoder {
-    codec: *const c_void,
-}
+pub struct VideoEncoder(*const c_void);
 
 unsafe impl Send for VideoEncoder {}
 unsafe impl Sync for VideoEncoder {}
@@ -97,7 +90,7 @@ impl VideoEncoder {
         let settings = settings.as_raw();
         let codec = unsafe { codec_create_video_encoder(&settings) };
         if !codec.is_null() {
-            Some(Self { codec })
+            Some(Self(codec))
         } else {
             log::error!("Failed to create VideoEncoder");
 
@@ -106,13 +99,13 @@ impl VideoEncoder {
     }
 
     pub fn encode(&self, frame: &VideoFrame) -> bool {
-        unsafe { codec_video_encoder_send_frame(self.codec, frame) }
+        unsafe { codec_video_encoder_send_frame(self.0, frame) }
     }
 
     pub fn read(&self) -> Option<VideoEncodePacket> {
-        let packet = unsafe { codec_video_encoder_read_packet(self.codec) };
+        let packet = unsafe { codec_video_encoder_read_packet(self.0) };
         if !packet.is_null() {
-            Some(VideoEncodePacket::from_raw(self.codec, packet))
+            Some(VideoEncodePacket::from_raw(self.0, packet))
         } else {
             None
         }
@@ -123,6 +116,6 @@ impl Drop for VideoEncoder {
     fn drop(&mut self) {
         log::info!("close VideoEncoder");
 
-        unsafe { codec_release_video_encoder(self.codec) }
+        unsafe { codec_release_video_encoder(self.0) }
     }
 }

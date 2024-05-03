@@ -1,5 +1,3 @@
-//! # NV12 Video Frame
-
 use std::slice::from_raw_parts;
 
 #[repr(C)]
@@ -9,6 +7,7 @@ pub struct VideoFrameRect {
     pub height: usize,
 }
 
+/// nv12 format
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct VideoFrame {
@@ -35,4 +34,12 @@ impl VideoFrame {
     pub fn get_uv_planar<'a>(&'a self) -> &'a [u8] {
         unsafe { from_raw_parts(self.data[1], self.linesize[1] * self.rect.height) }
     }
+}
+
+/// pcm format
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct AudioFrame {
+    pub frames: u32,
+    pub data: [*const u8; 2],
 }

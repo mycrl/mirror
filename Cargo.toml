@@ -13,7 +13,7 @@ members = [
     "transport", 
     "capture", 
     "sdk/desktop",
-    "sdk/android/jni-exports",
+    "sdk/android/native",
     "common/jni-macro",
     "common",
 ]

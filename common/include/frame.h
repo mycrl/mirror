@@ -24,4 +24,10 @@ struct VideoFrame
     size_t linesize[2];
 };
 
+struct AudioFrame
+{
+    uint32_t frames;
+    uint8_t* data[2];
+};
+
 #endif /* FRAME_H */
