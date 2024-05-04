@@ -43,7 +43,7 @@ async function build(Args) {
             fs.mkdirSync(exampleBuildPath)
         }
 
-        await spawn('cmake ..', { cwd: exampleBuildPath })
+        await spawn(`cmake ${Args.release ? '-DCMAKE_BUILD_TYPE=Release' : ''} ..`, { cwd: exampleBuildPath })
         await spawn('cmake --build .', { cwd: exampleBuildPath })
         await spawn('Copy-Item \
             -Path ./target/distributions/* \

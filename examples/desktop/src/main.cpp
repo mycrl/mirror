@@ -5,8 +5,6 @@
 //  Created by Panda on 2024/4/13.
 //
 
-#include <thread>
-
 #ifdef WIN32
 #include <windows.h>
 #endif
@@ -16,6 +14,50 @@
 #include <SDL_video.h>
 #include <SDL_render.h>
 #include <SDL_rect.h>
+
+class Render: public mirror::MirrorService::AVFrameSink 
+{
+public:
+    Render(SDL_Rect* sdl_rect,
+           SDL_Texture* sdl_texture,
+           SDL_Renderer* sdl_renderer)
+        : _sdl_rect(sdl_rect)
+        , _sdl_texture(sdl_texture)
+        , _sdl_renderer(sdl_renderer)
+    {
+    }
+
+    bool OnVideoFrame(struct VideoFrame* frame)
+    {
+        if (SDL_UpdateNVTexture(_sdl_texture,
+        _sdl_rect,
+        frame->data[0],
+        frame->linesize[0],
+        frame->data[1],
+        frame->linesize[1]) == 0)
+        {
+            if (SDL_RenderClear(_sdl_renderer) == 0)
+            {
+                if (SDL_RenderCopy(_sdl_renderer, _sdl_texture, nullptr, _sdl_rect) == 0)
+                {
+                    SDL_RenderPresent(_sdl_renderer);
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    bool OnAudioFrame(struct AudioFrame* frame)
+    {
+        return true;
+    }
+private:
+    SDL_Rect* _sdl_rect;
+    SDL_Texture* _sdl_texture;
+    SDL_Renderer* _sdl_renderer;
+};
 
 #ifdef WIN32
 int WinMain(HINSTANCE _instance,
@@ -47,7 +89,11 @@ int main()
 	options.video.frame_rate = 30;
 	options.video.bit_rate = 500 * 1024 * 8;
 	options.video.max_b_frames = 0;
-	options.video.key_frame_interval = 10;
+	options.video.key_frame_interval = 15;
+    options.audio.encoder = const_cast<char*>("libopus");
+    options.audio.decoder = const_cast<char*>("libopus");
+    options.audio.sample_rate = 48000;
+    options.audio.bit_rate = 6000;
 	options.multicast = const_cast<char*>("239.0.0.1");
 	options.mtu = 1500;
 	mirror::Init(options);
@@ -75,6 +121,7 @@ int main()
 												 sdl_rect.w,
 												 sdl_rect.h);
 
+    Render* render = new Render(&sdl_rect, sdl_texture, sdl_renderer);
 	std::optional<mirror::MirrorService::MirrorReceiver> receiver = std::nullopt;
 	std::optional<mirror::MirrorService::MirrorSender> sender = std::nullopt;
 	mirror::MirrorService* mirror = new mirror::MirrorService();
@@ -95,30 +142,16 @@ int main()
 				case SDL_SCANCODE_S:
 				{
 					auto devices = mirror::DeviceManagerService::GetDevices(DeviceKind::Screen);
+                    if (devices.device_list.size() == 0)
+                    {
+                        MessageBox(nullptr, TEXT("Not found a device!"), TEXT("Error"), 0);
+                        return -10;
+                    }
+
 					mirror::DeviceManagerService::SetInputDevice(devices.device_list[0]);
 
 					std::string bind = "0.0.0.0:3200";
-					sender = mirror->CreateSender(bind, [&](void* _, VideoFrame* frame)
-					{
-						if (SDL_UpdateNVTexture(sdl_texture,
-						&sdl_rect,
-						frame->data[0],
-						frame->linesize[0],
-						frame->data[1],
-						frame->linesize[1]) == 0)
-						{
-							if (SDL_RenderClear(sdl_renderer) == 0)
-							{
-								if (SDL_RenderCopy(sdl_renderer, sdl_texture, nullptr, &sdl_rect) == 0)
-								{
-									SDL_RenderPresent(sdl_renderer);
-									return true;
-								}
-							}
-						}
-
-					return false;
-					}, nullptr);
+					sender = mirror->CreateSender(bind, render);
 					if (sender.has_value())
 					{
 						created = true;
@@ -129,27 +162,7 @@ int main()
 				case SDL_SCANCODE_R:
 				{
 					std::string bind = "0.0.0.0:3200";
-					receiver = mirror->CreateReceiver(bind, [&](void* _, VideoFrame* frame)
-					{
-						if (SDL_UpdateNVTexture(sdl_texture,
-						&sdl_rect,
-						frame->data[0],
-						frame->linesize[0],
-						frame->data[1],
-						frame->linesize[1]) == 0)
-						{
-							if (SDL_RenderClear(sdl_renderer) == 0)
-							{
-								if (SDL_RenderCopy(sdl_renderer, sdl_texture, nullptr, &sdl_rect) == 0)
-								{
-									SDL_RenderPresent(sdl_renderer);
-									return true;
-								}
-							}
-						}
-
-					return false;
-					}, nullptr);
+					receiver = mirror->CreateReceiver(bind, render);
 					if (receiver.has_value())
 					{
 						created = true;
@@ -168,5 +181,6 @@ int main()
 	}
 
 	SDL_Quit();
+    mirror::Quit();
 	return 0;
 }

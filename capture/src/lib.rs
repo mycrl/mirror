@@ -11,6 +11,7 @@ use common::frame::{AudioFrame, VideoFrame};
 
 pub use device::{Device, DeviceKind, DeviceList};
 pub use manager::DeviceManager;
+use num_enum::TryFromPrimitive;
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
@@ -44,22 +45,42 @@ extern "C" {
     fn capture_set_output_callback(proc: RawOutputCallback) -> *const c_void;
 }
 
-#[derive(Debug)]
+#[derive(Debug, TryFromPrimitive)]
+#[repr(i32)]
 pub enum DeviceError {
-    InitializeFailed,
-    CreateDeviceManagerFailed,
+    InitializeFailed = -1,
+    StartupFailed = -2,
+    ResetVideoFailed = -3,
+    ResetAudioFailed = -4,
+    CreateSceneFailed = -5,
+    CreateMonitorDeviceFailed = -6,
+    CreateMonitorItemFailed = -7,
+    CreateVideoDeviceFailed = -8,
+    CreateVideoItemFailed = -9,
+    CreateDefaultAudioDeviceFailed = -10,
+    CreateAudioDeviceFailed = -11,
 }
 
 impl std::error::Error for DeviceError {}
 
 impl std::fmt::Display for DeviceError {
+    #[rustfmt::skip]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
             "{}",
             match self {
-                Self::CreateDeviceManagerFailed => "CreateDeviceManagerFailed",
                 Self::InitializeFailed => "InitializeFailed",
+                Self::StartupFailed => "StartupFailed",
+                Self::ResetVideoFailed => "ResetVideoFailed",
+                Self::ResetAudioFailed => "ResetAudioFailed",
+                Self::CreateSceneFailed => "CreateSceneFailed",
+                Self::CreateMonitorDeviceFailed => "CreateMonitorDeviceFailed",
+                Self::CreateMonitorItemFailed => "CreateMonitorItemFailed",
+                Self::CreateVideoDeviceFailed => "CreateVideoDeviceFailed",
+                Self::CreateVideoItemFailed => "CreateVideoItemFailed",
+                Self::CreateDefaultAudioDeviceFailed => "CreateDefaultAudioDeviceFailed",
+                Self::CreateAudioDeviceFailed => "CreateAudioDeviceFailed",
             }
         )
     }
@@ -197,8 +218,9 @@ pub struct DeviceManagerOptions {
 /// })?;
 /// ```
 pub fn init(options: DeviceManagerOptions) -> Result<(), DeviceError> {
-    if unsafe { capture_init(&options.video, &options.audio) } != 0 {
-        Err(DeviceError::InitializeFailed)
+    let result = unsafe { capture_init(&options.video, &options.audio) };
+    if result != 0 {
+        Err(DeviceError::try_from(result).unwrap())
     } else {
         Ok(())
     }

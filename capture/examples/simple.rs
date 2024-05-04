@@ -55,7 +55,7 @@ fn main() -> anyhow::Result<()> {
 
     let devices = DeviceManager::get_devices(DeviceKind::Screen).to_vec();
     for device in &devices {
-        println!("device: name={:?}, id={:?}", device.name(), device.id());
+        println!("> Device: name={:?}, id={:?}", device.name(), device.id());
     }
 
     DeviceManager::set_input(&devices[0]);

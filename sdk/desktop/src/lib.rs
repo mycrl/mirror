@@ -219,6 +219,13 @@ extern "C" fn get_devices(kind: DeviceKind) -> RawDevices {
         size: devices.len(),
     };
 
+    #[cfg(debug_assertions)]
+    {
+        for device in &devices {
+            log::info!("Device: name={:?}", device.name());
+        }
+    }
+
     std::mem::forget(devices);
     raw_devices
 }
@@ -292,7 +299,7 @@ unsafe impl Send for RawFrameSink {}
 unsafe impl Sync for RawFrameSink {}
 
 impl RawFrameSink {
-    fn video(&self, frame: &VideoFrame) -> bool {
+    fn send_video(&self, frame: &VideoFrame) -> bool {
         if let Some(callback) = &self.video {
             callback(self.ctx, frame)
         } else {
@@ -300,7 +307,7 @@ impl RawFrameSink {
         }
     }
 
-    fn audio(&self, frame: &AudioFrame) -> bool {
+    fn send_audio(&self, frame: &AudioFrame) -> bool {
         if let Some(callback) = &self.audio {
             callback(self.ctx, frame)
         } else {
@@ -334,8 +341,8 @@ extern "C" fn create_sender(
         unsafe { &*mirror }.mirror.create_sender(
             &Strings::from(bind).to_string()?,
             FrameSink {
-                video: move |frame: &VideoFrame| sink.video(frame),
-                audio: move |frame: &AudioFrame| sink.audio(frame),
+                video: move |frame: &VideoFrame| sink.send_video(frame),
+                audio: move |frame: &AudioFrame| sink.send_audio(frame),
             },
         )
     })())
@@ -381,8 +388,8 @@ extern "C" fn create_receiver(
         unsafe { &*mirror }.mirror.create_receiver(
             &Strings::from(bind).to_string()?,
             FrameSink {
-                video: move |frame: &VideoFrame| sink.video(frame),
-                audio: move |frame: &AudioFrame| sink.audio(frame),
+                video: move |frame: &VideoFrame| sink.send_video(frame),
+                audio: move |frame: &AudioFrame| sink.send_audio(frame),
             },
         )
     })())

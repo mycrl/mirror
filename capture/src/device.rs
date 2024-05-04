@@ -1,4 +1,4 @@
-use std::ffi::{c_char, c_int};
+use std::ffi::c_char;
 
 use common::strings::Strings;
 
@@ -7,7 +7,6 @@ pub struct RawDeviceDescription {
     pub kind: DeviceKind,
     pub id: *const c_char,
     pub name: *const c_char,
-    pub index: c_int,
 }
 
 #[repr(C)]
@@ -94,6 +93,10 @@ impl DeviceList {
     /// get_devices(DeviceKind::Video).to_vec();
     /// ```
     pub fn to_vec(&self) -> Vec<Device> {
+        if self.0.is_null() {
+            return Vec::new();
+        }
+
         let list = unsafe { &*self.0 };
         unsafe { std::slice::from_raw_parts(list.devices, list.size) }
             .into_iter()

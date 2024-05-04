@@ -62,8 +62,16 @@ struct VideoOptions
 
 struct AudioOptions
 {
+    /// Video encoder settings, possible values are `h264_qsv”, `h264_nvenc”,
+    /// `libx264” and so on.
+    char* encoder;
+    /// Video decoder settings, possible values are `h264_qsv”, `h264_cuvid”,
+    /// `h264”, etc.
+    char* decoder;
     /// The sample rate of the audio, in seconds.
-    uint32_t samples;
+    uint64_t sample_rate;
+    /// The bit rate of the video encoding.
+    uint64_t bit_rate;
 };
 
 struct MirrorOptions
@@ -98,7 +106,13 @@ struct Devices
 typedef const void* Mirror;
 typedef const void* Sender;
 typedef const void* Receiver;
-typedef bool (*ReceiverFrameCallback)(void* ctx, VideoFrame* frame);
+
+struct FrameSink
+{
+    bool (*video)(void* ctx, struct VideoFrame* frame);
+    bool (*audio)(void* ctx, struct AudioFrame* frame);
+    void* ctx;
+};
 
 extern "C"
 {
@@ -125,12 +139,12 @@ extern "C"
     /// Create a sender, specify a bound NIC address, you can pass callback to
     /// get the device screen or sound callback, callback can be null, if it is
     /// null then it means no callback data is needed.
-	EXPORT Sender create_sender(Mirror mirror, char* bind, ReceiverFrameCallback proc, void* ctx);
+	EXPORT Sender create_sender(Mirror mirror, char* bind, struct FrameSink sink);
     /// Close sender.
 	EXPORT void close_sender(Sender sender);
     /// Create a receiver, specify a bound NIC address, you can pass callback to
     /// get the sender's screen or sound callback, callback can not be null.
-	EXPORT Receiver create_receiver(Mirror mirror, char* bind, ReceiverFrameCallback proc, void* ctx);
+	EXPORT Receiver create_receiver(Mirror mirror, char* bind, struct FrameSink sink);
     /// Close receiver.
 	EXPORT void close_receiver(Receiver receiver);
 }
@@ -212,61 +226,42 @@ namespace mirror
 	class MirrorService
 	{
 	public:
-		class FrameProcContext
-		{
-		public:
-			typedef std::function<bool(void*, struct VideoFrame*)> FrameCallback;
-
-			FrameProcContext(FrameCallback callback, void* ctx)
-				: _callback(callback), _ctx(ctx)
-			{}
-
-			bool On(struct VideoFrame* frame)
-			{
-				return _callback(_ctx, frame);
-			}
-		private:
-			FrameCallback _callback;
-			void* _ctx;
-		};
-
 		class MirrorSender
 		{
 		public:
-			MirrorSender(Sender sender, FrameProcContext* ctx)
-				: _sender(sender), _ctx(ctx)
+			MirrorSender(Sender sender)
+				: _sender(sender)
 			{}
 
 			void Close()
 			{
 				close_sender(_sender);
-
-				if (_ctx != nullptr)
-				{
-					delete _ctx;
-				}
 			}
 		private:
 			Sender _sender;
-			FrameProcContext* _ctx;
 		};
 
 		class MirrorReceiver
 		{
 		public:
-			MirrorReceiver(Receiver receiver, FrameProcContext* ctx)
-				: _receiver(receiver), _ctx(ctx)
+			MirrorReceiver(Receiver receiver)
+				: _receiver(receiver)
 			{}
 
 			void Close()
 			{
 				close_receiver(_receiver);
-				delete _ctx;
 			}
 		private:
 			Receiver _receiver;
-			FrameProcContext* _ctx;
 		};
+
+        class AVFrameSink
+        {
+        public:
+            virtual bool OnVideoFrame(struct VideoFrame* frame) = 0;
+            virtual bool OnAudioFrame(struct AudioFrame* frame) = 0;
+        };
 
 		MirrorService()
 		{
@@ -285,27 +280,34 @@ namespace mirror
 			}
 		}
 
-		std::optional<MirrorSender> CreateSender(std::string& bind,
-												 std::optional<FrameProcContext::FrameCallback> callback,
-												 void* ctx)
+		std::optional<MirrorSender> CreateSender(std::string& bind, AVFrameSink* sink)
 		{
-			FrameProcContext* ctx_ = callback.has_value() ? new FrameProcContext(callback.value(), ctx) : nullptr;
-			Sender sender = create_sender(_mirror, const_cast<char*>(bind.c_str()), callback.has_value() ? _proc : nullptr, ctx_);
-			return sender != nullptr ? std::optional(MirrorSender(sender, ctx_)) : std::nullopt;
+            FrameSink frame_sink;
+            frame_sink.video = _video_proc;
+            frame_sink.audio = _audio_proc;
+            frame_sink.ctx = static_cast<void*>(sink);
+			Sender sender = create_sender(_mirror, const_cast<char*>(bind.c_str()), frame_sink);
+			return sender != nullptr ? std::optional(MirrorSender(sender)) : std::nullopt;
 		}
 
-		std::optional<MirrorReceiver> CreateReceiver(std::string& bind,
-													 FrameProcContext::FrameCallback callback,
-													 void* ctx)
+		std::optional<MirrorReceiver> CreateReceiver(std::string& bind, AVFrameSink* sink)
 		{
-			FrameProcContext* ctx_ = new FrameProcContext(callback, ctx);
-			Receiver receiver = create_receiver(_mirror, const_cast<char*>(bind.c_str()), _proc, ctx_);
-			return receiver != nullptr ? std::optional(MirrorReceiver(receiver, ctx_)) : std::nullopt;
+			FrameSink frame_sink;
+            frame_sink.video = _video_proc;
+            frame_sink.audio = _audio_proc;
+            frame_sink.ctx = static_cast<void*>(sink);
+			Receiver receiver = create_receiver(_mirror, const_cast<char*>(bind.c_str()), frame_sink);
+			return receiver != nullptr ? std::optional(MirrorReceiver(receiver)) : std::nullopt;
 		}
 	private:
-		static bool _proc(void* ctx, struct VideoFrame* frame)
+		static bool _video_proc(void* ctx, struct VideoFrame* frame)
 		{
-			return ((FrameProcContext*)ctx)->On(frame);
+			return ((AVFrameSink*)ctx)->OnVideoFrame(frame);
+		}
+
+        static bool _audio_proc(void* ctx, struct AudioFrame* frame)
+		{
+			return ((AVFrameSink*)ctx)->OnAudioFrame(frame);
 		}
 
 		Mirror _mirror = nullptr;

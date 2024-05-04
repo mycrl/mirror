@@ -15,8 +15,6 @@
 #define EXPORT
 #endif
 
-#include <libobs/obs.h>
-#include <stdio.h>
 #include <frame.h>
 
 struct VideoInfo
@@ -43,7 +41,6 @@ struct DeviceDescription
 	enum DeviceType type;
 	const char* id;
 	const char* name;
-	int index;
 };
 
 struct DeviceList
