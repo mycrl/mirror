@@ -69,15 +69,10 @@ impl Sender {
                         break;
                     }
 
-                    if let Ok(packet) = Packet::try_from(&buf[..size]) {
-                        match packet {
-                            Packet::Ping { timestamp } => {
-                                let bytes: Bytes = Packet::Pong { timestamp }.into();
-                                if socket.send_to(&bytes, addr).is_err() {
-                                    break;
-                                }
-                            }
-                            _ => (),
+                    if let Ok(Packet::Ping { timestamp }) = Packet::try_from(&buf[..size]) {
+                        let bytes: Bytes = Packet::Pong { timestamp }.into();
+                        if socket.send_to(&bytes, addr).is_err() {
+                            break;
                         }
                     }
                 } else {
@@ -100,7 +95,7 @@ impl Sender {
     ///
     /// Note that there may be packet loss.
     pub fn send(&mut self, bytes: &[u8]) -> Result<(), Error> {
-        if bytes.len() == 0 {
+        if bytes.is_empty() {
             return Ok(());
         }
 

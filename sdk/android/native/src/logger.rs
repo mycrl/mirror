@@ -5,21 +5,21 @@ use std::ffi::{c_char, c_int};
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LogLevel {
-    VERBOSE = 2,
-    DEBUG,
-    INFO,
-    WARN,
-    ERROR,
+    Verbose = 2,
+    Debug,
+    Info,
+    Warn,
+    Error,
 }
 
 impl LogLevel {
     fn from_level(level: log::Level) -> Self {
         match level {
-            log::Level::Trace => Self::VERBOSE,
-            log::Level::Debug => Self::DEBUG,
-            log::Level::Info => Self::INFO,
-            log::Level::Warn => Self::WARN,
-            log::Level::Error => Self::ERROR,
+            log::Level::Trace => Self::Verbose,
+            log::Level::Debug => Self::Debug,
+            log::Level::Info => Self::Info,
+            log::Level::Warn => Self::Warn,
+            log::Level::Error => Self::Error,
         }
     }
 }

@@ -99,7 +99,7 @@ impl DeviceList {
 
         let list = unsafe { &*self.0 };
         unsafe { std::slice::from_raw_parts(list.devices, list.size) }
-            .into_iter()
+            .iter()
             .map(|item| Device(*item))
             .collect()
     }

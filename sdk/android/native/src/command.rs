@@ -15,7 +15,7 @@ use jni::{objects::JByteArray, JNIEnv, JavaVM};
 // future class-related JNI operation can be added after FindClass, rather than
 // at the end of the table.
 thread_local! {
-    pub static ENV: RefCell<Option<*mut jni::sys::JNIEnv>> = RefCell::new(None);
+    pub static ENV: RefCell<Option<*mut jni::sys::JNIEnv>> = const { RefCell::new(None) };
 }
 
 pub static JVM: Mutex<Option<JavaVM>> = Mutex::new(None);
@@ -60,6 +60,8 @@ where
 pub fn copy_from_byte_array(env: &JNIEnv, array: &JByteArray) -> anyhow::Result<Bytes> {
     let size = env.get_array_length(array)? as usize;
     let mut bytes = BytesMut::zeroed(size);
-    env.get_byte_array_region(array, 0, unsafe { std::mem::transmute(&mut bytes[..]) })?;
+    env.get_byte_array_region(array, 0, unsafe {
+        std::mem::transmute::<&mut [u8], &mut [i8]>(&mut bytes[..])
+    })?;
     Ok(bytes.freeze())
 }

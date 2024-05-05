@@ -33,13 +33,13 @@ impl<'a> Packet<'a> {
     }
 }
 
-impl<'a> Into<Bytes> for Packet<'a> {
-    fn into(self) -> Bytes {
+impl<'a> From<Packet<'a>> for Bytes {
+    fn from(val: Packet<'a>) -> Self {
         let mut bytes = BytesMut::with_capacity(
-            5 + match &self {
-                Self::Bytes { chunk, .. } => 8 + chunk.len(),
-                Self::Ping { .. } | Self::Pong { .. } => 16,
-                Self::Nack { .. } => 4,
+            5 + match &val {
+                Packet::Bytes { chunk, .. } => 8 + chunk.len(),
+                Packet::Ping { .. } | Packet::Pong { .. } => 16,
+                Packet::Nack { .. } => 4,
             },
         );
 
@@ -47,22 +47,22 @@ impl<'a> Into<Bytes> for Packet<'a> {
         bytes.put_u32(0);
 
         // Package type.
-        bytes.put_u8(match &self {
-            Self::Ping { .. } => 0,
-            Self::Pong { .. } => 1,
-            Self::Nack { .. } => 2,
-            Self::Bytes { .. } => 3,
+        bytes.put_u8(match &val {
+            Packet::Ping { .. } => 0,
+            Packet::Pong { .. } => 1,
+            Packet::Nack { .. } => 2,
+            Packet::Bytes { .. } => 3,
         });
 
-        match self {
-            Self::Bytes { chunk, sequence } => {
+        match val {
+            Packet::Bytes { chunk, sequence } => {
                 bytes.put_u64(sequence);
                 bytes.put(chunk);
             }
-            Self::Ping { timestamp } | Self::Pong { timestamp } => {
+            Packet::Ping { timestamp } | Packet::Pong { timestamp } => {
                 bytes.put_u64(timestamp);
             }
-            Self::Nack { range } => {
+            Packet::Nack { range } => {
                 bytes.put_u64(range.start);
                 bytes.put_u64(range.end);
             }
@@ -70,7 +70,7 @@ impl<'a> Into<Bytes> for Packet<'a> {
 
         // Calculate CRC.
         let crc = fingerprint(&bytes[4..]);
-        (&mut bytes[0..4]).copy_from_slice(&crc.to_be_bytes());
+        bytes[0..4].copy_from_slice(&crc.to_be_bytes());
 
         bytes.freeze()
     }
@@ -82,7 +82,7 @@ impl<'a> TryFrom<&'a [u8]> for Packet<'a> {
     fn try_from(mut bytes: &'a [u8]) -> Result<Self, Self::Error> {
         // Check if the current slice is damaged.
         let crc = bytes.get_u32();
-        if crc != fingerprint(&bytes[..]) {
+        if crc != fingerprint(bytes) {
             return Err(());
         }
 
@@ -137,7 +137,7 @@ impl PacketEncoder {
     /// The result of the encoding may be null, this is because an empty packet
     /// may be passed in from outside.
     pub fn encode(&mut self, bytes: &[u8]) -> &[BytesMut] {
-        if bytes.len() == 0 {
+        if bytes.is_empty() {
             return &[];
         }
 
@@ -188,7 +188,7 @@ impl PacketDecoder {
     }
 
     pub fn decode(&mut self, mut bytes: &[u8]) -> Option<Bytes> {
-        if bytes.len() == 0 {
+        if bytes.is_empty() {
             return None;
         }
 
@@ -197,7 +197,7 @@ impl PacketDecoder {
 
         let mut results = None;
         if sequence != self.sequence {
-            if self.bytes.len() > 0 && self.bytes.len() >= self.length {
+            if !self.bytes.is_empty() && self.bytes.len() >= self.length {
                 results = Some(Bytes::copy_from_slice(&self.bytes[..self.length]));
             }
 

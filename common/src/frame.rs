@@ -50,7 +50,7 @@ impl VideoFrame {
     /// default for Android camera preview. The entire image in Y is written
     /// out, followed by interleaved lines that go U0, V0, U1, V1, etc.
     #[inline]
-    pub fn get_y_planar<'a>(&'a self) -> &'a [u8] {
+    pub fn get_y_planar(&self) -> &[u8] {
         unsafe {
             from_raw_parts(
                 self.data[0],
@@ -64,7 +64,7 @@ impl VideoFrame {
     /// Y is written out, followed by the image in V, then by the whole image in
     /// U.
     #[inline]
-    pub fn get_uv_planar<'a>(&'a self) -> &'a [u8] {
+    pub fn get_uv_planar(&self) -> &[u8] {
         unsafe {
             from_raw_parts(
                 self.data[1],

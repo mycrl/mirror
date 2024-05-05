@@ -61,14 +61,12 @@ impl Dequeue {
             }
         }
 
-        sequence
-            .map(|seq| {
-                self.queue
-                    .write()
-                    .unwrap()
-                    .remove(&seq)
-                    .map(|(bytes, _)| bytes)
-            })
-            .flatten()
+        sequence.and_then(|seq| {
+            self.queue
+                .write()
+                .unwrap()
+                .remove(&seq)
+                .map(|(bytes, _)| bytes)
+        })
     }
 }

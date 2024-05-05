@@ -32,37 +32,31 @@ pub fn jni_exports(attr: TokenStream, input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemImpl);
     let class_name = get_class_name(&input).unwrap();
     let package_name = get_package_name(&attr).unwrap().replace('.', "_");
-    let exports = input
-        .items
-        .iter()
-        .map(|item| {
-            if let ImplItem::Fn(func) = item {
-                if let Visibility::Public(_) = func.vis {
-                    let method = func.sig.ident.to_string();
-                    let func_name = to_camel_case(&method);
-                    let args = func.sig.inputs.clone();
-                    let args_ident = get_args_ident(&args);
-                    let output = func.sig.output.clone();
+    let exports = input.items.iter().filter_map(|item| {
+        if let ImplItem::Fn(func) = item {
+            if let Visibility::Public(_) = func.vis {
+                let method = func.sig.ident.to_string();
+                let func_name = to_camel_case(&method);
+                let args = func.sig.inputs.clone();
+                let args_ident = get_args_ident(&args);
+                let output = func.sig.output.clone();
 
-                    let func_name_ident = format_ident!("{}", method);
-                    let class_name_ident = format_ident!("{}", class_name);
-                    let jni_name =
-                        format_ident!("Java_{}_{}_{}", package_name, class_name, func_name);
+                let func_name_ident = format_ident!("{}", method);
+                let class_name_ident = format_ident!("{}", class_name);
+                let jni_name = format_ident!("Java_{}_{}_{}", package_name, class_name, func_name);
 
-                    return Some(quote! {
-                        #[no_mangle]
-                        #[allow(unused_mut)]
-                        pub extern "system" fn #jni_name(#args) #output {
-                            #class_name_ident::#func_name_ident(#(#args_ident)*)
-                        }
-                    });
-                }
+                return Some(quote! {
+                    #[no_mangle]
+                    #[allow(unused_mut)]
+                    pub extern "system" fn #jni_name(#args) #output {
+                        #class_name_ident::#func_name_ident(#(#args_ident)*)
+                    }
+                });
             }
+        }
 
-            None
-        })
-        .filter(|item| item.is_some())
-        .map(|item| item.unwrap());
+        None
+    });
 
     TokenStream::from(quote! {
         #input
@@ -76,10 +70,8 @@ fn get_package_name(attr: &TokenStream) -> Option<String> {
     if let Some(TokenTree::Ident(ident)) = iter.next() {
         if let Some(TokenTree::Punct(punct)) = iter.next() {
             if let Some(TokenTree::Literal(literal)) = iter.next() {
-                if ident.to_string().as_str() == "package" {
-                    if punct.to_string().as_str() == "=" {
-                        return Some(literal.to_string().replace("\"", ""));
-                    }
+                if ident.to_string().as_str() == "package" && punct.to_string().as_str() == "=" {
+                    return Some(literal.to_string().replace("\"", ""));
                 }
             }
         }

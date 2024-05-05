@@ -17,7 +17,7 @@ use transport::{
     Transport,
 };
 
-static OPTIONS: Lazy<RwLock<MirrorOptions>> = Lazy::new(|| Default::default());
+static OPTIONS: Lazy<RwLock<MirrorOptions>> = Lazy::new(Default::default);
 
 /// Audio Codec Configuration.
 #[derive(Debug, Clone)]
@@ -45,12 +45,12 @@ impl Default for AudioOptions {
     }
 }
 
-impl Into<AudioEncoderSettings> for AudioOptions {
-    fn into(self) -> AudioEncoderSettings {
+impl From<AudioOptions> for AudioEncoderSettings {
+    fn from(val: AudioOptions) -> Self {
         AudioEncoderSettings {
-            codec_name: self.encoder,
-            bit_rate: self.bit_rate,
-            sample_rate: self.sample_rate,
+            codec_name: val.encoder,
+            bit_rate: val.bit_rate,
+            sample_rate: val.sample_rate,
         }
     }
 }
@@ -95,16 +95,16 @@ impl Default for VideoOptions {
     }
 }
 
-impl Into<VideoEncoderSettings> for VideoOptions {
-    fn into(self) -> VideoEncoderSettings {
+impl From<VideoOptions> for VideoEncoderSettings {
+    fn from(val: VideoOptions) -> Self {
         VideoEncoderSettings {
-            width: self.width,
-            height: self.height,
-            bit_rate: self.bit_rate,
-            frame_rate: self.frame_rate,
-            max_b_frames: self.max_b_frames,
-            key_frame_interval: self.key_frame_interval,
-            codec_name: self.encoder,
+            width: val.width,
+            height: val.height,
+            bit_rate: val.bit_rate,
+            frame_rate: val.frame_rate,
+            max_b_frames: val.max_b_frames,
+            key_frame_interval: val.key_frame_interval,
+            codec_name: val.encoder,
         }
     }
 }
@@ -203,8 +203,8 @@ where
         Ok(Self {
             sink,
             adapter: Arc::downgrade(adapter),
-            video_encoder: VideoEncoder::new(&options.video.clone().try_into()?)?,
-            audio_encoder: AudioEncoder::new(&options.audio.clone().try_into()?)?,
+            video_encoder: VideoEncoder::new(&options.video.clone().into())?,
+            audio_encoder: AudioEncoder::new(&options.audio.clone().into())?,
         })
     }
 }

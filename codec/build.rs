@@ -129,15 +129,15 @@ fn find_ffmpeg_prefix(out_dir: &str) -> anyhow::Result<(Vec<String>, Vec<String>
 
 #[cfg(target_os = "windows")]
 fn find_ffmpeg_prefix(out_dir: &str) -> anyhow::Result<(Vec<String>, Vec<String>)> {
-    if !is_exsit(&join(&out_dir, "7z.exe").unwrap()) {
+    if !is_exsit(&join(out_dir, "7z.exe").unwrap()) {
         exec(
             "Invoke-WebRequest -Uri https://www.7-zip.org/a/7zr.exe -OutFile 7z.exe",
-            &out_dir,
+            out_dir,
         )
         .expect("Unable to download 7z cli exe.");
     }
 
-    let ffmpeg_prefix = join(&out_dir, "ffmpeg-6.1.1-full_build-shared").unwrap();
+    let ffmpeg_prefix = join(out_dir, "ffmpeg-6.1.1-full_build-shared").unwrap();
     if !is_exsit(&ffmpeg_prefix) {
         exec(
             "Invoke-WebRequest \
@@ -145,7 +145,7 @@ fn find_ffmpeg_prefix(out_dir: &str) -> anyhow::Result<(Vec<String>, Vec<String>
                         -OutFile ffmpeg.7z; \
                      ./7z.exe x ffmpeg.7z -aoa; \
                      del ffmpeg.7z",
-            &out_dir,
+            out_dir,
         )
         .expect("Unable to download ffmpeg shard release.");
     }

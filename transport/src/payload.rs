@@ -11,14 +11,9 @@ pub struct PacketInfo {
 /// Because of the need to transmit both audio and video data in srt, it is
 /// necessary to identify the type of packet, this encoder is used to packetize
 /// specific types of data for transmission over the network.
+#[derive(Default)]
 pub struct Muxer {
     sequence: u64,
-}
-
-impl Default for Muxer {
-    fn default() -> Self {
-        Self { sequence: 0 }
-    }
 }
 
 impl Muxer {

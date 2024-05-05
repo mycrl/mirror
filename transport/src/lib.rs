@@ -56,15 +56,14 @@ impl Transport {
             let discovery = discovery.as_ref().map(Arc::downgrade);
 
             thread::spawn(move || loop {
-                let discovery = if let Some(discovery) =
-                    discovery.as_ref().map(|item| item.upgrade()).flatten()
-                {
-                    discovery
-                } else {
-                    log::info!("discovery is drop, maybe is released.");
+                let discovery =
+                    if let Some(discovery) = discovery.as_ref().and_then(|item| item.upgrade()) {
+                        discovery
+                    } else {
+                        log::info!("discovery is drop, maybe is released.");
 
-                    break;
-                };
+                        break;
+                    };
 
                 if let Some((service, addr)) = discovery.recv_online() {
                     log::info!(
@@ -177,7 +176,7 @@ impl Transport {
             services.insert(service.clone());
 
             if let Some(discovery) = &self.discovery {
-                discovery.set_services(services.iter().map(|item| item.clone()).collect());
+                discovery.set_services(services.iter().cloned().collect());
             }
         }
 
@@ -208,12 +207,12 @@ impl Transport {
 
             log::info!("adapter recv a none, close the worker.");
 
-            if let Some(discovery) = discovery_.as_ref().map(|item| item.upgrade()).flatten() {
+            if let Some(discovery) = discovery_.as_ref().and_then(|item| item.upgrade()) {
                 if let Some(services) = services_.upgrade() {
                     let mut services = services.lock().unwrap();
                     services.remove(&service);
 
-                    discovery.set_services(services.iter().map(|item| item.clone()).collect());
+                    discovery.set_services(services.iter().cloned().collect());
                 }
             }
         });

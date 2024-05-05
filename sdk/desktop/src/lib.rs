@@ -25,14 +25,14 @@ static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 /// ```c
 /// struct VideoOptions
 /// {
-/// 	char* encoder;
-/// 	char* decoder;
-/// 	uint8_t max_b_frames;
-/// 	uint8_t frame_rate;
-/// 	uint32_t width;
-/// 	uint32_t height;
-/// 	uint64_t bit_rate;
-/// 	uint32_t key_frame_interval;
+///     char* encoder;
+///     char* decoder;
+///     uint8_t max_b_frames;
+///     uint8_t frame_rate;
+///     uint32_t width;
+///     uint32_t height;
+///     uint64_t bit_rate;
+///     uint32_t key_frame_interval;
 /// };
 /// ```
 #[repr(C)]
@@ -115,9 +115,9 @@ impl TryInto<AudioOptions> for RawAudioOptions {
 /// ```c
 /// struct MirrorOptions
 /// {
-/// 	VideoOptions video;
-/// 	char* multicast;
-/// 	size_t mtu;
+///     VideoOptions video;
+///     char* multicast;
+///     size_t mtu;
 /// };
 /// ```
 #[repr(C)]
