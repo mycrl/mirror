@@ -41,7 +41,7 @@ fn main() -> anyhow::Result<()> {
         std::env::set_current_dir(path)?;
     }
 
-    let frame = Arc::new(Mutex::new(vec![0u8; (WIDTH * HEIGHT * 4)]));
+    let frame = Arc::new(Mutex::new(vec![0u8; WIDTH * HEIGHT * 4]));
     init(DeviceManagerOptions {
         video: VideoInfo {
             fps: 30,
