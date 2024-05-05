@@ -1,6 +1,6 @@
 //
 //  main.cpp
-//  example
+//  receiver
 //
 //  Created by Panda on 2024/4/13.
 //
@@ -122,59 +122,22 @@ int main()
 												 sdl_rect.h);
 
     Render* render = new Render(&sdl_rect, sdl_texture, sdl_renderer);
-	std::optional<mirror::MirrorService::MirrorReceiver> receiver = std::nullopt;
-	std::optional<mirror::MirrorService::MirrorSender> sender = std::nullopt;
 	mirror::MirrorService* mirror = new mirror::MirrorService();
-	bool created = false;
-	SDL_Event event;
 
+	std::string bind = "0.0.0.0:3200";
+	auto receiver = mirror->CreateReceiver(bind, render);
+	if (!receiver.has_value())
+	{
+		MessageBox(nullptr, TEXT("Failed to create receiver!"), TEXT("Error"), 0);
+		SDL_Quit();
+    	mirror::Quit();
+		return -1;
+	}
+
+	SDL_Event event;
 	while (SDL_WaitEvent(&event))
 	{
-		if (event.type == SDL_KEYDOWN)
-		{
-			if (created)
-			{
-				continue;
-			}
-
-			switch (event.key.keysym.scancode)
-			{
-				case SDL_SCANCODE_S:
-				{
-					auto devices = mirror::DeviceManagerService::GetDevices(DeviceKind::Screen);
-                    if (devices.device_list.size() == 0)
-                    {
-                        MessageBox(nullptr, TEXT("Not found a device!"), TEXT("Error"), 0);
-                        return -10;
-                    }
-
-					mirror::DeviceManagerService::SetInputDevice(devices.device_list[0]);
-
-					std::string bind = "0.0.0.0:3200";
-					sender = mirror->CreateSender(bind, render);
-					if (sender.has_value())
-					{
-						created = true;
-					}
-
-					break;
-				}
-				case SDL_SCANCODE_R:
-				{
-					std::string bind = "0.0.0.0:3200";
-					receiver = mirror->CreateReceiver(bind, render);
-					if (receiver.has_value())
-					{
-						created = true;
-					}
-
-					break;
-				}
-				default:
-					break;
-			}
-		}
-		else if (event.type == SDL_QUIT)
+		if (event.type == SDL_QUIT)
 		{
 			break;
 		}

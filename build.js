@@ -16,12 +16,40 @@ function spawn(command, options) {
 async function build(Args) {
     await spawn(`cargo build ${Args.release ? '--release' : ''}`, { cwd: __dirname })
 
-    const distributionsPath = path.join(__dirname, './target')
+    const mirrorLibraryPath = path.join(__dirname, './target', Args.release ? 'release' : 'debug', './mirror.dll')
+    const mirrorLibraryPdbPath = path.join(__dirname, './target', Args.release ? 'release' : 'debug', './mirror.pdb')
+    const distributionsPath = path.join(__dirname, './target/distributions')
+    const libraryPath = path.join(distributionsPath, './bin')
+    const includePath = path.join(distributionsPath, './include')
+    const examplePath = path.join(distributionsPath, './example')
+
     if (!fs.existsSync(distributionsPath)) {
         fs.mkdirSync(distributionsPath)
     }
 
-    if (!fs.existsSync(path.join(distributionsPath, './distributions'))) {
+    if (!fs.existsSync(includePath)) {
+        fs.mkdirSync(includePath)
+    }
+
+    fs.copyFileSync(
+        path.join(__dirname, './sdk/desktop/include/mirror.h'), 
+        path.join(includePath, './mirror.h')
+    )
+
+    fs.copyFileSync(
+        path.join(__dirname, './common/include/frame.h'), 
+        path.join(includePath, './frame.h')
+    )
+
+    for (const file of ['sender', 'receiver', 'CMakeLists.txt']) {
+        await spawn(`Copy-Item \
+                    -Path ./examples/desktop/${file} \
+                    -Destination ${examplePath} \
+                    -Recurse \
+                    -Force`, { cwd: __dirname, shell: 'powershell.exe' })
+    }
+
+    if (!fs.existsSync(libraryPath)) {
         await spawn('Invoke-WebRequest \
             -Uri https://github.com/mycrl/distributions/releases/download/distributions/distributions-windows.zip \
             -OutFile distributions-windows.zip', { cwd: distributionsPath, shell: 'powershell.exe' })
@@ -30,37 +58,45 @@ async function build(Args) {
             -Path ./distributions-windows.zip \
             -DestinationPath ./', { cwd: distributionsPath, shell: 'powershell.exe' })
         fs.unlinkSync(path.join(distributionsPath, './distributions-windows.zip'))
-        fs.renameSync(path.join(distributionsPath, './distributions-windows'), path.join(distributionsPath, './distributions'))
+        fs.renameSync(path.join(distributionsPath, './distributions-windows'), libraryPath)
     }
 
-    fs.copyFileSync(
-        path.join(__dirname, `./target/${Args.release ? 'release' : 'debug'}/mirror.dll`),
-        path.join(distributionsPath, './distributions/mirror.dll'))
+    fs.copyFileSync(mirrorLibraryPath, path.join(libraryPath, './mirror.dll'))
 
     if (Args.example) {
         const exampleBuildPath = path.join(__dirname, './examples/desktop/build')
+        const profile = Args.release ? 'Release' : 'Debug'
+
         if (!fs.existsSync(exampleBuildPath)) {
             fs.mkdirSync(exampleBuildPath)
         }
 
-        await spawn(`cmake ${Args.release ? '-DCMAKE_BUILD_TYPE=Release' : ''} ..`, { cwd: exampleBuildPath })
+        await spawn(`cmake -DCMAKE_BUILD_TYPE=${profile} ..`, { cwd: exampleBuildPath })
         await spawn('cmake --build .', { cwd: exampleBuildPath })
-        await spawn('Copy-Item \
-            -Path ./target/distributions/* \
-            -Destination ./examples/desktop/build/Debug \
-            -Recurse \
-            -Force', { cwd: __dirname, shell: 'powershell.exe' })
+        
+        for (const project of ['sender', 'receiver']) {
+            await spawn(`Copy-Item \
+                -Path ${libraryPath}/* \
+                -Destination ${exampleBuildPath}/${project}/${profile} \
+                -Recurse \
+                -Force`, { cwd: __dirname, shell: 'powershell.exe' })
 
-        fs.copyFileSync(
-            path.join(__dirname, `./target/${Args.release ? 'release' : 'debug'}/mirror.dll`),
-            path.join(exampleBuildPath, './Debug/mirror.dll'),
-        )
-
-        if (!Args.release) {
             fs.copyFileSync(
-                path.join(__dirname, './target/debug/mirror.pdb'),
-                path.join(exampleBuildPath, './Debug/mirror.pdb'),
+                mirrorLibraryPath,
+                path.join(exampleBuildPath, project, `./${profile}/mirror.dll`),
             )
+
+            fs.copyFileSync(
+                path.join(exampleBuildPath, project, `./${profile}/${project}.exe`),
+                path.join(libraryPath, `${project}.exe`)
+            )
+
+            if (!Args.release) {
+                fs.copyFileSync(
+                    mirrorLibraryPdbPath,
+                    path.join(exampleBuildPath, project, `./${profile}/mirror.pdb`),
+                )
+            }
         }
     }
 }

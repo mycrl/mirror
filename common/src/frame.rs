@@ -47,7 +47,7 @@ impl VideoFrame {
     }
 
     /// NV12 is possibly the most commonly-used 8-bit 4:2:0 format. It is the
-    /// default for Android camera preview.[18] The entire image in Y is written
+    /// default for Android camera preview. The entire image in Y is written
     /// out, followed by interleaved lines that go U0, V0, U1, V1, etc.
     #[inline]
     pub fn get_y_planar<'a>(&'a self) -> &'a [u8] {
