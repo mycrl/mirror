@@ -26,6 +26,7 @@ pub enum DeviceKind {
     Video,
     Audio,
     Screen,
+    Window,
 }
 
 /// Indicates the system device captured by OBS, which can be a screen, camera,

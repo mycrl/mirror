@@ -11,13 +11,15 @@
 #include <libobs/obs.h>
 
 #ifdef WIN32
+#define OUTPUT_WINDOW_SOURCE	"window_capture"
 #define OUTPUT_AUDIO_SOURCE		"wasapi_output_capture"
 #define OUTPUT_MONITOR_SOURCE	"monitor_capture"
 #define OUTPUT_VIDEO_SOURCE		"dshow_input"
 #define VIDEO_SOURCE_PROPERTY	"video_device_id"
 #define MONITOR_SOURCE_PROPERTY "monitor_id"
 #define AUDIO_SOURCE_PROPERTY   "device_id"
-#else
+#define WINDOW_SOURCE_PROPERTY  "window"
+#elif LINUX
 #define OUTPUT_AUDIO_SOURCE		"pulse_output_capture"
 #endif
 
@@ -32,7 +34,8 @@ static struct
 	obs_sceneitem_t* video_scene_item;
 	obs_source_t* monitor_source;
 	obs_sceneitem_t* monitor_scene_item;
-	obs_source_t* default_audio_source;
+	obs_source_t* window_source;
+	obs_sceneitem_t* window_scene_item;
 	obs_source_t* audio_source;
 	struct OutputCallback output_callback;
 	struct VideoFrame video_frame;
@@ -41,17 +44,9 @@ static struct
 
 // update settings
 
-bool set_video_item_scale(obs_scene_t* scene, obs_sceneitem_t* item, void* _)
+void set_video_item_scale(obs_sceneitem_t* item)
 {
-	if (obs_sceneitem_is_group(item))
-	{
-		obs_sceneitem_group_enum_items(item, set_video_item_scale, nullptr);
-	}
-
-	if (obs_sceneitem_locked(item))
-	{
-		return true;
-	}
+	obs_sceneitem_set_scale_filter(item, OBS_SCALE_BILINEAR);
 
 	float width = float(GLOBAL.video_info.base_width);
 	float height = float(GLOBAL.video_info.base_height);
@@ -67,12 +62,7 @@ bool set_video_item_scale(obs_scene_t* scene, obs_sceneitem_t* item, void* _)
 	vec2_set(&info.scale, 1.0f, 1.0f);
 	vec2_set(&info.bounds, width, height);
 
-	obs_sceneitem_set_info(item, &info);
-
-	obs_data_t* states = obs_scene_save_transform_states(scene, true);
-	obs_scene_load_transform_states(obs_data_get_json(states));
-
-	return true;
+	obs_sceneitem_set_info2(item, &info);
 }
 
 void update_video_settings(struct DeviceDescription* description)
@@ -92,9 +82,9 @@ void update_video_settings(struct DeviceDescription* description)
 #endif
 
     obs_source_update(GLOBAL.video_source, settings);
-    obs_sceneitem_set_visible(GLOBAL.monitor_scene_item, false);
     obs_sceneitem_set_visible(GLOBAL.video_scene_item, true);
-    obs_set_output_source(0, GLOBAL.video_source);
+	obs_sceneitem_set_visible(GLOBAL.window_scene_item, false);
+	obs_sceneitem_set_visible(GLOBAL.monitor_scene_item, false);
 
     obs_data_release(settings);
 }
@@ -115,9 +105,30 @@ void update_monitor_settings(struct DeviceDescription* description)
     obs_source_update(GLOBAL.monitor_source, settings);
     obs_sceneitem_set_visible(GLOBAL.monitor_scene_item, true);
     obs_sceneitem_set_visible(GLOBAL.video_scene_item, false);
-    obs_set_output_source(0, GLOBAL.monitor_source);
+	obs_sceneitem_set_visible(GLOBAL.window_scene_item, false);
 
     obs_data_release(settings);
+}
+
+void update_window_settings(struct DeviceDescription* description)
+{
+	obs_data_t* settings = obs_data_create();
+	obs_data_apply(settings, obs_source_get_settings(GLOBAL.window_source));
+
+#ifdef WIN32
+	obs_data_set_bool(settings, "force_sdr", true);
+	obs_data_set_bool(settings, "compatibility", true);
+	obs_data_set_bool(settings, "capture_cursor", true);
+	obs_data_set_int(settings, "method", 2 /* METHOD_WGC */); // windows 10+ only
+	obs_data_set_string(settings, "window", description->id);
+#endif
+
+	obs_source_update(GLOBAL.window_source, settings);
+	obs_sceneitem_set_visible(GLOBAL.window_scene_item, true);
+	obs_sceneitem_set_visible(GLOBAL.video_scene_item, false);
+	obs_sceneitem_set_visible(GLOBAL.monitor_scene_item, false);
+
+	obs_data_release(settings);
 }
 
 void update_audio_settings(struct DeviceDescription* description)
@@ -237,6 +248,30 @@ int capture_init(VideoInfo* video_info, AudioInfo* audio_info)
 	{
 		return -5;
 	}
+	else
+	{
+		obs_set_output_source(0, obs_scene_get_source(GLOBAL.scene));
+	}
+
+	// window source
+	GLOBAL.window_source = obs_source_create(OUTPUT_WINDOW_SOURCE,
+											 "WindowCapture",
+											 nullptr,
+											 nullptr);
+	if (GLOBAL.window_source == nullptr)
+	{
+		return -6;
+	}
+
+	GLOBAL.window_scene_item = obs_scene_add(GLOBAL.scene, GLOBAL.window_source);
+	if (GLOBAL.window_scene_item == nullptr)
+	{
+		return -7;
+	}
+	else
+	{
+		set_video_item_scale(GLOBAL.window_scene_item);
+	}
 
 	// monitor source
 	GLOBAL.monitor_source = obs_source_create(OUTPUT_MONITOR_SOURCE,
@@ -245,13 +280,17 @@ int capture_init(VideoInfo* video_info, AudioInfo* audio_info)
 											  nullptr);
 	if (GLOBAL.monitor_source == nullptr)
 	{
-		return -6;
+		return -8;
 	}
 
 	GLOBAL.monitor_scene_item = obs_scene_add(GLOBAL.scene, GLOBAL.monitor_source);
 	if (GLOBAL.monitor_scene_item == nullptr)
 	{
-		return -7;
+		return -9;
+	}
+	else
+	{
+		set_video_item_scale(GLOBAL.monitor_scene_item);
 	}
 
 	// video source
@@ -261,46 +300,34 @@ int capture_init(VideoInfo* video_info, AudioInfo* audio_info)
 											nullptr);
 	if (GLOBAL.video_source == nullptr)
 	{
-		return -8;
+		return -10;
 	}
 
 	GLOBAL.video_scene_item = obs_scene_add(GLOBAL.scene, GLOBAL.video_source);
 	if (GLOBAL.video_scene_item == nullptr)
 	{
-		return -9;
+		return -11;
+	}
+	else
+	{
+		set_video_item_scale(GLOBAL.video_scene_item);
 	}
 
 	// create default audio source
 	obs_data_t* audio_settings = obs_data_create();
 	obs_data_set_string(audio_settings, AUDIO_SOURCE_PROPERTY, "default");
-	GLOBAL.default_audio_source = obs_source_create(OUTPUT_AUDIO_SOURCE, 
-													"DefaultAudioDevice", 
+	GLOBAL.audio_source = obs_source_create(OUTPUT_AUDIO_SOURCE, 
+													"AudioDevice", 
 													audio_settings, 
 													nullptr);
-	if (GLOBAL.default_audio_source == nullptr)
-	{
-		return -10;
-	}
-	else
-	{
-		obs_set_output_source(1, GLOBAL.default_audio_source);
-	}
-
-	// audio source
-	GLOBAL.audio_source = obs_source_create(OUTPUT_AUDIO_SOURCE,
-											"AudioCaptureDevice",
-											nullptr,
-											nullptr);
 	if (GLOBAL.audio_source == nullptr)
 	{
-		return -11;
+		return -12;
 	}
 	else
 	{
-		obs_set_output_source(2, GLOBAL.audio_source);
+		obs_set_output_source(1, GLOBAL.audio_source);
 	}
-
-	obs_scene_enum_items(GLOBAL.scene, set_video_item_scale, nullptr);
 
 	return 0;
 }
@@ -332,9 +359,14 @@ void capture_quit()
 		obs_sceneitem_release(GLOBAL.monitor_scene_item);
 	}
 
-	if (GLOBAL.default_audio_source != nullptr)
+	if (GLOBAL.window_source != nullptr)
 	{
-		obs_source_release(GLOBAL.default_audio_source);
+		obs_source_release(GLOBAL.window_source);
+	}
+
+	if (GLOBAL.window_scene_item != nullptr)
+	{
+		obs_sceneitem_release(GLOBAL.window_scene_item);
 	}
 
 	if (GLOBAL.audio_source != nullptr)
@@ -358,6 +390,10 @@ void capture_set_video_input(struct DeviceDescription* description)
 	else if (description->type == DeviceType::kDeviceTypeAudio)
 	{
 		update_audio_settings(description);
+	}
+	else if (description->type == DeviceType::kDeviceTypeWindow)
+	{
+		update_window_settings(description);
 	}
 }
 
@@ -389,6 +425,11 @@ struct DeviceList* capture_get_device_list(enum DeviceType type)
 	{
 		source = GLOBAL.audio_source;
 		key = AUDIO_SOURCE_PROPERTY;
+	}
+	else if (type == DeviceType::kDeviceTypeWindow)
+	{
+		source = GLOBAL.window_source;
+		key = WINDOW_SOURCE_PROPERTY;
 	}
 
 	obs_properties_t* properties = obs_source_properties(source);

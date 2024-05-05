@@ -34,6 +34,7 @@ enum DeviceType
 	kDeviceTypeVideo,
 	kDeviceTypeAudio,
 	kDeviceTypeScreen,
+	kDeviceTypeWindow,
 };
 
 struct DeviceDescription

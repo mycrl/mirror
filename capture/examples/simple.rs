@@ -53,7 +53,7 @@ fn main() -> anyhow::Result<()> {
         },
     })?;
 
-    let devices = DeviceManager::get_devices(DeviceKind::Screen).to_vec();
+    let devices = DeviceManager::get_devices(DeviceKind::Window).to_vec();
     for device in &devices {
         println!("> Device: name={:?}, id={:?}", device.name(), device.id());
     }
