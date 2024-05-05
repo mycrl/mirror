@@ -87,7 +87,7 @@ impl Drop for Device {
 pub struct DeviceList(pub(crate) *const RawDeviceList);
 
 impl DeviceList {
-    /// Converts the underlying reference to a Vec<Device>.
+    /// Converts the underlying reference to a `Vec<Device>`.
     ///
     /// ```
     /// get_devices(DeviceKind::Video).to_vec();
