@@ -64,8 +64,10 @@ fn main() -> anyhow::Result<()> {
         .target(&settings.target)
         .warnings(false)
         .out_dir(&settings.out_dir)
-        .file("./lib/video/encode.cpp")
-        .file("./lib/video/decode.cpp")
+        .file("./lib/video_encode.cpp")
+        .file("./lib/video_decode.cpp")
+        .file("./lib/audio_encode.cpp")
+        .file("./lib/audio_decode.cpp")
         .includes(&settings.ffmpeg_include_prefix)
         .include("../common/include")
         .compile("codec");
@@ -127,21 +129,23 @@ fn find_ffmpeg_prefix(out_dir: &str) -> anyhow::Result<(Vec<String>, Vec<String>
 
 #[cfg(target_os = "windows")]
 fn find_ffmpeg_prefix(out_dir: &str) -> anyhow::Result<(Vec<String>, Vec<String>)> {
-    if !is_exsit(&join(&out_dir, "7z.exe").unwrap()) {
+    if !is_exsit(&join(out_dir, "7z.exe").unwrap()) {
         exec(
             "Invoke-WebRequest -Uri https://www.7-zip.org/a/7zr.exe -OutFile 7z.exe",
-            &out_dir,
+            out_dir,
         )
         .expect("Unable to download 7z cli exe.");
     }
 
-    let ffmpeg_prefix = join(&out_dir, "ffmpeg-6.1.1-full_build-shared").unwrap();
+    let ffmpeg_prefix = join(out_dir, "ffmpeg-6.1.1-full_build-shared").unwrap();
     if !is_exsit(&ffmpeg_prefix) {
         exec(
-            "Invoke-WebRequest -Uri https://github.com/mycrl/mirror/releases/download/distributions/ffmpeg-6.1.1-full_build-shared.7z -OutFile ffmpeg.7z; \
+            "Invoke-WebRequest \
+                        -Uri https://github.com/mycrl/distributions/releases/download/distributions/ffmpeg-6.1.1-full_build-shared.7z \
+                        -OutFile ffmpeg.7z; \
                      ./7z.exe x ffmpeg.7z -aoa; \
                      del ffmpeg.7z",
-            &out_dir,
+            out_dir,
         )
         .expect("Unable to download ffmpeg shard release.");
     }

@@ -145,7 +145,7 @@ impl Discovery {
     pub fn set_services(&self, services: Vec<Service>) {
         log::info!("Discovery set services, services={:?}", services);
 
-        self.local_services.write().unwrap().0 = services.clone();
+        self.local_services.write().unwrap().0.clone_from(&services);
         if let Ok(pkt) = rmp_serde::encode::to_vec(&Message::Notify {
             id: self.id.0,
             services,
@@ -222,7 +222,7 @@ impl Services {
     fn diff(&self, services: &[Service]) -> Option<Vec<Service>> {
         let mut diffs = Vec::new();
         for item in services {
-            if self.0.iter().find(|value| value == &item).is_none() {
+            if !self.0.iter().any(|value| value == item) {
                 diffs.push(item.clone());
             }
         }
@@ -241,7 +241,7 @@ struct Uuid([u8; 10]);
 impl Uuid {
     fn new() -> Self {
         let mut uid = [0u8; 10];
-        (&mut uid[..8]).copy_from_slice(
+        uid[..8].copy_from_slice(
             SystemTime::now()
                 .duration_since(SystemTime::UNIX_EPOCH)
                 .unwrap()

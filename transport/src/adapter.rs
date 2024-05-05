@@ -76,6 +76,7 @@ impl ReceiverAdapterFactory for () {
 /// Because the receiver will normally join the stream in the middle of the
 /// stream, and in the face of this situation, it is necessary to process the
 /// sps and pps as well as the key frame information.
+#[allow(clippy::type_complexity)]
 pub struct StreamSenderAdapter {
     config: AtomicOption<Bytes>,
     tx: Sender<Option<(Bytes, StreamKind, u8, u64)>>,
@@ -176,11 +177,9 @@ impl StreamReceiverAdapter {
             // When keyframes are received, the video stream can be played back
             // normally without corruption.
             let mut readable = self.readable.get();
-            if flags == BufferFlag::KeyFrame as u8 {
-                if !readable {
-                    self.readable.update(true);
-                    readable = true;
-                }
+            if flags == BufferFlag::KeyFrame as u8 && !readable {
+                self.readable.update(true);
+                readable = true;
             }
 
             // In case of packet loss, no packet is sent to the decoder.

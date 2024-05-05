@@ -30,7 +30,7 @@ impl ReceiverAdapterFactory for SimpleReceiverAdapterFactory {
         let adapter_ = Arc::downgrade(&adapter);
         thread::spawn(move || {
             let child = Command::new("ffplay")
-                .args(&[
+                .args([
                     "-vcodec",
                     "h264",
                     "-fflags",

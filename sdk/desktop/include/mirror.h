@@ -31,240 +31,287 @@
 
 enum DeviceKind
 {
-    Video,
-    Audio,
-    Screem,
+	Video,
+	Audio,
+	Screen,
 };
 
 struct VideoOptions
 {
+    /// Video encoder settings, possible values are `h264_qsv”, `h264_nvenc”,
+    /// `libx264” and so on.
+	char* encoder;
+    /// Video decoder settings, possible values are `h264_qsv”, `h264_cuvid”,
+    /// `h264”, etc.
+	char* decoder;
+    /// Maximum number of B-frames, if low latency encoding is performed, it is
+    /// recommended to set it to 0 to indicate that no B-frames are encoded.
+	uint8_t max_b_frames;
+    /// Frame rate setting in seconds.
+	uint8_t frame_rate;
+    /// The width of the video.
+	uint32_t width;
+    /// The height of the video.
+	uint32_t height;
+    /// The bit rate of the video encoding.
+	uint64_t bit_rate;
+    /// Keyframe Interval, used to specify how many frames apart to output a
+    /// keyframe.
+	uint32_t key_frame_interval;
+};
+
+struct AudioOptions
+{
+    /// Video encoder settings, possible values are `h264_qsv”, `h264_nvenc”,
+    /// `libx264” and so on.
     char* encoder;
+    /// Video decoder settings, possible values are `h264_qsv”, `h264_cuvid”,
+    /// `h264”, etc.
     char* decoder;
-    uint8_t max_b_frames;
-    uint8_t frame_rate;
-    uint32_t width;
-    uint32_t height;
+    /// The sample rate of the audio, in seconds.
+    uint64_t sample_rate;
+    /// The bit rate of the video encoding.
     uint64_t bit_rate;
-    uint32_t key_frame_interval;
 };
 
 struct MirrorOptions
 {
-    VideoOptions video;
-    char* multicast;
-    size_t mtu;
+    /// Video Codec Configuration.
+	VideoOptions video;
+    /// Audio Codec Configuration.
+    AudioOptions audio;
+    /// Multicast address, e.g. `239.0.0.1`.
+	char* multicast;
+    /// The size of the maximum transmission unit of the network, which is
+    /// related to the settings of network devices such as routers or switches,
+    /// the recommended value is 1400.
+	size_t mtu;
 };
 
 struct Device
 {
-    const void* description;
+	const void* description;
 };
 
 struct Devices
 {
-    const struct Device* devices;
-    size_t capacity;
-    size_t size;
+	/// device list.
+	const struct Device* devices;
+	/// device vector capacity.
+	size_t capacity;
+	/// device vector size.
+	size_t size;
 };
 
 typedef const void* Mirror;
 typedef const void* Sender;
 typedef const void* Receiver;
-typedef bool (*ReceiverFrameCallback)(void* ctx, VideoFrame* frame);
+
+struct FrameSink
+{
+    bool (*video)(void* ctx, struct VideoFrame* frame);
+    bool (*audio)(void* ctx, struct AudioFrame* frame);
+    void* ctx;
+};
 
 extern "C"
 {
-EXPORT void quit();
-EXPORT bool init(struct MirrorOptions options);
-EXPORT const char* get_device_name(const struct Device* device);
-EXPORT enum DeviceKind get_device_kind(const struct Device* device);
-EXPORT struct Devices get_devices(enum DeviceKind kind);
-EXPORT void drop_devices(struct Devices* devices);
-EXPORT void set_input_device(const struct Device* device);
-EXPORT Mirror create_mirror();
-EXPORT void drop_mirror(Mirror mirror);
-EXPORT Sender create_sender(Mirror mirror, char* bind);
-EXPORT void close_sender(Sender sender);
-EXPORT Receiver create_receiver(Mirror mirror, char* bind, ReceiverFrameCallback proc, void* ctx);
-EXPORT void close_receiver(Receiver receiver);
+    /// Cleans up the environment when the SDK exits, and is recommended to be
+    /// called when the application exits.
+	EXPORT void quit();
+    /// Initialize the environment, which must be initialized before using the SDK.
+	EXPORT bool init(struct MirrorOptions options);
+    /// Get device name.
+	EXPORT const char* get_device_name(const struct Device* device);
+    /// Get device kind.
+	EXPORT enum DeviceKind get_device_kind(const struct Device* device);
+    /// Get devices from device manager.
+	EXPORT struct Devices get_devices(enum DeviceKind kind);
+    /// Release devices.
+	EXPORT void drop_devices(struct Devices* devices);
+    /// Setting up an input device, repeated settings for the same type of device
+    /// will overwrite the previous device.
+	EXPORT void set_input_device(const struct Device* device);
+    /// Create mirror.
+	EXPORT Mirror create_mirror();
+    /// Release mirror.
+	EXPORT void drop_mirror(Mirror mirror);
+    /// Create a sender, specify a bound NIC address, you can pass callback to
+    /// get the device screen or sound callback, callback can be null, if it is
+    /// null then it means no callback data is needed.
+	EXPORT Sender create_sender(Mirror mirror, char* bind, struct FrameSink sink);
+    /// Close sender.
+	EXPORT void close_sender(Sender sender);
+    /// Create a receiver, specify a bound NIC address, you can pass callback to
+    /// get the sender's screen or sound callback, callback can not be null.
+	EXPORT Receiver create_receiver(Mirror mirror, char* bind, struct FrameSink sink);
+    /// Close receiver.
+	EXPORT void close_receiver(Receiver receiver);
 }
 
 #ifdef __cplusplus
 
 namespace mirror
 {
-class DeviceService
-{
-public:
-    DeviceService(struct Device device): _device(device)
-    {
-    }
-    
-    std::optional<std::string> GetName()
-    {
-        auto name = get_device_name(&_device);
-        return name ? std::optional(std::string(name)) : std::nullopt;
-    }
-    
-    enum DeviceKind GetKind()
-    {
-        return get_device_kind(&_device);
-    }
-    
-    struct Device* AsRaw()
-    {
-        return &_device;
-    }
-private:
-    struct Device _device;
-};
+	class DeviceService
+	{
+	public:
+		DeviceService(struct Device device) : _device(device)
+		{}
 
-class DeviceList
-{
-public:
-    DeviceList(struct Devices devices): _devices(devices)
-    {
-        for (size_t i = 0; i < devices.size; i++)
+		std::optional<std::string> GetName()
+		{
+			auto name = get_device_name(&_device);
+			return name ? std::optional(std::string(name)) : std::nullopt;
+		}
+
+		enum DeviceKind GetKind()
+		{
+			return get_device_kind(&_device);
+		}
+
+		struct Device* AsRaw()
+		{
+			return &_device;
+		}
+	private:
+		struct Device _device;
+	};
+
+	class DeviceList
+	{
+	public:
+		DeviceList(struct Devices devices) : _devices(devices)
+		{
+			for (size_t i = 0; i < devices.size; i++)
+			{
+				device_list.push_back(DeviceService(devices.devices[i]));
+			}
+		}
+
+		~DeviceList()
+		{
+			drop_devices(&_devices);
+		}
+
+		std::vector<DeviceService> device_list = {};
+	private:
+		struct Devices _devices;
+	};
+
+	class DeviceManagerService
+	{
+	public:
+		static DeviceList GetDevices(enum DeviceKind kind)
+		{
+			return DeviceList(get_devices(kind));
+		}
+
+		static void SetInputDevice(DeviceService& device)
+		{
+			set_input_device(device.AsRaw());
+		}
+	};
+
+	bool Init(struct MirrorOptions options)
+	{
+		return init(options);
+	}
+
+	void Quit()
+	{
+		quit();
+	}
+
+	class MirrorService
+	{
+	public:
+		class MirrorSender
+		{
+		public:
+			MirrorSender(Sender sender)
+				: _sender(sender)
+			{}
+
+			void Close()
+			{
+				close_sender(_sender);
+			}
+		private:
+			Sender _sender;
+		};
+
+		class MirrorReceiver
+		{
+		public:
+			MirrorReceiver(Receiver receiver)
+				: _receiver(receiver)
+			{}
+
+			void Close()
+			{
+				close_receiver(_receiver);
+			}
+		private:
+			Receiver _receiver;
+		};
+
+        class AVFrameSink
         {
-            device_list.push_back(DeviceService(devices.devices[i]));
-        }
-    }
-    
-    ~DeviceList()
-    {
-        drop_devices(&_devices);
-    }
-    
-    std::vector<DeviceService> device_list = {};
-private:
-    struct Devices _devices;
-};
+        public:
+            virtual bool OnVideoFrame(struct VideoFrame* frame) = 0;
+            virtual bool OnAudioFrame(struct AudioFrame* frame) = 0;
+        };
 
-class DeviceManagerService
-{
-public:
-    static DeviceList GetDevices(enum DeviceKind kind)
-    {
-        return DeviceList(get_devices(kind));
-    }
-    
-    static void SetInputDevice(DeviceService& device)
-    {
-        set_input_device(device.AsRaw());
-    }
-};
+		MirrorService()
+		{
+			_mirror = create_mirror();
+			if (_mirror == nullptr)
+			{
+				throw std::runtime_error("Failed to create mirror");
+			}
+		}
 
-bool Init(struct MirrorOptions options)
-{
-    return init(options);
-}
+		~MirrorService()
+		{
+			if (_mirror != nullptr)
+			{
+				drop_mirror(_mirror);
+			}
+		}
 
-void Quit()
-{
-    quit();
-}
+		std::optional<MirrorSender> CreateSender(std::string& bind, AVFrameSink* sink)
+		{
+            FrameSink frame_sink;
+            frame_sink.video = _video_proc;
+            frame_sink.audio = _audio_proc;
+            frame_sink.ctx = static_cast<void*>(sink);
+			Sender sender = create_sender(_mirror, const_cast<char*>(bind.c_str()), frame_sink);
+			return sender != nullptr ? std::optional(MirrorSender(sender)) : std::nullopt;
+		}
 
-class MirrorService
-{
-public:
-    class FrameProcContext
-    {
-    public:
-        typedef std::function<bool (void*, struct VideoFrame*)> FrameCallback;
-        
-        FrameProcContext(FrameCallback callback, void* ctx)
-        : _callback(callback), _ctx(ctx)
-        {
-        }
-        
-        bool On(struct VideoFrame* frame)
-        {
-            return _callback(_ctx, frame);
-        }
-    private:
-        FrameCallback _callback;
-        void* _ctx;
-    };
+		std::optional<MirrorReceiver> CreateReceiver(std::string& bind, AVFrameSink* sink)
+		{
+			FrameSink frame_sink;
+            frame_sink.video = _video_proc;
+            frame_sink.audio = _audio_proc;
+            frame_sink.ctx = static_cast<void*>(sink);
+			Receiver receiver = create_receiver(_mirror, const_cast<char*>(bind.c_str()), frame_sink);
+			return receiver != nullptr ? std::optional(MirrorReceiver(receiver)) : std::nullopt;
+		}
+	private:
+		static bool _video_proc(void* ctx, struct VideoFrame* frame)
+		{
+			return ((AVFrameSink*)ctx)->OnVideoFrame(frame);
+		}
 
-    class MirrorSender
-    {
-    public:
-        MirrorSender(Sender sender): _sender(sender)
-        {
-        }
+        static bool _audio_proc(void* ctx, struct AudioFrame* frame)
+		{
+			return ((AVFrameSink*)ctx)->OnAudioFrame(frame);
+		}
 
-        void Close()
-        {
-            close_sender(_sender);
-        }
-    private:
-        Sender _sender;
-    };
-
-    class MirrorReceiver
-    {
-    public:
-        MirrorReceiver(Receiver receiver, FrameProcContext* ctx)
-            : _receiver(receiver), _ctx(ctx)
-        {
-        }
-
-        ~MirrorReceiver()
-        {
-            if (_ctx != nullptr)
-            {
-                delete _ctx;
-            }
-        }
-
-        void Close()
-        {
-            close_receiver(_receiver);
-        }
-    private:
-        Receiver _receiver;
-        FrameProcContext* _ctx;
-    };
-
-    MirrorService()
-    {
-        _mirror = create_mirror();
-        if (_mirror == nullptr)
-        {
-            throw std::runtime_error("Failed to create mirror");
-        }
-    }
-    
-    ~MirrorService()
-    {
-        if (_mirror != nullptr)
-        {
-            drop_mirror(_mirror);
-        }
-    }
-    
-    std::optional<MirrorSender> CreateSender(std::string& bind)
-    {
-        Sender sender = create_sender(_mirror, const_cast<char*>(bind.c_str()));
-        return sender ? std::optional(MirrorSender(sender)) : std::nullopt;
-    }
-    
-    std::optional<MirrorReceiver> CreateReceiver(std::string& bind,
-                        FrameProcContext::FrameCallback callback,
-                        void* ctx)
-    {
-        FrameProcContext* ctx_ = new FrameProcContext(callback, ctx);
-        Receiver receiver = create_receiver(_mirror, const_cast<char*>(bind.c_str()), _proc, ctx_);
-        return receiver ? std::optional(MirrorReceiver(receiver, ctx_)) : std::nullopt;
-    }
-private:
-    static bool _proc(void* ctx, struct VideoFrame* frame)
-    {
-        return ((FrameProcContext*)ctx)->On(frame);
-    }
-    
-    Mirror _mirror = nullptr;
-};
+		Mirror _mirror = nullptr;
+	};
 }
 
 #endif
