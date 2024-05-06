@@ -46,6 +46,14 @@ if (NOT EXISTS "${THIRD_PARTY_DIR}/ffmpeg-6.1.1-full_build-shared")
     endif()
 endif()
 
+if (NOT EXISTS "${THIRD_PARTY_DIR}/libyuv")
+    if (WIN32)
+        execute_process(
+            WORKING_DIRECTORY "${THIRD_PARTY_DIR}"
+            COMMAND powershell.exe -Command "git clone --branch stable https://chromium.googlesource.com/libyuv/libyuv")
+    endif()
+endif()
+
 add_library(codec STATIC 
             video_decode.cpp
             video_encode.cpp
@@ -54,6 +62,7 @@ add_library(codec STATIC
             codec.h)
 
 include_directories("${THIRD_PARTY_DIR}/ffmpeg-6.1.1-full_build-shared/include"
+                    "${THIRD_PARTY_DIR}/libyuv/include"
                     "../../common/include")
 
 target_link_directories(codec PRIVATE "${THIRD_PARTY_DIR}/ffmpeg-6.1.1-full_build-shared/lib")

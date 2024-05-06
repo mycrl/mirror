@@ -59,6 +59,32 @@ fn main() -> anyhow::Result<()> {
     println!("cargo:rerun-if-changed=./build.rs");
 
     let settings = Settings::build()?;
+    if !is_exsit(&join(
+        &settings.out_dir,
+        if cfg!(target_os = "windows") {
+            "yuv-windows-x86_64.lib"
+        } else {
+            "libyuv-linux-x86_64.a"
+        },
+    )?) {
+        if cfg!(target_os = "windows") {
+            exec("Invoke-WebRequest \
+                -Uri https://github.com/mycrl/libyuv-rs/releases/download/v0.1.2/yuv-windows-x86_64.lib \
+                -OutFile yuv.lib", &settings.out_dir)?;
+        } else {
+            exec(
+                "wget \
+                https://github.com/mycrl/libyuv-rs/releases/download/v0.1.2/libyuv-linux-x86_64.a \
+                -O libyuv.a",
+                &settings.out_dir,
+            )?;
+        }
+    }
+
+    if !is_exsit(&join(&settings.out_dir, "./libyuv")?) {
+        exec("git clone --branch stable https://chromium.googlesource.com/libyuv/libyuv", &settings.out_dir)?;
+    }
+
     cc::Build::new()
         .cpp(true)
         .std("c++20")
@@ -73,6 +99,7 @@ fn main() -> anyhow::Result<()> {
         .file("./lib/audio_decode.cpp")
         .includes(&settings.ffmpeg_include_prefix)
         .include("../common/include")
+        .include(&join(&settings.out_dir, "./libyuv/include")?)
         .compile("codec");
 
     println!("cargo:rustc-link-search=all={}", &settings.out_dir);
@@ -83,6 +110,7 @@ fn main() -> anyhow::Result<()> {
     println!("cargo:rustc-link-lib=avcodec");
     println!("cargo:rustc-link-lib=avutil");
     println!("cargo:rustc-link-lib=codec");
+    println!("cargo:rustc-link-lib=yuv");
     Ok(())
 }
 

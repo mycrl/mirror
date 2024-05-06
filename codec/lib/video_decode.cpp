@@ -7,6 +7,8 @@
 
 #include "./codec.h"
 
+#include <libyuv.h>
+
 struct VideoDecoder* codec_create_video_decoder(const char* codec_name)
 {
 	struct VideoDecoder* codec = new struct VideoDecoder;
@@ -24,10 +26,6 @@ struct VideoDecoder* codec_create_video_decoder(const char* codec_name)
 	{
 		codec_release_video_decoder(codec);
 		return nullptr;
-	}
-	else
-	{
-		codec->context->pix_fmt = AV_PIX_FMT_NV12;
 	}
 
 	if (avcodec_open2(codec->context, codec->codec, nullptr) != 0)
@@ -138,9 +136,48 @@ struct VideoFrame* codec_video_decoder_read_frame(struct VideoDecoder* codec)
 
 	codec->output_frame->rect.width = codec->frame->width;
 	codec->output_frame->rect.height = codec->frame->height;
-	codec->output_frame->data[0] = codec->frame->data[0];
-	codec->output_frame->data[1] = codec->frame->data[1];
-	codec->output_frame->linesize[0] = codec->frame->linesize[0];
-	codec->output_frame->linesize[1] = codec->frame->linesize[1];
+
+	if (codec->frame->format != AV_PIX_FMT_NV12)
+	{
+		if (codec->output_frame->data[0] == nullptr)
+		{
+			size_t size = codec->frame->width * codec->frame->height * 4;
+			codec->output_frame->linesize[0] = codec->frame->width;
+			codec->output_frame->linesize[1] = codec->frame->width;
+
+			codec->output_frame->data[0] = (uint8_t*)malloc(sizeof(uint8_t) * size);
+			if (codec->output_frame->data[0] == nullptr)
+			{
+				return nullptr;
+			}
+
+			codec->output_frame->data[1] = (uint8_t*)malloc(sizeof(uint8_t) * size);
+			if (codec->output_frame->data[1] == nullptr)
+			{
+				return nullptr;
+			}
+		}
+
+		libyuv::I420ToNV12(codec->frame->data[0],
+						   codec->frame->linesize[0],
+						   codec->frame->data[1],
+						   codec->frame->linesize[1],
+						   codec->frame->data[2],
+						   codec->frame->linesize[2],
+						   codec->output_frame->data[0],
+						   codec->output_frame->linesize[0],
+						   codec->output_frame->data[1],
+						   codec->output_frame->linesize[1],
+						   codec->frame->width,
+						   codec->frame->height);
+	}
+	else
+	{
+		codec->output_frame->data[0] = codec->frame->data[0];
+		codec->output_frame->data[1] = codec->frame->data[1];
+		codec->output_frame->linesize[0] = codec->frame->linesize[0];
+		codec->output_frame->linesize[1] = codec->frame->linesize[1];
+	}
+
 	return codec->output_frame;
 }

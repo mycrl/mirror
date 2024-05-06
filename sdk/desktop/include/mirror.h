@@ -132,7 +132,7 @@ extern "C"
 	EXPORT void drop_devices(struct Devices* devices);
     /// Setting up an input device, repeated settings for the same type of device
     /// will overwrite the previous device.
-	EXPORT void set_input_device(const struct Device* device);
+	EXPORT bool set_input_device(const struct Device* device);
     /// Create mirror.
 	EXPORT Mirror create_mirror();
     /// Release mirror.
@@ -208,9 +208,9 @@ namespace mirror
 			return DeviceList(get_devices(kind));
 		}
 
-		static void SetInputDevice(DeviceService& device)
+		static bool SetInputDevice(DeviceService& device)
 		{
-			set_input_device(device.AsRaw());
+			return set_input_device(device.AsRaw());
 		}
 	};
 

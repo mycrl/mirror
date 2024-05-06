@@ -82,7 +82,7 @@ int main()
 	sdl_rect.h = 720;
 
 	MirrorOptions options;
-	options.video.encoder = const_cast<char*>("h264_qsv");
+	options.video.encoder = const_cast<char*>("libx264");
 	options.video.decoder = const_cast<char*>("h264");
 	options.video.width = sdl_rect.w;
 	options.video.height = sdl_rect.h;
