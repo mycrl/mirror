@@ -34,6 +34,7 @@ enum DeviceKind
 	Video,
 	Audio,
 	Screen,
+    Window,
 };
 
 struct VideoOptions

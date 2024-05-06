@@ -83,7 +83,7 @@ int main()
 
 	MirrorOptions options;
 	options.video.encoder = const_cast<char*>("h264_qsv");
-	options.video.decoder = const_cast<char*>("h264_qsv");
+	options.video.decoder = const_cast<char*>("h264");
 	options.video.width = sdl_rect.w;
 	options.video.height = sdl_rect.h;
 	options.video.frame_rate = 30;
@@ -98,7 +98,7 @@ int main()
 	options.mtu = 1500;
 	mirror::Init(options);
 
-	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER))
+	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER))
 	{
 		return -1;
 	}
