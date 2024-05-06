@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use std::{env, fs, path::Path, process::Command};
 
 use anyhow::anyhow;
@@ -51,6 +53,7 @@ fn find_library(name: &str) -> (Vec<String>, Vec<String>) {
     )
 }
 
+#[cfg(any(target_os = "windows", target_os = "linux"))]
 fn main() -> anyhow::Result<()> {
     println!("cargo:rerun-if-changed=./lib");
     println!("cargo:rerun-if-changed=./build.rs");
@@ -92,6 +95,7 @@ struct Settings {
 }
 
 impl Settings {
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
     fn build() -> anyhow::Result<Self> {
         let _ = dotenv();
         let out_dir = env::var("OUT_DIR")?;
@@ -114,17 +118,6 @@ impl Settings {
                 .unwrap_or(true),
         })
     }
-}
-
-#[cfg(target_os = "macos")]
-fn find_ffmpeg_prefix(out_dir: &str) -> anyhow::Result<(Vec<String>, Vec<String>)> {
-    let ffmpeg_prefix = exec("brew --prefix ffmpeg", out_dir)
-        .expect("You don't have ffmpeg installed, please install ffmpeg: `brew install ffmpeg`.");
-
-    Ok((
-        vec![join(ffmpeg_prefix.trim(), "./include")?],
-        vec![join(ffmpeg_prefix.trim(), "./lib")?],
-    ))
 }
 
 #[cfg(target_os = "windows")]
@@ -169,3 +162,6 @@ fn find_ffmpeg_prefix(out_dir: &str) -> anyhow::Result<(Vec<String>, Vec<String>
 
     Ok((includes, libs))
 }
+
+#[cfg(target_os = "macos")]
+fn main() {}

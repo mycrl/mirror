@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use std::{env, fs, path::Path, process::Command};
 
 use anyhow::anyhow;
@@ -10,7 +12,6 @@ fn join(root: &str, next: &str) -> anyhow::Result<String> {
         .to_string())
 }
 
-#[allow(unused)]
 fn is_exsit(dir: &str) -> bool {
     fs::metadata(dir).is_ok()
 }
@@ -30,6 +31,7 @@ fn exec(command: &str, work_dir: &str) -> anyhow::Result<String> {
     }
 }
 
+#[cfg(target_os = "windows")]
 fn main() -> anyhow::Result<()> {
     println!("cargo:rerun-if-changed=./lib");
     println!("cargo:rerun-if-changed=./build.rs");
@@ -84,3 +86,6 @@ fn main() -> anyhow::Result<()> {
     println!("cargo:rustc-link-lib=obs");
     Ok(())
 }
+
+#[cfg(target_os = "macos")]
+fn main() {}

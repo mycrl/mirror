@@ -1,3 +1,5 @@
+#![cfg(all(target_os = "windows", target_os = "linux"))]
+
 mod mirror;
 
 use std::{

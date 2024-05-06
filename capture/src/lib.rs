@@ -1,3 +1,5 @@
+#![cfg(target_os = "windows")]
+
 mod device;
 mod manager;
 

@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use std::{
     sync::{Arc, Mutex},
     thread,
@@ -11,10 +13,12 @@ use minifb::{Window, WindowOptions};
 const WIDTH: usize = 1280;
 const HEIGHT: usize = 720;
 
+#[cfg(target_os = "windows")]
 struct FrameSink {
     frame: Arc<Mutex<Vec<u8>>>,
 }
 
+#[cfg(target_os = "windows")]
 impl AVFrameSink for FrameSink {
     fn video(&self, frmae: &VideoFrame) {
         let mut frame_ = self.frame.lock().unwrap();
@@ -34,6 +38,7 @@ impl AVFrameSink for FrameSink {
     }
 }
 
+#[cfg(target_os = "windows")]
 fn main() -> anyhow::Result<()> {
     {
         let mut path = std::env::current_exe()?;
@@ -77,3 +82,6 @@ fn main() -> anyhow::Result<()> {
         thread::sleep(Duration::from_millis(1000 / 30));
     }
 }
+
+#[cfg(target_os = "macos")]
+fn main() {}
