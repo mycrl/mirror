@@ -1,4 +1,4 @@
-#![cfg(all(target_os = "windows", target_os = "linux"))]
+#![cfg(any(target_os = "windows", target_os = "linux"))]
 
 mod mirror;
 
