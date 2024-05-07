@@ -11,8 +11,8 @@
 
 struct VideoDecoder* codec_create_video_decoder(const char* codec_name)
 {
-	struct VideoDecoder* codec = new struct VideoDecoder;
-	codec->output_frame = new struct VideoFrame;
+	struct VideoDecoder* codec = new VideoDecoder{};
+	codec->output_frame = new VideoFrame{};
 
 	codec->codec = avcodec_find_decoder_by_name(codec_name);
 	if (codec->codec == nullptr)
@@ -66,6 +66,12 @@ struct VideoDecoder* codec_create_video_decoder(const char* codec_name)
 
 void codec_release_video_decoder(struct VideoDecoder* codec)
 {
+	if (codec->frame->format != AV_PIX_FMT_NV12)
+	{
+		delete codec->output_frame->data[0];
+		delete codec->output_frame->data[1];
+	}
+
 	if (codec->context != nullptr)
 	{
 		avcodec_free_context(&codec->context);
@@ -144,18 +150,8 @@ struct VideoFrame* codec_video_decoder_read_frame(struct VideoDecoder* codec)
 			size_t size = codec->frame->width * codec->frame->height * 4;
 			codec->output_frame->linesize[0] = codec->frame->width;
 			codec->output_frame->linesize[1] = codec->frame->width;
-
-			codec->output_frame->data[0] = (uint8_t*)malloc(sizeof(uint8_t) * size);
-			if (codec->output_frame->data[0] == nullptr)
-			{
-				return nullptr;
-			}
-
-			codec->output_frame->data[1] = (uint8_t*)malloc(sizeof(uint8_t) * size);
-			if (codec->output_frame->data[1] == nullptr)
-			{
-				return nullptr;
-			}
+			codec->output_frame->data[0] = new uint8_t[size];
+			codec->output_frame->data[1] = new uint8_t[size];
 		}
 
 		libyuv::I420ToNV12(codec->frame->data[0],

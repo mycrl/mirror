@@ -15,7 +15,7 @@ const HEIGHT: usize = 720;
 
 #[cfg(target_os = "windows")]
 struct FrameSink {
-    frame: Arc<Mutex<Vec<u8>>>,
+    frame: Arc<Mutex<Vec<u32>>>,
 }
 
 #[cfg(target_os = "windows")]
@@ -29,12 +29,14 @@ impl AVFrameSink for FrameSink {
                 frmae.linesize[0] as i32,
                 frmae.data[1],
                 frmae.linesize[1] as i32,
-                frame_.as_mut_ptr(),
+                frame_.as_mut_ptr() as *mut u8,
                 WIDTH as i32 * 4,
                 WIDTH as i32,
                 HEIGHT as i32,
             );
         }
+
+        drop(frame_)
     }
 }
 
@@ -46,24 +48,24 @@ fn main() -> anyhow::Result<()> {
         std::env::set_current_dir(path)?;
     }
 
-    let frame = Arc::new(Mutex::new(vec![0u8; WIDTH * HEIGHT * 4]));
+    let frame = Arc::new(Mutex::new(vec![0u32; WIDTH * HEIGHT]));
     init(DeviceManagerOptions {
         video: VideoInfo {
-            fps: 30,
             width: WIDTH as u32,
             height: HEIGHT as u32,
+            fps: 30,
         },
         audio: AudioInfo {
             samples_per_sec: 48000,
         },
     })?;
 
-    let devices = DeviceManager::get_devices(DeviceKind::Window).to_vec();
+    let devices = DeviceManager::get_devices(DeviceKind::Screen)?.to_vec();
     for device in &devices {
         println!("> Device: name={:?}, id={:?}", device.name(), device.id());
     }
 
-    DeviceManager::set_input(&devices[0]);
+    DeviceManager::set_input(&devices[0])?;
     set_frame_sink(FrameSink {
         frame: frame.clone(),
     });
@@ -72,13 +74,7 @@ fn main() -> anyhow::Result<()> {
     window.limit_update_rate(Some(Duration::from_millis(1000 / 30)));
 
     loop {
-        {
-            let g_frame = frame.lock().unwrap();
-            let (_, shorts, _) = unsafe { g_frame.align_to::<u32>() };
-            window.update_with_buffer(shorts, WIDTH, HEIGHT)?;
-            drop(g_frame);
-        }
-
+        window.update_with_buffer(frame.lock().unwrap().as_ref(), WIDTH, HEIGHT)?;
         thread::sleep(Duration::from_millis(1000 / 30));
     }
 }

@@ -1,6 +1,6 @@
 #![cfg(any(target_os = "windows", target_os = "linux"))]
 
-mod mirror;
+pub mod mirror;
 
 use std::{
     ffi::{c_char, c_void},
@@ -86,12 +86,6 @@ impl TryInto<VideoOptions> for RawVideoOptions {
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct RawAudioOptions {
-    /// Video encoder settings, possible values are `h264_qsv”, `h264_nvenc”,
-    /// `libx264” and so on.
-    pub encoder: *const c_char,
-    /// Video decoder settings, possible values are `h264_qsv”, `h264_cuvid”,
-    /// `h264”, etc.
-    pub decoder: *const c_char,
     /// The sample rate of the audio, in seconds.
     pub sample_rate: u64,
     /// The bit rate of the video encoding.
@@ -101,16 +95,14 @@ pub struct RawAudioOptions {
 unsafe impl Send for RawAudioOptions {}
 unsafe impl Sync for RawAudioOptions {}
 
-impl TryInto<AudioOptions> for RawAudioOptions {
-    type Error = anyhow::Error;
-
-    fn try_into(self) -> Result<AudioOptions, Self::Error> {
-        Ok(AudioOptions {
-            encoder: Strings::from(self.encoder).to_string()?,
-            decoder: Strings::from(self.decoder).to_string()?,
+impl Into<AudioOptions> for RawAudioOptions {
+    fn into(self) -> AudioOptions {
+        AudioOptions {
+            encoder: "libopus".to_string(),
+            decoder: "libopus".to_string(),
             sample_rate: self.sample_rate,
             bit_rate: self.bit_rate,
-        })
+        }
     }
 }
 
@@ -147,19 +139,41 @@ impl TryInto<MirrorOptions> for RawMirrorOptions {
         Ok(MirrorOptions {
             multicast: Strings::from(self.multicast).to_string()?,
             video: self.video.try_into()?,
-            audio: self.audio.try_into()?,
+            audio: self.audio.into(),
             mtu: self.mtu,
         })
     }
 }
 
+/// Automatically search for encoders, limited hardware, fallback to software
+/// implementation if hardware acceleration unit is not found.
+///
+/// ```c
+/// EXPORT const char* mirror_find_video_encoder();
+/// ```
+#[no_mangle]
+extern "C" fn mirror_find_video_encoder() -> *const c_char {
+    unsafe { codec::video::codec_find_video_encoder() }
+}
+
+/// Automatically search for decoders, limited hardware, fallback to software
+/// implementation if hardware acceleration unit is not found.
+///
+/// ```c
+/// EXPORT const char* mirror_find_video_decoder();
+/// ```
+#[no_mangle]
+extern "C" fn mirror_find_video_decoder() -> *const c_char {
+    unsafe { codec::video::codec_find_video_decoder() }
+}
+
 /// Initialize the environment, which must be initialized before using the SDK.
 ///
 /// ```c
-/// EXPORT bool init(struct MirrorOptions options);
+/// EXPORT bool mirror_init(struct MirrorOptions options);
 /// ```
 #[no_mangle]
-extern "C" fn init(options: RawMirrorOptions) -> bool {
+extern "C" fn mirror_init(options: RawMirrorOptions) -> bool {
     checker((|| mirror::init(options.try_into()?))()).is_ok()
 }
 
@@ -167,20 +181,20 @@ extern "C" fn init(options: RawMirrorOptions) -> bool {
 /// called when the application exits.
 ///
 /// ```c
-/// EXPORT void quit();
+/// EXPORT void mirror_quit();
 /// ```
 #[no_mangle]
-extern "C" fn quit() {
+extern "C" fn mirror_quit() {
     mirror::quit()
 }
 
 /// Get device name.
 ///
 /// ```c
-/// EXPORT const char* get_device_name(const struct Device* device);
+/// EXPORT const char* mirror_get_device_name(const struct Device* device);
 /// ```
 #[no_mangle]
-extern "C" fn get_device_name(device: *const Device) -> *const c_char {
+extern "C" fn mirror_get_device_name(device: *const Device) -> *const c_char {
     assert!(!device.is_null());
 
     unsafe { &*device }.c_name()
@@ -189,10 +203,10 @@ extern "C" fn get_device_name(device: *const Device) -> *const c_char {
 /// Get device kind.
 ///
 /// ```c
-/// EXPORT enum DeviceKind get_device_kind(const struct Device* device);
+/// EXPORT enum DeviceKind mirror_get_device_kind(const struct Device* device);
 /// ```
 #[no_mangle]
-extern "C" fn get_device_kind(device: *const Device) -> DeviceKind {
+extern "C" fn mirror_get_device_kind(device: *const Device) -> DeviceKind {
     assert!(!device.is_null());
 
     unsafe { &*device }.kind()
@@ -208,13 +222,17 @@ pub struct RawDevices {
 /// Get devices from device manager.
 ///
 /// ```c
-/// EXPORT struct Devices get_devices(enum DeviceKind kind);
+/// EXPORT struct Devices mirror_get_devices(enum DeviceKind kind);
 /// ```
 #[no_mangle]
-extern "C" fn get_devices(kind: DeviceKind) -> RawDevices {
+extern "C" fn mirror_get_devices(kind: DeviceKind) -> RawDevices {
     log::info!("get devices: kind={:?}", kind);
 
-    let devices = DeviceManager::get_devices(kind).to_vec();
+    let devices = match checker(DeviceManager::get_devices(kind)) {
+        Ok(it) => it.to_vec(),
+        Err(_) => Vec::new(),
+    };
+
     let raw_devices = RawDevices {
         capacity: devices.capacity(),
         list: devices.as_ptr(),
@@ -235,10 +253,10 @@ extern "C" fn get_devices(kind: DeviceKind) -> RawDevices {
 /// Release devices.
 ///
 /// ```c
-/// EXPORT void drop_devices(struct Devices* devices);
+/// EXPORT void mirror_drop_devices(struct Devices* devices);
 /// ```
 #[no_mangle]
-extern "C" fn drop_devices(devices: *const RawDevices) {
+extern "C" fn mirror_drop_devices(devices: *const RawDevices) {
     assert!(!devices.is_null());
 
     let devices = unsafe { &*devices };
@@ -249,13 +267,13 @@ extern "C" fn drop_devices(devices: *const RawDevices) {
 /// will overwrite the previous device.
 ///
 /// ```c
-/// EXPORT void set_input_device(const struct Device* device);
+/// EXPORT void mirror_set_input_device(const struct Device* device);
 /// ```
 #[no_mangle]
-extern "C" fn set_input_device(device: *const Device) {
+extern "C" fn mirror_set_input_device(device: *const Device) -> bool {
     assert!(!device.is_null());
 
-    mirror::set_input_device(unsafe { &*device });
+    checker(mirror::set_input_device(unsafe { &*device })).is_ok()
 }
 
 #[repr(C)]
@@ -266,10 +284,10 @@ pub struct RawMirror {
 /// Create mirror.
 ///
 /// ```c
-/// EXPORT Mirror create_mirror();
+/// EXPORT Mirror mirror_create();
 /// ```
 #[no_mangle]
-extern "C" fn create_mirror() -> *const RawMirror {
+extern "C" fn mirror_create() -> *const RawMirror {
     checker(Mirror::new())
         .map(|mirror| Box::into_raw(Box::new(RawMirror { mirror })))
         .unwrap_or_else(|_| null_mut()) as *const _
@@ -278,10 +296,10 @@ extern "C" fn create_mirror() -> *const RawMirror {
 /// Release mirror.
 ///
 /// ```c
-/// EXPORT void drop_mirror(Mirror mirror);
+/// EXPORT void mirror_drop(Mirror mirror);
 /// ```
 #[no_mangle]
-extern "C" fn drop_mirror(mirror: *const RawMirror) {
+extern "C" fn mirror_drop(mirror: *const RawMirror) {
     assert!(!mirror.is_null());
 
     drop(unsafe { Box::from_raw(mirror as *mut RawMirror) });
@@ -328,10 +346,10 @@ pub struct RawSender {
 /// null then it means no callback data is needed.
 ///
 /// ```c
-/// EXPORT Sender create_sender(Mirror mirror, char* bind, ReceiverFrameCallback proc, void* ctx);
+/// EXPORT Sender mirror_create_sender(Mirror mirror, char* bind, ReceiverFrameCallback proc, void* ctx);
 /// ```
 #[no_mangle]
-extern "C" fn create_sender(
+extern "C" fn mirror_create_sender(
     mirror: *const RawMirror,
     bind: *const c_char,
     sink: RawFrameSink,
@@ -355,13 +373,15 @@ extern "C" fn create_sender(
 /// Close sender.
 ///
 /// ```c
-/// EXPORT void close_sender(Sender sender);
+/// EXPORT void mirror_close_sender(Sender sender);
 /// ```
 #[no_mangle]
-extern "C" fn close_sender(sender: *const RawSender) {
+extern "C" fn mirror_close_sender(sender: *const RawSender) {
     assert!(!sender.is_null());
 
-    drop(unsafe { Box::from_raw(sender as *mut RawSender) });
+    unsafe { Box::from_raw(sender as *mut RawSender) }
+        .adapter
+        .close();
 
     log::info!("close sender");
 }
@@ -375,10 +395,10 @@ pub struct RawReceiver {
 /// get the sender's screen or sound callback, callback can not be null.
 ///
 /// ```c
-/// EXPORT Receiver create_receiver(Mirror mirror, char* bind, ReceiverFrameCallback proc, void* ctx);
+/// EXPORT Receiver mirror_create_receiver(Mirror mirror, char* bind, ReceiverFrameCallback proc, void* ctx);
 /// ```
 #[no_mangle]
-extern "C" fn create_receiver(
+extern "C" fn mirror_create_receiver(
     mirror: *const RawMirror,
     bind: *const c_char,
     sink: RawFrameSink,
@@ -402,13 +422,15 @@ extern "C" fn create_receiver(
 /// Close receiver.
 ///
 /// ```c
-/// EXPORT void close_receiver(Receiver receiver);
+/// EXPORT void mirror_close_receiver(Receiver receiver);
 /// ```
 #[no_mangle]
-extern "C" fn close_receiver(receiver: *const RawReceiver) {
+extern "C" fn mirror_close_receiver(receiver: *const RawReceiver) {
     assert!(!receiver.is_null());
 
-    drop(unsafe { Box::from_raw(receiver as *mut RawReceiver) });
+    unsafe { Box::from_raw(receiver as *mut RawReceiver) }
+        .adapter
+        .close();
 
     log::info!("close receiver");
 }

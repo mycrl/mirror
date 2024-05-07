@@ -59,6 +59,7 @@ add_library(codec STATIC
             video_encode.cpp
             audio_decode.cpp
             audio_encode.cpp
+            codec.cpp
             codec.h)
 
 include_directories("${THIRD_PARTY_DIR}/ffmpeg-6.1.1-full_build-shared/include"

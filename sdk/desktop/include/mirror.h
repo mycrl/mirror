@@ -63,12 +63,6 @@ struct VideoOptions
 
 struct AudioOptions
 {
-    /// Video encoder settings, possible values are `h264_qsv”, `h264_nvenc”,
-    /// `libx264” and so on.
-    char* encoder;
-    /// Video decoder settings, possible values are `h264_qsv”, `h264_cuvid”,
-    /// `h264”, etc.
-    char* decoder;
     /// The sample rate of the audio, in seconds.
     uint64_t sample_rate;
     /// The bit rate of the video encoding.
@@ -117,37 +111,43 @@ struct FrameSink
 
 extern "C"
 {
+    /// Automatically search for encoders, limited hardware, fallback to software
+    /// implementation if hardware acceleration unit is not found.
+    EXPORT const char* mirror_find_video_encoder();
+    /// Automatically search for decoders, limited hardware, fallback to software
+    /// implementation if hardware acceleration unit is not found.
+    EXPORT const char* mirror_find_video_decoder();
     /// Cleans up the environment when the SDK exits, and is recommended to be
     /// called when the application exits.
-	EXPORT void quit();
+	EXPORT void mirror_quit();
     /// Initialize the environment, which must be initialized before using the SDK.
-	EXPORT bool init(struct MirrorOptions options);
+	EXPORT bool mirror_init(struct MirrorOptions options);
     /// Get device name.
-	EXPORT const char* get_device_name(const struct Device* device);
+	EXPORT const char* mirror_get_device_name(const struct Device* device);
     /// Get device kind.
-	EXPORT enum DeviceKind get_device_kind(const struct Device* device);
+	EXPORT enum DeviceKind mirror_get_device_kind(const struct Device* device);
     /// Get devices from device manager.
-	EXPORT struct Devices get_devices(enum DeviceKind kind);
+	EXPORT struct Devices mirror_get_devices(enum DeviceKind kind);
     /// Release devices.
-	EXPORT void drop_devices(struct Devices* devices);
+	EXPORT void mirror_drop_devices(struct Devices* devices);
     /// Setting up an input device, repeated settings for the same type of device
     /// will overwrite the previous device.
-	EXPORT bool set_input_device(const struct Device* device);
+	EXPORT bool mirror_set_input_device(const struct Device* device);
     /// Create mirror.
-	EXPORT Mirror create_mirror();
+	EXPORT Mirror mirror_create();
     /// Release mirror.
-	EXPORT void drop_mirror(Mirror mirror);
+	EXPORT void mirror_drop(Mirror mirror);
     /// Create a sender, specify a bound NIC address, you can pass callback to
     /// get the device screen or sound callback, callback can be null, if it is
     /// null then it means no callback data is needed.
-	EXPORT Sender create_sender(Mirror mirror, char* bind, struct FrameSink sink);
+	EXPORT Sender mirror_create_sender(Mirror mirror, char* bind, struct FrameSink sink);
     /// Close sender.
-	EXPORT void close_sender(Sender sender);
+	EXPORT void mirror_close_sender(Sender sender);
     /// Create a receiver, specify a bound NIC address, you can pass callback to
     /// get the sender's screen or sound callback, callback can not be null.
-	EXPORT Receiver create_receiver(Mirror mirror, char* bind, struct FrameSink sink);
+	EXPORT Receiver mirror_create_receiver(Mirror mirror, char* bind, struct FrameSink sink);
     /// Close receiver.
-	EXPORT void close_receiver(Receiver receiver);
+	EXPORT void mirror_close_receiver(Receiver receiver);
 }
 
 #ifdef __cplusplus
@@ -162,13 +162,13 @@ namespace mirror
 
 		std::optional<std::string> GetName()
 		{
-			auto name = get_device_name(&_device);
+			auto name = mirror_get_device_name(&_device);
 			return name ? std::optional(std::string(name)) : std::nullopt;
 		}
 
 		enum DeviceKind GetKind()
 		{
-			return get_device_kind(&_device);
+			return mirror_get_device_kind(&_device);
 		}
 
 		struct Device* AsRaw()
@@ -192,7 +192,7 @@ namespace mirror
 
 		~DeviceList()
 		{
-			drop_devices(&_devices);
+			mirror_drop_devices(&_devices);
 		}
 
 		std::vector<DeviceService> device_list = {};
@@ -205,23 +205,23 @@ namespace mirror
 	public:
 		static DeviceList GetDevices(enum DeviceKind kind)
 		{
-			return DeviceList(get_devices(kind));
+			return DeviceList(mirror_get_devices(kind));
 		}
 
 		static bool SetInputDevice(DeviceService& device)
 		{
-			return set_input_device(device.AsRaw());
+			return mirror_set_input_device(device.AsRaw());
 		}
 	};
 
 	bool Init(struct MirrorOptions options)
 	{
-		return init(options);
+		return mirror_init(options);
 	}
 
 	void Quit()
 	{
-		quit();
+		mirror_quit();
 	}
 
 	class MirrorService
@@ -236,7 +236,7 @@ namespace mirror
 
 			void Close()
 			{
-				close_sender(_sender);
+				mirror_close_sender(_sender);
 			}
 		private:
 			Sender _sender;
@@ -251,7 +251,7 @@ namespace mirror
 
 			void Close()
 			{
-				close_receiver(_receiver);
+				mirror_close_receiver(_receiver);
 			}
 		private:
 			Receiver _receiver;
@@ -266,7 +266,7 @@ namespace mirror
 
 		MirrorService()
 		{
-			_mirror = create_mirror();
+			_mirror = mirror_create();
 			if (_mirror == nullptr)
 			{
 				throw std::runtime_error("Failed to create mirror");
@@ -277,7 +277,7 @@ namespace mirror
 		{
 			if (_mirror != nullptr)
 			{
-				drop_mirror(_mirror);
+				mirror_drop(_mirror);
 			}
 		}
 
@@ -287,7 +287,7 @@ namespace mirror
             frame_sink.video = _video_proc;
             frame_sink.audio = _audio_proc;
             frame_sink.ctx = static_cast<void*>(sink);
-			Sender sender = create_sender(_mirror, const_cast<char*>(bind.c_str()), frame_sink);
+			Sender sender = mirror_create_sender(_mirror, const_cast<char*>(bind.c_str()), frame_sink);
 			return sender != nullptr ? std::optional(MirrorSender(sender)) : std::nullopt;
 		}
 
@@ -297,7 +297,7 @@ namespace mirror
             frame_sink.video = _video_proc;
             frame_sink.audio = _audio_proc;
             frame_sink.ctx = static_cast<void*>(sink);
-			Receiver receiver = create_receiver(_mirror, const_cast<char*>(bind.c_str()), frame_sink);
+			Receiver receiver = mirror_create_receiver(_mirror, const_cast<char*>(bind.c_str()), frame_sink);
 			return receiver != nullptr ? std::optional(MirrorReceiver(receiver)) : std::nullopt;
 		}
 	private:

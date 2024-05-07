@@ -47,6 +47,7 @@ public:
         }
 
         return false;
+		// return true;
     }
 
     bool OnAudioFrame(struct AudioFrame* frame)
@@ -82,16 +83,14 @@ int main()
 	sdl_rect.h = 720;
 
 	MirrorOptions options;
-	options.video.encoder = const_cast<char*>("libx264");
-	options.video.decoder = const_cast<char*>("h264");
+	options.video.encoder = const_cast<char*>(mirror_find_video_encoder());
+	options.video.decoder = const_cast<char*>(mirror_find_video_decoder());
 	options.video.width = sdl_rect.w;
 	options.video.height = sdl_rect.h;
 	options.video.frame_rate = 30;
 	options.video.bit_rate = 500 * 1024 * 8;
 	options.video.max_b_frames = 0;
 	options.video.key_frame_interval = 15;
-    options.audio.encoder = const_cast<char*>("libopus");
-    options.audio.decoder = const_cast<char*>("libopus");
     options.audio.sample_rate = 48000;
     options.audio.bit_rate = 6000;
 	options.multicast = const_cast<char*>("239.0.0.1");
@@ -103,7 +102,7 @@ int main()
 		return -1;
 	}
 
-	SDL_Window* screen = SDL_CreateWindow("simple",
+	SDL_Window* screen = SDL_CreateWindow("sneder",
 										  SDL_WINDOWPOS_UNDEFINED,
 										  SDL_WINDOWPOS_UNDEFINED,
 										  sdl_rect.w,
@@ -153,6 +152,6 @@ int main()
 	}
 
 	SDL_Quit();
-    mirror::Quit();
+	mirror::Quit();
 	return 0;
 }

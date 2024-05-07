@@ -9,8 +9,8 @@
 
 struct AudioDecoder* codec_create_audio_decoder(const char* codec_name)
 {
-	struct AudioDecoder* codec = new struct AudioDecoder;
-	codec->output_frame = new struct AudioFrame;
+	struct AudioDecoder* codec = new AudioDecoder{};
+	codec->output_frame = new AudioFrame{};
 
 	codec->codec = avcodec_find_decoder_by_name(codec_name);
 	if (codec->codec == nullptr)

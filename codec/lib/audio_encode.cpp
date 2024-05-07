@@ -9,9 +9,8 @@
 
 struct AudioEncoder* codec_create_audio_encoder(struct AudioEncoderSettings* settings)
 {
-	struct AudioEncoder* codec = new struct AudioEncoder;
-	codec->codec_name = std::string(settings->codec_name);
-	codec->output_packet = new struct EncodePacket;
+	struct AudioEncoder* codec = new AudioEncoder{};
+	codec->output_packet = new EncodePacket{};
 
 	codec->codec = avcodec_find_encoder_by_name(settings->codec_name);
 	if (codec->codec == nullptr)
@@ -32,6 +31,7 @@ struct AudioEncoder* codec_create_audio_encoder(struct AudioEncoderSettings* set
 	codec->context->sample_rate = settings->sample_rate;
 	codec->context->channel_layout = AV_CH_LAYOUT_STEREO;
 	codec->context->sample_fmt = AV_SAMPLE_FMT_S16;
+	codec->codec_name = std::string(settings->codec_name);
 
 	if (avcodec_open2(codec->context, codec->codec, nullptr) != 0)
 	{

@@ -15,9 +15,8 @@ extern "C"
 
 struct VideoEncoder* codec_create_video_encoder(struct VideoEncoderSettings* settings)
 {
-	struct VideoEncoder* codec = new struct VideoEncoder;
-	codec->codec_name = std::string(settings->codec_name);
-	codec->output_packet = new struct EncodePacket;
+	struct VideoEncoder* codec = new VideoEncoder{};
+	codec->output_packet = new EncodePacket{};
 
 	codec->codec = avcodec_find_encoder_by_name(settings->codec_name);
 	if (codec->codec == nullptr)
@@ -43,6 +42,7 @@ struct VideoEncoder* codec_create_video_encoder(struct VideoEncoderSettings* set
 	codec->context->max_b_frames = settings->max_b_frames;
 	codec->context->pix_fmt = AV_PIX_FMT_NV12;
 	codec->context->max_samples = 1;
+	codec->codec_name = std::string(settings->codec_name);
 
 	if (codec->codec_name == "h264_qsv")
 	{

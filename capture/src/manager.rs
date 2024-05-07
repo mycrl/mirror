@@ -1,13 +1,24 @@
-use crate::device::{Device, DeviceKind, DeviceList, RawDeviceDescription, RawDeviceList};
+use std::ffi::c_int;
+
+use crate::{
+    device::{Device, DeviceKind, DeviceList, RawDeviceDescription, RawDeviceList},
+    DeviceError,
+};
+
+#[repr(C)]
+struct RawGetDeviceListResult {
+    status: c_int,
+    list: *const RawDeviceList,
+}
 
 extern "C" {
     /// Enumerates all input sources.
     ///
     /// Callback function returns true to continue enumeration, or false to
     /// end enumeration.
-    fn capture_get_device_list(kind: DeviceKind) -> *const RawDeviceList;
+    fn capture_get_device_list(kind: DeviceKind) -> RawGetDeviceListResult;
     /// Sets the primary output source for a channel.
-    fn capture_set_video_input(description: *const RawDeviceDescription);
+    fn capture_set_video_input(description: *const RawDeviceDescription) -> c_int;
 }
 
 pub struct DeviceManager;
@@ -18,10 +29,15 @@ impl DeviceManager {
     /// ```
     /// let devices = get_devices(DeviceKind::Video).to_vec();
     /// ```
-    pub fn get_devices(kind: DeviceKind) -> DeviceList {
+    pub fn get_devices(kind: DeviceKind) -> Result<DeviceList, DeviceError> {
         log::info!("DeviceManager get devices");
 
-        DeviceList(unsafe { capture_get_device_list(kind) })
+        let result = unsafe { capture_get_device_list(kind) };
+        if result.status != 0 {
+            Err(DeviceError::try_from(result.status).unwrap())
+        } else {
+            Ok(DeviceList(result.list))
+        }
     }
 
     /// Setting up an input device, it is important to note that a device of the
@@ -35,9 +51,14 @@ impl DeviceManager {
     ///
     /// set_input(&devices[0]);
     /// ```
-    pub fn set_input(device: &Device) {
+    pub fn set_input(device: &Device) -> Result<(), DeviceError> {
         log::info!("DeviceManager set input device");
 
-        unsafe { capture_set_video_input(device.as_ptr()) }
+        let status = unsafe { capture_set_video_input(device.as_ptr()) };
+        if status != 0 {
+            Err(DeviceError::try_from(status).unwrap())
+        } else {
+            Ok(())
+        }
     }
 }
