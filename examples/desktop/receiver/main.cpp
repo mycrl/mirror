@@ -29,25 +29,24 @@ public:
 
     bool OnVideoFrame(struct VideoFrame* frame)
     {
-        // if (SDL_UpdateNVTexture(_sdl_texture,
-        // _sdl_rect,
-        // frame->data[0],
-        // frame->linesize[0],
-        // frame->data[1],
-        // frame->linesize[1]) == 0)
-        // {
-        //     if (SDL_RenderClear(_sdl_renderer) == 0)
-        //     {
-        //         if (SDL_RenderCopy(_sdl_renderer, _sdl_texture, nullptr, _sdl_rect) == 0)
-        //         {
-        //             SDL_RenderPresent(_sdl_renderer);
-        //             return true;
-        //         }
-        //     }
-        // }
+        if (SDL_UpdateNVTexture(_sdl_texture,
+        _sdl_rect,
+        frame->data[0],
+        frame->linesize[0],
+        frame->data[1],
+        frame->linesize[1]) == 0)
+        {
+            if (SDL_RenderClear(_sdl_renderer) == 0)
+            {
+                if (SDL_RenderCopy(_sdl_renderer, _sdl_texture, nullptr, _sdl_rect) == 0)
+                {
+                    SDL_RenderPresent(_sdl_renderer);
+                    return true;
+                }
+            }
+        }
 
-        // return false;
-        return true;
+        return false;
     }
 
     bool OnAudioFrame(struct AudioFrame* frame)
@@ -113,7 +112,7 @@ int main()
 		return -2;
 	}
 
-	SDL_Renderer* sdl_renderer = SDL_CreateRenderer(screen, -1, 0);
+	SDL_Renderer* sdl_renderer = SDL_CreateRenderer(screen, -1, SDL_RENDERER_ACCELERATED);
 	SDL_Texture* sdl_texture = SDL_CreateTexture(sdl_renderer,
 												 SDL_PIXELFORMAT_NV12,
 												 SDL_TEXTUREACCESS_STREAMING,

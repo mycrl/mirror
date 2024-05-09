@@ -42,24 +42,24 @@ static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 pub struct RawVideoOptions {
     /// Video encoder settings, possible values are `h264_qsv”, `h264_nvenc”,
     /// `libx264” and so on.
-    encoder: *const c_char,
+    pub encoder: *const c_char,
     /// Video decoder settings, possible values are `h264_qsv”, `h264_cuvid”,
     /// `h264”, etc.
-    decoder: *const c_char,
+    pub decoder: *const c_char,
     /// Maximum number of B-frames, if low latency encoding is performed, it is
     /// recommended to set it to 0 to indicate that no B-frames are encoded.
-    max_b_frames: u8,
+    pub max_b_frames: u8,
     /// Frame rate setting in seconds.
-    frame_rate: u8,
+    pub frame_rate: u8,
     /// The width of the video.
-    width: u32,
+    pub width: u32,
     /// The height of the video.
-    height: u32,
+    pub height: u32,
     /// The bit rate of the video encoding.
-    bit_rate: u64,
+    pub bit_rate: u64,
     /// Keyframe Interval, used to specify how many frames apart to output a
     /// keyframe.
-    key_frame_interval: u32,
+    pub key_frame_interval: u32,
 }
 
 unsafe impl Send for RawVideoOptions {}
@@ -118,15 +118,15 @@ impl Into<AudioOptions> for RawAudioOptions {
 #[derive(Debug, Clone, Copy)]
 pub struct RawMirrorOptions {
     /// Video Codec Configuration.
-    video: RawVideoOptions,
+    pub video: RawVideoOptions,
     /// Audio Codec Configuration.
-    audio: RawAudioOptions,
+    pub audio: RawAudioOptions,
     /// Multicast address, e.g. `239.0.0.1`.
-    multicast: *const c_char,
+    pub multicast: *const c_char,
     /// The size of the maximum transmission unit of the network, which is
     /// related to the settings of network devices such as routers or switches,
     /// the recommended value is 1400.
-    mtu: usize,
+    pub mtu: usize,
 }
 
 unsafe impl Send for RawMirrorOptions {}
@@ -152,7 +152,7 @@ impl TryInto<MirrorOptions> for RawMirrorOptions {
 /// EXPORT const char* mirror_find_video_encoder();
 /// ```
 #[no_mangle]
-extern "C" fn mirror_find_video_encoder() -> *const c_char {
+pub extern "C" fn mirror_find_video_encoder() -> *const c_char {
     unsafe { codec::video::codec_find_video_encoder() }
 }
 
@@ -163,7 +163,7 @@ extern "C" fn mirror_find_video_encoder() -> *const c_char {
 /// EXPORT const char* mirror_find_video_decoder();
 /// ```
 #[no_mangle]
-extern "C" fn mirror_find_video_decoder() -> *const c_char {
+pub extern "C" fn mirror_find_video_decoder() -> *const c_char {
     unsafe { codec::video::codec_find_video_decoder() }
 }
 
@@ -173,7 +173,7 @@ extern "C" fn mirror_find_video_decoder() -> *const c_char {
 /// EXPORT bool mirror_init(struct MirrorOptions options);
 /// ```
 #[no_mangle]
-extern "C" fn mirror_init(options: RawMirrorOptions) -> bool {
+pub extern "C" fn mirror_init(options: RawMirrorOptions) -> bool {
     checker((|| mirror::init(options.try_into()?))()).is_ok()
 }
 
@@ -184,7 +184,7 @@ extern "C" fn mirror_init(options: RawMirrorOptions) -> bool {
 /// EXPORT void mirror_quit();
 /// ```
 #[no_mangle]
-extern "C" fn mirror_quit() {
+pub extern "C" fn mirror_quit() {
     mirror::quit()
 }
 
@@ -194,7 +194,7 @@ extern "C" fn mirror_quit() {
 /// EXPORT const char* mirror_get_device_name(const struct Device* device);
 /// ```
 #[no_mangle]
-extern "C" fn mirror_get_device_name(device: *const Device) -> *const c_char {
+pub extern "C" fn mirror_get_device_name(device: *const Device) -> *const c_char {
     assert!(!device.is_null());
 
     unsafe { &*device }.c_name()
@@ -206,7 +206,7 @@ extern "C" fn mirror_get_device_name(device: *const Device) -> *const c_char {
 /// EXPORT enum DeviceKind mirror_get_device_kind(const struct Device* device);
 /// ```
 #[no_mangle]
-extern "C" fn mirror_get_device_kind(device: *const Device) -> DeviceKind {
+pub extern "C" fn mirror_get_device_kind(device: *const Device) -> DeviceKind {
     assert!(!device.is_null());
 
     unsafe { &*device }.kind()
@@ -225,7 +225,7 @@ pub struct RawDevices {
 /// EXPORT struct Devices mirror_get_devices(enum DeviceKind kind);
 /// ```
 #[no_mangle]
-extern "C" fn mirror_get_devices(kind: DeviceKind) -> RawDevices {
+pub extern "C" fn mirror_get_devices(kind: DeviceKind) -> RawDevices {
     log::info!("get devices: kind={:?}", kind);
 
     let devices = match checker(DeviceManager::get_devices(kind)) {
@@ -256,7 +256,7 @@ extern "C" fn mirror_get_devices(kind: DeviceKind) -> RawDevices {
 /// EXPORT void mirror_drop_devices(struct Devices* devices);
 /// ```
 #[no_mangle]
-extern "C" fn mirror_drop_devices(devices: *const RawDevices) {
+pub extern "C" fn mirror_drop_devices(devices: *const RawDevices) {
     assert!(!devices.is_null());
 
     let devices = unsafe { &*devices };
@@ -270,7 +270,7 @@ extern "C" fn mirror_drop_devices(devices: *const RawDevices) {
 /// EXPORT void mirror_set_input_device(const struct Device* device);
 /// ```
 #[no_mangle]
-extern "C" fn mirror_set_input_device(device: *const Device) -> bool {
+pub extern "C" fn mirror_set_input_device(device: *const Device) -> bool {
     assert!(!device.is_null());
 
     checker(mirror::set_input_device(unsafe { &*device })).is_ok()
@@ -287,7 +287,7 @@ pub struct RawMirror {
 /// EXPORT Mirror mirror_create();
 /// ```
 #[no_mangle]
-extern "C" fn mirror_create() -> *const RawMirror {
+pub extern "C" fn mirror_create() -> *const RawMirror {
     checker(Mirror::new())
         .map(|mirror| Box::into_raw(Box::new(RawMirror { mirror })))
         .unwrap_or_else(|_| null_mut()) as *const _
@@ -299,7 +299,7 @@ extern "C" fn mirror_create() -> *const RawMirror {
 /// EXPORT void mirror_drop(Mirror mirror);
 /// ```
 #[no_mangle]
-extern "C" fn mirror_drop(mirror: *const RawMirror) {
+pub extern "C" fn mirror_drop(mirror: *const RawMirror) {
     assert!(!mirror.is_null());
 
     drop(unsafe { Box::from_raw(mirror as *mut RawMirror) });
@@ -309,10 +309,10 @@ extern "C" fn mirror_drop(mirror: *const RawMirror) {
 
 #[repr(C)]
 #[derive(Clone, Copy)]
-struct RawFrameSink {
-    video: Option<extern "C" fn(ctx: *const c_void, frame: *const VideoFrame) -> bool>,
-    audio: Option<extern "C" fn(ctx: *const c_void, frame: *const AudioFrame) -> bool>,
-    ctx: *const c_void,
+pub struct RawFrameSink {
+    pub video: Option<extern "C" fn(ctx: *const c_void, frame: *const VideoFrame) -> bool>,
+    pub audio: Option<extern "C" fn(ctx: *const c_void, frame: *const AudioFrame) -> bool>,
+    pub ctx: *const c_void,
 }
 
 unsafe impl Send for RawFrameSink {}
@@ -349,7 +349,7 @@ pub struct RawSender {
 /// EXPORT Sender mirror_create_sender(Mirror mirror, char* bind, ReceiverFrameCallback proc, void* ctx);
 /// ```
 #[no_mangle]
-extern "C" fn mirror_create_sender(
+pub extern "C" fn mirror_create_sender(
     mirror: *const RawMirror,
     bind: *const c_char,
     sink: RawFrameSink,
@@ -376,7 +376,7 @@ extern "C" fn mirror_create_sender(
 /// EXPORT void mirror_close_sender(Sender sender);
 /// ```
 #[no_mangle]
-extern "C" fn mirror_close_sender(sender: *const RawSender) {
+pub extern "C" fn mirror_close_sender(sender: *const RawSender) {
     assert!(!sender.is_null());
 
     unsafe { Box::from_raw(sender as *mut RawSender) }
@@ -398,7 +398,7 @@ pub struct RawReceiver {
 /// EXPORT Receiver mirror_create_receiver(Mirror mirror, char* bind, ReceiverFrameCallback proc, void* ctx);
 /// ```
 #[no_mangle]
-extern "C" fn mirror_create_receiver(
+pub extern "C" fn mirror_create_receiver(
     mirror: *const RawMirror,
     bind: *const c_char,
     sink: RawFrameSink,
@@ -425,7 +425,7 @@ extern "C" fn mirror_create_receiver(
 /// EXPORT void mirror_close_receiver(Receiver receiver);
 /// ```
 #[no_mangle]
-extern "C" fn mirror_close_receiver(receiver: *const RawReceiver) {
+pub extern "C" fn mirror_close_receiver(receiver: *const RawReceiver) {
     assert!(!receiver.is_null());
 
     unsafe { Box::from_raw(receiver as *mut RawReceiver) }

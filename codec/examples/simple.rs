@@ -24,17 +24,12 @@ fn main() -> anyhow::Result<()> {
             width: 1280,
             height: 720,
         },
-        data: [
-            buf.as_slice().as_ptr(),
-            buf.as_slice().as_ptr(),
-        ]
+        data: [buf.as_slice().as_ptr(), buf.as_slice().as_ptr()],
     };
 
     loop {
         if encoder.encode(&frame) {
-            while let Some(_packet) = encoder.read() {
-
-            }
+            while let Some(_packet) = encoder.read() {}
         } else {
             break;
         }
