@@ -81,15 +81,11 @@ bool codec_audio_encoder_send_frame(struct AudioEncoder* codec, struct AudioFram
 
 	codec->frame->data[0] = frame->data[0];
 	codec->frame->data[1] = frame->data[1];
-	codec->frame->pts = codec->frame_num * codec->context->frame_size;
+	codec->frame->pts = codec->context->frame_num * codec->context->frame_size;
 
 	if (avcodec_send_frame(codec->context, codec->frame) != 0)
 	{
 		return false;
-	}
-	else
-	{
-		codec->frame_num += 1;
 	}
 
 	return true;

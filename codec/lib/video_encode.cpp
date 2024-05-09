@@ -93,7 +93,6 @@ struct VideoEncoder* codec_create_video_encoder(struct VideoEncoderSettings* set
 		return nullptr;
 	}
 
-	codec->frame_num = 0;
 	codec->frame->width = codec->context->width;
 	codec->frame->height = codec->context->height;
 	codec->frame->format = codec->context->pix_fmt;
@@ -131,16 +130,12 @@ bool codec_video_encoder_send_frame(struct VideoEncoder* codec, struct VideoFram
 				  codec->context->width,
 				  codec->context->height);
 
-	codec->frame->pts = av_rescale_q(codec->frame_num,
+	codec->frame->pts = av_rescale_q(codec->context->frame_num,
 									 codec->context->pkt_timebase,
 									 codec->context->time_base);
 	if (avcodec_send_frame(codec->context, codec->frame) != 0)
 	{
 		return false;
-	}
-	else
-	{
-		codec->frame_num++;
 	}
 
 	return true;

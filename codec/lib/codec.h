@@ -51,7 +51,6 @@ struct VideoEncoder
 	AVCodecContext* context;
 	AVPacket* packet;
 	AVFrame* frame;
-	uint64_t frame_num;
 	struct EncodePacket* output_packet;
 };
 
@@ -79,7 +78,6 @@ struct AudioEncoder
 	AVCodecContext* context;
 	AVPacket* packet;
 	AVFrame* frame;
-	uint64_t frame_num;
 	struct EncodePacket* output_packet;
 };
 

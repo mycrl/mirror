@@ -27,7 +27,7 @@ struct VideoDecoder* codec_create_video_decoder(const char* codec_name)
 		codec_release_video_decoder(codec);
 		return nullptr;
 	}
-
+    
 	if (avcodec_open2(codec->context, codec->codec, nullptr) != 0)
 	{
 		codec_release_video_decoder(codec);
