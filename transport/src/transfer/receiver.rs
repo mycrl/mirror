@@ -57,6 +57,7 @@ impl Receiver {
         let socket: Arc<UdpSocket> = Arc::new(socket.into());
         if let IpAddr::V4(bind) = bind.ip() {
             socket.join_multicast_v4(&multicast, &bind)?;
+            socket.set_broadcast(true)?;
 
             log::info!(
                 "multicast receiver join: multicast={}, interface={}",
@@ -69,7 +70,6 @@ impl Receiver {
 
         let (tx, rx) = channel();
         let target = Arc::new(AtomicOption::new(None));
-
         let queue = Arc::new(Dequeue::new(50));
 
         let target_ = Arc::downgrade(&target);

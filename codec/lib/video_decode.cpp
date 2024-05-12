@@ -7,10 +7,12 @@
 
 #include "./codec.h"
 
+#include <libyuv.h>
+
 struct VideoDecoder* codec_create_video_decoder(const char* codec_name)
 {
-	struct VideoDecoder* codec = new struct VideoDecoder;
-	codec->output_frame = new struct VideoFrame;
+	struct VideoDecoder* codec = new VideoDecoder{};
+	codec->output_frame = new VideoFrame{};
 
 	codec->codec = avcodec_find_decoder_by_name(codec_name);
 	if (codec->codec == nullptr)
@@ -25,11 +27,7 @@ struct VideoDecoder* codec_create_video_decoder(const char* codec_name)
 		codec_release_video_decoder(codec);
 		return nullptr;
 	}
-	else
-	{
-		codec->context->pix_fmt = AV_PIX_FMT_NV12;
-	}
-
+    
 	if (avcodec_open2(codec->context, codec->codec, nullptr) != 0)
 	{
 		codec_release_video_decoder(codec);
@@ -68,6 +66,12 @@ struct VideoDecoder* codec_create_video_decoder(const char* codec_name)
 
 void codec_release_video_decoder(struct VideoDecoder* codec)
 {
+	if (codec->frame->format != AV_PIX_FMT_NV12)
+	{
+		delete codec->output_frame->data[0];
+		delete codec->output_frame->data[1];
+	}
+
 	if (codec->context != nullptr)
 	{
 		avcodec_free_context(&codec->context);
@@ -96,9 +100,9 @@ bool codec_video_decoder_send_packet(struct VideoDecoder* codec,
 									 uint8_t* buf,
 									 size_t size)
 {
-	while (size > 0)
+	while (size)
 	{
-		int ret = av_parser_parse2(codec->parser,
+		int len = av_parser_parse2(codec->parser,
 								   codec->context,
 								   &codec->packet->data,
 								   &codec->packet->size,
@@ -107,22 +111,15 @@ bool codec_video_decoder_send_packet(struct VideoDecoder* codec,
 								   AV_NOPTS_VALUE,
 								   AV_NOPTS_VALUE,
 								   0);
-		if (ret < 0)
-		{
-			return false;
-		}
+		buf += len;
+		size -= len;
 
-		buf += ret;
-		size -= ret;
-
-		if (codec->packet->size == 0)
+		if (codec->packet->size)
 		{
-			continue;
-		}
-
-		if (avcodec_send_packet(codec->context, codec->packet) != 0)
-		{
-			return false;
+			if (avcodec_send_packet(codec->context, codec->packet) != 0)
+			{
+				return false;
+			}
 		}
 	}
 
@@ -138,9 +135,38 @@ struct VideoFrame* codec_video_decoder_read_frame(struct VideoDecoder* codec)
 
 	codec->output_frame->rect.width = codec->frame->width;
 	codec->output_frame->rect.height = codec->frame->height;
-	codec->output_frame->data[0] = codec->frame->data[0];
-	codec->output_frame->data[1] = codec->frame->data[1];
-	codec->output_frame->linesize[0] = codec->frame->linesize[0];
-	codec->output_frame->linesize[1] = codec->frame->linesize[1];
+
+	if (codec->frame->format != AV_PIX_FMT_NV12)
+	{
+		if (codec->output_frame->data[0] == nullptr)
+		{
+			size_t size = codec->frame->width * codec->frame->height * 4;
+			codec->output_frame->linesize[0] = codec->frame->width;
+			codec->output_frame->linesize[1] = codec->frame->width;
+			codec->output_frame->data[0] = new uint8_t[size];
+			codec->output_frame->data[1] = new uint8_t[size];
+		}
+
+		libyuv::I420ToNV12(codec->frame->data[0],
+						   codec->frame->linesize[0],
+						   codec->frame->data[1],
+						   codec->frame->linesize[1],
+						   codec->frame->data[2],
+						   codec->frame->linesize[2],
+						   codec->output_frame->data[0],
+						   codec->output_frame->linesize[0],
+						   codec->output_frame->data[1],
+						   codec->output_frame->linesize[1],
+						   codec->frame->width,
+						   codec->frame->height);
+	}
+	else
+	{
+		codec->output_frame->data[0] = codec->frame->data[0];
+		codec->output_frame->data[1] = codec->frame->data[1];
+		codec->output_frame->linesize[0] = codec->frame->linesize[0];
+		codec->output_frame->linesize[1] = codec->frame->linesize[1];
+	}
+
 	return codec->output_frame;
 }

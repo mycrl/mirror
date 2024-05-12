@@ -3,11 +3,14 @@ use std::{
     thread,
 };
 
+#[cfg(feature = "audio")]
+use codec::AudioDecoder;
+
 use anyhow::Result;
 use bytes::Bytes;
 use capture::{AVFrameSink, AudioInfo, Device, DeviceManager, DeviceManagerOptions, VideoInfo};
 use codec::{
-    AudioDecoder, AudioEncoder, AudioEncoderSettings, VideoDecoder, VideoEncoder,
+    AudioEncoder, AudioEncoderSettings, VideoDecoder, VideoEncoder,
     VideoEncoderSettings,
 };
 use common::frame::{AudioFrame, VideoFrame};
@@ -22,11 +25,9 @@ static OPTIONS: Lazy<RwLock<MirrorOptions>> = Lazy::new(Default::default);
 /// Audio Codec Configuration.
 #[derive(Debug, Clone)]
 pub struct AudioOptions {
-    /// Video encoder settings, possible values are `h264_qsv”, `h264_nvenc”,
-    /// `libx264” and so on.
+    /// Video encoder settings, possible values are `libopus`and so on.
     pub encoder: String,
-    /// Video decoder settings, possible values are `h264_qsv”, `h264_cuvid”,
-    /// `h264”, etc.
+    /// Video decoder settings, possible values are `libopus`and so on.
     pub decoder: String,
     /// The sample rate of the audio, in seconds.
     pub sample_rate: u64,
@@ -58,11 +59,11 @@ impl From<AudioOptions> for AudioEncoderSettings {
 /// Video Codec Configuration.
 #[derive(Debug, Clone)]
 pub struct VideoOptions {
-    /// Video encoder settings, possible values are `h264_qsv”, `h264_nvenc”,
-    /// `libx264” and so on.
+    /// Video encoder settings, possible values are `h264_qsv`, `h264_nvenc`,
+    /// `libx264` and so on.
     pub encoder: String,
-    /// Video decoder settings, possible values are `h264_qsv”, `h264_cuvid”,
-    /// `h264”, etc.
+    /// Video decoder settings, possible values are `h264_qsv`, `h264_cuvid`,
+    /// `h264`, etc.
     pub decoder: String,
     /// Maximum number of B-frames, if low latency encoding is performed, it is
     /// recommended to set it to 0 to indicate that no B-frames are encoded.
@@ -175,10 +176,11 @@ pub fn quit() {
 
 /// Setting up an input device, repeated settings for the same type of device
 /// will overwrite the previous device.
-pub fn set_input_device(device: &Device) {
-    DeviceManager::set_input(device);
+pub fn set_input_device(device: &Device) -> Result<()> {
+    DeviceManager::set_input(device)?;
 
     log::info!("set input to device manager: device={:?}", device.name());
+    Ok(())
 }
 
 pub struct FrameSink<A, V> {
@@ -298,33 +300,38 @@ impl Mirror {
         let adapter = StreamReceiverAdapter::new();
         self.0.create_receiver(bind.parse()?, &adapter)?;
 
-        let adapter_ = Arc::downgrade(&adapter);
         let video_decoder = VideoDecoder::new(&options.video.decoder)?;
+
+        #[cfg(feature = "audio")]
         let audio_decoder = AudioDecoder::new(&options.audio.decoder)?;
 
+        let adapter_ = adapter.clone();
         thread::spawn(move || {
-            while let Some(adapter) = adapter_.upgrade().as_ref() {
-                'a: while let Some((packet, kind, _)) = adapter.next() {
-                    if kind == StreamKind::Video {
-                        if !video_decoder.decode(&packet) {
-                            break;
-                        }
+            'a: while let Some((packet, kind, _)) = adapter_.next() {
+                if packet.is_empty() {
+                    continue;
+                }
 
+                if kind == StreamKind::Video {
+                    if video_decoder.decode(&packet) {
                         while let Some(frame) = video_decoder.read() {
                             if !(sink.video)(frame) {
                                 break 'a;
                             }
                         }
-                    } else if kind == StreamKind::Audio {
-                        if !audio_decoder.decode(&packet) {
-                            break;
-                        }
-
+                    } else {
+                        break;
+                    }
+                } else if kind == StreamKind::Audio {
+                    #[cfg(feature = "audio")]
+                    if audio_decoder.decode(&packet) {
                         while let Some(frame) = audio_decoder.read() {
                             if !(sink.audio)(frame) {
                                 break 'a;
                             }
                         }
+                    } else {
+                        break;
                     }
                 }
             }

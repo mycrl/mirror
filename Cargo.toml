@@ -15,5 +15,5 @@ members = [
     "sdk/desktop",
     "sdk/android/native",
     "common/jni-macro",
-    "common",
+    "common"
 ]

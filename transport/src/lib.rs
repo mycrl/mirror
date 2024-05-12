@@ -97,7 +97,7 @@ impl Transport {
                                 thread::spawn(move || {
                                     let mut remuxer = Remuxer::default();
 
-                                    'a: while let Ok(packet) = receiver.read() {
+                                    while let Ok(packet) = receiver.read() {
                                         if let Some(adapter) = adapter.upgrade() {
                                             if let Some((offset, info)) = remuxer.remux(&packet) {
                                                 if !adapter.send(
@@ -108,14 +108,15 @@ impl Transport {
                                                 ) {
                                                     log::error!("adapter on buf failed.");
 
-                                                    break 'a;
+                                                    break;
                                                 }
                                             } else {
                                                 adapter.loss_pkt();
                                             }
                                         } else {
                                             log::warn!("adapter is droped!");
-                                            break 'a;
+
+                                            break;
                                         }
                                     }
 
@@ -232,7 +233,7 @@ impl Transport {
         thread::spawn(move || {
             let mut remuxer = Remuxer::default();
 
-            'a: while let Ok(packet) = receiver.read() {
+            while let Ok(packet) = receiver.read() {
                 if let Some(adapter) = adapter.upgrade() {
                     if let Some((offset, info)) = remuxer.remux(&packet) {
                         if !adapter.send(
@@ -242,14 +243,14 @@ impl Transport {
                             info.timestamp,
                         ) {
                             log::error!("adapter on buf failed.");
-                            break 'a;
+                            break;
                         }
                     } else {
                         adapter.loss_pkt();
                     }
                 } else {
                     log::warn!("adapter is droped!");
-                    break 'a;
+                    break;
                 }
             }
 

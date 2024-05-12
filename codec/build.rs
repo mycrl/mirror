@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use std::{env, fs, path::Path, process::Command};
 
 use anyhow::anyhow;
@@ -51,11 +53,41 @@ fn find_library(name: &str) -> (Vec<String>, Vec<String>) {
     )
 }
 
+#[cfg(any(target_os = "windows", target_os = "linux"))]
 fn main() -> anyhow::Result<()> {
     println!("cargo:rerun-if-changed=./lib");
     println!("cargo:rerun-if-changed=./build.rs");
 
     let settings = Settings::build()?;
+    if !is_exsit(&join(
+        &settings.out_dir,
+        if cfg!(target_os = "windows") {
+            "yuv-windows-x86_64.lib"
+        } else {
+            "libyuv-linux-x86_64.a"
+        },
+    )?) {
+        if cfg!(target_os = "windows") {
+            exec("Invoke-WebRequest \
+                -Uri https://github.com/mycrl/libyuv-rs/releases/download/v0.1.2/yuv-windows-x86_64.lib \
+                -OutFile yuv.lib", &settings.out_dir)?;
+        } else {
+            exec(
+                "wget \
+                https://github.com/mycrl/libyuv-rs/releases/download/v0.1.2/libyuv-linux-x86_64.a \
+                -O libyuv.a",
+                &settings.out_dir,
+            )?;
+        }
+    }
+
+    if !is_exsit(&join(&settings.out_dir, "./libyuv")?) {
+        exec(
+            "git clone --branch stable https://chromium.googlesource.com/libyuv/libyuv",
+            &settings.out_dir,
+        )?;
+    }
+
     cc::Build::new()
         .cpp(true)
         .std("c++20")
@@ -64,12 +96,14 @@ fn main() -> anyhow::Result<()> {
         .target(&settings.target)
         .warnings(false)
         .out_dir(&settings.out_dir)
+        .file("./lib/codec.cpp")
         .file("./lib/video_encode.cpp")
         .file("./lib/video_decode.cpp")
         .file("./lib/audio_encode.cpp")
         .file("./lib/audio_decode.cpp")
         .includes(&settings.ffmpeg_include_prefix)
         .include("../common/include")
+        .include(&join(&settings.out_dir, "./libyuv/include")?)
         .compile("codec");
 
     println!("cargo:rustc-link-search=all={}", &settings.out_dir);
@@ -80,6 +114,7 @@ fn main() -> anyhow::Result<()> {
     println!("cargo:rustc-link-lib=avcodec");
     println!("cargo:rustc-link-lib=avutil");
     println!("cargo:rustc-link-lib=codec");
+    println!("cargo:rustc-link-lib=yuv");
     Ok(())
 }
 
@@ -92,6 +127,7 @@ struct Settings {
 }
 
 impl Settings {
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
     fn build() -> anyhow::Result<Self> {
         let _ = dotenv();
         let out_dir = env::var("OUT_DIR")?;
@@ -116,43 +152,26 @@ impl Settings {
     }
 }
 
-#[cfg(target_os = "macos")]
-fn find_ffmpeg_prefix(out_dir: &str) -> anyhow::Result<(Vec<String>, Vec<String>)> {
-    let ffmpeg_prefix = exec("brew --prefix ffmpeg", out_dir)
-        .expect("You don't have ffmpeg installed, please install ffmpeg: `brew install ffmpeg`.");
-
-    Ok((
-        vec![join(ffmpeg_prefix.trim(), "./include")?],
-        vec![join(ffmpeg_prefix.trim(), "./lib")?],
-    ))
-}
-
 #[cfg(target_os = "windows")]
 fn find_ffmpeg_prefix(out_dir: &str) -> anyhow::Result<(Vec<String>, Vec<String>)> {
-    if !is_exsit(&join(out_dir, "7z.exe").unwrap()) {
-        exec(
-            "Invoke-WebRequest -Uri https://www.7-zip.org/a/7zr.exe -OutFile 7z.exe",
-            out_dir,
-        )
-        .expect("Unable to download 7z cli exe.");
-    }
-
-    let ffmpeg_prefix = join(out_dir, "ffmpeg-6.1.1-full_build-shared").unwrap();
+    let ffmpeg_prefix = join(out_dir, "ffmpeg").unwrap();
     if !is_exsit(&ffmpeg_prefix) {
         exec(
             "Invoke-WebRequest \
-                        -Uri https://github.com/mycrl/distributions/releases/download/distributions/ffmpeg-6.1.1-full_build-shared.7z \
-                        -OutFile ffmpeg.7z; \
-                     ./7z.exe x ffmpeg.7z -aoa; \
-                     del ffmpeg.7z",
+                -Uri https://github.com/ShiftMediaProject/FFmpeg/releases/download/6.1.r112164/libffmpeg_6.1.r112164_msvc17_x64.zip \
+                -OutFile ffmpeg.zip",
             out_dir,
-        )
-        .expect("Unable to download ffmpeg shard release.");
+        )?;
+
+        exec(
+            "Expand-Archive -Path ffmpeg.zip -DestinationPath ./ffmpeg",
+            out_dir,
+        )?;
     }
 
     Ok((
         vec![join(&ffmpeg_prefix, "./include")?],
-        vec![join(&ffmpeg_prefix, "./lib")?],
+        vec![join(&ffmpeg_prefix, "./lib/x64")?],
     ))
 }
 
@@ -169,3 +188,6 @@ fn find_ffmpeg_prefix(out_dir: &str) -> anyhow::Result<(Vec<String>, Vec<String>
 
     Ok((includes, libs))
 }
+
+#[cfg(target_os = "macos")]
+fn main() {}

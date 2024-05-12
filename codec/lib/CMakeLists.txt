@@ -22,27 +22,28 @@ if (NOT EXISTS "${THIRD_PARTY_DIR}")
     endif()
 endif()
 
-if (NOT EXISTS "${THIRD_PARTY_DIR}/7z.exe")
-    if (WIN32)
-        execute_process(
-            WORKING_DIRECTORY "${THIRD_PARTY_DIR}"
-            COMMAND powershell.exe -Command "Invoke-WebRequest -Uri https://www.7-zip.org/a/7zr.exe -OutFile 7z.exe")
-    endif()
-endif()
-
 if (WIN32)
     set(ENV{PATH} "${THIRD_PARTY_DIR};$ENV{PATH}")
 endif()
 
-if (NOT EXISTS "${THIRD_PARTY_DIR}/ffmpeg-6.1.1-full_build-shared")
+if (NOT EXISTS "${THIRD_PARTY_DIR}/ffmpeg")
     if (WIN32)
         execute_process(
             WORKING_DIRECTORY "${THIRD_PARTY_DIR}"
             COMMAND powershell.exe -Command "Invoke-WebRequest \
-                    -Uri https://github.com/mycrl/distributions/releases/download/distributions/ffmpeg-6.1.1-full_build-shared.7z \
-                    -OutFile ffmpeg.7z; \
-                ./7z.exe x ffmpeg.7z -aoa; \
-                del ffmpeg.7z")
+                    -Uri https://github.com/ShiftMediaProject/FFmpeg/releases/download/6.1.r112164/libffmpeg_6.1.r112164_msvc17_x64.zip \
+                    -OutFile ffmpeg.zip")
+        execute_process(
+            WORKING_DIRECTORY "${THIRD_PARTY_DIR}"
+            COMMAND powershell.exe -Command "Expand-Archive -Path ffmpeg.zip -DestinationPath ./ffmpeg")
+    endif()
+endif()
+
+if (NOT EXISTS "${THIRD_PARTY_DIR}/libyuv")
+    if (WIN32)
+        execute_process(
+            WORKING_DIRECTORY "${THIRD_PARTY_DIR}"
+            COMMAND powershell.exe -Command "git clone --branch stable https://chromium.googlesource.com/libyuv/libyuv")
     endif()
 endif()
 
@@ -51,12 +52,14 @@ add_library(codec STATIC
             video_encode.cpp
             audio_decode.cpp
             audio_encode.cpp
+            codec.cpp
             codec.h)
 
-include_directories("${THIRD_PARTY_DIR}/ffmpeg-6.1.1-full_build-shared/include"
+include_directories("${THIRD_PARTY_DIR}/ffmpeg/include"
+                    "${THIRD_PARTY_DIR}/libyuv/include"
                     "../../common/include")
 
-target_link_directories(codec PRIVATE "${THIRD_PARTY_DIR}/ffmpeg-6.1.1-full_build-shared/lib")
+target_link_directories(codec PRIVATE "${THIRD_PARTY_DIR}/ffmpeg/lib/x64")
 target_link_libraries(codec avcodec 
                             avutil)
 

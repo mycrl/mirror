@@ -15,9 +15,8 @@ extern "C"
 
 struct VideoEncoder* codec_create_video_encoder(struct VideoEncoderSettings* settings)
 {
-	struct VideoEncoder* codec = new struct VideoEncoder;
-	codec->codec_name = std::string(settings->codec_name);
-	codec->output_packet = new struct EncodePacket;
+	struct VideoEncoder* codec = new VideoEncoder{};
+	codec->output_packet = new EncodePacket{};
 
 	codec->codec = avcodec_find_encoder_by_name(settings->codec_name);
 	if (codec->codec == nullptr)
@@ -43,12 +42,14 @@ struct VideoEncoder* codec_create_video_encoder(struct VideoEncoderSettings* set
 	codec->context->max_b_frames = settings->max_b_frames;
 	codec->context->pix_fmt = AV_PIX_FMT_NV12;
 	codec->context->max_samples = 1;
+	codec->codec_name = std::string(settings->codec_name);
 
 	if (codec->codec_name == "h264_qsv")
 	{
-		av_opt_set_int(codec->context->priv_data, "preset", 7, 0);
-		av_opt_set_int(codec->context->priv_data, "profile", 66, 0);
-		av_opt_set_int(codec->context->priv_data, "scenario", 4, 0);
+		av_opt_set_int(codec->context->priv_data, "preset", 7 /* veryfast */, 0);
+		av_opt_set_int(codec->context->priv_data, "profile", 66 /* baseline */, 0);
+		av_opt_set_int(codec->context->priv_data, "scenario", 4 /* livestreaming */, 0);
+	    av_opt_set_int(codec->context->priv_data, "look_ahead", 0 /* false */, 0);
 	}
 	else if (codec->codec_name == "h264_nvenc")
 	{
@@ -93,7 +94,6 @@ struct VideoEncoder* codec_create_video_encoder(struct VideoEncoderSettings* set
 		return nullptr;
 	}
 
-	codec->frame_num = 0;
 	codec->frame->width = codec->context->width;
 	codec->frame->height = codec->context->height;
 	codec->frame->format = codec->context->pix_fmt;
@@ -131,16 +131,12 @@ bool codec_video_encoder_send_frame(struct VideoEncoder* codec, struct VideoFram
 				  codec->context->width,
 				  codec->context->height);
 
-	codec->frame->pts = av_rescale_q(codec->frame_num,
+	codec->frame->pts = av_rescale_q(codec->context->frame_num,
 									 codec->context->pkt_timebase,
 									 codec->context->time_base);
 	if (avcodec_send_frame(codec->context, codec->frame) != 0)
 	{
 		return false;
-	}
-	else
-	{
-		codec->frame_num++;
 	}
 
 	return true;

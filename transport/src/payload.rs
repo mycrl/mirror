@@ -46,7 +46,7 @@ impl Muxer {
 /// Decode the packets received from the network and separate out the different
 /// types of data.
 pub struct Remuxer {
-    sequence: i64,
+    sequence: i128,
 }
 
 impl Default for Remuxer {
@@ -57,7 +57,7 @@ impl Default for Remuxer {
 
 impl Remuxer {
     pub fn remux(&mut self, mut buf: &[u8]) -> Option<(usize, PacketInfo)> {
-        let seq = buf.get_u64() as i64;
+        let seq = buf.get_u64() as i128;
         let kind = StreamKind::try_from(buf.get_u8()).ok()?;
         let flags = buf.get_u8();
         let timestamp = buf.get_u64();

@@ -21,6 +21,7 @@
 
 extern "C"
 {
+#include <libavutil/hwcontext.h>
 #include <libavcodec/avcodec.h>
 #include <libavutil/frame.h>
 }
@@ -50,7 +51,6 @@ struct VideoEncoder
 	AVCodecContext* context;
 	AVPacket* packet;
 	AVFrame* frame;
-	uint64_t frame_num;
 	struct EncodePacket* output_packet;
 };
 
@@ -78,7 +78,6 @@ struct AudioEncoder
 	AVCodecContext* context;
 	AVPacket* packet;
 	AVFrame* frame;
-	uint64_t frame_num;
 	struct EncodePacket* output_packet;
 };
 
@@ -92,8 +91,22 @@ struct AudioDecoder
 	struct AudioFrame* output_frame;
 };
 
+struct CodecDesc
+{
+	const char* name;
+	AVHWDeviceType type;
+};
+
+enum CodecKind
+{
+	Encoder,
+	Decoder,
+};
+
 extern "C"
 {
+	EXPORT const char* codec_find_video_encoder();
+	EXPORT const char* codec_find_video_decoder();
 	EXPORT struct VideoEncoder* codec_create_video_encoder(struct VideoEncoderSettings* settings);
 	EXPORT bool codec_video_encoder_send_frame(struct VideoEncoder* codec, struct VideoFrame* frame);
 	EXPORT struct EncodePacket* codec_video_encoder_read_packet(struct VideoEncoder* codec);

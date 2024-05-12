@@ -1,5 +1,7 @@
-mod audio;
-mod video;
+#![cfg(any(target_os = "windows", target_os = "linux"))]
+
+pub mod audio;
+pub mod video;
 
 use std::ffi::c_int;
 

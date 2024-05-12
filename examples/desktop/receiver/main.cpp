@@ -82,20 +82,18 @@ int main()
 	sdl_rect.h = 720;
 
 	MirrorOptions options;
-	options.video.encoder = const_cast<char*>("h264_qsv");
-	options.video.decoder = const_cast<char*>("h264_qsv");
+	options.video.encoder = const_cast<char*>("libx264");
+	options.video.decoder = const_cast<char*>("h264");
 	options.video.width = sdl_rect.w;
 	options.video.height = sdl_rect.h;
 	options.video.frame_rate = 30;
 	options.video.bit_rate = 500 * 1024 * 8;
 	options.video.max_b_frames = 0;
 	options.video.key_frame_interval = 15;
-    options.audio.encoder = const_cast<char*>("libopus");
-    options.audio.decoder = const_cast<char*>("libopus");
     options.audio.sample_rate = 48000;
     options.audio.bit_rate = 6000;
 	options.multicast = const_cast<char*>("239.0.0.1");
-	options.mtu = 1500;
+	options.mtu = 1400;
 	mirror::Init(options);
 
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER))
@@ -103,7 +101,7 @@ int main()
 		return -1;
 	}
 
-	SDL_Window* screen = SDL_CreateWindow("simple",
+	SDL_Window* screen = SDL_CreateWindow("receiver",
 										  SDL_WINDOWPOS_UNDEFINED,
 										  SDL_WINDOWPOS_UNDEFINED,
 										  sdl_rect.w,
@@ -114,7 +112,7 @@ int main()
 		return -2;
 	}
 
-	SDL_Renderer* sdl_renderer = SDL_CreateRenderer(screen, -1, 0);
+	SDL_Renderer* sdl_renderer = SDL_CreateRenderer(screen, -1, SDL_RENDERER_ACCELERATED);
 	SDL_Texture* sdl_texture = SDL_CreateTexture(sdl_renderer,
 												 SDL_PIXELFORMAT_NV12,
 												 SDL_TEXTUREACCESS_STREAMING,
@@ -124,7 +122,7 @@ int main()
     Render* render = new Render(&sdl_rect, sdl_texture, sdl_renderer);
 	mirror::MirrorService* mirror = new mirror::MirrorService();
 
-	std::string bind = "0.0.0.0:3200";
+	std::string bind = "0.0.0.0:8080";
 	auto receiver = mirror->CreateReceiver(bind, render);
 	if (!receiver.has_value())
 	{

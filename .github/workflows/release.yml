@@ -1,0 +1,56 @@
+name: publish release
+on:
+  push:
+    tags:
+      - v*
+jobs:
+  build:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        target:
+          - debug
+          - release
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: '${{ matrix.target }}-cargo-${{ hashFiles(''**/Cargo.lock'') }}'
+      - name: Build distributions (Debug)
+        if: matrix.target == 'debug'
+        run: npm run build
+      - name: Build distributions (Release)
+        if: matrix.target == 'release'
+        run: npm run build:release
+      - name: Compress distributions
+        run: Compress-Archive -Path ./build -DestinationPath ./windows-x64-${{ matrix.target }}.zip
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: windows-x64-${{ matrix.target }}
+          path: ./windows-x64-${{ matrix.target }}.zip
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download All Artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: artifacts
+      - name: Create release
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        env:
+          GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          files: artifacts/**/*

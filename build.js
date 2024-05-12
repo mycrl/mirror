@@ -1,110 +1,86 @@
-'use strict'
+const { execSync } = require('child_process')
+const { join } = require('path')
+const fs = require('fs')
 
-const {exec} = require('node:child_process')
-const path = require('node:path')
-const fs = require('node:fs')
+const Args = process
+    .argv
+    .slice(process.argv.indexOf('--') + 1)
+    .map(item=>item.replace('--', ''))
+    .reduce((args,item) => Object.assign(args, {
+        [item]: true
+    }), {})
 
-function spawn(command, options) {
-    return new Promise((resolve,reject,ps=exec(command, options))=>{
-        ps.stderr.pipe(process.stderr)
-        ps.stdout.pipe(process.stdout)
-        ps.on('close', resolve)
-        ps.on('error', reject)
+const Profile = Args.release ? 'Release' : 'Debug'
+const Command = (cmd, options = {}) => execSync(cmd,  {
+    shell: 'powershell.exe',
+    stdio: process.stdio,
+    cwd: __dirname,
+    ...options,
+})
+
+for (const path of [
+    './build', 
+    './build/bin', 
+    './build/lib', 
+    './build/include', 
+    './build/examples', 
+    './build/examples/receiver', 
+    './build/examples/sender'
+]) {
+    if (!fs.existsSync(path)) {
+        fs.mkdirSync(path)
     }
-    )
 }
 
-async function build(Args) {
-    await spawn(`cargo build ${Args.release ? '--release' : ''}`, {
-        cwd: __dirname
-    })
-
-    const mirrorLibraryPath = path.join(__dirname, './target', Args.release ? 'release' : 'debug', './mirror.dll.lib')
-    const mirrorDllPdbPath = path.join(__dirname, './target', Args.release ? 'release' : 'debug', './mirror.pdb')
-    const mirrorDllPath = path.join(__dirname, './target', Args.release ? 'release' : 'debug', './mirror.dll')
-    const distributionsPath = path.join(__dirname, './target/distributions')
-    const dllPath = path.join(distributionsPath, './bin')
-    const libraryPath = path.join(distributionsPath, './lib')
-    const includePath = path.join(distributionsPath, './include')
-    const examplePath = path.join(distributionsPath, './example')
-
-    for (const path of [distributionsPath, includePath, libraryPath]) {
-        if (!fs.existsSync(path)) {
-            fs.mkdirSync(path)
-        }
-    }
-
-    fs.copyFileSync(path.join(__dirname, './sdk/desktop/include/mirror.h'), path.join(includePath, './mirror.h'))
-    fs.copyFileSync(path.join(__dirname, './common/include/frame.h'), path.join(includePath, './frame.h'))
-
-    for (const file of ['CMakeLists.txt', 'sender', 'receiver']) {
-        await spawn(`Copy-Item \
-                    -Path ./examples/desktop/${file} \
-                    -Destination ${examplePath} \
-                    -Recurse \
-                    -Force`, {
-            cwd: __dirname,
-            shell: 'powershell.exe'
-        })
-    }
-
-    if (!fs.existsSync(dllPath)) {
-        await spawn('Invoke-WebRequest \
+if (!fs.existsSync('./build/bin/data')) {
+    if (!fs.existsSync('./build/distributions-windows.zip')) {
+        Command('Invoke-WebRequest \
             -Uri https://github.com/mycrl/distributions/releases/download/distributions/distributions-windows.zip \
-            -OutFile distributions-windows.zip', {
-            cwd: distributionsPath,
-            shell: 'powershell.exe'
-        })
-
-        await spawn('Expand-Archive \
-            -Path ./distributions-windows.zip \
-            -DestinationPath ./', {
-            cwd: distributionsPath,
-            shell: 'powershell.exe'
-        })
-        fs.unlinkSync(path.join(distributionsPath, './distributions-windows.zip'))
-        fs.renameSync(path.join(distributionsPath, './distributions-windows'), dllPath)
+            -OutFile build\\distributions-windows.zip')
     }
 
-    fs.copyFileSync(mirrorDllPath, path.join(dllPath, './mirror.dll'))
-    fs.copyFileSync(mirrorLibraryPath, path.join(libraryPath, './mirror.dll.lib'))
-
-    if (Args.example) {
-        const exampleBuildPath = path.join(__dirname, './examples/desktop/build')
-        const profile = Args.release ? 'Release' : 'Debug'
-
-        if (!fs.existsSync(exampleBuildPath)) {
-            fs.mkdirSync(exampleBuildPath)
-        }
-
-        await spawn(`cmake -DCMAKE_BUILD_TYPE=${profile} ..`, {
-            cwd: exampleBuildPath
-        })
-        await spawn('cmake --build .', {
-            cwd: exampleBuildPath
-        })
-
-        for (const project of ['sender', 'receiver']) {
-            await spawn(`Copy-Item \
-                -Path ${dllPath}/* \
-                -Destination ${exampleBuildPath}/${project}/${profile} \
-                -Recurse \
-                -Force`, {
-                cwd: __dirname,
-                shell: 'powershell.exe'
-            })
-
-            fs.copyFileSync(mirrorDllPath, path.join(exampleBuildPath, project, `./${profile}/mirror.dll`), )
-
-            fs.copyFileSync(path.join(exampleBuildPath, project, `./${profile}/${project}.exe`), path.join(dllPath, `${project}.exe`))
-
-            if (!Args.release) {
-                fs.copyFileSync(mirrorDllPdbPath, path.join(exampleBuildPath, project, `./${profile}/mirror.pdb`), )
-            }
-        }
-    }
+    Command('Expand-Archive -Path build\\distributions-windows.zip -DestinationPath build\\bin -Force')
+    fs.unlinkSync('./build/distributions-windows.zip')
 }
 
-build(process.argv.slice(process.argv.indexOf('--') + 1).map(item=>item.replace('--', '')).reduce((args,item)=>Object.assign(args, {
-    [item]: true
-}), {}))
+fs.copyFileSync('./examples/desktop/CMakeLists.txt', './build/examples/CMakeLists.txt')
+fs.copyFileSync('./examples/desktop/sender/main.cpp', './build/examples/sender/main.cpp')
+fs.copyFileSync('./examples/desktop/receiver/main.cpp', './build/examples/receiver/main.cpp')
+
+fs.copyFileSync('./sdk/desktop/include/mirror.h', './build/include/mirror.h')
+fs.copyFileSync('./common/include/frame.h', './build/include/frame.h')
+
+execSync(`cargo build ${Args.release ? '--release' : ''}`)
+
+fs.copyFileSync(`./target/${Profile.toLowerCase()}/mirror.dll`, './build/bin/mirror.dll')
+fs.copyFileSync(`./target/${Profile.toLowerCase()}/mirror.dll.lib`, './build/lib/mirror.dll.lib')
+
+if (!Args.release) {
+    fs.copyFileSync('./target/debug/mirror.pdb', './build/bin/mirror.pdb')
+}
+
+if (!fs.existsSync('./examples/desktop/build')) {
+    fs.mkdirSync('./examples/desktop/build')
+}
+
+Command(`cmake -DCMAKE_BUILD_TYPE=${Profile} ..`, { cwd: join(__dirname, './examples/desktop/build') })
+Command(`cmake --build . --config=${Profile}`, { cwd: join(__dirname, './examples/desktop/build') })
+
+fs.copyFileSync(`./examples/desktop/build/receiver/${Profile}/receiver.exe`, './build/bin/receiver.exe')
+fs.copyFileSync(`./examples/desktop/build/sender/${Profile}/sender.exe`, './build/bin/sender.exe')
+
+fs.writeFileSync('./build/examples/sender/CMakeLists.txt', 
+    fs.readFileSync('./examples/desktop/sender/CMakeLists.txt')
+        .toString()
+        .replace('../../../sdk/desktop/include', '../../include')
+        .replace('../../../common/include', '../../include')
+        .replace('../../../target/debug', '../../lib')
+        .replace('../../../target/release', '../../lib'))
+
+fs.writeFileSync('./build/examples/receiver/CMakeLists.txt', 
+    fs.readFileSync('./examples/desktop/receiver/CMakeLists.txt')
+        .toString()
+        .replace('../../../sdk/desktop/include', '../../include')
+        .replace('../../../common/include', '../../include')
+        .replace('../../../target/debug', '../../lib')
+        .replace('../../../target/release', '../../lib'))

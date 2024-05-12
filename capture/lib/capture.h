@@ -57,6 +57,12 @@ struct OutputCallback
     void* ctx;
 };
 
+struct GetDeviceListResult
+{
+	int status;
+	struct DeviceList* list;
+};
+
 extern "C"
 {
     // Releases all data associated with OBS and terminates the OBS context.
@@ -67,9 +73,9 @@ extern "C"
     //
     // Callback function returns true to continue enumeration, or false to end 
     // enumeration.
-	EXPORT struct DeviceList* capture_get_device_list(enum DeviceType type);
+	EXPORT struct GetDeviceListResult capture_get_device_list(enum DeviceType type);
     // Sets the primary output source for a channel.
-	EXPORT void capture_set_video_input(struct DeviceDescription* description);
+	EXPORT int capture_set_video_input(struct DeviceDescription* description);
     // Adds/removes a raw video/audio callback. Allows the ability to obtain raw video/audio
     // frames without necessarily using an output.
 	EXPORT void* capture_set_output_callback(struct OutputCallback proc);
