@@ -26,16 +26,16 @@ This is a screencasting SDK that does not rely on third-party services. It inclu
 
 ### Prerequisites
 
-* [Rust](https://www.rust-lang.org/tools/install) - The main language used in the project.
-* [CMake](https://cmake.org/download/) - Required when compiling C++ projects and dependencies.
+* [rust](https://www.rust-lang.org/tools/install) - The main language used in the project.
+* [cmake](https://cmake.org/download/) - Required when compiling C++ projects and dependencies.
 
 #### Android
 
-* [Python3](https://www.python.org/downloads/) - cargo gradle requires python environment.
+* [python3](https://www.python.org/downloads/) - cargo gradle requires python environment.
 
 #### Windows
 
-* [Node.js](https://nodejs.org/en/download) - Automatically compiling and packaging scripts requires the node.js environment. <sup>Optional</sup>
+* [node.js](https://nodejs.org/en/download) - Automatically compiling and packaging scripts requires the node.js environment. <sup>Optional</sup>
 
 
 ### Building
@@ -72,8 +72,8 @@ cmake --build .
 
 ### Examples
 
-* [Android](./examples/android) - Record the screen and broadcast audio and video streams, and support automatic discovery of other clients.
-* [Desktop](./examples/desktop/) - Record the screen and broadcast audio and video streams. Automatic discovery is not supported. The port address is fixed in the example.
+* [android](./examples/android) - Record the screen and broadcast audio and video streams, and support automatic discovery of other clients.
+* [desktop](./examples/desktop/) - Record the screen and broadcast audio and video streams. Automatic discovery is not supported. The port address is fixed in the example.
 
 
 ### License
