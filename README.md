@@ -34,13 +34,7 @@ This is a screencasting SDK that does not rely on third-party services. It inclu
 
 * [rust](https://www.rust-lang.org/tools/install) - The main language used in the project.
 * [cmake](https://cmake.org/download/) - Required when compiling C++ projects and dependencies.
-
-#### Android
-
-* [python3](https://www.python.org/downloads/) - cargo gradle requires python environment.
-
-#### Windows
-
+* [python3](https://www.python.org/downloads/) - cargo gradle requires python environment. <sup>Optional</sup>
 * [node.js](https://nodejs.org/en/download) - Automatically compiling and packaging scripts requires the node.js environment. <sup>Optional</sup>
 
 
