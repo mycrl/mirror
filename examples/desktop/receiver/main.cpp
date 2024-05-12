@@ -129,7 +129,6 @@ int main()
 		MessageBox(nullptr, TEXT("Failed to create receiver!"), TEXT("Error"), 0);
 		SDL_Quit();
     	mirror::Quit();
-
 		return -1;
 	}
 
@@ -144,6 +143,5 @@ int main()
 
 	SDL_Quit();
     mirror::Quit();
-
 	return 0;
 }
