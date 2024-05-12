@@ -30,15 +30,14 @@ This is a screencasting SDK that does not rely on third-party services. It inclu
 * [desktop](./examples/desktop/) - Record the screen and broadcast audio and video streams. Automatic discovery is not supported. The port address is fixed in the example.
 
 
-## Prerequisites
+## Building
+
+#### Prerequisites
 
 * [rust](https://www.rust-lang.org/tools/install) - The main language used in the project.
 * [cmake](https://cmake.org/download/) - Required when compiling C++ projects and dependencies.
 * [python3](https://www.python.org/downloads/) - cargo gradle requires python environment. <sup>Optional</sup>
 * [node.js](https://nodejs.org/en/download) - Automatically compiling and packaging scripts requires the node.js environment. <sup>Optional</sup>
-
-
-## Building
 
 Examples and SDK library files can be automatically packaged by running an automatic compilation script.
 
