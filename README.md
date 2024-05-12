@@ -70,5 +70,11 @@ cmake --build .
 ```
 
 
+## Examples
+
+* [Android](./examples/android) - Record the screen and broadcast audio and video streams, and support automatic discovery of other clients.
+* [Desktop](./examples/desktop/) - Record the screen and broadcast audio and video streams. Automatic discovery is not supported. The port address is fixed in the example.
+
+
 ## License
 [MIT](./LICENSE) Copyright (c) 2022 Mr.Panda.
