@@ -24,6 +24,12 @@ This is a screencasting SDK that does not rely on third-party services. It inclu
 * Supports Intel QSV, AMD AMF, Nvidia EVENC, MediaCodec.
 
 
+### Examples
+
+* [android](./examples/android) - Record the screen and broadcast audio and video streams, and support automatic discovery of other clients.
+* [desktop](./examples/desktop/) - Record the screen and broadcast audio and video streams. Automatic discovery is not supported. The port address is fixed in the example.
+
+
 ### Prerequisites
 
 * [rust](https://www.rust-lang.org/tools/install) - The main language used in the project.
@@ -68,12 +74,6 @@ cd build
 cmake ..
 cmake --build .
 ```
-
-
-### Examples
-
-* [android](./examples/android) - Record the screen and broadcast audio and video streams, and support automatic discovery of other clients.
-* [desktop](./examples/desktop/) - Record the screen and broadcast audio and video streams. Automatic discovery is not supported. The port address is fixed in the example.
 
 
 ### License
