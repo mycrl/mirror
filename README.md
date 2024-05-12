@@ -50,7 +50,6 @@ The Debug version is compiled by default. If you need the Release version, just 
 For android, there is no need to manually call compilation. You can directly use Android Studio to open `examples/android`.
 
 For Windows or Linux examples, you can compile them separately.
-
 First you need to build the dynamic library:
 
 ```sh
