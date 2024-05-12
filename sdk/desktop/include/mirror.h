@@ -39,11 +39,11 @@ enum DeviceKind
 
 struct VideoOptions
 {
-    /// Video encoder settings, possible values are `h264_qsv”, `h264_nvenc”,
-    /// `libx264” and so on.
+    /// Video encoder settings, possible values are `h264_qsv`, `h264_nvenc`,
+    /// `libx264` and so on.
 	char* encoder;
-    /// Video decoder settings, possible values are `h264_qsv”, `h264_cuvid”,
-    /// `h264”, etc.
+    /// Video decoder settings, possible values are `h264_qsv`, `h264_cuvid`,
+    /// `h264`, etc.
 	char* decoder;
     /// Maximum number of B-frames, if low latency encoding is performed, it is
     /// recommended to set it to 0 to indicate that no B-frames are encoded.

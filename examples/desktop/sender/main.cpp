@@ -83,7 +83,7 @@ int main()
 
 	MirrorOptions options;
 	options.video.encoder = const_cast<char*>(mirror_find_video_encoder());
-	options.video.decoder = const_cast<char*>(mirror_find_video_decoder());
+	options.video.decoder = const_cast<char*>("h264");
 	options.video.width = sdl_rect.w;
 	options.video.height = sdl_rect.h;
 	options.video.frame_rate = 30;
@@ -93,7 +93,7 @@ int main()
     options.audio.sample_rate = 48000;
     options.audio.bit_rate = 6000;
 	options.multicast = const_cast<char*>("239.0.0.1");
-	options.mtu = 1500;
+	options.mtu = 1400;
 	mirror::Init(options);
 
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER))
@@ -101,7 +101,7 @@ int main()
 		return -1;
 	}
 
-	SDL_Window* screen = SDL_CreateWindow("sneder",
+	SDL_Window* screen = SDL_CreateWindow("sender",
 										  SDL_WINDOWPOS_UNDEFINED,
 										  SDL_WINDOWPOS_UNDEFINED,
 										  sdl_rect.w,
@@ -131,7 +131,7 @@ int main()
 
 	mirror::DeviceManagerService::SetInputDevice(devices.device_list[0]);
 
-	std::string bind = "0.0.0.0:3200";
+	std::string bind = "0.0.0.0:8080";
 	auto sender = mirror->CreateSender(bind, render);
 	if (!sender.has_value())
 	{

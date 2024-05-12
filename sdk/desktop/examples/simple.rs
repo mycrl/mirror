@@ -51,7 +51,7 @@ fn main() -> anyhow::Result<()> {
         mirror_set_input_device(
             &unsafe { std::slice::from_raw_parts(devices.list, devices.size) }[0],
         );
-        
+
         mirror_drop_devices(&devices);
 
         let sender = mirror_create_sender(

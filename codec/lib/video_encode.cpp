@@ -46,9 +46,10 @@ struct VideoEncoder* codec_create_video_encoder(struct VideoEncoderSettings* set
 
 	if (codec->codec_name == "h264_qsv")
 	{
-		av_opt_set_int(codec->context->priv_data, "preset", 7, 0);
-		av_opt_set_int(codec->context->priv_data, "profile", 66, 0);
-		av_opt_set_int(codec->context->priv_data, "scenario", 4, 0);
+		av_opt_set_int(codec->context->priv_data, "preset", 7 /* veryfast */, 0);
+		av_opt_set_int(codec->context->priv_data, "profile", 66 /* baseline */, 0);
+		av_opt_set_int(codec->context->priv_data, "scenario", 4 /* livestreaming */, 0);
+	    av_opt_set_int(codec->context->priv_data, "look_ahead", 0 /* false */, 0);
 	}
 	else if (codec->codec_name == "h264_nvenc")
 	{

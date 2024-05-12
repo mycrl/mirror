@@ -63,8 +63,8 @@ if (!fs.existsSync('./examples/desktop/build')) {
     fs.mkdirSync('./examples/desktop/build')
 }
 
-Command(`cmake -DCMAKE_BUILD_TYPE=${Profile} ..`, { cwd: join(__dirname, './examples/desktop//build') })
-Command(`cmake --build . --config=${Profile}`, { cwd: join(__dirname, './examples/desktop//build') })
+Command(`cmake -DCMAKE_BUILD_TYPE=${Profile} ..`, { cwd: join(__dirname, './examples/desktop/build') })
+Command(`cmake --build . --config=${Profile}`, { cwd: join(__dirname, './examples/desktop/build') })
 
 fs.copyFileSync(`./examples/desktop/build/receiver/${Profile}/receiver.exe`, './build/bin/receiver.exe')
 fs.copyFileSync(`./examples/desktop/build/sender/${Profile}/sender.exe`, './build/bin/sender.exe')

@@ -78,7 +78,7 @@ struct Args {
 fn main() -> anyhow::Result<()> {
     simple_logger::init_with_level(log::Level::Info).unwrap();
 
-    let mut args = Args::parse();
+    let args = Args::parse();
     let transport = Transport::new(
         1400,
         "239.0.0.1".parse()?,
@@ -89,7 +89,6 @@ fn main() -> anyhow::Result<()> {
     )?;
 
     if args.kind == "client" {
-        args.addr.set_port(args.addr.port() + 1);
         let adapter = StreamSenderAdapter::new();
         transport.create_sender(0, args.addr, vec![], &adapter)?;
 

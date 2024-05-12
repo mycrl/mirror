@@ -40,11 +40,11 @@ static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct RawVideoOptions {
-    /// Video encoder settings, possible values are `h264_qsv”, `h264_nvenc”,
-    /// `libx264” and so on.
+    /// Video encoder settings, possible values are `h264_qsv`, `h264_nvenc`,
+    /// `libx264` and so on.
     pub encoder: *const c_char,
-    /// Video decoder settings, possible values are `h264_qsv”, `h264_cuvid”,
-    /// `h264”, etc.
+    /// Video decoder settings, possible values are `h264_qsv`, `h264_cuvid`,
+    /// `h264`, etc.
     pub decoder: *const c_char,
     /// Maximum number of B-frames, if low latency encoding is performed, it is
     /// recommended to set it to 0 to indicate that no B-frames are encoded.

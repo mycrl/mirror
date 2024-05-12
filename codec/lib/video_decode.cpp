@@ -100,9 +100,9 @@ bool codec_video_decoder_send_packet(struct VideoDecoder* codec,
 									 uint8_t* buf,
 									 size_t size)
 {
-	while (size > 0)
+	while (size)
 	{
-		int ret = av_parser_parse2(codec->parser,
+		int len = av_parser_parse2(codec->parser,
 								   codec->context,
 								   &codec->packet->data,
 								   &codec->packet->size,
@@ -111,22 +111,15 @@ bool codec_video_decoder_send_packet(struct VideoDecoder* codec,
 								   AV_NOPTS_VALUE,
 								   AV_NOPTS_VALUE,
 								   0);
-		if (ret < 0)
-		{
-			return false;
-		}
+		buf += len;
+		size -= len;
 
-		buf += ret;
-		size -= ret;
-
-		if (codec->packet->size == 0)
+		if (codec->packet->size)
 		{
-			continue;
-		}
-
-		if (avcodec_send_packet(codec->context, codec->packet) != 0)
-		{
-			return false;
+			if (avcodec_send_packet(codec->context, codec->packet) != 0)
+			{
+				return false;
+			}
 		}
 	}
 

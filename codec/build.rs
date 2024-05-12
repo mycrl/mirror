@@ -154,24 +154,24 @@ impl Settings {
 
 #[cfg(target_os = "windows")]
 fn find_ffmpeg_prefix(out_dir: &str) -> anyhow::Result<(Vec<String>, Vec<String>)> {
-    let ffmpeg_prefix = join(out_dir, "ffmpeg-6.1.1").unwrap();
+    let ffmpeg_prefix = join(out_dir, "ffmpeg").unwrap();
     if !is_exsit(&ffmpeg_prefix) {
         exec(
             "Invoke-WebRequest \
-                -Uri https://github.com/mycrl/distributions/releases/download/distributions/ffmpeg-6.1.1.zip \
+                -Uri https://github.com/ShiftMediaProject/FFmpeg/releases/download/6.1.r112164/libffmpeg_6.1.r112164_msvc17_x64.zip \
                 -OutFile ffmpeg.zip",
             out_dir,
         )?;
 
         exec(
-            "Expand-Archive -Path ffmpeg.zip -DestinationPath ./",
+            "Expand-Archive -Path ffmpeg.zip -DestinationPath ./ffmpeg",
             out_dir,
         )?;
     }
 
     Ok((
         vec![join(&ffmpeg_prefix, "./include")?],
-        vec![join(&ffmpeg_prefix, "./lib")?],
+        vec![join(&ffmpeg_prefix, "./lib/x64")?],
     ))
 }
 

@@ -9,6 +9,7 @@ use common::atomic::EasyAtomic;
 
 pub struct Dequeue {
     queue: Arc<RwLock<BTreeMap<u64, (Bytes, Instant)>>>,
+    last_queue: AtomicU64,
     rtt: Arc<AtomicU64>,
     time: Instant,
     delay: usize,
@@ -16,14 +17,11 @@ pub struct Dequeue {
 
 impl Dequeue {
     pub fn new(delay: usize) -> Self {
-        let rtt = Arc::new(AtomicU64::new(delay as u64 / 2));
-        let queue: Arc<RwLock<BTreeMap<u64, (Bytes, Instant)>>> =
-            Arc::new(RwLock::new(BTreeMap::new()));
-
         Self {
+            rtt: Arc::new(AtomicU64::new(delay as u64 / 2)),
+            queue: Arc::new(RwLock::new(BTreeMap::new())),
+            last_queue: AtomicU64::new(0),
             time: Instant::now(),
-            rtt,
-            queue,
             delay,
         }
     }
@@ -40,6 +38,11 @@ impl Dequeue {
     }
 
     pub fn push(&self, sequence: u64, bytes: Bytes) {
+        let last_seq = self.last_queue.get();
+        if !(last_seq >= u64::MAX - 100 && sequence <= 100) && last_seq >= sequence {
+            return;
+        }
+
         if !self.queue.read().unwrap().contains_key(&sequence) {
             self.queue
                 .write()
@@ -57,6 +60,7 @@ impl Dequeue {
         let mut sequence = None;
         if let Some((seq, (_, time))) = self.queue.read().unwrap().first_key_value() {
             if time.elapsed().as_millis() as usize >= self.delay {
+                self.last_queue.update(*seq);
                 sequence.replace(*seq);
             }
         }

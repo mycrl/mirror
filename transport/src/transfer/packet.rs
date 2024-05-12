@@ -174,7 +174,7 @@ impl PacketEncoder {
 /// types of data.
 pub struct PacketDecoder {
     bytes: BytesMut,
-    sequence: i16,
+    sequence: i32,
     length: usize,
 }
 
@@ -192,7 +192,7 @@ impl PacketDecoder {
             return None;
         }
 
-        let sequence = bytes.get_u16() as i16;
+        let sequence = bytes.get_u16() as i32;
         let length = bytes.get_u32() as usize;
 
         let mut results = None;

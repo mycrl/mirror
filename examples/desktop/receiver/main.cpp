@@ -82,8 +82,8 @@ int main()
 	sdl_rect.h = 720;
 
 	MirrorOptions options;
-	options.video.encoder = const_cast<char*>(mirror_find_video_encoder());
-	options.video.decoder = const_cast<char*>(mirror_find_video_decoder());
+	options.video.encoder = const_cast<char*>("libx264");
+	options.video.decoder = const_cast<char*>("h264");
 	options.video.width = sdl_rect.w;
 	options.video.height = sdl_rect.h;
 	options.video.frame_rate = 30;
@@ -93,7 +93,7 @@ int main()
     options.audio.sample_rate = 48000;
     options.audio.bit_rate = 6000;
 	options.multicast = const_cast<char*>("239.0.0.1");
-	options.mtu = 1500;
+	options.mtu = 1400;
 	mirror::Init(options);
 
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER))
@@ -122,13 +122,14 @@ int main()
     Render* render = new Render(&sdl_rect, sdl_texture, sdl_renderer);
 	mirror::MirrorService* mirror = new mirror::MirrorService();
 
-	std::string bind = "0.0.0.0:3200";
+	std::string bind = "0.0.0.0:8080";
 	auto receiver = mirror->CreateReceiver(bind, render);
 	if (!receiver.has_value())
 	{
 		MessageBox(nullptr, TEXT("Failed to create receiver!"), TEXT("Error"), 0);
 		SDL_Quit();
     	mirror::Quit();
+
 		return -1;
 	}
 
@@ -143,5 +144,6 @@ int main()
 
 	SDL_Quit();
     mirror::Quit();
+
 	return 0;
 }
