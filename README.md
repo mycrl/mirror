@@ -16,7 +16,7 @@
 This is a screencasting SDK that does not rely on third-party services. It includes functions such as automatic discovery, service grouping, and automatic reconnection. It only supports LANs with good network conditions.
 
 
-## Features
+### Features
 
 * Prefer hardware codecs.
 * Use UDP multicast to transmit audio and video streams.
@@ -24,7 +24,7 @@ This is a screencasting SDK that does not rely on third-party services. It inclu
 * Supports Intel QSV, AMD AMF, Nvidia EVENC, MediaCodec.
 
 
-## Prerequisites
+### Prerequisites
 
 * [Rust](https://www.rust-lang.org/tools/install) - The main language used in the project.
 * [CMake](https://cmake.org/download/) - Required when compiling C++ projects and dependencies.
@@ -38,7 +38,7 @@ This is a screencasting SDK that does not rely on third-party services. It inclu
 * [Node.js](https://nodejs.org/en/download) - Automatically compiling and packaging scripts requires the node.js environment. <sup>Optional</sup>
 
 
-## Building
+### Building
 
 Examples and SDK library files can be automatically packaged by running an automatic compilation script.
 
@@ -70,11 +70,11 @@ cmake --build .
 ```
 
 
-## Examples
+### Examples
 
 * [Android](./examples/android) - Record the screen and broadcast audio and video streams, and support automatic discovery of other clients.
 * [Desktop](./examples/desktop/) - Record the screen and broadcast audio and video streams. Automatic discovery is not supported. The port address is fixed in the example.
 
 
-## License
+### License
 [MIT](./LICENSE) Copyright (c) 2022 Mr.Panda.
