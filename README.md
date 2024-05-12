@@ -49,8 +49,6 @@ npm run build
 The Debug version is compiled by default. If you need the Release version, just run `npm run build:release`.  
 For android, there is no need to manually call compilation. You can directly use Android Studio to open `examples/android`.
 
-#### Example
-
 For Windows or Linux examples, you can compile them separately.
 
 First you need to build the dynamic library:
