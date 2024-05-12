@@ -8,14 +8,67 @@
 </div>
 <div align="center">
   <sup>Low-latency transport protocols use [SRT](https://github.com/Haivision/srt)</sup></br>
-  <sup>Video: H264, Audio: Amr</sup>
+  <sup>Video: H264, Audio: Opus</sup>
 </div>
+<br/>
+<br/>
 
-***
+This is a screencasting SDK that does not rely on third-party services. It includes functions such as automatic discovery, service grouping, and automatic reconnection. It only supports LANs with good network conditions.
 
-This is a screen casting SDK that does not rely on third-party services, including auto-discovery, service grouping, and auto-reconnection, and is designed to support only LANs with good network conditions, and may have poor latency performance on WANs.
 
-***
+## Features
 
-### License
+* Prefer hardware codecs.
+* Use UDP multicast to transmit audio and video streams.
+* Support Android, Windows, Linux.
+* Supports Intel QSV, AMD AMF, Nvidia EVENC, MediaCodec.
+
+
+## Prerequisites
+
+* [Rust](https://www.rust-lang.org/tools/install) - The main language used in the project.
+* [CMake](https://cmake.org/download/) - Required when compiling C++ projects and dependencies.
+
+#### Android
+
+* [Python3](https://www.python.org/downloads/) - cargo gradle requires python environment.
+
+#### Windows
+
+* [Node.js](https://nodejs.org/en/download) - Automatically compiling and packaging scripts requires the node.js environment. <sup>Optional</sup>
+
+
+## Building
+
+Examples and SDK library files can be automatically packaged by running an automatic compilation script.
+
+```sh
+npm run build
+```
+
+The Debug version is compiled by default. If you need the Release version, just run `npm run build:release`.  
+For android, there is no need to manually call compilation. You can directly use Android Studio to open `examples/android`.
+
+#### Example
+
+For Windows or Linux examples, you can compile them separately.
+
+First you need to build the dynamic library:
+
+```sh
+cargo build
+```
+
+Next, enter the example directory and use cmake to generate and compile:
+
+```sh
+cd examples/desktop
+mkdir build
+cd build
+cmake ..
+cmake --build .
+```
+
+
+## License
 [MIT](./LICENSE) Copyright (c) 2022 Mr.Panda.
