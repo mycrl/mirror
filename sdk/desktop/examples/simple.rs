@@ -1,8 +1,15 @@
+#![allow(unused)]
+
 use std::{ffi::CString, ptr::null, thread, time::Duration};
 
+#[cfg(any(target_os = "windows", target_os = "linux"))]
 use capture::DeviceKind;
 use clap::Parser;
+
+#[cfg(any(target_os = "windows", target_os = "linux"))]
 use codec::video::{codec_find_video_decoder, codec_find_video_encoder};
+
+#[cfg(any(target_os = "windows", target_os = "linux"))]
 use mirror::{
     mirror_close_receiver, mirror_close_sender, mirror_create, mirror_create_receiver,
     mirror_create_sender, mirror_drop, mirror_drop_devices, mirror_get_devices, mirror_init,
@@ -21,6 +28,7 @@ struct Args {
     kind: String,
 }
 
+#[cfg(any(target_os = "windows", target_os = "linux"))]
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     let bind = CString::new("0.0.0.0:8080")?;
@@ -85,3 +93,6 @@ fn main() -> anyhow::Result<()> {
     mirror_quit();
     Ok(())
 }
+
+#[cfg(target_os = "macos")]
+fn main() {}

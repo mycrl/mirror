@@ -2,6 +2,7 @@
 
 use std::{thread, time::Duration};
 
+#[cfg(any(target_os = "windows", target_os = "linux"))]
 use codec::{video::find_video_encoder, VideoEncoder, VideoEncoderSettings};
 use common::frame::{VideoFrame, VideoFrameRect};
 
