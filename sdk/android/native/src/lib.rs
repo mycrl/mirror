@@ -20,9 +20,6 @@ use transport::{
     TransportOptions,
 };
 
-#[global_allocator]
-static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
-
 /// JNI_OnLoad
 ///
 /// jint JNI_OnLoad(JavaVM *vm, void *reserved);

@@ -80,28 +80,27 @@ impl<'a> TryFrom<&'a [u8]> for Packet<'a> {
     type Error = ();
 
     fn try_from(mut bytes: &'a [u8]) -> Result<Self, Self::Error> {
-        // Check if the current slice is damaged.
         let crc = bytes.get_u32();
-        if crc != fingerprint(bytes) {
-            return Err(());
+        if crc == fingerprint(bytes) {
+            Ok(match bytes.get_u8() {
+                0 => Self::Ping {
+                    timestamp: bytes.get_u64(),
+                },
+                1 => Self::Pong {
+                    timestamp: bytes.get_u64(),
+                },
+                2 => Self::Nack {
+                    range: bytes.get_u64()..bytes.get_u64(),
+                },
+                3 => Self::Bytes {
+                    sequence: bytes.get_u64(),
+                    chunk: bytes,
+                },
+                _ => return Err(()),
+            })
+        } else {
+            Err(())
         }
-
-        Ok(match bytes.get_u8() {
-            0 => Self::Ping {
-                timestamp: bytes.get_u64(),
-            },
-            1 => Self::Pong {
-                timestamp: bytes.get_u64(),
-            },
-            2 => Self::Nack {
-                range: bytes.get_u64()..bytes.get_u64(),
-            },
-            3 => Self::Bytes {
-                sequence: bytes.get_u64(),
-                chunk: bytes,
-            },
-            _ => return Err(()),
-        })
     }
 }
 
@@ -112,7 +111,7 @@ impl<'a> TryFrom<&'a [u8]> for Packet<'a> {
 /// ```
 /// assert_eq!(faster_stun::util::fingerprint(b"1"), 3498621689);
 /// ```
-fn fingerprint(buf: &[u8]) -> u32 {
+pub fn fingerprint(buf: &[u8]) -> u32 {
     Crc::<u32>::new(&CRC_32_ISO_HDLC).checksum(buf) ^ 0x5354_554e
 }
 

@@ -31,7 +31,7 @@ if (NOT EXISTS "${THIRD_PARTY_DIR}/ffmpeg")
         execute_process(
             WORKING_DIRECTORY "${THIRD_PARTY_DIR}"
             COMMAND powershell.exe -Command "Invoke-WebRequest \
-                    -Uri https://github.com/ShiftMediaProject/FFmpeg/releases/download/6.1.r112164/libffmpeg_6.1.r112164_msvc17_x64.zip \
+                    -Uri https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2024-05-12-13-21/ffmpeg-n6.1.1-96-g1606aab99b-win64-lgpl-shared-6.1.zip \
                     -OutFile ffmpeg.zip")
         execute_process(
             WORKING_DIRECTORY "${THIRD_PARTY_DIR}"
@@ -59,7 +59,7 @@ include_directories("${THIRD_PARTY_DIR}/ffmpeg/include"
                     "${THIRD_PARTY_DIR}/libyuv/include"
                     "../../common/include")
 
-target_link_directories(codec PRIVATE "${THIRD_PARTY_DIR}/ffmpeg/lib/x64")
+target_link_directories(codec PRIVATE "${THIRD_PARTY_DIR}/ffmpeg/lib")
 target_link_libraries(codec avcodec 
                             avutil)
 

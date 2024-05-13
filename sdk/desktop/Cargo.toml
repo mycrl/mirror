@@ -17,7 +17,6 @@ log = "0.4.20"
 simple_logger = "4"
 anyhow = "1.0.82"
 once_cell = "1.19.0"
-mimalloc = { version = "*", default-features = false }
 
 [dev-dependencies]
 clap = { version = "4", features = ["derive", "env"] }

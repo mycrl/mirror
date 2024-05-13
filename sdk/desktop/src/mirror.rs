@@ -9,10 +9,7 @@ use codec::AudioDecoder;
 use anyhow::Result;
 use bytes::Bytes;
 use capture::{AVFrameSink, AudioInfo, Device, DeviceManager, DeviceManagerOptions, VideoInfo};
-use codec::{
-    AudioEncoder, AudioEncoderSettings, VideoDecoder, VideoEncoder,
-    VideoEncoderSettings,
-};
+use codec::{AudioEncoder, AudioEncoderSettings, VideoDecoder, VideoEncoder, VideoEncoderSettings};
 use common::frame::{AudioFrame, VideoFrame};
 use once_cell::sync::Lazy;
 use transport::{

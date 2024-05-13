@@ -1,6 +1,7 @@
 use crate::adapter::StreamKind;
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
+use xxhash_rust::xxh3::xxh3_64;
 
 pub struct PacketInfo {
     pub kind: StreamKind,
@@ -17,7 +18,7 @@ pub struct Muxer {
 }
 
 impl Muxer {
-    const HEAD_SIZE: usize = 18;
+    const HEAD_SIZE: usize = 26;
 
     /// The result of the encoding may be null, this is because an empty packet
     /// may be passed in from outside.
@@ -27,11 +28,16 @@ impl Muxer {
         }
 
         let mut bytes = BytesMut::with_capacity(buf.len() + Self::HEAD_SIZE);
+        bytes.put_u64(0);
         bytes.put_u64(self.sequence);
         bytes.put_u8(info.kind as u8);
         bytes.put_u8(info.flags);
         bytes.put_u64(info.timestamp);
         bytes.put(buf);
+
+        // xxhash
+        let hash = xxh3_64(&bytes[8..]);
+        bytes[0..8].copy_from_slice(&hash.to_be_bytes());
 
         if self.sequence == u64::MAX {
             self.sequence = 0;
@@ -56,32 +62,33 @@ impl Default for Remuxer {
 }
 
 impl Remuxer {
-    pub fn remux(&mut self, mut buf: &[u8]) -> Option<(usize, PacketInfo)> {
-        let seq = buf.get_u64() as i128;
-        let kind = StreamKind::try_from(buf.get_u8()).ok()?;
-        let flags = buf.get_u8();
-        let timestamp = buf.get_u64();
+    pub fn remux(&mut self, mut bytes: &[u8]) -> Option<(usize, PacketInfo)> {
+        let hash = bytes.get_u64();
+        if hash == xxh3_64(bytes) {
+            let seq = bytes.get_u64() as i128;
+            let is_loss = seq != 0 && self.sequence + 1 != seq;
+            if is_loss {
+                log::warn!(
+                    "Packet loss, number of lost = {}, current seq={}, previous seq={}",
+                    seq - self.sequence,
+                    seq,
+                    self.sequence
+                );
+            }
 
-        let is_loss = seq != 0 && self.sequence + 1 != seq;
-        if is_loss {
-            log::warn!(
-                "Packet loss, number of lost = {}, current seq={}, previous seq={}",
-                seq - self.sequence,
-                seq,
-                self.sequence
-            );
-        }
-
-        self.sequence = seq;
-        if !is_loss {
-            Some((
-                Muxer::HEAD_SIZE,
-                PacketInfo {
-                    kind,
-                    flags,
-                    timestamp,
-                },
-            ))
+            self.sequence = seq;
+            if !is_loss {
+                Some((
+                    Muxer::HEAD_SIZE,
+                    PacketInfo {
+                        kind: StreamKind::try_from(bytes.get_u8()).ok()?,
+                        flags: bytes.get_u8(),
+                        timestamp: bytes.get_u64(),
+                    },
+                ))
+            } else {
+                None
+            }
         } else {
             None
         }

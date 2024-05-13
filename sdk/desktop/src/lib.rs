@@ -19,9 +19,6 @@ use transport::adapter::{StreamReceiverAdapter, StreamSenderAdapter};
 
 use crate::mirror::FrameSink;
 
-#[global_allocator]
-static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
-
 /// Video Codec Configuration.
 ///
 /// ```c

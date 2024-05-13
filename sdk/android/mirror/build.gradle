@@ -10,9 +10,9 @@ apply plugin: 'org.mozilla.rust-android-gradle.rust-android'
 apply plugin: 'maven-publish'
 
 dependencies {
-    implementation 'androidx.core:core-ktx:1.13.0'
+    implementation 'androidx.core:core-ktx:1.13.1'
     implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'com.google.android.material:material:1.11.0'
+    implementation 'com.google.android.material:material:1.12.0'
     implementation 'com.ensarsarajcic.kotlinx:serialization-msgpack:0.5.5'
 }
 
@@ -64,8 +64,10 @@ android {
 }
 
 cargo {
+    verbose = true
     profile = 'release'
     apiLevel = 29
+    rustupChannel = 'stable'
     prebuiltToolchains = true
     pythonCommand = 'python3'
     module = '../native'

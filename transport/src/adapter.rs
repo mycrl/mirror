@@ -121,6 +121,7 @@ impl StreamSenderAdapter {
                         buf = bytes.freeze();
                     }
                 }
+
                 self.tx
                     .send(Some((buf, StreamKind::Video, flags as u8, timestamp)))
                     .is_ok()
