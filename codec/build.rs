@@ -156,7 +156,7 @@ impl Settings {
 fn find_ffmpeg_prefix(out_dir: &str) -> anyhow::Result<(Vec<String>, Vec<String>)> {
     let ffmpeg_prefix = join(
         out_dir,
-        "ffmpeg-n6.1.1-96-g1606aab99b-win64-lgpl-shared-6.1",
+        "ffmpeg-n6.1.1-96-g1606aab99b-win64-gpl-shared-6.1",
     )
     .unwrap();
     if !is_exsit(&ffmpeg_prefix) {
