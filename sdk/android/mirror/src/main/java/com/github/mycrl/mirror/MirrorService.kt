@@ -100,7 +100,7 @@ class MirrorService constructor(
                             receiver.onStart(ReceiverAdapterWrapper { -> close() })
                         }
 
-                        override fun sink(kind: Int, timestamp: Long, buf: ByteArray): Boolean {
+                        override fun sink(kind: Int, flags: Int, timestamp: Long, buf: ByteArray): Boolean {
                             try {
                                 if (isReleased) {
                                     return false
@@ -109,13 +109,13 @@ class MirrorService constructor(
                                 when (kind) {
                                     StreamKind.Video -> {
                                         if (videoDecoder.isRunning) {
-                                            videoDecoder.sink(buf, timestamp)
+                                            videoDecoder.sink(buf, flags, timestamp)
                                         }
                                     }
 
                                     StreamKind.Audio -> {
                                         if (audioDecoder != null && audioDecoder!!.isRunning) {
-                                            audioDecoder!!.sink(buf, timestamp)
+                                            audioDecoder!!.sink(buf, flags, timestamp)
                                         }
                                     }
                                 }
@@ -236,7 +236,7 @@ class MirrorService constructor(
                 observer.onStart(ReceiverAdapterWrapper { -> close() })
             }
 
-            override fun sink(kind: Int, timestamp: Long, buf: ByteArray): Boolean {
+            override fun sink(kind: Int, flags: Int, timestamp: Long, buf: ByteArray): Boolean {
                 try {
                     if (isReleased) {
                         return false
@@ -245,13 +245,13 @@ class MirrorService constructor(
                     when (kind) {
                         StreamKind.Video -> {
                             if (videoDecoder.isRunning) {
-                                videoDecoder.sink(buf, timestamp)
+                                videoDecoder.sink(buf, flags, timestamp)
                             }
                         }
 
                         StreamKind.Audio -> {
                             if (audioDecoder != null && audioDecoder.isRunning) {
-                                audioDecoder.sink(buf, timestamp)
+                                audioDecoder.sink(buf, flags, timestamp)
                             }
                         }
                     }

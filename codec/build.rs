@@ -162,7 +162,7 @@ fn find_ffmpeg_prefix(out_dir: &str) -> anyhow::Result<(Vec<String>, Vec<String>
     if !is_exsit(&ffmpeg_prefix) {
         exec(
             "Invoke-WebRequest \
-                -Uri https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2024-05-12-13-21/ffmpeg-n6.1.1-96-g1606aab99b-win64-lgpl-shared-6.1.zip \
+                -Uri https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2024-05-13-12-48/ffmpeg-n6.1.1-96-g1606aab99b-win64-gpl-shared-6.1.zip \
                 -OutFile ffmpeg.zip",
             out_dir,
         )?;

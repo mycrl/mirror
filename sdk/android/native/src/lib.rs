@@ -356,8 +356,8 @@ impl Mirror {
             let stream_adapter_ = Arc::downgrade(&stream_adapter);
             thread::spawn(move || {
                 while let Some(stream_adapter) = stream_adapter_.upgrade() {
-                    if let Some((buf, kind, timestamp)) = stream_adapter.next() {
-                        if !adapter.sink(buf, kind, timestamp) {
+                    if let Some((buf, kind, flags, timestamp)) = stream_adapter.next() {
+                        if !adapter.sink(buf, kind, flags, timestamp) {
                             break;
                         }
                     }

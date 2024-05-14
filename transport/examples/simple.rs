@@ -45,7 +45,7 @@ impl ReceiverAdapterFactory for SimpleReceiverAdapterFactory {
                 .spawn()?;
 
             if let Some(mut stdin) = child.stdin {
-                while let Some((buf, kind, _)) = adapter.next() {
+                while let Some((buf, kind, _, _)) = adapter.next() {
                     if kind == StreamKind::Video {
                         if let Err(e) = stdin.write_all(&buf) {
                             println!("{:?}", e);

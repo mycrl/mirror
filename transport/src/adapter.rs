@@ -2,7 +2,7 @@ use std::{
     fmt,
     net::SocketAddr,
     sync::{
-        atomic::AtomicBool,
+        atomic::{AtomicBool, AtomicU8},
         mpsc::{channel, Receiver, Sender},
         Arc, Mutex, Weak,
     },
@@ -71,14 +71,16 @@ impl ReceiverAdapterFactory for () {
     }
 }
 
-/// Video Streaming Send Processing
+/// Video Audio Streaming Send Processing
 ///
 /// Because the receiver will normally join the stream in the middle of the
 /// stream, and in the face of this situation, it is necessary to process the
 /// sps and pps as well as the key frame information.
 #[allow(clippy::type_complexity)]
 pub struct StreamSenderAdapter {
-    config: AtomicOption<Bytes>,
+    audio_interval: AtomicU8,
+    video_config: AtomicOption<Bytes>,
+    audio_config: AtomicOption<Bytes>,
     tx: Sender<Option<(Bytes, StreamKind, u8, u64)>>,
     rx: Mutex<Receiver<Option<(Bytes, StreamKind, u8, u64)>>>,
 }
@@ -87,7 +89,9 @@ impl StreamSenderAdapter {
     pub fn new() -> Arc<Self> {
         let (tx, rx) = channel();
         Arc::new(Self {
-            config: AtomicOption::new(None),
+            video_config: AtomicOption::new(None),
+            audio_config: AtomicOption::new(None),
+            audio_interval: AtomicU8::new(0),
             rx: Mutex::new(rx),
             tx,
         })
@@ -108,12 +112,12 @@ impl StreamSenderAdapter {
         match info {
             StreamBufferInfo::Video(flags, timestamp) => {
                 if flags == BufferFlag::Config as i32 {
-                    self.config.swap(Some(buf.clone()));
+                    self.video_config.swap(Some(buf.clone()));
                 }
 
                 // Add SPS and PPS units in front of each keyframe (only use android)
                 if flags == BufferFlag::KeyFrame as i32 {
-                    if let Some(config) = self.config.get() {
+                    if let Some(config) = self.video_config.get() {
                         let mut bytes = BytesMut::with_capacity(config.len() + buf.len());
                         bytes.put(&config[..]);
                         bytes.put(buf);
@@ -126,10 +130,38 @@ impl StreamSenderAdapter {
                     .send(Some((buf, StreamKind::Video, flags as u8, timestamp)))
                     .is_ok()
             }
-            StreamBufferInfo::Audio(flags, timestamp) => self
-                .tx
-                .send(Some((buf, StreamKind::Audio, flags as u8, timestamp)))
-                .is_ok(),
+            StreamBufferInfo::Audio(flags, timestamp) => {
+                if flags == BufferFlag::Config as i32 {
+                    self.audio_config.swap(Some(buf.clone()));
+                }
+
+                // Insert a configuration package into every 30 audio packages.
+                let count = self.audio_interval.get();
+                self.audio_interval.update(if count == 30 {
+                    if let Some(config) = self.video_config.get() {
+                        if self
+                            .tx
+                            .send(Some((
+                                config.clone(),
+                                StreamKind::Audio,
+                                BufferFlag::Config as u8,
+                                timestamp,
+                            )))
+                            .is_err()
+                        {
+                            return false;
+                        }
+                    }
+
+                    0
+                } else {
+                    count + 1
+                });
+
+                self.tx
+                    .send(Some((buf, StreamKind::Audio, flags as u8, timestamp)))
+                    .is_ok()
+            }
         }
     }
 
@@ -138,22 +170,24 @@ impl StreamSenderAdapter {
     }
 }
 
-/// Video Streaming Receiver Processing
+/// Video Audio Streaming Receiver Processing
 ///
 /// The main purpose is to deal with cases where packet loss occurs at the
 /// receiver side, since the SRT communication protocol does not completely
 /// guarantee no packet loss.
 pub struct StreamReceiverAdapter {
-    readable: AtomicBool,
-    tx: Sender<Option<(Bytes, StreamKind, u64)>>,
-    rx: Mutex<Receiver<Option<(Bytes, StreamKind, u64)>>>,
+    audio_ready: AtomicBool,
+    video_readable: AtomicBool,
+    tx: Sender<Option<(Bytes, StreamKind, u8, u64)>>,
+    rx: Mutex<Receiver<Option<(Bytes, StreamKind, u8, u64)>>>,
 }
 
 impl StreamReceiverAdapter {
     pub fn new() -> Arc<Self> {
         let (tx, rx) = channel();
         Arc::new(Self {
-            readable: AtomicBool::new(false),
+            video_readable: AtomicBool::new(false),
+            audio_ready: AtomicBool::new(false),
             rx: Mutex::new(rx),
             tx,
         })
@@ -166,7 +200,7 @@ impl StreamReceiverAdapter {
         );
     }
 
-    pub fn next(&self) -> Option<(Bytes, StreamKind, u64)> {
+    pub fn next(&self) -> Option<(Bytes, StreamKind, u8, u64)> {
         self.rx.lock().unwrap().recv().ok().flatten()
     }
 
@@ -174,26 +208,43 @@ impl StreamReceiverAdapter {
     /// packet loss occurs, the previous keyframe is retransmitted directly into
     /// the decoder.
     pub fn send(&self, buf: Bytes, kind: StreamKind, flags: u8, timestamp: u64) -> bool {
-        if kind == StreamKind::Video {
-            // When keyframes are received, the video stream can be played back
-            // normally without corruption.
-            let mut readable = self.readable.get();
-            if flags == BufferFlag::KeyFrame as u8 && !readable {
-                self.readable.update(true);
-                readable = true;
-            }
+        match kind {
+            StreamKind::Video => {
+                // When keyframes are received, the video stream can be played back
+                // normally without corruption.
+                let mut readable = self.video_readable.get();
+                if flags == BufferFlag::KeyFrame as u8 && !readable {
+                    self.video_readable.update(true);
+                    readable = true;
+                }
 
-            // In case of packet loss, no packet is sent to the decoder.
-            if !readable {
-                return true;
+                // In case of packet loss, no packet is sent to the decoder.
+                if !readable {
+                    return true;
+                }
+            }
+            StreamKind::Audio => {
+                // The audio configuration package only needs to be processed once.
+                let ready = self.audio_ready.get();
+                if flags == BufferFlag::Config as u8 {
+                    if !ready {
+                        self.audio_ready.update(true);
+                    } else {
+                        return true;
+                    }
+                } else {
+                    if !ready {
+                        return true;
+                    }
+                }
             }
         }
 
-        self.tx.send(Some((buf, kind, timestamp))).is_ok()
+        self.tx.send(Some((buf, kind, flags, timestamp))).is_ok()
     }
 
     /// Marks that the video packet has been lost.
     pub fn loss_pkt(&self) {
-        self.readable.update(false);
+        self.video_readable.update(false);
     }
 }
