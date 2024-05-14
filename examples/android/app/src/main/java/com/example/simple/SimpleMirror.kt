@@ -121,8 +121,8 @@ class SimpleMirrorService : Service() {
             override val format = MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface
             override val bitRate = 500 * 1024 * 8
             override val frameRate = 60
-            override var height = 1080
-            override var width = 1920
+            override var height = 720
+            override var width = 1280
         }
 
         private val AudioConfigure = object : Audio.AudioEncoder.AudioEncoderConfigure {
@@ -225,8 +225,8 @@ class SimpleMirrorService : Service() {
 
         Log.i("simple", "create sender.")
 
-         VideoConfigure.width = displayMetrics.widthPixels
-         VideoConfigure.height = displayMetrics.heightPixels
+        // VideoConfigure.width = displayMetrics.widthPixels
+        // VideoConfigure.height = displayMetrics.heightPixels
         mediaProjection =
             (getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager).getMediaProjection(
                 Activity.RESULT_OK,

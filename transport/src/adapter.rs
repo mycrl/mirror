@@ -138,7 +138,7 @@ impl StreamSenderAdapter {
                 // Insert a configuration package into every 30 audio packages.
                 let count = self.audio_interval.get();
                 self.audio_interval.update(if count == 30 {
-                    if let Some(config) = self.video_config.get() {
+                    if let Some(config) = self.audio_config.get() {
                         if self
                             .tx
                             .send(Some((
