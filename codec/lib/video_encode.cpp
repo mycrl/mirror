@@ -46,10 +46,10 @@ struct VideoEncoder* codec_create_video_encoder(struct VideoEncoderSettings* set
 
 	if (codec->codec_name == "h264_qsv")
 	{
-		// av_opt_set_int(codec->context->priv_data, "preset", 7 /* veryfast */, 0);
-		// av_opt_set_int(codec->context->priv_data, "profile", 66 /* baseline */, 0);
-		// av_opt_set_int(codec->context->priv_data, "scenario", 4 /* livestreaming */, 0);
-	    // av_opt_set_int(codec->context->priv_data, "look_ahead", 0 /* false */, 0);
+		av_opt_set_int(codec->context->priv_data, "preset", 7 /* veryfast */, 0);
+		av_opt_set_int(codec->context->priv_data, "profile", 66 /* baseline */, 0);
+		av_opt_set_int(codec->context->priv_data, "scenario", 4 /* livestreaming */, 0);
+	    av_opt_set_int(codec->context->priv_data, "look_ahead", 0 /* false */, 0);
 	}
 	else if (codec->codec_name == "h264_nvenc")
 	{
@@ -98,12 +98,7 @@ struct VideoEncoder* codec_create_video_encoder(struct VideoEncoderSettings* set
 	codec->frame->height = codec->context->height;
 	codec->frame->format = codec->context->pix_fmt;
 
-	int ret = av_image_alloc(codec->frame->data,
-							 codec->frame->linesize,
-							 codec->context->width,
-							 codec->context->height,
-							 codec->context->pix_fmt,
-							 32);
+	int ret = av_frame_get_buffer(codec->frame, 32);
 	if (ret < 0)
 	{
 		codec_release_video_encoder(codec);
@@ -120,8 +115,12 @@ bool codec_video_encoder_send_frame(struct VideoEncoder* codec, struct VideoFram
 		return false;
 	}
 
-	uint8_t* data[4] = { frame->data[0], frame->data[1], nullptr, nullptr };
 	int linesize[4] = { (int)frame->linesize[0], (int)frame->linesize[1], 0, 0 };
+#ifdef VERSION_6
+	uint8_t* data[4] = { frame->data[0], frame->data[1], nullptr, nullptr };
+#else
+	const uint8_t* data[4] = { frame->data[0], frame->data[1], nullptr, nullptr };
+#endif // VERSION_6
 
 	av_image_copy(codec->frame->data,
 				  codec->frame->linesize,
@@ -131,7 +130,13 @@ bool codec_video_encoder_send_frame(struct VideoEncoder* codec, struct VideoFram
 				  codec->context->width,
 				  codec->context->height);
 
-	codec->frame->pts = av_rescale_q(codec->context->frame_num,
+#ifdef VERSION_6
+	auto count = codec->context->frame_num;
+#else
+	auto count = codec->context->frame_number;
+#endif // VERSION_6
+
+	codec->frame->pts = av_rescale_q(count,
 									 codec->context->pkt_timebase,
 									 codec->context->time_base);
 	if (avcodec_send_frame(codec->context, codec->frame) != 0)

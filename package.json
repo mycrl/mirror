@@ -4,8 +4,10 @@
     "description": "",
     "main": "build.js",
     "scripts": {
-        "build": "node ./build.js",
+        "build:debug": "node ./build.js",
         "build:release": "node ./build.js -- --release",
+        "build:ffmpeg4-debug": "node ./build.js -- --ffmpeg4",
+        "build:ffmpeg4-release": "node ./build.js -- --release --ffmpeg4",
         "fmt": "cargo +nightly fmt"
     },
     "repository": {

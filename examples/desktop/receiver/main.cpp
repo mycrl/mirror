@@ -82,8 +82,8 @@ int main()
 	sdl_rect.h = 720;
 
 	MirrorOptions options;
-	options.video.encoder = const_cast<char*>("libx264");
-	options.video.decoder = const_cast<char*>("h264");
+	options.video.encoder = const_cast<char*>(mirror_find_video_encoder());
+	options.video.decoder = const_cast<char*>(mirror_find_video_decoder());
 	options.video.width = sdl_rect.w;
 	options.video.height = sdl_rect.h;
 	options.video.frame_rate = 30;

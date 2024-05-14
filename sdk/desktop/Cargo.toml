@@ -11,7 +11,7 @@ name = "mirror"
 bytes = "1.5"
 capture = { path = "../../capture" }
 common = { path = "../../common" }
-codec = { path = "../../codec" }
+codec = { path = "../../codec", default-features = false}
 transport = { path = "../../transport" }
 log = "0.4.20"
 simple_logger = "4"
@@ -22,5 +22,6 @@ once_cell = "1.19.0"
 clap = { version = "4", features = ["derive", "env"] }
 
 [features]
-default = []
+default = ["codec/ffmpeg6"]
+ffmpeg4 = ["codec/ffmpeg4"]
 audio = []
