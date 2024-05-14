@@ -26,16 +26,16 @@ if (WIN32)
     set(ENV{PATH} "${THIRD_PARTY_DIR};$ENV{PATH}")
 endif()
 
-if (NOT EXISTS "${THIRD_PARTY_DIR}/ffmpeg")
+if (NOT EXISTS "${THIRD_PARTY_DIR}/ffmpeg-n6.1.1-96-g1606aab99b-win64-gpl-shared-6.1")
     if (WIN32)
         execute_process(
             WORKING_DIRECTORY "${THIRD_PARTY_DIR}"
             COMMAND powershell.exe -Command "Invoke-WebRequest \
-                    -Uri https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2024-05-12-13-21/ffmpeg-n6.1.1-96-g1606aab99b-win64-lgpl-shared-6.1.zip \
+                    -Uri https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2024-05-13-12-48/ffmpeg-n6.1.1-96-g1606aab99b-win64-gpl-shared-6.1.zip \
                     -OutFile ffmpeg.zip")
         execute_process(
             WORKING_DIRECTORY "${THIRD_PARTY_DIR}"
-            COMMAND powershell.exe -Command "Expand-Archive -Path ffmpeg.zip -DestinationPath ./ffmpeg")
+            COMMAND powershell.exe -Command "Expand-Archive -Path ffmpeg.zip -DestinationPath ./")
     endif()
 endif()
 
@@ -55,11 +55,11 @@ add_library(codec STATIC
             codec.cpp
             codec.h)
 
-include_directories("${THIRD_PARTY_DIR}/ffmpeg/include"
+include_directories("${THIRD_PARTY_DIR}/ffmpeg-n6.1.1-96-g1606aab99b-win64-gpl-shared-6.1/include"
                     "${THIRD_PARTY_DIR}/libyuv/include"
                     "../../common/include")
 
-target_link_directories(codec PRIVATE "${THIRD_PARTY_DIR}/ffmpeg/lib")
+target_link_directories(codec PRIVATE "${THIRD_PARTY_DIR}/ffmpeg-n6.1.1-96-g1606aab99b-win64-gpl-shared-6.1/lib")
 target_link_libraries(codec avcodec 
                             avutil)
 
