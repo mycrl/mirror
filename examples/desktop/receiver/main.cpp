@@ -122,7 +122,7 @@ int main()
     Render* render = new Render(&sdl_rect, sdl_texture, sdl_renderer);
 	mirror::MirrorService* mirror = new mirror::MirrorService();
 
-	std::string bind = "192.168.2.183:8080";
+	std::string bind = "0.0.0.0:8080";
 	auto receiver = mirror->CreateReceiver(bind, render);
 	if (!receiver.has_value())
 	{
