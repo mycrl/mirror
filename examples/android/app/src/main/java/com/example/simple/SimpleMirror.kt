@@ -225,8 +225,8 @@ class SimpleMirrorService : Service() {
 
         Log.i("simple", "create sender.")
 
-        // VideoConfigure.width = displayMetrics.widthPixels
-        // VideoConfigure.height = displayMetrics.heightPixels
+        VideoConfigure.width = displayMetrics.widthPixels
+        VideoConfigure.height = displayMetrics.heightPixels
         mediaProjection =
             (getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager).getMediaProjection(
                 Activity.RESULT_OK,
