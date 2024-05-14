@@ -304,7 +304,7 @@ impl Mirror {
 
         let adapter_ = adapter.clone();
         thread::spawn(move || {
-            'a: while let Some((packet, kind, _)) = adapter_.next() {
+            'a: while let Some((packet, kind, _, _)) = adapter_.next() {
                 if packet.is_empty() {
                     continue;
                 }
