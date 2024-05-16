@@ -45,7 +45,6 @@ struct VideoEncoderSettings
 
 struct VideoEncoder
 {
-	std::string codec_name;
 #ifdef VERSION_6
 	const AVCodec* codec;
 #else
@@ -80,7 +79,6 @@ struct AudioEncoderSettings
 
 struct AudioEncoder
 {
-	std::string codec_name;
 #ifdef VERSION_6
 	const AVCodec* codec;
 #else

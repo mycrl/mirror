@@ -9,10 +9,10 @@ name = "mirror_android"
 
 [dependencies]
 bytes = "1.5"
-transport = { path = "../../../transport"}
+transport = { path = "../../../../../../transport"}
 log = { version = "0.4.20", features = ["std"]}
 num_cpus = "1.16.0"
 jni = "0.21.1"
-common = { path = "../../../common"}
+common = { path = "../../../../../../common"}
 anyhow = "1.0.79"
-jni-macro = { path = "../../../common/jni-macro" }
+jni-macro = { path = "../macro" }

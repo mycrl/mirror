@@ -38,41 +38,43 @@ struct VideoEncoder* codec_create_video_encoder(struct VideoEncoderSettings* set
 	codec->context->thread_count = 1;
 	codec->context->skip_alpha = true;
 	codec->context->pix_fmt = AV_PIX_FMT_NV12;
-	codec->context->thread_type = FF_THREAD_FRAME;
 	codec->context->flags = AV_CODEC_FLAG_LOW_DELAY;
+	codec->context->profile = FF_PROFILE_H264_BASELINE;
 
 	codec->context->width = settings->width;
 	codec->context->height = settings->height;
 	codec->context->bit_rate = settings->bit_rate;
+	codec->context->rc_buffer_size = settings->bit_rate;
+	codec->context->rc_max_rate = settings->bit_rate * 2;
+	codec->context->rc_min_rate = settings->bit_rate / 2;
 	codec->context->framerate = av_make_q(settings->frame_rate, 1);
 	codec->context->time_base = av_make_q(1, settings->frame_rate);
 	codec->context->pkt_timebase = av_make_q(1, settings->frame_rate);
 	codec->context->gop_size = settings->key_frame_interval;
 	codec->context->max_b_frames = settings->max_b_frames;
-	codec->codec_name = std::string(settings->codec_name);
-
-	if (codec->codec_name == "h264_qsv")
+	
+	auto name = std::string(settings->codec_name);
+	if (name == "h264_qsv")
 	{
 		av_opt_set_int(codec->context->priv_data, "preset", 7 /* veryfast */, 0);
-		av_opt_set_int(codec->context->priv_data, "profile", 66 /* baseline */, 0);
-		av_opt_set_int(codec->context->priv_data, "scenario", 4 /* livestreaming */, 0);
+		av_opt_set_int(codec->context->priv_data, "scenario", 1 /* displayremoting */, 0);
 	    av_opt_set_int(codec->context->priv_data, "look_ahead", 0 /* false */, 0);
+		av_opt_set_int(codec->context->priv_data, "async_depth", 1, 0);
 	}
-	else if (codec->codec_name == "h264_nvenc")
+	else if (name == "h264_nvenc")
 	{
-		av_opt_set_int(codec->context->priv_data, "zerolatency", 1, 0);
-		av_opt_set_int(codec->context->priv_data, "b_adapt", 0, 0);
-		av_opt_set_int(codec->context->priv_data, "rc", 1, 0);
-		av_opt_set_int(codec->context->priv_data, "preset", 3, 0);
-		av_opt_set_int(codec->context->priv_data, "profile", 0, 0);
-		av_opt_set_int(codec->context->priv_data, "tune", 1, 0);
+		av_opt_set_int(codec->context->priv_data, "zerolatency", 1 /* true */, 0);
+		av_opt_set_int(codec->context->priv_data, "b_adapt", 0 /* false */, 0);
+		av_opt_set_int(codec->context->priv_data, "rc", 2 /* cbr */, 0);
+		av_opt_set_int(codec->context->priv_data, "cbr", 1 /* true */, 0);
+		av_opt_set_int(codec->context->priv_data, "preset", 7 /* low latency */, 0);
+		av_opt_set_int(codec->context->priv_data, "tune", 3 /* ultra low latency */, 0);
 		av_opt_set_int(codec->context->priv_data, "cq", 30, 0);
 	}
-	else if (codec->codec_name == "libx264")
+	else if (name == "libx264")
 	{
-		av_opt_set(codec->context->priv_data, "preset", "veryfast", 0);
+		av_opt_set(codec->context->priv_data, "preset", "superfast", 0);
 		av_opt_set(codec->context->priv_data, "tune", "zerolatency", 0);
-		av_opt_set(codec->context->priv_data, "profile", "baseline", 0);
 	}
 
 	if (avcodec_open2(codec->context, codec->codec, nullptr) != 0)
@@ -167,8 +169,8 @@ struct EncodePacket* codec_video_encoder_read_packet(struct VideoEncoder* codec)
 	}
 
 	codec->output_packet->buffer = codec->packet->data;
-	codec->output_packet->len = codec->packet->size;
 	codec->output_packet->flags = codec->packet->flags;
+	codec->output_packet->len = codec->packet->size;
 	return codec->output_packet;
 }
 
