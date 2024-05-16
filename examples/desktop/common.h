@@ -66,6 +66,7 @@ class Args
 public:
 	struct Params
 	{
+        int fps = 30;
 		int width = 1280;
 		int height = 720;
 		std::string bind = "0.0.0.0:8080";
@@ -83,6 +84,10 @@ public:
 				continue;
 			}
 
+            if (kv[0] == "fps")
+			{
+				ArgsParams.fps = std::stoi(kv[1]);
+			}
 			if (kv[0] == "width")
 			{
 				ArgsParams.width = std::stoi(kv[1]);

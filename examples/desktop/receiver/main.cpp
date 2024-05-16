@@ -43,10 +43,10 @@ int main()
 	options.video.decoder = const_cast<char*>(args.ArgsParams.decoder.c_str());
 	options.video.width = sdl_rect.w;
 	options.video.height = sdl_rect.h;
-	options.video.frame_rate = 30;
+	options.video.frame_rate = args.ArgsParams.fps;
+    options.video.key_frame_interval = args.ArgsParams.fps;
 	options.video.bit_rate = 500 * 1024 * 8;
 	options.video.max_b_frames = 0;
-	options.video.key_frame_interval = 30;
     options.audio.sample_rate = 48000;
     options.audio.bit_rate = 6000;
 	options.multicast = const_cast<char*>("239.0.0.1");
