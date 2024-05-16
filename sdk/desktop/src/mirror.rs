@@ -200,10 +200,10 @@ where
     fn new(adapter: &Arc<StreamSenderAdapter>, sink: FrameSink<A, V>) -> anyhow::Result<Self> {
         let options = OPTIONS.read().unwrap();
         Ok(Self {
-            sink,
-            adapter: Arc::downgrade(adapter),
             video_encoder: VideoEncoder::new(&options.video.clone().into())?,
             audio_encoder: AudioEncoder::new(&options.audio.clone().into())?,
+            adapter: Arc::downgrade(adapter),
+            sink,
         })
     }
 }
