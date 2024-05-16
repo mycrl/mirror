@@ -32,6 +32,15 @@ struct VideoEncoder* codec_create_video_encoder(struct VideoEncoderSettings* set
 		return nullptr;
 	}
 
+	codec->context->delay = 0;
+	codec->context->max_samples = 1;
+	codec->context->has_b_frames = 0;
+	codec->context->thread_count = 1;
+	codec->context->skip_alpha = true;
+	codec->context->pix_fmt = AV_PIX_FMT_NV12;
+	codec->context->thread_type = FF_THREAD_FRAME;
+	codec->context->flags = AV_CODEC_FLAG_LOW_DELAY;
+
 	codec->context->width = settings->width;
 	codec->context->height = settings->height;
 	codec->context->bit_rate = settings->bit_rate;
@@ -40,8 +49,6 @@ struct VideoEncoder* codec_create_video_encoder(struct VideoEncoderSettings* set
 	codec->context->pkt_timebase = av_make_q(1, settings->frame_rate);
 	codec->context->gop_size = settings->key_frame_interval;
 	codec->context->max_b_frames = settings->max_b_frames;
-	codec->context->pix_fmt = AV_PIX_FMT_NV12;
-	codec->context->max_samples = 1;
 	codec->codec_name = std::string(settings->codec_name);
 
 	if (codec->codec_name == "h264_qsv")

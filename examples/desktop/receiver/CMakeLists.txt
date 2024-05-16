@@ -40,9 +40,11 @@ if (NOT EXISTS "${THIRD_PARTY_DIR}/SDL2.lib")
 endif()
 
 if(MSVC)
-    add_executable(receiver WIN32 main.cpp)
+    add_executable(receiver WIN32 main.cpp
+                                  ../common.h)
 else()
-    add_executable(receiver main.cpp)
+    add_executable(receiver main.cpp
+                            ../common.h)
 endif()
 
 target_link_directories(receiver PRIVATE "${THIRD_PARTY_DIR}")

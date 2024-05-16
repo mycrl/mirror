@@ -9,60 +9,15 @@
 #include <windows.h>
 #endif
 
-#include <mirror.h>
 #include <SDL.h>
 #include <SDL_video.h>
-#include <SDL_render.h>
-#include <SDL_rect.h>
 
-class Render: public mirror::MirrorService::AVFrameSink 
-{
-public:
-    Render(SDL_Rect* sdl_rect,
-           SDL_Texture* sdl_texture,
-           SDL_Renderer* sdl_renderer)
-        : _sdl_rect(sdl_rect)
-        , _sdl_texture(sdl_texture)
-        , _sdl_renderer(sdl_renderer)
-    {
-    }
-
-    bool OnVideoFrame(struct VideoFrame* frame)
-    {
-        if (SDL_UpdateNVTexture(_sdl_texture,
-        _sdl_rect,
-        frame->data[0],
-        frame->linesize[0],
-        frame->data[1],
-        frame->linesize[1]) == 0)
-        {
-            if (SDL_RenderClear(_sdl_renderer) == 0)
-            {
-                if (SDL_RenderCopy(_sdl_renderer, _sdl_texture, nullptr, _sdl_rect) == 0)
-                {
-                    SDL_RenderPresent(_sdl_renderer);
-                    return true;
-                }
-            }
-        }
-
-        return false;
-    }
-
-    bool OnAudioFrame(struct AudioFrame* frame)
-    {
-        return true;
-    }
-private:
-    SDL_Rect* _sdl_rect;
-    SDL_Texture* _sdl_texture;
-    SDL_Renderer* _sdl_renderer;
-};
+#include "../common.h"
 
 #ifdef WIN32
 int WinMain(HINSTANCE _instance,
 			HINSTANCE _prev_instance,
-			LPSTR _cmd_line,
+			LPSTR cmd_line,
 			int _show_cmd)
 #else
 int main()
@@ -75,15 +30,17 @@ int main()
 	freopen("CONOUT$", "w+t", stdout);
 #endif
 
+	Args args = Args(std::string(cmd_line));
+
 	SDL_Rect sdl_rect;
 	sdl_rect.x = 0;
 	sdl_rect.y = 0;
-	sdl_rect.w = 1280;
-	sdl_rect.h = 720;
+	sdl_rect.w = args.ArgsParams.width;
+	sdl_rect.h = args.ArgsParams.height;
 
 	MirrorOptions options;
-	options.video.encoder = const_cast<char*>(mirror_find_video_encoder());
-	options.video.decoder = const_cast<char*>(mirror_find_video_decoder());
+	options.video.encoder = const_cast<char*>(args.ArgsParams.encoder.c_str());
+	options.video.decoder = const_cast<char*>(args.ArgsParams.decoder.c_str());
 	options.video.width = sdl_rect.w;
 	options.video.height = sdl_rect.h;
 	options.video.frame_rate = 30;
@@ -122,8 +79,7 @@ int main()
     Render* render = new Render(&sdl_rect, sdl_texture, sdl_renderer);
 	mirror::MirrorService* mirror = new mirror::MirrorService();
 
-	std::string bind = "0.0.0.0:8080";
-	auto receiver = mirror->CreateReceiver(bind, render);
+	auto receiver = mirror->CreateReceiver(args.ArgsParams.bind, render);
 	if (!receiver.has_value())
 	{
 		MessageBox(nullptr, TEXT("Failed to create receiver!"), TEXT("Error"), 0);
