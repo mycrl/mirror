@@ -43,6 +43,7 @@ if (!fs.existsSync('./build/bin/data')) {
     fs.unlinkSync('./build/distributions-windows.zip')
 }
 
+fs.copyFileSync('./examples/desktop/common.h', './build/examples/common.h')
 fs.copyFileSync('./examples/desktop/CMakeLists.txt', './build/examples/CMakeLists.txt')
 fs.copyFileSync('./examples/desktop/sender/main.cpp', './build/examples/sender/main.cpp')
 fs.copyFileSync('./examples/desktop/receiver/main.cpp', './build/examples/receiver/main.cpp')
