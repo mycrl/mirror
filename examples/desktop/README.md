@@ -6,7 +6,7 @@
 
 #### Args
 
-| Field   | default          | htlp                                    |
+| Field   | default          | help                                    |
 |---------|------------------|-----------------------------------------|
 | width   | 1280             | video width                             |
 | height  | 720              | video height                            |
