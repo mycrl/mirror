@@ -24,4 +24,3 @@ clap = { version = "4", features = ["derive", "env"] }
 [features]
 default = ["codec/ffmpeg6"]
 ffmpeg4 = ["codec/ffmpeg4"]
-audio = []

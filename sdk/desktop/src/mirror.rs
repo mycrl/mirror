@@ -3,13 +3,10 @@ use std::{
     thread,
 };
 
-#[cfg(feature = "audio")]
-use codec::AudioDecoder;
-
 use anyhow::Result;
 use bytes::Bytes;
 use capture::{AVFrameSink, AudioInfo, Device, DeviceManager, DeviceManagerOptions, VideoInfo};
-use codec::{AudioEncoder, AudioEncoderSettings, VideoDecoder, VideoEncoder, VideoEncoderSettings};
+use codec::{AudioDecoder, AudioEncoder, AudioEncoderSettings, VideoDecoder, VideoEncoder, VideoEncoderSettings};
 use common::frame::{AudioFrame, VideoFrame};
 use once_cell::sync::Lazy;
 use transport::{
@@ -298,8 +295,6 @@ impl Mirror {
         self.0.create_receiver(bind.parse()?, &adapter)?;
 
         let video_decoder = VideoDecoder::new(&options.video.decoder)?;
-
-        #[cfg(feature = "audio")]
         let audio_decoder = AudioDecoder::new(&options.audio.decoder)?;
 
         let adapter_ = adapter.clone();
@@ -320,7 +315,6 @@ impl Mirror {
                         break;
                     }
                 } else if kind == StreamKind::Audio {
-                    #[cfg(feature = "audio")]
                     if audio_decoder.decode(&packet) {
                         while let Some(frame) = audio_decoder.read() {
                             if !(sink.audio)(frame) {
