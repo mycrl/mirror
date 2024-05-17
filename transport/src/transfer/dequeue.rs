@@ -4,59 +4,59 @@ use std::{
     time::Instant,
 };
 
-use bytes::Bytes;
 use common::atomic::EasyAtomic;
 
+use super::packet::Packet;
+
+/// Packet reordering queue.
 pub struct Dequeue {
-    queue: Arc<RwLock<BTreeMap<u64, (Bytes, Instant)>>>,
+    queue: Arc<RwLock<BTreeMap<u64, (Packet, Instant)>>>,
     last_queue: AtomicU64,
-    rtt: Arc<AtomicU64>,
-    time: Instant,
     delay: usize,
 }
 
 impl Dequeue {
     pub fn new(delay: usize) -> Self {
         Self {
-            rtt: Arc::new(AtomicU64::new(delay as u64 / 2)),
             queue: Arc::new(RwLock::new(BTreeMap::new())),
             last_queue: AtomicU64::new(0),
-            time: Instant::now(),
             delay,
         }
     }
 
-    pub fn get_time(&self) -> u64 {
-        self.time.elapsed().as_millis() as u64
-    }
-
-    pub fn update(&self, time: u64) {
-        let rtt = self.time.elapsed().as_millis() as u64 - time;
-        self.rtt.update(rtt);
-
-        log::info!("Network latency detection, rtt={}", rtt);
-    }
-
-    pub fn push(&self, sequence: u64, bytes: Bytes) {
+    /// Add a data packet to the queue, and the queue will sort all the data
+    /// packets from small to large according to the sequence number.
+    ///
+    /// It should be noted that you can ignore the order or whether there are
+    /// duplicates, and the internal processing can be normal.
+    pub fn push(&self, packet: Packet) {
+        // Check whether the current sequence number has been dequeued. If so, do not
+        // process it.
         let last_seq = self.last_queue.get();
-        if !(last_seq >= u64::MAX - 100 && sequence <= 100) && last_seq >= sequence {
+        if !(last_seq >= u64::MAX - 100 && packet.sequence <= 100) && last_seq >= packet.sequence {
             return;
         }
 
-        if !self.queue.read().unwrap().contains_key(&sequence) {
+        // To avoid duplicate insertion, check here first.
+        if !self.queue.read().unwrap().contains_key(&packet.sequence) {
             self.queue
                 .write()
                 .unwrap()
-                .insert(sequence, (bytes, Instant::now()));
+                .insert(packet.sequence, (packet, Instant::now()));
         } else {
             log::info!(
                 "The retransmission packet is received, sequence={:?}",
-                sequence
+                packet.sequence
             );
         }
     }
 
-    pub fn pop(&self) -> Option<Bytes> {
+    /// According to the set delay, the data packets are taken out from the
+    /// queue in order. You can try to take them out multiple times until there
+    /// is no result.
+    pub fn pop(&self) -> Option<Packet> {
+        // Get the packet with the smallest sequence number in the queue and check
+        // whether it has timed out.
         let mut sequence = None;
         if let Some((seq, (_, time))) = self.queue.read().unwrap().first_key_value() {
             if time.elapsed().as_millis() as usize >= self.delay {
@@ -70,7 +70,7 @@ impl Dequeue {
                 .write()
                 .unwrap()
                 .remove(&seq)
-                .map(|(bytes, _)| bytes)
+                .map(|(packet, _)| packet)
         })
     }
 }

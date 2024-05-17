@@ -5,7 +5,6 @@ use std::{
         Arc,
     },
     thread,
-    time::Duration,
 };
 
 use bytes::Bytes;
@@ -93,44 +92,20 @@ impl Receiver {
                         target.swap(Some(addr));
                     }
 
-                    if let Ok(packet) = Packet::try_from(&buf[..size]) {
-                        match packet {
-                            Packet::Pong { timestamp } => queue.update(timestamp),
-                            Packet::Bytes { sequence, chunk } => {
-                                queue.push(sequence, Bytes::copy_from_slice(chunk));
+                    if let Some(packet) = Packet::try_from(&buf[..size]) {
+                        queue.push(packet);
 
-                                while let Some(bytes) = queue.pop() {
-                                    if let Some(payload) = decoder.decode(&bytes) {
-                                        if tx.send(payload).is_err() {
-                                            break 'a;
-                                        }
-                                    }
+                        while let Some(packet) = queue.pop() {
+                            if let Some(payload) = decoder.decode(packet) {
+                                if tx.send(payload).is_err() {
+                                    break 'a;
                                 }
                             }
-                            _ => (),
                         }
                     }
                 } else {
                     break;
                 };
-            }
-        });
-
-        let socket_ = Arc::downgrade(&socket);
-        thread::spawn(move || {
-            while let Some(socket) = socket_.upgrade() {
-                if let Some(to) = target.get() {
-                    let bytes: Bytes = Packet::Ping {
-                        timestamp: queue.get_time(),
-                    }
-                    .into();
-
-                    if socket.send_to(&bytes, to).is_err() {
-                        break;
-                    }
-                }
-
-                thread::sleep(Duration::from_secs(1));
             }
         });
 

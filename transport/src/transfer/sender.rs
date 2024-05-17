@@ -1,15 +1,6 @@
-use std::{
-    net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
-    sync::Arc,
-    thread,
-};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
 
-use super::{
-    packet::{Packet, PacketEncoder},
-    Error,
-};
-
-use bytes::Bytes;
+use super::{packet::PacketEncoder, Error};
 
 /// A UDP server.
 ///
@@ -28,9 +19,8 @@ use bytes::Bytes;
 /// group.
 pub struct Sender {
     target: SocketAddr,
-    socket: Arc<UdpSocket>,
+    socket: UdpSocket,
     encoder: PacketEncoder,
-    sequence: u64,
 }
 
 impl Sender {
@@ -46,7 +36,7 @@ impl Sender {
     pub fn new(multicast: Ipv4Addr, bind: SocketAddr, mtu: usize) -> Result<Self, Error> {
         assert!(bind.is_ipv4());
 
-        let socket = Arc::new(UdpSocket::bind(SocketAddr::new(bind.ip(), 0))?);
+        let socket = UdpSocket::bind(SocketAddr::new(bind.ip(), 0))?;
         if let IpAddr::V4(bind) = bind.ip() {
             socket.join_multicast_v4(&multicast, &bind)?;
 
@@ -59,32 +49,9 @@ impl Sender {
 
         log::info!("multicast sender bind to: bind={}", bind);
 
-        let socket_ = Arc::downgrade(&socket);
-        thread::spawn(move || {
-            let mut buf = [0u8; 2048];
-
-            while let Some(socket) = socket_.upgrade() {
-                if let Ok((size, addr)) = socket.recv_from(&mut buf) {
-                    if size == 0 {
-                        break;
-                    }
-
-                    if let Ok(Packet::Ping { timestamp }) = Packet::try_from(&buf[..size]) {
-                        let bytes: Bytes = Packet::Pong { timestamp }.into();
-                        if socket.send_to(&bytes, addr).is_err() {
-                            break;
-                        }
-                    }
-                } else {
-                    break;
-                }
-            }
-        });
-
         Ok(Self {
             target: SocketAddr::new(IpAddr::V4(multicast), bind.port()),
-            encoder: PacketEncoder::new(Packet::get_max_size(mtu)),
-            sequence: 0,
+            encoder: PacketEncoder::new(mtu),
             socket,
         })
     }
@@ -100,18 +67,7 @@ impl Sender {
         }
 
         for packet in self.encoder.encode(bytes) {
-            let bytes: Bytes = Packet::Bytes {
-                sequence: self.sequence,
-                chunk: packet,
-            }
-            .into();
-
-            self.socket.send_to(&bytes, self.target)?;
-            if self.sequence == u64::MAX {
-                self.sequence = 0;
-            } else {
-                self.sequence += 1;
-            }
+            self.socket.send_to(&packet, self.target)?;
         }
 
         Ok(())
