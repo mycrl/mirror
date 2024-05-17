@@ -63,7 +63,7 @@ int main()
 										  SDL_WINDOWPOS_UNDEFINED,
 										  sdl_rect.w,
 										  sdl_rect.h,
-										  SDL_WINDOW_OPENGL);
+										  SDL_WINDOW_OPENGL | SDL_WINDOW_MAXIMIZED);
 	if (screen == NULL)
 	{
 		return -2;

@@ -63,7 +63,7 @@ int main()
 										  SDL_WINDOWPOS_UNDEFINED,
 										  sdl_rect.w,
 										  sdl_rect.h,
-										  SDL_WINDOW_OPENGL);
+										  SDL_WINDOW_OPENGL | SDL_WINDOW_MAXIMIZED);
 	if (screen == NULL)
 	{
 		return -2;
@@ -79,31 +79,21 @@ int main()
     Render* render = new Render(&sdl_rect, sdl_texture, sdl_renderer);
 	mirror::MirrorService* mirror = new mirror::MirrorService();
 	
-	auto devices = mirror::DeviceManagerService::GetDevices(DeviceKind::Window);
+	auto devices = mirror::DeviceManagerService::GetDevices(DeviceKind::Screen);
     if (devices.device_list.size() == 0)
     {
         MessageBox(nullptr, TEXT("Not found a device!"), TEXT("Error"), 0);
         return -10;
     }
 	
-	for (int i = 0; i < devices.device_list.size(); i++)
-	{
-		printf("[%d] %s \n", i, devices.device_list[i].GetName().value_or("").c_str());
-	}
-
-	printf("select: ");
-	int index = std::stoi(std::string(1, (char)getchar()));
-	if (index < devices.device_list.size())
-	{
-		mirror::DeviceManagerService::SetInputDevice(devices.device_list[index]);
-	}
-
+	mirror::DeviceManagerService::SetInputDevice(devices.device_list[0]);
 	auto sender = mirror->CreateSender(args.ArgsParams.bind, render);
 	if (!sender.has_value())
 	{
 		MessageBox(nullptr, TEXT("Failed to create sender!"), TEXT("Error"), 0);
         SDL_Quit();
         mirror::Quit();
+
 	    return -1;
 	}
 
