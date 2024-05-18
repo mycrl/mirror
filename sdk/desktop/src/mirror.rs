@@ -6,11 +6,17 @@ use std::{
 use anyhow::Result;
 use bytes::Bytes;
 use capture::{AVFrameSink, AudioInfo, Device, DeviceManager, DeviceManagerOptions, VideoInfo};
-use codec::{AudioDecoder, AudioEncoder, AudioEncoderSettings, VideoDecoder, VideoEncoder, VideoEncoderSettings};
+use codec::{
+    audio::create_opus_identification_header, AudioDecoder, AudioEncoder, AudioEncoderSettings,
+    VideoDecoder, VideoEncoder, VideoEncoderSettings,
+};
+
 use common::frame::{AudioFrame, VideoFrame};
 use once_cell::sync::Lazy;
 use transport::{
-    adapter::{StreamBufferInfo, StreamKind, StreamReceiverAdapter, StreamSenderAdapter},
+    adapter::{
+        BufferFlag, StreamBufferInfo, StreamKind, StreamReceiverAdapter, StreamSenderAdapter,
+    },
     Transport,
 };
 
@@ -196,6 +202,15 @@ where
 {
     fn new(adapter: &Arc<StreamSenderAdapter>, sink: FrameSink<A, V>) -> anyhow::Result<Self> {
         let options = OPTIONS.read().unwrap();
+
+        adapter.send(
+            Bytes::copy_from_slice(&create_opus_identification_header(
+                1,
+                options.audio.sample_rate as u32,
+            )),
+            StreamBufferInfo::Audio(BufferFlag::Config as i32, 0),
+        );
+
         Ok(Self {
             video_encoder: VideoEncoder::new(&options.video.clone().into())?,
             audio_encoder: AudioEncoder::new(&options.audio.clone().into())?,

@@ -7,7 +7,7 @@ use std::{
 };
 
 use capture::*;
-use common::frame::VideoFrame;
+use common::frame::{AudioFrame, VideoFrame};
 use minifb::{Window, WindowOptions};
 
 const WIDTH: usize = 1280;

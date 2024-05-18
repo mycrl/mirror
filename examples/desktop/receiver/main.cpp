@@ -98,6 +98,11 @@ int main()
 		}
 	}
 
+    if (receiver.has_value())
+	{
+        receiver.value().Close();
+	}
+
 	SDL_Quit();
     mirror::Quit();
 

@@ -64,7 +64,7 @@ cargo {
     rustupChannel = 'stable'
     prebuiltToolchains = true
     pythonCommand = 'python3'
-    module = '../native'
+    module = './src/main/native'
     libname = 'mirror_android'
     targets = ['arm64']
     targetDirectory = '../../../target'

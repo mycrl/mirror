@@ -106,6 +106,11 @@ int main()
 		}
 	}
 
+	if (sender.has_value())
+	{
+		sender.value().Close();
+	}
+
 	SDL_Quit();
 	mirror::Quit();
 	return 0;
