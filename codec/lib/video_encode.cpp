@@ -5,6 +5,8 @@
 //  Created by Mr.Panda on 2024/2/14.
 //
 
+#include <string>
+
 #include "./codec.h"
 
 extern "C"

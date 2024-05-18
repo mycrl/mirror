@@ -88,13 +88,16 @@ struct VideoDecoder* codec_create_video_decoder(const char* codec_name)
 
 void codec_release_video_decoder(struct VideoDecoder* codec)
 {
-	if (codec->frame->format != AV_PIX_FMT_NV12)
+	if (codec->format_format.has_value())
 	{
-		for (auto& buf : codec->output_frame->data)
+		if (codec->format_format.value() != AV_PIX_FMT_NV12)
 		{
-			if (buf != nullptr)
+			for (auto buf : codec->output_frame->data)
 			{
-				delete buf;
+				if (buf != nullptr)
+				{
+					delete buf;
+				}
 			}
 		}
 	}
@@ -163,13 +166,18 @@ struct VideoFrame* codec_video_decoder_read_frame(struct VideoDecoder* codec)
 	codec->output_frame->rect.width = codec->frame->width;
 	codec->output_frame->rect.height = codec->frame->height;
 
-	if (codec->frame->format != AV_PIX_FMT_NV12 && codec->output_frame->data[0] == nullptr)
+	if (codec->frame->format != AV_PIX_FMT_NV12 && !codec->format_format.has_value())
 	{
 		for (int i = 0; i < 2; i++)
 		{
 			codec->output_frame->data[i] = new uint8_t[codec->frame->width * codec->frame->height * 1.5];
 			codec->output_frame->linesize[i] = codec->frame->width;
 		}
+	}
+
+	if (!codec->format_format.has_value())
+	{
+		codec->format_format = std::optional(codec->frame->format);
 	}
 
 	if (codec->frame->format != AV_PIX_FMT_NV12)

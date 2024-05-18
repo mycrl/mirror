@@ -78,33 +78,47 @@ int main()
 
     Render* render = new Render(&sdl_rect, sdl_texture, sdl_renderer);
 	mirror::MirrorService* mirror = new mirror::MirrorService();
-
-	auto receiver = mirror->CreateReceiver(args.ArgsParams.bind, render);
-	if (!receiver.has_value())
-	{
-		MessageBox(nullptr, TEXT("Failed to create receiver!"), TEXT("Error"), 0);
-		SDL_Quit();
-    	mirror::Quit();
-        
-		return -1;
-	}
-
+	std::optional<mirror::MirrorService::MirrorReceiver> receiver = std::nullopt;
 	SDL_Event event;
+
 	while (SDL_WaitEvent(&event))
 	{
 		if (event.type == SDL_QUIT)
 		{
 			break;
 		}
-	}
+		else if (event.type == SDL_KEYDOWN)
+		{
+			switch (event.key.keysym.sym)
+			{
+				case SDLK_s:
+					if (!receiver.has_value())
+					{
+						receiver = mirror->CreateReceiver(args.ArgsParams.bind, render);
+						if (!receiver.has_value())
+						{
+							MessageBox(nullptr, TEXT("Failed to create receiver!"), TEXT("Error"), 0);
+							SDL_Quit();
+							mirror::Quit();
 
-    if (receiver.has_value())
-	{
-        receiver.value().Close();
+							return -1;
+						}
+					}
+
+					break;
+				case SDLK_k:
+					if (receiver.has_value())
+					{
+						receiver.value().Close();
+						receiver = std::nullopt;
+					}
+
+					break;
+			}
+		}
 	}
 
 	SDL_Quit();
     mirror::Quit();
-
 	return 0;
 }

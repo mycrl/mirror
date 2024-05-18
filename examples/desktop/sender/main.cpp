@@ -44,7 +44,7 @@ int main()
 	options.video.width = sdl_rect.w;
 	options.video.height = sdl_rect.h;
 	options.video.frame_rate = args.ArgsParams.fps;
-    options.video.key_frame_interval = args.ArgsParams.fps;
+	options.video.key_frame_interval = args.ArgsParams.fps;
 	options.video.bit_rate = 500 * 1024 * 8;
 	options.video.max_b_frames = 0;
 	options.audio.sample_rate = 48000;
@@ -76,39 +76,58 @@ int main()
 												 sdl_rect.w,
 												 sdl_rect.h);
 
-    Render* render = new Render(&sdl_rect, sdl_texture, sdl_renderer);
+	Render* render = new Render(&sdl_rect, sdl_texture, sdl_renderer);
 	mirror::MirrorService* mirror = new mirror::MirrorService();
-	
-	auto devices = mirror::DeviceManagerService::GetDevices(DeviceKind::Screen);
-    if (devices.device_list.size() == 0)
-    {
-        MessageBox(nullptr, TEXT("Not found a device!"), TEXT("Error"), 0);
-        return -10;
-    }
-	
-	mirror::DeviceManagerService::SetInputDevice(devices.device_list[0]);
-	auto sender = mirror->CreateSender(args.ArgsParams.bind, render);
-	if (!sender.has_value())
-	{
-		MessageBox(nullptr, TEXT("Failed to create sender!"), TEXT("Error"), 0);
-        SDL_Quit();
-        mirror::Quit();
 
-	    return -1;
+	auto devices = mirror::DeviceManagerService::GetDevices(DeviceKind::Screen);
+	if (devices.device_list.size() == 0)
+	{
+		MessageBox(nullptr, TEXT("Not found a device!"), TEXT("Error"), 0);
+		return -10;
+	}
+	else
+	{
+		mirror::DeviceManagerService::SetInputDevice(devices.device_list[0]);
 	}
 
+	std::optional<mirror::MirrorService::MirrorSender> sender = std::nullopt;
 	SDL_Event event;
+
 	while (SDL_WaitEvent(&event))
 	{
 		if (event.type == SDL_QUIT)
 		{
 			break;
 		}
-	}
+		else if (event.type == SDL_KEYDOWN)
+		{
+			switch (event.key.keysym.sym)
+			{
+				case SDLK_s:
+					if (!sender.has_value())
+					{
+						sender = mirror->CreateSender(args.ArgsParams.bind, render);
+						if (!sender.has_value())
+						{
+							MessageBox(nullptr, TEXT("Failed to create sender!"), TEXT("Error"), 0);
+							SDL_Quit();
+							mirror::Quit();
 
-	if (sender.has_value())
-	{
-		sender.value().Close();
+							return -1;
+						}
+					}
+
+					break;
+				case SDLK_k:
+					if (sender.has_value())
+					{
+						sender.value().Close();
+						sender = std::nullopt;
+					}
+
+					break;
+			}
+		}
 	}
 
 	SDL_Quit();

@@ -201,46 +201,44 @@ pub use encode::{AudioEncodePacket, AudioEncoder, AudioEncoderSettings};
 ///
 ///        This table defines the mapping from encoded streams to output
 ///        channels.  Its contents are specified in Section 5.1.1.
+#[rustfmt::skip]
 pub fn create_opus_identification_header(channel: u8, sample_rate: u32) -> Vec<u8> {
     let sample_rate = sample_rate.to_le_bytes();
 
     [
-        // csd0,
-
+        // AOPUSHDR
+        0x41, 0x4f, 0x50, 0x55, 0x53, 0x48, 0x44, 0x52,
+        // ...
+        0x13, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         // Opus
-        0x4f,
-        0x70,
-        0x75,
-        0x73,
+        0x4f, 0x70, 0x75, 0x73,
         // Head
-        0x48,
-        0x65,
-        0x61,
-        0x64,
+        0x48, 0x65, 0x61, 0x64,
         // Version
         0x01,
         // Channel Count
         channel,
         // Pre skip
-        0x00,
-        0x00,
+        0x00, 0x00,
         // Input Sample Rate (Hz), eg: 48000
         sample_rate[0],
         sample_rate[1],
         sample_rate[2],
         sample_rate[3],
         // Output Gain (Q7.8 in dB) 
-        0x00,
-        0x00,
+        0x00, 0x00,
         // Mapping Family
         0x00,
-
-        // csd1
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-
-        // csd2
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        // AOPUSDLY
+        0x41, 0x4f, 0x50, 0x55, 0x53, 0x44, 0x4c, 0x59,
+        // ...
+        0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
+        0xa0, 0x2e, 0x63, 0x00, 0x00, 0x00, 0x00, 0x00,
+        // AOPUSPRL
+        0x41, 0x4f, 0x50, 0x55, 0x53, 0x50, 0x52, 0x4c, 
+        // ...
+        0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
+        0x00, 0xb4, 0xc4, 0x04, 0x00, 0x00, 0x00, 0x00,
     ]
     .to_vec()
 }
-// [65, 79, 80, 85, 83, 72, 68, 82, 19, 0, 0, 0, 0, 0, 0, 0, 79, 112, 117, 115, 72, 101, 97, 100, 1, 1, 56, 1, 128, 187, 0, 0, 0, 0, 0, 65, 79, 80, 85, 83, 68, 76, 89, 8, 0, 0, 0, 0, 0, 0, 0, 160, 46, 99, 0, 0, 0, 0, 0, 65, 79, 80, 85, 83, 80, 82, 76, 8, 0, 0, 0, 0, 0, 0, 0, 0, 180, 196, 4, 0, 0, 0, 0]
