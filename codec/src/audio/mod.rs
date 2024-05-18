@@ -229,7 +229,7 @@ pub fn create_opus_identification_header(channel: u8, sample_rate: u32) -> Vec<u
         sample_rate[1],
         sample_rate[2],
         sample_rate[3],
-        // Output Gain (Q7.8 in dB)
+        // Output Gain (Q7.8 in dB) 
         0x00,
         0x00,
         // Mapping Family
@@ -243,3 +243,4 @@ pub fn create_opus_identification_header(channel: u8, sample_rate: u32) -> Vec<u
     ]
     .to_vec()
 }
+// [65, 79, 80, 85, 83, 72, 68, 82, 19, 0, 0, 0, 0, 0, 0, 0, 79, 112, 117, 115, 72, 101, 97, 100, 1, 1, 56, 1, 128, 187, 0, 0, 0, 0, 0, 65, 79, 80, 85, 83, 68, 76, 89, 8, 0, 0, 0, 0, 0, 0, 0, 160, 46, 99, 0, 0, 0, 0, 0, 65, 79, 80, 85, 83, 80, 82, 76, 8, 0, 0, 0, 0, 0, 0, 0, 0, 180, 196, 4, 0, 0, 0, 0]
