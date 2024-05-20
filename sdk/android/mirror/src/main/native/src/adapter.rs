@@ -30,16 +30,17 @@ impl AndroidStreamReceiverAdapter {
     //      */
     //     abstract fun sink(kind: Int, buf: ByteArray)
     // }
-    pub(crate) fn sink(&self, buf: Bytes, kind: StreamKind, timestamp: u64) -> bool {
+    pub(crate) fn sink(&self, buf: Bytes, kind: StreamKind, flags: u8, timestamp: u64) -> bool {
         let mut env = get_current_env();
         catcher(&mut env, |env| {
             let buf = env.byte_array_from_slice(&buf)?.into();
             let ret = env.call_method(
                 self.callback.as_obj(),
                 "sink",
-                "(IJ[B)Z",
+                "(IIJ[B)Z",
                 &[
                     JValue::Int(kind as i32),
+                    JValue::Int(flags as i32),
                     JValue::Long(timestamp as i64),
                     JValue::Object(&buf),
                 ],
@@ -142,8 +143,8 @@ impl ReceiverAdapterFactory for AndroidStreamReceiverAdapterFactory {
         let stream_adapter = StreamReceiverAdapter::new();
         let stream_adapter_ = Arc::downgrade(&stream_adapter);
         thread::spawn(move || {
-            while let Some((buf, kind, timestamp)) = stream_adapter.next() {
-                if !adapter.sink(buf, kind, timestamp) {
+            while let Some((buf, kind, flags, timestamp)) = stream_adapter.next() {
+                if !adapter.sink(buf, kind, flags, timestamp) {
                     break;
                 }
             }

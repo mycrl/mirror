@@ -9,11 +9,11 @@ lto = true
 [workspace]
 resolver = "2"
 members = [
-    "codec", 
+    "codec",
+    "common",
+    "capture",
     "transport", 
-    "capture", 
     "sdk/desktop",
-    "sdk/android/native",
-    "common/jni-macro",
-    "common"
+    "sdk/android/mirror/src/main/native",
+    "sdk/android/mirror/src/main/macro",
 ]

@@ -10,6 +10,10 @@ if (NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE "Debug")
 endif()
 
+if (NOT FFMPEG_VERSION)
+    set(FFMPEG_VERSION "6")
+endif()
+
 # Used to download or initialize third-party dependent libraries.
 set(THIRD_PARTY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party")
 
@@ -26,16 +30,31 @@ if (WIN32)
     set(ENV{PATH} "${THIRD_PARTY_DIR};$ENV{PATH}")
 endif()
 
-if (NOT EXISTS "${THIRD_PARTY_DIR}/ffmpeg")
+if (FFMPEG_VERSION STREQUAL "6")
+    set(FFMPEG_PREFIX "${THIRD_PARTY_DIR}/ffmpeg-6.1")
+else()
+    set(FFMPEG_PREFIX "${THIRD_PARTY_DIR}/ffmpeg-4.4")
+endif()
+
+if (NOT EXISTS "${FFMPEG_PREFIX}")
     if (WIN32)
+        if (FFMPEG_VERSION STREQUAL "6")
+            execute_process(
+                WORKING_DIRECTORY "${THIRD_PARTY_DIR}"
+                COMMAND powershell.exe -Command "Invoke-WebRequest \
+                        -Uri https://github.com/mycrl/distributions/releases/download/distributions/ffmpeg-6.1.zip \
+                        -OutFile ffmpeg.zip")
+        else()
+            execute_process(
+                WORKING_DIRECTORY "${THIRD_PARTY_DIR}"
+                COMMAND powershell.exe -Command "Invoke-WebRequest \
+                        -Uri https://github.com/mycrl/distributions/releases/download/distributions/ffmpeg-4.4.zip \
+                        -OutFile ffmpeg.zip")
+        endif()
+
         execute_process(
             WORKING_DIRECTORY "${THIRD_PARTY_DIR}"
-            COMMAND powershell.exe -Command "Invoke-WebRequest \
-                    -Uri https://github.com/ShiftMediaProject/FFmpeg/releases/download/6.1.r112164/libffmpeg_6.1.r112164_msvc17_x64.zip \
-                    -OutFile ffmpeg.zip")
-        execute_process(
-            WORKING_DIRECTORY "${THIRD_PARTY_DIR}"
-            COMMAND powershell.exe -Command "Expand-Archive -Path ffmpeg.zip -DestinationPath ./ffmpeg")
+            COMMAND powershell.exe -Command "Expand-Archive -Path ffmpeg.zip -DestinationPath ./")
     endif()
 endif()
 
@@ -55,11 +74,11 @@ add_library(codec STATIC
             codec.cpp
             codec.h)
 
-include_directories("${THIRD_PARTY_DIR}/ffmpeg/include"
+include_directories("${FFMPEG_PREFIX}/include"
                     "${THIRD_PARTY_DIR}/libyuv/include"
                     "../../common/include")
 
-target_link_directories(codec PRIVATE "${THIRD_PARTY_DIR}/ffmpeg/lib/x64")
+target_link_directories(codec PRIVATE "${FFMPEG_PREFIX}/lib")
 target_link_libraries(codec avcodec 
                             avutil)
 
@@ -70,6 +89,12 @@ if(MSVC)
     else()
         set_property(TARGET codec PROPERTY MSVC_RUNTIME_LIBRARY MultiThreadedDebug)
     endif()
+endif()
+
+if (FFMPEG_VERSION STREQUAL "6")
+    add_compile_definitions(VERSION_6)
+else()
+    add_compile_definitions(VERSION_4)
 endif()
 
 # Build header.

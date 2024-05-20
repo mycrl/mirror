@@ -9,9 +9,15 @@ common = { path = "../common" }
 
 [dev-dependencies]
 anyhow = "1.0.80"
+clap = { version = "4", features = ["derive", "env"] }
 
 [build-dependencies]
 cc = "1.0.88"
 anyhow = "1.0.80"
 dotenv = "0.15.0"
 pkg-config = "0.3.30"
+
+[features]
+default = ["ffmpeg6"]
+ffmpeg6 = []
+ffmpeg4 = []

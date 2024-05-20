@@ -5,11 +5,9 @@ use std::{
         Arc,
     },
     thread,
-    time::Duration,
 };
 
 use bytes::Bytes;
-use common::atomic::AtomicOption;
 use socket2::Socket;
 use thread_priority::{set_current_thread_priority, ThreadPriority};
 
@@ -69,68 +67,34 @@ impl Receiver {
         log::info!("multicast receiver bind to: bind={}", bind);
 
         let (tx, rx) = channel();
-        let target = Arc::new(AtomicOption::new(None));
-        let queue = Arc::new(Dequeue::new(50));
-
-        let target_ = Arc::downgrade(&target);
         let socket_ = Arc::downgrade(&socket);
-        let queue_ = Arc::downgrade(&queue);
         thread::spawn(move || {
             let _ = set_current_thread_priority(ThreadPriority::Max);
 
             let mut buf = vec![0u8; 2048];
+            let mut queue = Dequeue::new(50);
             let mut decoder = PacketDecoder::new();
 
-            'a: while let (Some(queue), Some(socket), Some(target)) =
-                (queue_.upgrade(), socket_.upgrade(), target_.upgrade())
-            {
-                if let Ok((size, addr)) = socket.recv_from(&mut buf[..]) {
+            'a: while let Some(socket) = socket_.upgrade() {
+                if let Ok(size) = socket.recv(&mut buf[..]) {
                     if size == 0 {
                         break;
                     }
 
-                    if target.is_none() {
-                        target.swap(Some(addr));
-                    }
+                    if let Some(packet) = Packet::try_from(&buf[..size]) {
+                        queue.push(packet);
 
-                    if let Ok(packet) = Packet::try_from(&buf[..size]) {
-                        match packet {
-                            Packet::Pong { timestamp } => queue.update(timestamp),
-                            Packet::Bytes { sequence, chunk } => {
-                                queue.push(sequence, Bytes::copy_from_slice(chunk));
-
-                                while let Some(bytes) = queue.pop() {
-                                    if let Some(payload) = decoder.decode(&bytes) {
-                                        if tx.send(payload).is_err() {
-                                            break 'a;
-                                        }
-                                    }
+                        while let Some(packet) = queue.pop() {
+                            if let Some(payload) = decoder.decode(packet) {
+                                if tx.send(payload).is_err() {
+                                    break 'a;
                                 }
                             }
-                            _ => (),
                         }
                     }
                 } else {
                     break;
                 };
-            }
-        });
-
-        let socket_ = Arc::downgrade(&socket);
-        thread::spawn(move || {
-            while let Some(socket) = socket_.upgrade() {
-                if let Some(to) = target.get() {
-                    let bytes: Bytes = Packet::Ping {
-                        timestamp: queue.get_time(),
-                    }
-                    .into();
-
-                    if socket.send_to(&bytes, to).is_err() {
-                        break;
-                    }
-                }
-
-                thread::sleep(Duration::from_secs(1));
             }
         });
 

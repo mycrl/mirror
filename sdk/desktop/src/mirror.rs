@@ -3,20 +3,20 @@ use std::{
     thread,
 };
 
-#[cfg(feature = "audio")]
-use codec::AudioDecoder;
-
 use anyhow::Result;
 use bytes::Bytes;
 use capture::{AVFrameSink, AudioInfo, Device, DeviceManager, DeviceManagerOptions, VideoInfo};
 use codec::{
-    AudioEncoder, AudioEncoderSettings, VideoDecoder, VideoEncoder,
-    VideoEncoderSettings,
+    audio::create_opus_identification_header, AudioDecoder, AudioEncoder, AudioEncoderSettings,
+    VideoDecoder, VideoEncoder, VideoEncoderSettings,
 };
+
 use common::frame::{AudioFrame, VideoFrame};
 use once_cell::sync::Lazy;
 use transport::{
-    adapter::{StreamBufferInfo, StreamKind, StreamReceiverAdapter, StreamSenderAdapter},
+    adapter::{
+        BufferFlag, StreamBufferInfo, StreamKind, StreamReceiverAdapter, StreamSenderAdapter,
+    },
     Transport,
 };
 
@@ -202,11 +202,20 @@ where
 {
     fn new(adapter: &Arc<StreamSenderAdapter>, sink: FrameSink<A, V>) -> anyhow::Result<Self> {
         let options = OPTIONS.read().unwrap();
+
+        adapter.send(
+            Bytes::copy_from_slice(&create_opus_identification_header(
+                1,
+                options.audio.sample_rate as u32,
+            )),
+            StreamBufferInfo::Audio(BufferFlag::Config as i32, 0),
+        );
+
         Ok(Self {
-            sink,
-            adapter: Arc::downgrade(adapter),
             video_encoder: VideoEncoder::new(&options.video.clone().into())?,
             audio_encoder: AudioEncoder::new(&options.audio.clone().into())?,
+            adapter: Arc::downgrade(adapter),
+            sink,
         })
     }
 }
@@ -301,13 +310,11 @@ impl Mirror {
         self.0.create_receiver(bind.parse()?, &adapter)?;
 
         let video_decoder = VideoDecoder::new(&options.video.decoder)?;
-
-        #[cfg(feature = "audio")]
         let audio_decoder = AudioDecoder::new(&options.audio.decoder)?;
 
         let adapter_ = adapter.clone();
         thread::spawn(move || {
-            'a: while let Some((packet, kind, _)) = adapter_.next() {
+            'a: while let Some((packet, kind, _, _)) = adapter_.next() {
                 if packet.is_empty() {
                     continue;
                 }
@@ -323,7 +330,6 @@ impl Mirror {
                         break;
                     }
                 } else if kind == StreamKind::Audio {
-                    #[cfg(feature = "audio")]
                     if audio_decoder.decode(&packet) {
                         while let Some(frame) = audio_decoder.read() {
                             if !(sink.audio)(frame) {

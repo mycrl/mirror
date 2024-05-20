@@ -43,6 +43,7 @@ if (!fs.existsSync('./build/bin/data')) {
     fs.unlinkSync('./build/distributions-windows.zip')
 }
 
+fs.copyFileSync('./examples/desktop/common.h', './build/examples/common.h')
 fs.copyFileSync('./examples/desktop/CMakeLists.txt', './build/examples/CMakeLists.txt')
 fs.copyFileSync('./examples/desktop/sender/main.cpp', './build/examples/sender/main.cpp')
 fs.copyFileSync('./examples/desktop/receiver/main.cpp', './build/examples/receiver/main.cpp')
@@ -50,7 +51,7 @@ fs.copyFileSync('./examples/desktop/receiver/main.cpp', './build/examples/receiv
 fs.copyFileSync('./sdk/desktop/include/mirror.h', './build/include/mirror.h')
 fs.copyFileSync('./common/include/frame.h', './build/include/frame.h')
 
-execSync(`cargo build ${Args.release ? '--release' : ''}`)
+execSync(`cargo build ${Args.release ? '--release' : ''} ${Args.ffmpeg4 ? '--features ffmpeg4' : ''}`)
 
 fs.copyFileSync(`./target/${Profile.toLowerCase()}/mirror.dll`, './build/bin/mirror.dll')
 fs.copyFileSync(`./target/${Profile.toLowerCase()}/mirror.dll.lib`, './build/lib/mirror.dll.lib')

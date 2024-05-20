@@ -31,7 +31,6 @@ struct AudioEncoder* codec_create_audio_encoder(struct AudioEncoderSettings* set
 	codec->context->sample_rate = settings->sample_rate;
 	codec->context->channel_layout = AV_CH_LAYOUT_STEREO;
 	codec->context->sample_fmt = AV_SAMPLE_FMT_S16;
-	codec->codec_name = std::string(settings->codec_name);
 
 	if (avcodec_open2(codec->context, codec->codec, nullptr) != 0)
 	{
@@ -79,9 +78,16 @@ bool codec_audio_encoder_send_frame(struct AudioEncoder* codec, struct AudioFram
 		return false;
 	}
 
+#ifdef VERSION_6
+	auto count = codec->context->frame_num;
+#else
+	auto count = codec->context->frame_number;
+#endif // VERSION_6
+
+
 	codec->frame->data[0] = frame->data[0];
 	codec->frame->data[1] = frame->data[1];
-	codec->frame->pts = codec->context->frame_num * codec->context->frame_size;
+	codec->frame->pts = count * codec->context->frame_size;
 
 	if (avcodec_send_frame(codec->context, codec->frame) != 0)
 	{

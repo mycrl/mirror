@@ -9,6 +9,11 @@
 
 #include <libyuv.h>
 
+extern "C"
+{
+#include <libavutil/opt.h>
+}
+
 struct VideoDecoder* codec_create_video_decoder(const char* codec_name)
 {
 	struct VideoDecoder* codec = new VideoDecoder{};
@@ -27,7 +32,24 @@ struct VideoDecoder* codec_create_video_decoder(const char* codec_name)
 		codec_release_video_decoder(codec);
 		return nullptr;
 	}
-    
+
+	codec->context->delay = 0;
+	codec->context->max_samples = 1;
+	codec->context->has_b_frames = 0;
+	codec->context->thread_count = 1;
+	codec->context->skip_alpha = true;
+	codec->context->pix_fmt = AV_PIX_FMT_NV12;
+	codec->context->flags = AV_CODEC_FLAG_LOW_DELAY;
+
+	if (codec_name == "h264_qsv")
+	{
+		av_opt_set_int(codec->context->priv_data, "async_depth", 1, 0);
+	}
+	else if (codec_name == "h264")
+	{
+		av_opt_set_int(codec->context->priv_data, "is_avc", 1, 0);
+	}
+
 	if (avcodec_open2(codec->context, codec->codec, nullptr) != 0)
 	{
 		codec_release_video_decoder(codec);
@@ -66,10 +88,18 @@ struct VideoDecoder* codec_create_video_decoder(const char* codec_name)
 
 void codec_release_video_decoder(struct VideoDecoder* codec)
 {
-	if (codec->frame->format != AV_PIX_FMT_NV12)
+	if (codec->format_format.has_value())
 	{
-		delete codec->output_frame->data[0];
-		delete codec->output_frame->data[1];
+		if (codec->format_format.value() != AV_PIX_FMT_NV12)
+		{
+			for (auto buf : codec->output_frame->data)
+			{
+				if (buf != nullptr)
+				{
+					delete buf;
+				}
+			}
+		}
 	}
 
 	if (codec->context != nullptr)
@@ -136,17 +166,22 @@ struct VideoFrame* codec_video_decoder_read_frame(struct VideoDecoder* codec)
 	codec->output_frame->rect.width = codec->frame->width;
 	codec->output_frame->rect.height = codec->frame->height;
 
+	if (codec->frame->format != AV_PIX_FMT_NV12 && !codec->format_format.has_value())
+	{
+		for (int i = 0; i < 2; i++)
+		{
+			codec->output_frame->data[i] = new uint8_t[codec->frame->width * codec->frame->height * 1.5];
+			codec->output_frame->linesize[i] = codec->frame->width;
+		}
+	}
+
+	if (!codec->format_format.has_value())
+	{
+		codec->format_format = std::optional(codec->frame->format);
+	}
+
 	if (codec->frame->format != AV_PIX_FMT_NV12)
 	{
-		if (codec->output_frame->data[0] == nullptr)
-		{
-			size_t size = codec->frame->width * codec->frame->height * 4;
-			codec->output_frame->linesize[0] = codec->frame->width;
-			codec->output_frame->linesize[1] = codec->frame->width;
-			codec->output_frame->data[0] = new uint8_t[size];
-			codec->output_frame->data[1] = new uint8_t[size];
-		}
-
 		libyuv::I420ToNV12(codec->frame->data[0],
 						   codec->frame->linesize[0],
 						   codec->frame->data[1],
@@ -159,13 +194,16 @@ struct VideoFrame* codec_video_decoder_read_frame(struct VideoDecoder* codec)
 						   codec->output_frame->linesize[1],
 						   codec->frame->width,
 						   codec->frame->height);
+
+		av_frame_unref(codec->frame);
 	}
 	else
 	{
-		codec->output_frame->data[0] = codec->frame->data[0];
-		codec->output_frame->data[1] = codec->frame->data[1];
-		codec->output_frame->linesize[0] = codec->frame->linesize[0];
-		codec->output_frame->linesize[1] = codec->frame->linesize[1];
+		for (int i = 0; i < 2; i++)
+		{
+			codec->output_frame->linesize[i] = codec->frame->linesize[i];
+			codec->output_frame->data[i] = codec->frame->data[i];
+		}
 	}
 
 	return codec->output_frame;
