@@ -5,6 +5,7 @@ edition = "2021"
 
 [dev-dependencies]
 anyhow = "1.0.80"
+rand = "0.8.5"
 
 [build-dependencies]
 anyhow = "1.0.80"

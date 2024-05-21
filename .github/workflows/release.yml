@@ -25,6 +25,10 @@ jobs:
             ~/.cargo/git/db/
             target/
           key: '${{ matrix.target }}-cargo-${{ hashFiles(''**/Cargo.lock'') }}'
+      - name: Setup dependencies
+        run: |
+          pip3 install meson
+          pip3 install ninja
       - name: Build distributions (FFmpeg 6.1)
         if: matrix.version == 'ffmpeg6'
         run: npm run build:${{ matrix.target }}

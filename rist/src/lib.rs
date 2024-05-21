@@ -99,7 +99,7 @@ impl Sender {
         }
 
         let mut peer_config = null();
-        let url = CString::new(format!("udp://{}", addr.to_string())).unwrap();
+        let url = CString::new(format!("rist://{}", addr.to_string())).unwrap();
         if unsafe { rist_parse_address2(url.as_ptr(), &mut peer_config) } != 0 {
             return Err(Error::ParseAddress);
         }
@@ -194,7 +194,7 @@ impl Receiver {
         }
 
         let mut peer_config = null();
-        let url = CString::new(format!("udp://@{}", addr.to_string())).unwrap();
+        let url = CString::new(format!("rist://@{}", addr.to_string())).unwrap();
         if unsafe { rist_parse_address2(url.as_ptr(), &mut peer_config) } != 0 {
             return Err(Error::ParseAddress);
         }

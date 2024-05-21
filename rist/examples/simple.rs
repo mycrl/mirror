@@ -3,11 +3,12 @@ use std::{
     time::Duration,
 };
 
+use rand::prelude::*;
 use rist::{Receiver, Sender};
 
 fn main() -> anyhow::Result<()> {
-    let mut sender = Sender::new("239.0.0.1:8084".parse()?)?;
-    let receiver = Receiver::new("239.0.0.1:8084".parse()?)?;
+    let mut sender = Sender::new("127.0.0.1:8084".parse()?)?;
+    let receiver = Receiver::new("127.0.0.1:8084".parse()?)?;
 
     thread::spawn(move || {
         while let Some(packet) = receiver.read() {
@@ -15,8 +16,10 @@ fn main() -> anyhow::Result<()> {
         }
     });
 
-    let buf = [0u8; 1000];
+    let mut rng = rand::thread_rng();
+    let mut buf = vec![0u8; 1000];
     loop {
+        buf.shuffle(&mut rng);
         sender.send(&buf)?;
         sleep(Duration::from_secs(1));
     }
