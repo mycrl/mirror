@@ -42,16 +42,46 @@ fn main() -> anyhow::Result<()> {
         )?;
     }
 
-    if !is_exsit(&join(&rist_prefix, "./build/librist.a")?) {
-        exec(&[
-            "mkdir build",
-            "cd build",
-            "meson .. --default-library=static --buildtype=release -Db_lto=true -Dtest=false -Dbuilt_tools=false -Dbuiltin_cjson=true",
-            "ninja"
-        ].join(if cfg!(target_os = "windows") { "; " } else { " && " }), &rist_prefix)?;
+    #[cfg(target_os = "windows")]
+    {
+        if !is_exsit(&join(&rist_prefix, "./build/rist.lib")?) {
+            exec("meson setup build \
+                --backend vs2022 \
+                --default-library=static \
+                --buildtype=release \
+                -Db_lto=true \
+                -Dtest=false \
+                -Dbuilt_tools=false \
+                -Dbuiltin_cjson=true; \
+            meson compile -C build; \
+            cd build; \
+            Rename-Item -Path librist.a -NewName rist.lib", &rist_prefix)?;
+        }
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        if !is_exsit(&join(&rist_prefix, "./build/librist.a")?) {
+            exec("mkdir build && \
+                cd build && \
+                meson .. \
+                    --default-library=static \
+                    --buildtype=release \
+                    -Db_lto=true \
+                    -Dtest=false \
+                    -Dbuilt_tools=false \
+                    -Dbuiltin_cjson=true && \
+                ninja", &rist_prefix)?;
+        }
     }
 
     println!("cargo:rustc-link-search=all={}/build", rist_prefix);
     println!("cargo:rustc-link-lib=rist");
+
+    #[cfg(target_os = "windows")]
+    {
+        println!("cargo:rustc-link-lib=iphlpapi");
+    }
+
     Ok(())
 }

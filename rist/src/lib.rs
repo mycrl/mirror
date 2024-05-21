@@ -94,8 +94,7 @@ impl Sender {
         }
 
         let mut ctx = null();
-        if unsafe { rist_sender_create(&mut ctx, RistProfile::Main, 0, logging_settings) } != 0
-        {
+        if unsafe { rist_sender_create(&mut ctx, RistProfile::Main, 0, logging_settings) } != 0 {
             return Err(Error::CreateSender);
         }
 

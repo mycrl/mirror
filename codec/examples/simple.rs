@@ -67,7 +67,6 @@ fn main() -> anyhow::Result<()> {
     let encoder = VideoEncoder::new(&VideoEncoderSettings {
         codec_name: find_video_encoder(),
         bit_rate: 500 * 1024 * 8,
-        max_b_frames: 0,
         width: args.width,
         height: args.height,
         frame_rate: args.fps,

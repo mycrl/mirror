@@ -34,6 +34,7 @@ This is a screencasting SDK that does not rely on third-party services. It inclu
 
 #### Prerequisites
 
+* [git](https://git-scm.com/downloads) - clone git repo.
 * [rust](https://www.rust-lang.org/tools/install) - The main language used in the project.
 * [cmake](https://cmake.org/download/) - Required when compiling C++ projects and dependencies.
 * [python3](https://www.python.org/downloads/) - cargo gradle requires python environment. <sup>Optional</sup>

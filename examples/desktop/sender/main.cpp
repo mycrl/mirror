@@ -46,7 +46,6 @@ int main()
 	options.video.frame_rate = args.ArgsParams.fps;
 	options.video.key_frame_interval = args.ArgsParams.fps;
 	options.video.bit_rate = 500 * 1024 * 8;
-	options.video.max_b_frames = 0;
 	options.audio.sample_rate = 48000;
 	options.audio.bit_rate = 6000;
 	options.multicast = const_cast<char*>("239.0.0.1");

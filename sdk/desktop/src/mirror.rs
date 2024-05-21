@@ -65,9 +65,6 @@ pub struct VideoOptions {
     /// Video decoder settings, possible values are `h264_qsv`, `h264_cuvid`,
     /// `h264`, etc.
     pub decoder: String,
-    /// Maximum number of B-frames, if low latency encoding is performed, it is
-    /// recommended to set it to 0 to indicate that no B-frames are encoded.
-    pub max_b_frames: u8,
     /// Frame rate setting in seconds.
     pub frame_rate: u8,
     /// The width of the video.
@@ -86,7 +83,6 @@ impl Default for VideoOptions {
         Self {
             encoder: "libx264".to_string(),
             decoder: "h264".to_string(),
-            max_b_frames: 0,
             frame_rate: 30,
             width: 1280,
             height: 720,
@@ -103,7 +99,6 @@ impl From<VideoOptions> for VideoEncoderSettings {
             height: val.height,
             bit_rate: val.bit_rate,
             frame_rate: val.frame_rate,
-            max_b_frames: val.max_b_frames,
             key_frame_interval: val.key_frame_interval,
             codec_name: val.encoder,
         }

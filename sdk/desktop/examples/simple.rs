@@ -40,7 +40,6 @@ fn main() -> anyhow::Result<()> {
         video: RawVideoOptions {
             encoder: unsafe { codec_find_video_encoder() },
             decoder: unsafe { codec_find_video_decoder() },
-            max_b_frames: 0,
             frame_rate: 30,
             width: 1280,
             height: 720,

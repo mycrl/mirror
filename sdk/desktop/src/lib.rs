@@ -43,9 +43,6 @@ pub struct RawVideoOptions {
     /// Video decoder settings, possible values are `h264_qsv`, `h264_cuvid`,
     /// `h264`, etc.
     pub decoder: *const c_char,
-    /// Maximum number of B-frames, if low latency encoding is performed, it is
-    /// recommended to set it to 0 to indicate that no B-frames are encoded.
-    pub max_b_frames: u8,
     /// Frame rate setting in seconds.
     pub frame_rate: u8,
     /// The width of the video.
@@ -70,7 +67,6 @@ impl TryInto<VideoOptions> for RawVideoOptions {
             encoder: Strings::from(self.encoder).to_string()?,
             decoder: Strings::from(self.decoder).to_string()?,
             key_frame_interval: self.key_frame_interval,
-            max_b_frames: self.max_b_frames,
             frame_rate: self.frame_rate,
             width: self.width,
             height: self.height,

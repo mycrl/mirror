@@ -35,7 +35,6 @@ struct EncodePacket
 struct VideoEncoderSettings
 {
 	const char* codec_name;
-	uint8_t max_b_frames;
 	uint8_t frame_rate;
 	uint32_t width;
 	uint32_t height;

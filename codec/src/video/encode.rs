@@ -15,7 +15,6 @@ extern "C" {
 #[repr(C)]
 pub struct RawVideoEncoderSettings {
     pub codec_name: *const c_char,
-    pub max_b_frames: u8,
     pub frame_rate: u8,
     pub width: u32,
     pub height: u32,
@@ -32,7 +31,6 @@ impl Drop for RawVideoEncoderSettings {
 #[derive(Debug, Clone)]
 pub struct VideoEncoderSettings {
     pub codec_name: String,
-    pub max_b_frames: u8,
     pub frame_rate: u8,
     pub width: u32,
     pub height: u32,
@@ -45,7 +43,6 @@ impl VideoEncoderSettings {
         RawVideoEncoderSettings {
             codec_name: CString::new(self.codec_name.as_str()).unwrap().into_raw(),
             key_frame_interval: self.key_frame_interval,
-            max_b_frames: self.max_b_frames,
             frame_rate: self.frame_rate,
             width: self.width,
             height: self.height,

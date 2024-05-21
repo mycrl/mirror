@@ -60,6 +60,18 @@ if (!Args.release) {
     fs.copyFileSync('./target/debug/mirror.pdb', './build/bin/mirror.pdb')
 }
 
+if (!Args.ffmpeg4) {
+    for (const item of [
+        './build/bin/swresample-3.dll',
+        './build/bin/avcodec-58.dll',
+        './build/bin/avutil-56.dll',
+    ]) {
+        if (fs.existsSync(item)) {
+            fs.unlinkSync(item)
+        }
+    }
+}
+
 if (!fs.existsSync('./examples/desktop/build')) {
     fs.mkdirSync('./examples/desktop/build')
 }
