@@ -1,0 +1,10 @@
+[package]
+name = "rist"
+version = "0.1.0"
+edition = "2021"
+
+[dev-dependencies]
+anyhow = "1.0.80"
+
+[build-dependencies]
+anyhow = "1.0.80"

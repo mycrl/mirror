@@ -15,5 +15,5 @@ members = [
     "transport", 
     "sdk/desktop",
     "sdk/android/mirror/src/main/native",
-    "sdk/android/mirror/src/main/macro",
+    "sdk/android/mirror/src/main/macro", "rist",
 ]
