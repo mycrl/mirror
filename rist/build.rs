@@ -45,7 +45,8 @@ fn main() -> anyhow::Result<()> {
     #[cfg(target_os = "windows")]
     {
         if !is_exsit(&join(&rist_prefix, "./build/rist.lib")?) {
-            exec("meson setup build \
+            exec(
+                "meson setup build \
                 --backend vs2022 \
                 --default-library=static \
                 --buildtype=release \
@@ -55,14 +56,17 @@ fn main() -> anyhow::Result<()> {
                 -Dbuiltin_cjson=true; \
             meson compile -C build; \
             cd build; \
-            Rename-Item -Path librist.a -NewName rist.lib", &rist_prefix)?;
+            Rename-Item -Path librist.a -NewName rist.lib",
+                &rist_prefix,
+            )?;
         }
     }
 
     #[cfg(not(target_os = "windows"))]
     {
         if !is_exsit(&join(&rist_prefix, "./build/librist.a")?) {
-            exec("mkdir build && \
+            exec(
+                "mkdir build && \
                 cd build && \
                 meson .. \
                     --default-library=static \
@@ -71,7 +75,9 @@ fn main() -> anyhow::Result<()> {
                     -Dtest=false \
                     -Dbuilt_tools=false \
                     -Dbuiltin_cjson=true && \
-                ninja", &rist_prefix)?;
+                ninja",
+                &rist_prefix,
+            )?;
         }
     }
 

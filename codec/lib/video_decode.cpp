@@ -39,7 +39,7 @@ struct VideoDecoder* codec_create_video_decoder(const char* codec_name)
 	codec->context->thread_count = 1;
 	codec->context->skip_alpha = true;
 	codec->context->pix_fmt = AV_PIX_FMT_NV12;
-	codec->context->flags = AV_CODEC_FLAG_LOW_DELAY;
+	codec->context->flags = AV_CODEC_FLAG_QSCALE | AV_CODEC_FLAG_LOW_DELAY;
 
 	if (codec_name == "h264_qsv")
 	{

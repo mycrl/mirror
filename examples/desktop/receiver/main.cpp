@@ -75,7 +75,7 @@ int main()
 												 sdl_rect.w,
 												 sdl_rect.h);
 
-    Render* render = new Render(&sdl_rect, sdl_texture, sdl_renderer);
+    Render* render = new Render(&sdl_rect, sdl_texture, sdl_renderer, true);
 	mirror::MirrorService* mirror = new mirror::MirrorService();
 	std::optional<mirror::MirrorService::MirrorReceiver> receiver = std::nullopt;
 	SDL_Event event;

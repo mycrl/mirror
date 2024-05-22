@@ -23,14 +23,21 @@ class Render : public mirror::MirrorService::AVFrameSink
 public:
 	Render(SDL_Rect* sdl_rect,
 		   SDL_Texture* sdl_texture,
-		   SDL_Renderer* sdl_renderer)
+		   SDL_Renderer* sdl_renderer,
+		   bool is_render)
 		: _sdl_rect(sdl_rect)
 		, _sdl_texture(sdl_texture)
 		, _sdl_renderer(sdl_renderer)
+		, _is_render(is_render)
 	{}
 
 	bool OnVideoFrame(struct VideoFrame* frame)
 	{
+		if (!_is_render)
+		{
+			return true;
+		}
+
 		if (SDL_UpdateNVTexture(_sdl_texture,
 								_sdl_rect,
 								frame->data[0],
@@ -59,6 +66,7 @@ private:
 	SDL_Rect* _sdl_rect;
 	SDL_Texture* _sdl_texture;
 	SDL_Renderer* _sdl_renderer;
+	bool _is_render;
 };
 
 class Args
