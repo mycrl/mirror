@@ -7,8 +7,8 @@ use rand::prelude::*;
 use rist::{Receiver, Sender};
 
 fn main() -> anyhow::Result<()> {
-    let mut sender = Sender::new("127.0.0.1:8084".parse()?)?;
     let receiver = Receiver::new("127.0.0.1:8084".parse()?)?;
+    let mut sender = Sender::new("127.0.0.1:8084".parse()?)?;
 
     thread::spawn(move || {
         while let Some(packet) = receiver.read() {
