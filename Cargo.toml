@@ -12,7 +12,6 @@ members = [
     "codec",
     "common",
     "capture",
-    "transfer",
     "transport", 
     "sdk/desktop",
     "sdk/android/mirror/src/main/native",
