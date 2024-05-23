@@ -2,10 +2,10 @@ use std::{fmt::Debug, mem::size_of};
 
 use libc::{c_char, c_int};
 
-use super::{srt_setsockflag, SrtError, SrtErrorKind, SRTSOCKET, SRT_SOCKOPT, SRT_TRANSTYPE};
+use super::{srt_setsockflag, Error, ErrorKind, SRTSOCKET, SRT_SOCKOPT, SRT_TRANSTYPE};
 
 #[derive(Debug, Clone)]
-pub struct SrtOptions {
+pub struct Options {
     pub max_bandwidth: i64,
     pub latency: u32,
     pub timeout: u32,
@@ -14,8 +14,8 @@ pub struct SrtOptions {
     pub fc: u32,
 }
 
-impl SrtOptions {
-    pub(crate) fn apply_socket(&self, fd: i32) -> Result<(), SrtError> {
+impl Options {
+    pub(crate) fn apply_socket(&self, fd: i32) -> Result<(), Error> {
         set_sock_opt(fd, SRT_SOCKOPT::SRTO_TRANSTYPE, &SRT_TRANSTYPE::SRTT_LIVE)?;
         set_sock_opt(fd, SRT_SOCKOPT::SRTO_TSBPDMODE, &1_i32)?;
         set_sock_opt(fd, SRT_SOCKOPT::SRTO_TLPKTDROP, &1_i32)?;
@@ -33,7 +33,7 @@ impl SrtOptions {
     }
 }
 
-impl Default for SrtOptions {
+impl Default for Options {
     fn default() -> Self {
         Self {
             fec: "fec,layout:even,rows:20,cols:10,arq:always".to_string(),
@@ -50,7 +50,7 @@ fn set_sock_opt<T: Sized + Debug + PartialEq>(
     sock: SRTSOCKET,
     opt: SRT_SOCKOPT,
     flag: &T,
-) -> Result<(), SrtError> {
+) -> Result<(), Error> {
     if unsafe {
         srt_setsockflag(
             sock,
@@ -62,15 +62,15 @@ fn set_sock_opt<T: Sized + Debug + PartialEq>(
     {
         Ok(())
     } else {
-        SrtError::error(SrtErrorKind::SetOptError)
+        Error::error(ErrorKind::SetOptError)
     }
 }
 
-fn set_sock_opt_str(sock: SRTSOCKET, opt: SRT_SOCKOPT, flag: &str) -> Result<(), SrtError> {
+fn set_sock_opt_str(sock: SRTSOCKET, opt: SRT_SOCKOPT, flag: &str) -> Result<(), Error> {
     if unsafe { srt_setsockflag(sock, opt, to_c_str(flag) as *const _, flag.len() as c_int) } == 0 {
         Ok(())
     } else {
-        SrtError::error(SrtErrorKind::SetOptError)
+        Error::error(ErrorKind::SetOptError)
     }
 }
 

@@ -8,18 +8,18 @@ use libc::c_int;
 use os_socketaddr::OsSocketAddr;
 
 use super::{
-    options::SrtOptions, srt_close, srt_connect, srt_create_socket, srt_recv, srt_send, SrtError,
-    SrtErrorKind, SRTSOCKET, SRT_INVALID_SOCK,
+    options::Options, srt_close, srt_connect, srt_create_socket, srt_recv, srt_send, Error,
+    ErrorKind, SRTSOCKET, SRT_INVALID_SOCK,
 };
 
 pub struct Socket {
     fd: SRTSOCKET,
-    opt: SrtOptions,
+    opt: Options,
     is_closed: Arc<AtomicBool>,
 }
 
 impl Socket {
-    pub(crate) fn new(fd: SRTSOCKET, opt: SrtOptions) -> Self {
+    pub(crate) fn new(fd: SRTSOCKET, opt: Options) -> Self {
         Self {
             is_closed: Arc::new(AtomicBool::new(false)),
             opt,
@@ -88,17 +88,17 @@ impl Socket {
     /// error this function may return any additional information. In
     /// non-blocking mode a detailed "late" failure cannot be distinguished,
     /// and therefore it can also be obtained from this function.
-    pub fn connect(addr: SocketAddr, opt: SrtOptions) -> Result<Self, SrtError> {
+    pub fn connect(addr: SocketAddr, opt: Options) -> Result<Self, Error> {
         let fd = unsafe { srt_create_socket() };
         if fd == SRT_INVALID_SOCK {
-            return SrtError::error(SrtErrorKind::InvalidSock);
+            return Error::error(ErrorKind::InvalidSock);
         } else {
             opt.apply_socket(fd)?;
         }
 
         let addr: OsSocketAddr = addr.into();
         if unsafe { srt_connect(fd, addr.as_ptr() as *const _, addr.len() as c_int) } == -1 {
-            return SrtError::error(SrtErrorKind::ConnectError);
+            return Error::error(ErrorKind::ConnectError);
         }
 
         Ok(Self::new(fd, opt))
@@ -157,9 +157,9 @@ impl Socket {
     /// until then it will be kept in the receiver buffer. Also, when the
     /// time to play has come for a message that is next to the currently
     /// lost one, it will be delivered and the lost one dropped.
-    pub fn read(&self, buf: &mut [u8]) -> Result<usize, SrtError> {
+    pub fn read(&self, buf: &mut [u8]) -> Result<usize, Error> {
         if self.is_closed.get() {
-            return SrtError::error(SrtErrorKind::RecvError);
+            return Error::error(ErrorKind::RecvError);
         }
 
         let ret = unsafe { srt_recv(self.fd, buf.as_mut_ptr() as *mut _, buf.len() as c_int) };
@@ -168,7 +168,7 @@ impl Socket {
         }
 
         if ret < 0 {
-            SrtError::error(SrtErrorKind::RecvError)
+            Error::error(ErrorKind::RecvError)
         } else {
             Ok(ret as usize)
         }
@@ -215,7 +215,7 @@ impl Socket {
     /// rest of the buffer next time to send it completely. In both **file/
     /// message** and **live mode** the successful return is always equal to
     /// `len`.
-    pub fn send(&self, mut buf: &[u8]) -> Result<(), SrtError> {
+    pub fn send(&self, mut buf: &[u8]) -> Result<(), Error> {
         if buf.len() == 0 {
             return Ok(());
         }
@@ -227,20 +227,20 @@ impl Socket {
         Ok(())
     }
 
-    fn send_with_sized(&self, buf: &[u8]) -> Result<usize, SrtError> {
+    fn send_with_sized(&self, buf: &[u8]) -> Result<usize, Error> {
         if buf.len() == 0 {
             return Ok(0);
         }
 
         if self.is_closed.get() {
-            return SrtError::error(SrtErrorKind::SendError);
+            return Error::error(ErrorKind::SendError);
         }
 
         let size = std::cmp::min(buf.len(), self.opt.max_pkt_size());
         let ret = unsafe { srt_send(self.fd, buf.as_ptr() as *const _, size as c_int) } as usize;
         if ret != size {
             self.is_closed.update(true);
-            SrtError::error(SrtErrorKind::SendError)
+            Error::error(ErrorKind::SendError)
         } else {
             Ok(ret as usize)
         }

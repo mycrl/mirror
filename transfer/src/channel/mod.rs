@@ -44,18 +44,19 @@
 //!     Ok(())
 //! }
 
-mod listener;
+mod server;
 mod options;
 mod socket;
+mod fragments;
 
-pub use self::{listener::Listener, options::SrtOptions, socket::Socket};
+pub use self::{server::Server, options::Options, socket::Socket};
 
 use std::ffi::{c_char, c_int, c_void, CStr};
 
 use libc::sockaddr;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SrtErrorKind {
+pub enum ErrorKind {
     InvalidSock,
     BindError,
     ListenError,
@@ -68,13 +69,13 @@ pub enum SrtErrorKind {
 }
 
 #[derive(Debug, Clone)]
-pub struct SrtError {
-    pub kind: SrtErrorKind,
+pub struct Error {
+    pub kind: ErrorKind,
     pub message: Option<String>,
 }
 
-impl SrtError {
-    fn error<T>(kind: SrtErrorKind) -> Result<T, Self> {
+impl Error {
+    fn error<T>(kind: ErrorKind) -> Result<T, Self> {
         Err(Self {
             kind,
             message: unsafe { CStr::from_ptr(srt_getlasterror_str()) }
@@ -85,9 +86,9 @@ impl SrtError {
     }
 }
 
-impl std::error::Error for SrtError {}
+impl std::error::Error for Error {}
 
-impl std::fmt::Display for SrtError {
+impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "kind = {:?}, message = {:?}", self.kind, self.message)
     }

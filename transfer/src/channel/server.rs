@@ -10,21 +10,21 @@ use libc::sockaddr;
 use os_socketaddr::OsSocketAddr;
 
 use super::{
-    options::SrtOptions, socket::Socket, srt_bind, srt_close, srt_create_socket, srt_getsockname,
-    srt_listen, srt_listen_callback, SrtError, SrtErrorKind, SRTSOCKET, SRT_INVALID_SOCK,
+    options::Options, socket::Socket, srt_bind, srt_close, srt_create_socket, srt_getsockname,
+    srt_listen, srt_listen_callback, Error, ErrorKind, SRTSOCKET, SRT_INVALID_SOCK,
 };
 
-pub struct Listener {
+pub struct Server {
     ctx: *mut Sender<(SRTSOCKET, SocketAddr)>,
     rx: Receiver<(SRTSOCKET, SocketAddr)>,
     fd: SRTSOCKET,
-    opt: SrtOptions,
+    opt: Options,
 }
 
-unsafe impl Send for Listener {}
-unsafe impl Sync for Listener {}
+unsafe impl Send for Server {}
+unsafe impl Sync for Server {}
 
-impl Listener {
+impl Server {
     /// Binds a socket to a local address and port. Binding specifies the local
     /// network interface and the UDP port number to be used for the socket.
     /// When the local address is a wildcard (`INADDR_ANY` for IPv4 or
@@ -135,27 +135,27 @@ impl Listener {
     /// option must be first set explicitly to 0 or 1, otherwise the binding
     /// will fail. In all other cases this option is meaningless. See
     /// `SRTO_IPV6ONLY` option for more information.
-    pub fn bind(addr: SocketAddr, opt: SrtOptions, backlog: u32) -> Result<Self, SrtError> {
+    pub fn bind(addr: SocketAddr, opt: Options, backlog: u32) -> Result<Self, Error> {
         let fd = unsafe { srt_create_socket() };
         if fd == SRT_INVALID_SOCK {
-            return SrtError::error(SrtErrorKind::InvalidSock);
+            return Error::error(ErrorKind::InvalidSock);
         } else {
             opt.apply_socket(fd)?;
         }
 
         let addr: OsSocketAddr = addr.into();
         if unsafe { srt_bind(fd, addr.as_ptr() as *const _, addr.len() as c_int) } == -1 {
-            return SrtError::error(SrtErrorKind::BindError);
+            return Error::error(ErrorKind::BindError);
         }
 
         if unsafe { srt_listen(fd, backlog as c_int) } == -1 {
-            return SrtError::error(SrtErrorKind::ListenError);
+            return Error::error(ErrorKind::ListenError);
         }
 
         let (tx, rx) = channel();
         let ctx = Box::into_raw(Box::new(tx));
         if unsafe { srt_listen_callback(fd, listener_fn, ctx as *mut _) } != 0 {
-            SrtError::error(SrtErrorKind::ListenError)
+            Error::error(ErrorKind::ListenError)
         } else {
             Ok(Self { fd, ctx, rx, opt })
         }
@@ -203,11 +203,11 @@ impl Listener {
     /// SRT_EPOLL_UPDATE) event is raised on the `lsn` socket when
     /// a new background connection is attached to the group, although it's
     /// usually for internal use only.
-    pub fn accept(&mut self) -> Result<(Socket, SocketAddr), SrtError> {
+    pub fn accept(&mut self) -> Result<(Socket, SocketAddr), Error> {
         if let Ok((fd, addr)) = self.rx.recv() {
             Ok((Socket::new(fd, self.opt.clone()), addr))
         } else {
-            SrtError::error(SrtErrorKind::AcceptError)
+            Error::error(ErrorKind::AcceptError)
         }
     }
 
@@ -228,7 +228,7 @@ impl Listener {
     }
 }
 
-impl Drop for Listener {
+impl Drop for Server {
     fn drop(&mut self) {
         unsafe {
             let _ = Box::from_raw(self.ctx);
