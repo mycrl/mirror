@@ -20,6 +20,7 @@ impl Options {
         set_sock_opt(fd, SRT_SOCKOPT::SRTO_TRANSTYPE, &SRT_TRANSTYPE::SRTT_LIVE)?;
         set_sock_opt(fd, SRT_SOCKOPT::SRTO_TSBPDMODE, &1_i32)?;
         set_sock_opt(fd, SRT_SOCKOPT::SRTO_TLPKTDROP, &1_i32)?;
+        set_sock_opt(fd, SRT_SOCKOPT::SRTO_REUSEADDR, &1_i32)?;
         set_sock_opt(fd, SRT_SOCKOPT::SRTO_FC, &self.fc)?;
         set_sock_opt(fd, SRT_SOCKOPT::SRTO_MSS, &self.mtu)?;
         set_sock_opt(fd, SRT_SOCKOPT::SRTO_RCVLATENCY, &self.latency)?;

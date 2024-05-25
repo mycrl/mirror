@@ -31,7 +31,7 @@ impl FragmentEncoder {
                 buf.put_u64(0);
                 buf.put_u64(self.sequence);
                 buf.put_u32(bytes.len() as u32);
-                buf.put(chunk);
+                buf.extend_from_slice(chunk);
 
                 let hash = xxh3_64(&buf[8..]);
                 buf[0..8].copy_from_slice(&hash.to_be_bytes());
@@ -69,9 +69,9 @@ impl FragmentDecoder {
         let mut result = None;
 
         if bytes.get_u64() == xxh3_64(bytes) {
-            let sequence = bytes.get_u64();
+            let sequence = bytes.get_u64() as i128;
             let size = bytes.get_u32() as usize;
-            if sequence as i128 != self.sequence {
+            if sequence != self.sequence {
                 if !self.bytes.is_empty() && self.bytes.len() >= self.size {
                     result = Some((
                         self.sequence as u64,
@@ -82,7 +82,7 @@ impl FragmentDecoder {
                 self.bytes.clear();
             }
 
-            self.sequence = sequence as i128;
+            self.sequence = sequence;
             self.size = size;
 
             self.bytes.put(bytes);

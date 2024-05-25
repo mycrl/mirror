@@ -79,7 +79,7 @@ impl Transport {
                         if !closeds.is_empty() {
                             for id in closeds {
                                 if channels.write().unwrap().remove(&id).is_some() {
-                                    log::error!("channel is close, id={}", id)
+                                    log::info!("channel is close, id={}", id)
                                 }
                             }
                         }
@@ -105,6 +105,7 @@ impl Transport {
         )?;
 
         let mut opt = srt::Options::default();
+        opt.fc = 32;
         opt.latency = 20;
         opt.mtu = self.options.mtu as u32;
         opt.stream_id = Some(
@@ -116,7 +117,7 @@ impl Transport {
             .encode(),
         );
 
-        let mut encoder = srt::FragmentEncoder::new(self.options.mtu);
+        let mut encoder = srt::FragmentEncoder::new(opt.max_pkt_size());
         let sender = srt::Socket::connect(self.options.server, opt)?;
         log::info!("sender connect to server={}", self.options.server);
 
@@ -124,6 +125,10 @@ impl Transport {
         thread::spawn(move || {
             'a: while let Some(adapter) = adapter_.upgrade() {
                 if let Some((buf, kind, flags, timestamp)) = adapter.next() {
+                    if buf.is_empty() {
+                        continue;
+                    }
+
                     let payload = Muxer::mux(
                         PacketInfo {
                             kind,
@@ -170,6 +175,7 @@ impl Transport {
         adapter: &Arc<StreamReceiverAdapter>,
     ) -> Result<(), Error> {
         let mut opt = srt::Options::default();
+        opt.fc = 32;
         opt.latency = 20;
         opt.mtu = self.options.mtu as u32;
         opt.stream_id = Some(
@@ -217,6 +223,10 @@ impl Transport {
                                 let adapter_ = adapter_.clone();
                                 thread::spawn(move || {
                                     while let Some((seq, bytes)) = mcast_rceiver.read() {
+                                        if bytes.is_empty() {
+                                            break;
+                                        }
+
                                         if let Some(adapter) = adapter_.upgrade() {
                                             if seq + 1 == sequence_.get() {
                                                 if let Some((offset, info)) = Remuxer::remux(&bytes)
@@ -237,9 +247,11 @@ impl Transport {
                                             } else {
                                                 adapter.loss_pkt()
                                             }
-                                        }
 
-                                        sequence_.update(seq);
+                                            sequence_.update(seq);
+                                        } else {
+                                            break;
+                                        }
                                     }
                                 });
                             }
@@ -264,9 +276,13 @@ impl Transport {
             let mut buf = [0u8; 2000];
 
             while let Ok(size) = receiver.read(&mut buf) {
+                if size == 0 {
+                    break;
+                }
+
                 if let Some((seq, bytes)) = decoder.decode(&buf[..size]) {
                     if let Some(adapter) = adapter_.upgrade() {
-                        if seq + 1 == sequence.get() {
+                        if seq - 1 == sequence.get() {
                             if let Some((offset, info)) = Remuxer::remux(&bytes) {
                                 if !adapter.send(
                                     bytes.slice(offset..),
@@ -284,9 +300,11 @@ impl Transport {
                         } else {
                             adapter.loss_pkt()
                         }
-                    }
 
-                    sequence.update(seq);
+                        sequence.update(seq);
+                    } else {
+                        break;
+                    }
                 }
             }
 

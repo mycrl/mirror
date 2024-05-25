@@ -2,6 +2,7 @@ use crate::adapter::StreamKind;
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 
+#[derive(Debug)]
 pub struct PacketInfo {
     pub kind: StreamKind,
     pub flags: u8,

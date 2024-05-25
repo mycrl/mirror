@@ -58,13 +58,14 @@ impl StreamInfo {
     }
 
     pub fn encode(self) -> String {
-        let mut format = "#!::".to_string();
-        format.push_str(&format!("i={}", self.id));
-        format.push_str(&format!("k={}", self.kind as u8));
-        if let Some(port) = self.port {
-            format.push_str(&format!("p={}", port));
-        }
-
-        format
+        format!(
+            "#!::{}",
+            [
+                format!("i={}", self.id),
+                format!("k={}", self.kind as u8),
+                self.port.map(|p| format!("p={}", p)).unwrap_or_default(),
+            ]
+            .join(",")
+        )
     }
 }

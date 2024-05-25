@@ -38,6 +38,7 @@ fn main() -> Result<()> {
     let mut opt = Options::default();
     opt.mtu = config.mtu as u32;
     opt.latency = 20;
+    opt.fc = 32;
 
     let mut server = Server::bind(config.bind, opt, 100)?;
 

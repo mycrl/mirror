@@ -44,7 +44,9 @@ impl Signal {
 
 pub fn start_server(bind: SocketAddr, route: Arc<Route>) -> Result<(), Error> {
     let listener = TcpListener::bind(bind)?;
-    while let Ok((mut socket, _)) = listener.accept() {
+    while let Ok((mut socket, addr)) = listener.accept() {
+        log::info!("new signal socket, addr={}", addr);
+
         let route = route.clone();
         thread::spawn(move || {
             {
@@ -64,6 +66,8 @@ pub fn start_server(bind: SocketAddr, route: Arc<Route>) -> Result<(), Error> {
                     break;
                 }
             }
+
+            log::info!("signal socket close, addr={}", addr);
         });
     }
 

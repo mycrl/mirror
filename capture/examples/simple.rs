@@ -66,9 +66,9 @@ fn main() -> anyhow::Result<()> {
     }
 
     DeviceManager::set_input(&devices[0])?;
-    set_frame_sink(FrameSink {
+    set_frame_sink(Some(FrameSink {
         frame: frame.clone(),
-    });
+    }));
 
     let mut window = Window::new("simple", WIDTH, HEIGHT, WindowOptions::default())?;
     window.limit_update_rate(Some(Duration::from_millis(1000 / 30)));

@@ -308,6 +308,7 @@ pub extern "C" fn mirror_drop(mirror: *const RawMirror) {
 pub struct RawFrameSink {
     pub video: Option<extern "C" fn(ctx: *const c_void, frame: *const VideoFrame) -> bool>,
     pub audio: Option<extern "C" fn(ctx: *const c_void, frame: *const AudioFrame) -> bool>,
+    pub close: Option<extern "C" fn(ctx: *const c_void)>,
     pub ctx: *const c_void,
 }
 
@@ -328,6 +329,22 @@ impl RawFrameSink {
             callback(self.ctx, frame)
         } else {
             true
+        }
+    }
+
+    fn closed(&self) {
+        if let Some(callback) = &self.close {
+            callback(self.ctx)
+        }
+    }
+}
+
+impl Into<FrameSink> for RawFrameSink {
+    fn into(self) -> FrameSink {
+        FrameSink {
+            video: Box::new(move |frame: &VideoFrame| self.send_video(frame)),
+            audio: Box::new(move |frame: &AudioFrame| self.send_audio(frame)),
+            close: Box::new(move || self.closed()),
         }
     }
 }
@@ -353,13 +370,9 @@ pub extern "C" fn mirror_create_sender(
     assert!(!mirror.is_null());
 
     checker((|| {
-        unsafe { &*mirror }.mirror.create_sender(
-            id as u32,
-            FrameSink {
-                video: move |frame: &VideoFrame| sink.send_video(frame),
-                audio: move |frame: &AudioFrame| sink.send_audio(frame),
-            },
-        )
+        unsafe { &*mirror }
+            .mirror
+            .create_sender(id as u32, sink.into())
     })())
     .map(|adapter| Box::into_raw(Box::new(RawSender { adapter })))
     .unwrap_or_else(|_| null_mut())
@@ -394,6 +407,7 @@ pub extern "C" fn mirror_close_sender(sender: *const RawSender) {
         .adapter
         .close();
 
+    capture::set_frame_sink::<()>(None);
     log::info!("close sender");
 }
 
@@ -417,13 +431,9 @@ pub extern "C" fn mirror_create_receiver(
     assert!(!mirror.is_null());
 
     checker((|| {
-        unsafe { &*mirror }.mirror.create_receiver(
-            id as u32,
-            FrameSink {
-                video: move |frame: &VideoFrame| sink.send_video(frame),
-                audio: move |frame: &AudioFrame| sink.send_audio(frame),
-            },
-        )
+        unsafe { &*mirror }
+            .mirror
+            .create_receiver(id as u32, sink.into())
     })())
     .map(|adapter| Box::into_raw(Box::new(RawReceiver { adapter })))
     .unwrap_or_else(|_| null_mut())

@@ -68,6 +68,7 @@ fn main() -> anyhow::Result<()> {
             RawFrameSink {
                 video: None,
                 audio: None,
+                close: None,
                 ctx: null(),
             },
         );
@@ -81,6 +82,7 @@ fn main() -> anyhow::Result<()> {
             RawFrameSink {
                 video: None,
                 audio: None,
+                close: None,
                 ctx: null(),
             },
         );

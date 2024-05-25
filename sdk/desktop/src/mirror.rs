@@ -183,24 +183,21 @@ pub fn set_input_device(device: &Device) -> Result<()> {
     Ok(())
 }
 
-pub struct FrameSink<A, V> {
-    pub video: V,
-    pub audio: A,
+pub struct FrameSink {
+    pub video: Box<dyn Fn(&VideoFrame) -> bool + Send>,
+    pub audio: Box<dyn Fn(&AudioFrame) -> bool + Send>,
+    pub close: Box<dyn Fn() + Send>,
 }
 
-struct SenderObserver<A, V> {
+struct SenderObserver {
     audio_encoder: AudioEncoder,
     video_encoder: VideoEncoder,
     adapter: Weak<StreamSenderAdapter>,
-    sink: FrameSink<A, V>,
+    sink: FrameSink,
 }
 
-impl<A, V> SenderObserver<A, V>
-where
-    A: Fn(&AudioFrame) -> bool + Send + 'static,
-    V: Fn(&VideoFrame) -> bool + Send + 'static,
-{
-    fn new(adapter: &Arc<StreamSenderAdapter>, sink: FrameSink<A, V>) -> anyhow::Result<Self> {
+impl SenderObserver {
+    fn new(adapter: &Arc<StreamSenderAdapter>, sink: FrameSink) -> anyhow::Result<Self> {
         let options = OPTIONS.read().unwrap();
 
         adapter.send(
@@ -220,11 +217,7 @@ where
     }
 }
 
-impl<A, V> AVFrameSink for SenderObserver<A, V>
-where
-    A: Fn(&AudioFrame) -> bool + Send + 'static,
-    V: Fn(&VideoFrame) -> bool + Send + 'static,
-{
+impl AVFrameSink for SenderObserver {
     fn video(&self, frame: &VideoFrame) {
         (self.sink.video)(frame);
 
@@ -258,6 +251,12 @@ where
     }
 }
 
+impl Drop for SenderObserver {
+    fn drop(&mut self) {
+        (self.sink.close)()
+    }
+}
+
 pub struct Mirror(Transport);
 
 impl Mirror {
@@ -273,35 +272,19 @@ impl Mirror {
     /// Create a sender, specify a bound NIC address, you can pass callback to
     /// get the device screen or sound callback, callback can be null, if it is
     /// null then it means no callback data is needed.
-    pub fn create_sender<A, V>(
-        &self,
-        id: u32,
-        sink: FrameSink<A, V>,
-    ) -> Result<Arc<StreamSenderAdapter>>
-    where
-        A: Fn(&AudioFrame) -> bool + Send + 'static,
-        V: Fn(&VideoFrame) -> bool + Send + 'static,
-    {
+    pub fn create_sender(&self, id: u32, sink: FrameSink) -> Result<Arc<StreamSenderAdapter>> {
         log::info!("create sender: id={}", id);
 
         let adapter = StreamSenderAdapter::new();
         self.0.create_sender(id, &adapter)?;
 
-        capture::set_frame_sink(SenderObserver::new(&adapter, sink)?);
+        capture::set_frame_sink(Some(SenderObserver::new(&adapter, sink)?));
         Ok(adapter)
     }
 
     /// Create a receiver, specify a bound NIC address, you can pass callback to
     /// get the sender's screen or sound callback, callback can not be null.
-    pub fn create_receiver<A, V>(
-        &self,
-        id: u32,
-        sink: FrameSink<A, V>,
-    ) -> Result<Arc<StreamReceiverAdapter>>
-    where
-        A: Fn(&AudioFrame) -> bool + Send + 'static,
-        V: Fn(&VideoFrame) -> bool + Send + 'static,
-    {
+    pub fn create_receiver(&self, id: u32, sink: FrameSink) -> Result<Arc<StreamReceiverAdapter>> {
         log::info!("create receiver: id={}", id);
 
         let options = OPTIONS.read().unwrap();
@@ -340,6 +323,8 @@ impl Mirror {
                     }
                 }
             }
+
+            (sink.close)()
         });
 
         Ok(adapter)

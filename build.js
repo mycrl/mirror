@@ -21,7 +21,8 @@ const Command = (cmd, options = {}) => execSync(cmd,  {
 for (const path of [
     './build', 
     './build/bin', 
-    './build/lib', 
+    './build/lib',
+    './build/server', 
     './build/include', 
     './build/examples', 
     './build/examples/receiver', 
@@ -55,6 +56,7 @@ execSync(`cargo build ${Args.release ? '--release' : ''} ${Args.ffmpeg4 ? '--fea
 
 fs.copyFileSync(`./target/${Profile.toLowerCase()}/mirror.dll`, './build/bin/mirror.dll')
 fs.copyFileSync(`./target/${Profile.toLowerCase()}/mirror.dll.lib`, './build/lib/mirror.dll.lib')
+fs.copyFileSync(`./target/${Profile.toLowerCase()}/service.exe`, './build/server/mirror-service.exe')
 
 if (!Args.release) {
     fs.copyFileSync('./target/debug/mirror.pdb', './build/bin/mirror.pdb')

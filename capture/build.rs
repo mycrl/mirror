@@ -66,7 +66,7 @@ fn main() -> anyhow::Result<()> {
         .cpp(true)
         .std("c++20")
         .debug(is_debug)
-        .static_crt(true)
+        .static_crt(false)
         .target(&target)
         .warnings(false)
         .out_dir(&out_dir)

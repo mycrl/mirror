@@ -249,13 +249,17 @@ impl Drop for Server {
 
 extern "C" fn listener_fn(
     opaque: *mut c_void,
-    s: SRTSOCKET,
+    socket: SRTSOCKET,
     _hs_version: c_int,
     peeraddr: *const sockaddr,
     stream_id: *const c_char,
 ) -> c_int {
     #[cfg(not(target_os = "windows"))]
     use libc::sockaddr_in;
+
+    if socket == SRT_INVALID_SOCK {
+        return -1;
+    }
 
     #[cfg(target_os = "windows")]
     let size = size_of::<sockaddr>() as i32;
@@ -267,7 +271,7 @@ extern "C" fn listener_fn(
     if let Some(addr) = unsafe { OsSocketAddr::copy_from_raw(peeraddr as *const _, size) }.into() {
         if tx
             .send((
-                s,
+                socket,
                 SocketInfo {
                     stream_id: Strings::from(stream_id).to_string().ok(),
                     addr,

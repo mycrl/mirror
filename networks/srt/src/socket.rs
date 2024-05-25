@@ -159,10 +159,6 @@ impl Socket {
     /// time to play has come for a message that is next to the currently
     /// lost one, it will be delivered and the lost one dropped.
     pub fn read(&self, buf: &mut [u8]) -> Result<usize, Error> {
-        if self.is_closed.get() {
-            return Err(error());
-        }
-
         let ret = unsafe { srt_recv(self.fd, buf.as_mut_ptr() as *mut _, buf.len() as c_int) };
         if ret <= 0 {
             self.is_closed.update(true);
@@ -231,10 +227,6 @@ impl Socket {
     fn send_with_sized(&self, buf: &[u8]) -> Result<usize, Error> {
         if buf.len() == 0 {
             return Ok(0);
-        }
-
-        if self.is_closed.get() {
-            return Err(error());
         }
 
         let size = std::cmp::min(buf.len(), self.opt.max_pkt_size());

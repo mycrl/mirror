@@ -98,7 +98,7 @@ fn main() -> anyhow::Result<()> {
         .cpp(true)
         .std("c++20")
         .debug(settings.is_debug)
-        .static_crt(true)
+        .static_crt(false)
         .target(&settings.target)
         .warnings(false)
         .out_dir(&settings.out_dir)
