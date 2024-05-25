@@ -72,6 +72,8 @@ struct MirrorOptions
 	VideoOptions video;
     /// Audio Codec Configuration.
     AudioOptions audio;
+    /// mirror server address.
+    char* server;
     /// Multicast address, e.g. `239.0.0.1`.
 	char* multicast;
     /// The size of the maximum transmission unit of the network, which is
@@ -137,12 +139,14 @@ extern "C"
     /// Create a sender, specify a bound NIC address, you can pass callback to
     /// get the device screen or sound callback, callback can be null, if it is
     /// null then it means no callback data is needed.
-	EXPORT Sender mirror_create_sender(Mirror mirror, char* bind, struct FrameSink sink);
+	EXPORT Sender mirror_create_sender(Mirror mirror, int id, struct FrameSink sink);
+    /// Set whether the sender uses multicast transmission.
+    EXPORT void mirror_sender_set_multicast(Sender sender, bool is_multicast);
     /// Close sender.
 	EXPORT void mirror_close_sender(Sender sender);
     /// Create a receiver, specify a bound NIC address, you can pass callback to
     /// get the sender's screen or sound callback, callback can not be null.
-	EXPORT Receiver mirror_create_receiver(Mirror mirror, char* bind, struct FrameSink sink);
+	EXPORT Receiver mirror_create_receiver(Mirror mirror, int id, struct FrameSink sink);
     /// Close receiver.
 	EXPORT void mirror_close_receiver(Receiver receiver);
 }
@@ -231,6 +235,11 @@ namespace mirror
 				: _sender(sender)
 			{}
 
+			void SetMulticast(bool is_multicast)
+			{
+				mirror_sender_set_multicast(_sender, is_multicast);
+			}
+
 			void Close()
 			{
 				mirror_close_sender(_sender);
@@ -278,23 +287,23 @@ namespace mirror
 			}
 		}
 
-		std::optional<MirrorSender> CreateSender(std::string& bind, AVFrameSink* sink)
+		std::optional<MirrorSender> CreateSender(int id, AVFrameSink* sink)
 		{
             FrameSink frame_sink;
             frame_sink.video = _video_proc;
             frame_sink.audio = _audio_proc;
             frame_sink.ctx = static_cast<void*>(sink);
-			Sender sender = mirror_create_sender(_mirror, const_cast<char*>(bind.c_str()), frame_sink);
+			Sender sender = mirror_create_sender(_mirror, id, frame_sink);
 			return sender != nullptr ? std::optional(MirrorSender(sender)) : std::nullopt;
 		}
 
-		std::optional<MirrorReceiver> CreateReceiver(std::string& bind, AVFrameSink* sink)
+		std::optional<MirrorReceiver> CreateReceiver(int id, AVFrameSink* sink)
 		{
 			FrameSink frame_sink;
             frame_sink.video = _video_proc;
             frame_sink.audio = _audio_proc;
             frame_sink.ctx = static_cast<void*>(sink);
-			Receiver receiver = mirror_create_receiver(_mirror, const_cast<char*>(bind.c_str()), frame_sink);
+			Receiver receiver = mirror_create_receiver(_mirror, id, frame_sink);
 			return receiver != nullptr ? std::optional(MirrorReceiver(receiver)) : std::nullopt;
 		}
 	private:

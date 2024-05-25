@@ -31,11 +31,12 @@ struct Args {
 #[cfg(any(target_os = "windows", target_os = "linux"))]
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
-    let bind = CString::new("0.0.0.0:8080")?;
+    let server = CString::new("127.0.0.1:8080")?;
     let multicast = CString::new("239.0.0.1")?;
 
     mirror_init(RawMirrorOptions {
         multicast: multicast.as_ptr(),
+        server: server.as_ptr(),
         mtu: 1400,
         video: RawVideoOptions {
             encoder: unsafe { codec_find_video_encoder() },
@@ -63,7 +64,7 @@ fn main() -> anyhow::Result<()> {
 
         let sender = mirror_create_sender(
             mirror,
-            bind.as_ptr(),
+            0,
             RawFrameSink {
                 video: None,
                 audio: None,
@@ -76,7 +77,7 @@ fn main() -> anyhow::Result<()> {
     } else {
         let receiver = mirror_create_receiver(
             mirror,
-            bind.as_ptr(),
+            0,
             RawFrameSink {
                 video: None,
                 audio: None,

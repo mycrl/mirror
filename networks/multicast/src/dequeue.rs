@@ -1,10 +1,10 @@
 use std::{collections::BTreeMap, time::Instant};
 
-use super::packet::Packet;
+use super::fragments::Fragment;
 
 /// Packet reordering queue.
 pub struct Dequeue {
-    queue: BTreeMap<u64, (Packet, Instant)>,
+    queue: BTreeMap<u64, (Fragment, Instant)>,
     last_queue: u64,
     delay: usize,
 }
@@ -23,23 +23,19 @@ impl Dequeue {
     ///
     /// It should be noted that you can ignore the order or whether there are
     /// duplicates, and the internal processing can be normal.
-    pub fn push(&mut self, packet: Packet) {
+    pub fn push(&mut self, packet: Fragment) {
         // Check whether the current sequence number has been dequeued. If so, do not
         // process it.
-        if !(self.last_queue >= u64::MAX - 100 && packet.sequence <= 100)
-            && self.last_queue >= packet.sequence
+        if !(self.last_queue >= u64::MAX - 100 && packet.chunk_sequence <= 100)
+            && self.last_queue >= packet.chunk_sequence
         {
             return;
         }
 
         // To avoid duplicate insertion, check here first.
-        if !self.queue.contains_key(&packet.sequence) {
-            self.queue.insert(packet.sequence, (packet, Instant::now()));
-        } else {
-            log::info!(
-                "The retransmission packet is received, sequence={:?}",
-                packet.sequence
-            );
+        if !self.queue.contains_key(&packet.chunk_sequence) {
+            self.queue
+                .insert(packet.chunk_sequence, (packet, Instant::now()));
         }
     }
 
@@ -47,7 +43,7 @@ impl Dequeue {
     /// queue in order. You can try to take them out multiple times until there
     /// is no result.
     #[rustfmt::skip]
-    pub fn pop(&mut self) -> Option<Packet> {
+    pub fn pop(&mut self) -> Option<Fragment> {
         // Get the packet with the smallest sequence number in the queue and check
         // whether it has timed out.
         let mut sequence = None;

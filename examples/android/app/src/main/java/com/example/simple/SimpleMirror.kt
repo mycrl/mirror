@@ -31,7 +31,6 @@ import com.github.mycrl.mirror.MirrorAdapterConfigure
 import com.github.mycrl.mirror.MirrorReceiver
 import com.github.mycrl.mirror.MirrorSender
 import com.github.mycrl.mirror.MirrorService
-import com.github.mycrl.mirror.MirrorServiceObserver
 import com.github.mycrl.mirror.ReceiverAdapterWrapper
 import com.github.mycrl.mirror.Video
 
@@ -135,30 +134,11 @@ class SimpleMirrorService : Service() {
     }
 
     private var receiverAdapter: ReceiverAdapterWrapper? = null
-    private val mirror: MirrorService =
-        MirrorService(1400, "239.0.0.1", "0.0.0.0:3200", object : MirrorServiceObserver() {
-            override fun accept(id: Int, ip: String): MirrorReceiver {
-                receivedHandler?.let { it(id, ip) }
-
-                return object : MirrorReceiver() {
-                    override val track = createAudioTrack()
-                    override val surface = outputSurface!!
-
-                    override fun released() {
-                        super.released()
-                        receivedReleaseHandler?.let { it(id, ip) }
-
-                        Log.w("simple", "receiver is released.")
-                    }
-
-                    override fun onStart(adapter: ReceiverAdapterWrapper) {
-                        super.onStart(adapter)
-
-                        receiverAdapter = adapter
-                    }
-                }
-            }
-        })
+    private val mirror: MirrorService = MirrorService(
+        "127.0.0.1:880",
+        "239.0.0.1",
+        1400
+    )
 
     override fun onBind(intent: Intent?): IBinder {
         return SimpleMirrorServiceBinder(this)
@@ -197,8 +177,7 @@ class SimpleMirrorService : Service() {
     fun createReceiver(addr: String) {
         Log.i("simple", "create receiver.")
 
-        val (_, port) = addr.split(":")
-        mirror.createReceiver("0.0.0.0:${port.toInt()}", object : MirrorAdapterConfigure {
+        mirror.createReceiver(0, object : MirrorAdapterConfigure {
             override val video = VideoConfigure
             override val audio = AudioConfigure
         }, object : MirrorReceiver() {
@@ -236,7 +215,6 @@ class SimpleMirrorService : Service() {
         mediaProjection?.registerCallback(object : MediaProjection.Callback() {}, null)
         sender = mirror.createSender(
             0,
-            "0.0.0.0:8080",
             object : MirrorAdapterConfigure {
                 override val video = VideoConfigure
                 override val audio = AudioConfigure

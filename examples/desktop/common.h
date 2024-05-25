@@ -74,10 +74,11 @@ class Args
 public:
 	struct Params
 	{
+		int id = 0;
         int fps = 30;
 		int width = 1280;
 		int height = 720;
-		std::string bind = "0.0.0.0:8080";
+		std::string server = "127.0.0.1:8080";
 		std::string encoder = mirror_find_video_encoder();
 		std::string decoder = mirror_find_video_decoder();
 	};
@@ -92,11 +93,14 @@ public:
 				continue;
 			}
 
-            if (kv[0] == "fps")
+			if (kv[0] == "id")
+			{
+				ArgsParams.id = std::stoi(kv[1]);
+			}
+			else if (kv[0] == "fps")
 			{
 				ArgsParams.fps = std::stoi(kv[1]);
-			}
-			if (kv[0] == "width")
+			} else if (kv[0] == "width")
 			{
 				ArgsParams.width = std::stoi(kv[1]);
 			}
@@ -112,9 +116,9 @@ public:
 			{
 				ArgsParams.decoder = kv[1];
 			}
-			else if (kv[0] == "bind")
+			else if (kv[0] == "server")
 			{
-				ArgsParams.bind = kv[1];
+				ArgsParams.server = kv[1];
 			}
 		}
 	}

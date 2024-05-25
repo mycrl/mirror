@@ -1,204 +1,151 @@
 pub mod adapter;
-mod discovery;
 mod payload;
-mod transfer;
 
 use std::{
-    collections::HashSet,
-    net::{Ipv4Addr, SocketAddr},
-    sync::{Arc, Mutex},
+    collections::HashMap,
+    io::{Error, Read},
+    net::{Ipv4Addr, SocketAddr, TcpStream},
+    sync::{
+        atomic::{AtomicU32, AtomicU64},
+        mpsc::{channel, Sender},
+        Arc, RwLock,
+    },
     thread,
 };
 
 use adapter::StreamReceiverAdapter;
-use thiserror::Error;
-use transfer::{Receiver, Sender};
+use bytes::BytesMut;
+use common::atomic::EasyAtomic;
+use service::{signal::Signal, SocketKind, StreamInfo};
+use smallvec::SmallVec;
 
 use crate::{
-    adapter::{ReceiverAdapterFactory, StreamSenderAdapter},
-    discovery::{Discovery, DiscoveryError, Service},
+    adapter::StreamSenderAdapter,
     payload::{Muxer, PacketInfo, Remuxer},
 };
 
-#[derive(Debug, Error)]
-pub enum TransportError {
-    #[error(transparent)]
-    NetError(#[from] transfer::Error),
-    #[error(transparent)]
-    DiscoveryError(#[from] DiscoveryError),
+pub fn init() -> bool {
+    srt::startup()
 }
 
-pub struct TransportOptions<T> {
-    pub bind: SocketAddr,
-    pub adapter_factory: T,
+pub fn exit() {
+    srt::cleanup()
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct TransportOptions {
+    pub server: SocketAddr,
+    pub multicast: Ipv4Addr,
+    pub mtu: usize,
 }
 
 #[derive(Debug)]
 pub struct Transport {
-    services: Arc<Mutex<HashSet<Service>>>,
-    discovery: Option<Arc<Discovery>>,
-    multicast: Ipv4Addr,
-    mtu: usize,
+    index: AtomicU32,
+    options: TransportOptions,
+    channels: Arc<RwLock<HashMap<u32, Sender<Signal>>>>,
 }
 
 impl Transport {
-    pub fn new<T>(
-        mtu: usize,
-        multicast: Ipv4Addr,
-        options: Option<TransportOptions<T>>,
-    ) -> Result<Self, TransportError>
-    where
-        T: ReceiverAdapterFactory + 'static,
-    {
-        let mut discovery = None;
-        if let Some(options) = options {
-            discovery = Some(Discovery::new(options.bind)?);
-            let discovery = discovery.as_ref().map(Arc::downgrade);
+    pub fn new(options: TransportOptions) -> Result<Self, Error> {
+        let channels: Arc<RwLock<HashMap<u32, Sender<Signal>>>> = Default::default();
+        let mut socket = TcpStream::connect(options.server)?;
 
-            thread::spawn(move || loop {
-                let discovery =
-                    if let Some(discovery) = discovery.as_ref().and_then(|item| item.upgrade()) {
-                        discovery
-                    } else {
-                        log::info!("discovery is drop, maybe is released.");
+        let channels_ = Arc::downgrade(&channels);
+        thread::spawn(move || {
+            let mut buf = [0u8; 1024];
+            let mut bytes = BytesMut::with_capacity(2000);
 
-                        break;
-                    };
+            while let Ok(size) = socket.read(&mut buf) {
+                if size == 0 {
+                    break;
+                }
 
-                if let Some((service, addr)) = discovery.recv_online() {
-                    log::info!(
-                        "discovery recv online service, id={}, port={}, addr={}",
-                        service.id,
-                        service.port,
-                        addr
-                    );
+                bytes.extend_from_slice(&buf[..size]);
+                if let Some((size, signal)) = Signal::decode(&bytes) {
+                    let _ = bytes.split_to(size);
 
-                    let bind = SocketAddr::new(addr.ip(), service.port);
-                    if let Some(adapter) =
-                        options
-                            .adapter_factory
-                            .connect(service.id, bind, &service.description)
-                    {
-                        log::info!(
-                            "adapter factory created a adapter, ip={}, port={}",
-                            options.bind.ip(),
-                            service.port
-                        );
+                    if let Some(channels) = channels_.upgrade() {
+                        let mut closeds: SmallVec<[u32; 10]> = SmallVec::with_capacity(10);
 
-                        let bind = SocketAddr::new(options.bind.ip(), service.port);
-                        match Receiver::new(multicast, bind) {
-                            Ok(receiver) => {
-                                log::info!(
-                                    "connected to remote service, ip={}, port={}",
-                                    addr.ip(),
-                                    service.port,
-                                );
-
-                                thread::spawn(move || {
-                                    let mut remuxer = Remuxer::default();
-
-                                    while let Ok(packet) = receiver.read() {
-                                        if let Some(adapter) = adapter.upgrade() {
-                                            if let Some((offset, info)) = remuxer.remux(&packet) {
-                                                if !adapter.send(
-                                                    packet.slice(offset..),
-                                                    info.kind,
-                                                    info.flags,
-                                                    info.timestamp,
-                                                ) {
-                                                    log::error!("adapter on buf failed.");
-
-                                                    break;
-                                                }
-                                            } else {
-                                                adapter.loss_pkt();
-                                            }
-                                        } else {
-                                            log::warn!("adapter is droped!");
-
-                                            break;
-                                        }
-                                    }
-
-                                    log::warn!("socket is closed, ip={}", addr.ip());
-
-                                    discovery.remove(&addr);
-                                    if let Some(adapter) = adapter.upgrade() {
-                                        adapter.close();
-                                    }
-                                });
+                        {
+                            for (id, tx) in channels.read().unwrap().iter() {
+                                if tx.send(signal).is_err() {
+                                    closeds.push(*id);
+                                }
                             }
-                            Err(e) => {
-                                log::error!(
-                                    "connect to remote service failed, ip={}, port={}, error={}",
-                                    addr.ip(),
-                                    service.port,
-                                    e,
-                                );
+                        }
+
+                        if !closeds.is_empty() {
+                            for id in closeds {
+                                if channels.write().unwrap().remove(&id).is_some() {
+                                    log::error!("channel is close, id={}", id)
+                                }
                             }
                         }
                     } else {
-                        log::info!("adapter factory not create adapter.");
+                        break;
                     }
-                } else {
-                    log::info!("discovery recv online a none, maybe is released.");
-
-                    break;
                 }
-            });
-        }
+            }
+        });
 
         Ok(Self {
-            services: Default::default(),
-            multicast,
-            discovery,
-            mtu,
+            index: AtomicU32::new(0),
+            options,
+            channels,
         })
     }
 
-    pub fn create_sender(
-        &self,
-        id: u8,
-        bind: SocketAddr,
-        description: Vec<u8>,
-        adapter: &Arc<StreamSenderAdapter>,
-    ) -> Result<(), TransportError> {
-        let mut sender = Sender::new(self.multicast, bind, self.mtu)?;
-        let service = Service {
-            port: bind.port(),
-            description,
-            id,
-        };
+    pub fn create_sender(&self, id: u32, adapter: &Arc<StreamSenderAdapter>) -> Result<(), Error> {
+        let mut mcast_sender = multicast::Server::new(
+            self.options.multicast,
+            "0.0.0.0".parse().unwrap(),
+            self.options.mtu,
+        )?;
 
-        log::info!("sender bind to port={}", bind.port());
-
-        {
-            let mut services = self.services.lock().unwrap();
-            services.insert(service.clone());
-
-            if let Some(discovery) = &self.discovery {
-                discovery.set_services(services.iter().cloned().collect());
+        let mut opt = srt::Options::default();
+        opt.latency = 20;
+        opt.mtu = self.options.mtu as u32;
+        opt.stream_id = Some(
+            StreamInfo {
+                port: Some(mcast_sender.local_addr().port()),
+                kind: SocketKind::Publisher,
+                id,
             }
-        }
+            .encode(),
+        );
 
-        let services_ = Arc::downgrade(&self.services);
-        let discovery_ = self.discovery.as_ref().map(Arc::downgrade);
+        let mut encoder = srt::FragmentEncoder::new(self.options.mtu);
+        let sender = srt::Socket::connect(self.options.server, opt)?;
+        log::info!("sender connect to server={}", self.options.server);
+
         let adapter_ = Arc::downgrade(adapter);
         thread::spawn(move || {
-            let mut muxer = Muxer::default();
-
-            while let Some(adapter) = adapter_.upgrade() {
+            'a: while let Some(adapter) = adapter_.upgrade() {
                 if let Some((buf, kind, flags, timestamp)) = adapter.next() {
-                    if let Some(payload) = muxer.mux(
+                    let payload = Muxer::mux(
                         PacketInfo {
                             kind,
                             flags,
                             timestamp,
                         },
                         buf.as_ref(),
-                    ) {
-                        if let Err(e) = sender.send(&payload) {
-                            log::error!("failed to send buf in socket, err={:?}", e);
+                    );
+
+                    if adapter.get_multicast() {
+                        if let Err(e) = mcast_sender.send(&payload) {
+                            log::error!("failed to send buf in multicast, err={:?}", e);
+
+                            break 'a;
+                        }
+                    } else {
+                        for chunk in encoder.encode(&payload) {
+                            if let Err(e) = sender.send(chunk) {
+                                log::error!("failed to send buf in srt, err={:?}", e);
+
+                                break 'a;
+                            }
                         }
                     }
                 } else {
@@ -208,13 +155,9 @@ impl Transport {
 
             log::info!("adapter recv a none, close the worker.");
 
-            if let Some(discovery) = discovery_.as_ref().and_then(|item| item.upgrade()) {
-                if let Some(services) = services_.upgrade() {
-                    let mut services = services.lock().unwrap();
-                    services.remove(&service);
-
-                    discovery.set_services(services.iter().cloned().collect());
-                }
+            if let Some(adapter) = adapter_.upgrade() {
+                adapter.close();
+                sender.close();
             }
         });
 
@@ -223,41 +166,135 @@ impl Transport {
 
     pub fn create_receiver(
         &self,
-        bind: SocketAddr,
+        id: u32,
         adapter: &Arc<StreamReceiverAdapter>,
-    ) -> Result<(), TransportError> {
-        let receiver = Receiver::new(self.multicast, bind)?;
-        log::info!("receiver listening, port={}", bind.port(),);
+    ) -> Result<(), Error> {
+        let mut opt = srt::Options::default();
+        opt.latency = 20;
+        opt.mtu = self.options.mtu as u32;
+        opt.stream_id = Some(
+            StreamInfo {
+                kind: SocketKind::Subscriber,
+                port: None,
+                id,
+            }
+            .encode(),
+        );
 
-        let adapter = Arc::downgrade(adapter);
-        thread::spawn(move || {
-            let mut remuxer = Remuxer::default();
+        let sequence = Arc::new(AtomicU64::new(0));
+        let mut decoder = srt::FragmentDecoder::new();
+        let receiver = Arc::new(srt::Socket::connect(self.options.server, opt)?);
+        log::info!("receiver connect to server={}", self.options.server);
 
-            while let Ok(packet) = receiver.read() {
-                if let Some(adapter) = adapter.upgrade() {
-                    if let Some((offset, info)) = remuxer.remux(&packet) {
-                        if !adapter.send(
-                            packet.slice(offset..),
-                            info.kind,
-                            info.flags,
-                            info.timestamp,
-                        ) {
-                            log::error!("adapter on buf failed.");
-                            break;
+        {
+            let index = self.index.get();
+            self.index
+                .update(if index == u32::MAX { 0 } else { index + 1 });
+
+            let (tx, rx) = channel();
+            self.channels.write().unwrap().insert(index, tx);
+
+            let local_id = id;
+            let multicast = self.options.multicast;
+            let sequence_ = sequence.clone();
+            let receiver_ = Arc::downgrade(&receiver);
+            let adapter_ = Arc::downgrade(adapter);
+            thread::spawn(move || {
+                while let Ok(signal) = rx.recv() {
+                    match signal {
+                        Signal::Start { id, port } => {
+                            if id == local_id {
+                                let mcast_rceiver = if let Ok(socket) = multicast::Socket::new(
+                                    multicast,
+                                    SocketAddr::new("0.0.0.0".parse().unwrap(), port),
+                                ) {
+                                    socket
+                                } else {
+                                    break;
+                                };
+
+                                let sequence_ = sequence_.clone();
+                                let adapter_ = adapter_.clone();
+                                thread::spawn(move || {
+                                    while let Some((seq, bytes)) = mcast_rceiver.read() {
+                                        if let Some(adapter) = adapter_.upgrade() {
+                                            if seq + 1 == sequence_.get() {
+                                                if let Some((offset, info)) = Remuxer::remux(&bytes)
+                                                {
+                                                    if !adapter.send(
+                                                        bytes.slice(offset..),
+                                                        info.kind,
+                                                        info.flags,
+                                                        info.timestamp,
+                                                    ) {
+                                                        log::error!("adapter on buf failed.");
+
+                                                        break;
+                                                    }
+                                                } else {
+                                                    adapter.loss_pkt();
+                                                }
+                                            } else {
+                                                adapter.loss_pkt()
+                                            }
+                                        }
+
+                                        sequence_.update(seq);
+                                    }
+                                });
+                            }
                         }
-                    } else {
-                        adapter.loss_pkt();
+                        Signal::Stop { id } => {
+                            if id == local_id {
+                                break;
+                            }
+                        }
                     }
-                } else {
-                    log::warn!("adapter is droped!");
-                    break;
+                }
+
+                if let (Some(adapter), Some(receiver)) = (adapter_.upgrade(), receiver_.upgrade()) {
+                    adapter.close();
+                    receiver.close();
+                }
+            });
+        }
+
+        let adapter_ = Arc::downgrade(adapter);
+        thread::spawn(move || {
+            let mut buf = [0u8; 2000];
+
+            while let Ok(size) = receiver.read(&mut buf) {
+                if let Some((seq, bytes)) = decoder.decode(&buf[..size]) {
+                    if let Some(adapter) = adapter_.upgrade() {
+                        if seq + 1 == sequence.get() {
+                            if let Some((offset, info)) = Remuxer::remux(&bytes) {
+                                if !adapter.send(
+                                    bytes.slice(offset..),
+                                    info.kind,
+                                    info.flags,
+                                    info.timestamp,
+                                ) {
+                                    log::error!("adapter on buf failed.");
+
+                                    break;
+                                }
+                            } else {
+                                adapter.loss_pkt();
+                            }
+                        } else {
+                            adapter.loss_pkt()
+                        }
+                    }
+
+                    sequence.update(seq);
                 }
             }
 
-            log::warn!("receiver is closed, addr={}", bind);
+            log::warn!("receiver is closed, id={}", id);
 
-            if let Some(adapter) = adapter.upgrade() {
+            if let Some(adapter) = adapter_.upgrade() {
                 adapter.close();
+                receiver.close();
             }
         });
 

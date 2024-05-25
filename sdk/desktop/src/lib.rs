@@ -3,7 +3,7 @@
 pub mod mirror;
 
 use std::{
-    ffi::{c_char, c_void},
+    ffi::{c_char, c_int, c_void},
     fmt::Debug,
     ptr::null_mut,
     sync::Arc,
@@ -114,6 +114,8 @@ pub struct RawMirrorOptions {
     pub video: RawVideoOptions,
     /// Audio Codec Configuration.
     pub audio: RawAudioOptions,
+    /// mirror server address.
+    pub server: *const c_char,
     /// Multicast address, e.g. `239.0.0.1`.
     pub multicast: *const c_char,
     /// The size of the maximum transmission unit of the network, which is
@@ -131,6 +133,7 @@ impl TryInto<MirrorOptions> for RawMirrorOptions {
     fn try_into(self) -> Result<MirrorOptions, Self::Error> {
         Ok(MirrorOptions {
             multicast: Strings::from(self.multicast).to_string()?,
+            server: Strings::from(self.server).to_string()?,
             video: self.video.try_into()?,
             audio: self.audio.into(),
             mtu: self.mtu,
@@ -344,15 +347,14 @@ pub struct RawSender {
 #[no_mangle]
 pub extern "C" fn mirror_create_sender(
     mirror: *const RawMirror,
-    bind: *const c_char,
+    id: c_int,
     sink: RawFrameSink,
 ) -> *const RawSender {
     assert!(!mirror.is_null());
-    assert!(!bind.is_null());
 
     checker((|| {
         unsafe { &*mirror }.mirror.create_sender(
-            &Strings::from(bind).to_string()?,
+            id as u32,
             FrameSink {
                 video: move |frame: &VideoFrame| sink.send_video(frame),
                 audio: move |frame: &AudioFrame| sink.send_audio(frame),
@@ -361,6 +363,22 @@ pub extern "C" fn mirror_create_sender(
     })())
     .map(|adapter| Box::into_raw(Box::new(RawSender { adapter })))
     .unwrap_or_else(|_| null_mut())
+}
+
+/// Set whether the sender uses multicast transmission.
+///
+/// ```c
+/// EXPORT void mirror_sender_set_multicast(Sender sender, bool is_multicast);
+/// ```
+#[no_mangle]
+pub extern "C" fn mirror_sender_set_multicast(sender: *const RawSender, is_multicast: bool) {
+    assert!(!sender.is_null());
+
+    unsafe { Box::from_raw(sender as *mut RawSender) }
+        .adapter
+        .set_multicast(is_multicast);
+
+    log::info!("set sender transport use multicast={}", is_multicast);
 }
 
 /// Close sender.
@@ -393,15 +411,14 @@ pub struct RawReceiver {
 #[no_mangle]
 pub extern "C" fn mirror_create_receiver(
     mirror: *const RawMirror,
-    bind: *const c_char,
+    id: c_int,
     sink: RawFrameSink,
 ) -> *const RawReceiver {
     assert!(!mirror.is_null());
-    assert!(!bind.is_null());
 
     checker((|| {
         unsafe { &*mirror }.mirror.create_receiver(
-            &Strings::from(bind).to_string()?,
+            id as u32,
             FrameSink {
                 video: move |frame: &VideoFrame| sink.send_video(frame),
                 audio: move |frame: &AudioFrame| sink.send_audio(frame),

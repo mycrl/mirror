@@ -11,9 +11,12 @@ resolver = "2"
 members = [
     "codec",
     "common",
+    "service",
     "capture",
-    "transport", 
+    "transport",
     "sdk/desktop",
     "sdk/android/mirror/src/main/native",
     "sdk/android/mirror/src/main/macro",
+    "networks/multicast",
+    "networks/srt",
 ]

@@ -17,7 +17,7 @@ use transport::{
     adapter::{
         BufferFlag, StreamBufferInfo, StreamKind, StreamReceiverAdapter, StreamSenderAdapter,
     },
-    Transport,
+    Transport, TransportOptions,
 };
 
 static OPTIONS: Lazy<RwLock<MirrorOptions>> = Lazy::new(Default::default);
@@ -111,6 +111,8 @@ pub struct MirrorOptions {
     pub video: VideoOptions,
     /// Audio Codec Configuration.
     pub audio: AudioOptions,
+    /// mirror server address.
+    pub server: String,
     /// Multicast address, e.g. `239.0.0.1`.
     pub multicast: String,
     /// The size of the maximum transmission unit of the network, which is
@@ -123,6 +125,7 @@ impl Default for MirrorOptions {
     fn default() -> Self {
         Self {
             multicast: "239.0.0.1".to_string(),
+            server: "127.0.0.1".to_string(),
             video: Default::default(),
             audio: Default::default(),
             mtu: 1500,
@@ -149,6 +152,7 @@ pub fn init(options: MirrorOptions) -> Result<()> {
     *OPTIONS.write().unwrap() = options.clone();
     log::info!("mirror init: options={:?}", options);
 
+    transport::init();
     Ok(capture::init(DeviceManagerOptions {
         video: VideoInfo {
             width: options.video.width,
@@ -164,6 +168,7 @@ pub fn init(options: MirrorOptions) -> Result<()> {
 /// Cleans up the environment when the SDK exits, and is recommended to be
 /// called when the application exits.
 pub fn quit() {
+    transport::exit();
     capture::quit();
 
     log::info!("close mirror");
@@ -258,11 +263,11 @@ pub struct Mirror(Transport);
 impl Mirror {
     pub fn new() -> Result<Self> {
         let options = OPTIONS.read().unwrap();
-        Ok(Self(Transport::new::<()>(
-            options.mtu,
-            options.multicast.parse()?,
-            None,
-        )?))
+        Ok(Self(Transport::new(TransportOptions {
+            multicast: options.multicast.parse()?,
+            server: options.server.parse()?,
+            mtu: options.mtu,
+        })?))
     }
 
     /// Create a sender, specify a bound NIC address, you can pass callback to
@@ -270,18 +275,17 @@ impl Mirror {
     /// null then it means no callback data is needed.
     pub fn create_sender<A, V>(
         &self,
-        bind: &str,
+        id: u32,
         sink: FrameSink<A, V>,
     ) -> Result<Arc<StreamSenderAdapter>>
     where
         A: Fn(&AudioFrame) -> bool + Send + 'static,
         V: Fn(&VideoFrame) -> bool + Send + 'static,
     {
-        log::info!("create sender: bind={}", bind);
+        log::info!("create sender: id={}", id);
 
         let adapter = StreamSenderAdapter::new();
-        self.0
-            .create_sender(0, bind.parse()?, Vec::new(), &adapter)?;
+        self.0.create_sender(id, &adapter)?;
 
         capture::set_frame_sink(SenderObserver::new(&adapter, sink)?);
         Ok(adapter)
@@ -291,18 +295,18 @@ impl Mirror {
     /// get the sender's screen or sound callback, callback can not be null.
     pub fn create_receiver<A, V>(
         &self,
-        bind: &str,
+        id: u32,
         sink: FrameSink<A, V>,
     ) -> Result<Arc<StreamReceiverAdapter>>
     where
         A: Fn(&AudioFrame) -> bool + Send + 'static,
         V: Fn(&VideoFrame) -> bool + Send + 'static,
     {
-        log::info!("create receiver: bind={}", bind);
+        log::info!("create receiver: id={}", id);
 
         let options = OPTIONS.read().unwrap();
         let adapter = StreamReceiverAdapter::new();
-        self.0.create_receiver(bind.parse()?, &adapter)?;
+        self.0.create_receiver(id, &adapter)?;
 
         let video_decoder = VideoDecoder::new(&options.video.decoder)?;
         let audio_decoder = AudioDecoder::new(&options.audio.decoder)?;

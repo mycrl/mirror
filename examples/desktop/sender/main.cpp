@@ -45,9 +45,10 @@ int main()
 	options.video.height = sdl_rect.h;
 	options.video.frame_rate = args.ArgsParams.fps;
 	options.video.key_frame_interval = args.ArgsParams.fps;
-	options.video.bit_rate = 500 * 1024 * 8;
+	options.video.bit_rate = 1 * 1024 * 8;
 	options.audio.sample_rate = 48000;
 	options.audio.bit_rate = 6000;
+	options.server = const_cast<char*>(args.ArgsParams.server.c_str());
 	options.multicast = const_cast<char*>("239.0.0.1");
 	options.mtu = 1400;
 	mirror::Init(options);
@@ -105,7 +106,7 @@ int main()
 				case SDLK_s:
 					if (!sender.has_value())
 					{
-						sender = mirror->CreateSender(args.ArgsParams.bind, render);
+						sender = mirror->CreateSender(args.ArgsParams.id, render);
 						if (!sender.has_value())
 						{
 							MessageBox(nullptr, TEXT("Failed to create sender!"), TEXT("Error"), 0);

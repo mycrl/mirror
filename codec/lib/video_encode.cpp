@@ -46,9 +46,6 @@ struct VideoEncoder* codec_create_video_encoder(struct VideoEncoderSettings* set
 	codec->context->width = settings->width;
 	codec->context->height = settings->height;
 	codec->context->bit_rate = settings->bit_rate;
-	codec->context->rc_buffer_size = settings->bit_rate;
-	codec->context->rc_max_rate = settings->bit_rate * 2;
-	codec->context->rc_min_rate = settings->bit_rate / 2;
 	codec->context->framerate = av_make_q(settings->frame_rate, 1);
 	codec->context->time_base = av_make_q(1, settings->frame_rate);
 	codec->context->pkt_timebase = av_make_q(1, settings->frame_rate);

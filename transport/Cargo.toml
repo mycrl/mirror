@@ -6,21 +6,14 @@ edition = "2021"
 [dependencies]
 bytes = "1.5.0"
 log = "0.4.20"
-rmp-serde = "1.1.2"
-serde = { version = "1.0.195", features = ["derive"] }
 common = { path = "../common" }
-thiserror = "1.0.56"
-rand = "0.8"
-socket2 = "0.5.6"
-crc = "3.0.1"
-thread-priority = "0.16.0"
-xxhash-rust = { version = "0.8.5", features = ["xxh3"]}
+srt = { path = "../networks/srt" }
+multicast = { path = "../networks/multicast" }
+service = { path = "../service" }
+smallvec = "1.13.2"
 
 [target.'cfg(target_os = "windows")'.dev-dependencies]
 libyuv = "0.1.2"
-
-[[example]]
-name = "simple"
 
 [dev-dependencies]
 clap = { version = "4", features = ["derive", "env"] }

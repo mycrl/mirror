@@ -1,10 +1,9 @@
 use std::{
     fmt,
-    net::SocketAddr,
     sync::{
         atomic::{AtomicBool, AtomicU8},
         mpsc::{channel, Receiver, Sender},
-        Arc, Mutex, Weak,
+        Arc, Mutex,
     },
 };
 
@@ -56,21 +55,6 @@ pub enum StreamBufferInfo {
     Audio(i32, u64),
 }
 
-pub trait ReceiverAdapterFactory: Send + Sync {
-    fn connect(
-        &self,
-        id: u8,
-        addr: SocketAddr,
-        description: &[u8],
-    ) -> Option<Weak<StreamReceiverAdapter>>;
-}
-
-impl ReceiverAdapterFactory for () {
-    fn connect(&self, _: u8, _: SocketAddr, _: &[u8]) -> Option<Weak<StreamReceiverAdapter>> {
-        None
-    }
-}
-
 /// Video Audio Streaming Send Processing
 ///
 /// Because the receiver will normally join the stream in the middle of the
@@ -78,6 +62,7 @@ impl ReceiverAdapterFactory for () {
 /// sps and pps as well as the key frame information.
 #[allow(clippy::type_complexity)]
 pub struct StreamSenderAdapter {
+    is_multicast: AtomicBool,
     audio_interval: AtomicU8,
     video_config: AtomicOption<Bytes>,
     audio_config: AtomicOption<Bytes>,
@@ -91,10 +76,21 @@ impl StreamSenderAdapter {
         Arc::new(Self {
             video_config: AtomicOption::new(None),
             audio_config: AtomicOption::new(None),
+            is_multicast: AtomicBool::new(false),
             audio_interval: AtomicU8::new(0),
             rx: Mutex::new(rx),
             tx,
         })
+    }
+
+    /// Toggle whether to use multicast
+    pub fn set_multicast(&self, is_multicast: bool) {
+        self.is_multicast.update(is_multicast);
+    }
+
+    /// Get whether to use multicast
+    pub(crate) fn get_multicast(&self) -> bool {
+        self.is_multicast.get()
     }
 
     pub fn close(&self) {
