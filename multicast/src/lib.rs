@@ -129,8 +129,8 @@ pub struct Server {
 }
 
 impl Server {
-    pub fn local_addr(&self) -> SocketAddr {
-        self.target
+    pub fn local_port(&self) -> u16 {
+        self.target.port()
     }
 
     /// Creates a UDP socket from the given address.
@@ -152,8 +152,8 @@ impl Server {
         }
 
         Ok(Self {
+            target: SocketAddr::new(IpAddr::V4(multicast), socket.local_addr()?.port()),
             encoder: FragmentEncoder::new(mtu),
-            target: socket.local_addr()?,
             socket,
         })
     }

@@ -303,11 +303,29 @@ pub extern "C" fn mirror_drop(mirror: *const RawMirror) {
     log::info!("close mirror");
 }
 
+/// ```c
+/// struct FrameSink
+/// {
+///     bool (*video)(void* ctx, struct VideoFrame* frame);
+///     bool (*audio)(void* ctx, struct AudioFrame* frame);
+///     void (*close)(void* ctx);
+///     void* ctx;
+/// };
+/// ```
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct RawFrameSink {
+    /// ```c
+    /// bool (*video)(void* ctx, struct VideoFrame* frame);
+    /// ```
     pub video: Option<extern "C" fn(ctx: *const c_void, frame: *const VideoFrame) -> bool>,
+    /// ```c
+    /// bool (*audio)(void* ctx, struct AudioFrame* frame);
+    /// ```
     pub audio: Option<extern "C" fn(ctx: *const c_void, frame: *const AudioFrame) -> bool>,
+    /// ```c
+    /// void (*close)(void* ctx);
+    /// ```
     pub close: Option<extern "C" fn(ctx: *const c_void)>,
     pub ctx: *const c_void,
 }
@@ -387,9 +405,7 @@ pub extern "C" fn mirror_create_sender(
 pub extern "C" fn mirror_sender_set_multicast(sender: *const RawSender, is_multicast: bool) {
     assert!(!sender.is_null());
 
-    unsafe { Box::from_raw(sender as *mut RawSender) }
-        .adapter
-        .set_multicast(is_multicast);
+    unsafe { &*sender }.adapter.set_multicast(is_multicast);
 
     log::info!("set sender transport use multicast={}", is_multicast);
 }

@@ -91,6 +91,7 @@ int main()
 	}
 
 	std::optional<mirror::MirrorService::MirrorSender> sender = std::nullopt;
+	bool is_multicast = false;
 	SDL_Event event;
 
 	while (SDL_WaitEvent(&event))
@@ -103,6 +104,14 @@ int main()
 		{
 			switch (event.key.keysym.sym)
 			{
+				case SDLK_t:
+					if (sender.has_value())
+					{
+						is_multicast = !is_multicast;
+						sender.value().SetMulticast(is_multicast);
+					}
+
+					break;
 				case SDLK_s:
 					if (!sender.has_value())
 					{

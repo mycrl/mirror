@@ -119,7 +119,7 @@ impl Transport {
         opt.mtu = self.options.mtu as u32;
         opt.stream_id = Some(
             StreamInfo {
-                port: Some(mcast_sender.local_addr().port()),
+                port: Some(mcast_sender.local_port()),
                 kind: SocketKind::Publisher,
                 id,
             }
@@ -252,7 +252,7 @@ impl Transport {
                                         if let Some(adapter) = adapter_.upgrade() {
                                             // Check whether the sequence number is continuous, in
                                             // order to check whether packet loss has occurred
-                                            if seq + 1 == sequence_.get() {
+                                            if seq - 1 == sequence_.get() {
                                                 if let Some((offset, info)) = Remuxer::remux(&bytes)
                                                 {
                                                     if !adapter.send(
