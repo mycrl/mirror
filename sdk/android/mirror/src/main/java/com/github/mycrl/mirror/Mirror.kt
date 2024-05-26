@@ -18,15 +18,25 @@ data class StreamBufferInfo(val kind: Int) {
 }
 
 class SenderAdapterWrapper constructor(
-    private val sender: (StreamBufferInfo, ByteArray) -> Unit,
-    private val releaser: () -> Unit,
+    private val sendProc: (StreamBufferInfo, ByteArray) -> Unit,
+    private val getMulticastProc: () -> Boolean,
+    private val setMulticastProc: (Boolean) -> Unit,
+    private val releaseProc: () -> Unit,
 ) {
     fun send(info: StreamBufferInfo, buf: ByteArray) {
-        sender(info, buf)
+        sendProc(info, buf)
+    }
+
+    fun getMulticast() : Boolean {
+        return getMulticastProc()
+    }
+
+    fun setMulticast(isMulticast: Boolean) {
+        setMulticastProc(isMulticast)
     }
 
     fun release() {
-        releaser()
+        releaseProc()
     }
 }
 
@@ -62,6 +72,8 @@ class Mirror constructor(
         createSender(mirror, id, sender)
         return SenderAdapterWrapper(
             { info, buf -> sendBufToSender(sender, info, buf) },
+            { -> senderGetMulticast(sender) },
+            { enable -> senderSetMulticast(sender, enable) },
             { -> releaseStreamSenderAdapter(sender) },
         )
     }
@@ -96,34 +108,79 @@ class Mirror constructor(
         }
     }
 
+      /**
+      * Create a stream receiver adapter where the return value is a
+      * pointer to the instance, and you need to check that the returned
+      * pointer is not Null.
+      */
     private external fun createStreamReceiverAdapter(adapter: ReceiverAdapter): Long
 
+     /**
+      * Free the stream receiver adapter instance pointer.
+      */
     private external fun releaseStreamReceiverAdapter(adapter: Long)
 
+     /**
+      * Creates a mirror instance, the return value is a pointer, and you
+        need to
+      * check that the pointer is valid.
+      */
     private external fun createMirror(
         server: String,
         multicast: String,
         mtu: Int,
     ): Long
 
+     /**
+      * Free the mirror instance pointer.
+      */
     private external fun releaseMirror(mirror: Long)
 
+     /**
+      * Creates an instance of the stream sender adapter, the return value is
+        a
+      * pointer and you need to check if the pointer is valid.
+      */
     private external fun createStreamSenderAdapter(): Long
 
+     /**
+      * Get whether the sender uses multicast transmission
+      */
+    private external fun senderGetMulticast(adapter: Long): Boolean
+
+     /**
+      * Set whether the sender uses multicast transmission
+      */
+    private external fun senderSetMulticast(adapter: Long, isMulticast: Boolean)
+
+     /**
+      * Release the stream sender adapter.
+      */
     private external fun releaseStreamSenderAdapter(adapter: Long)
 
+     /**
+      * Creates the sender, the return value indicates whether the creation
+      * was successful or not.
+      */
     private external fun createSender(
         mirror: Long,
         id: Int,
         adapter: Long
     )
 
+     /**
+      * Sends the packet to the sender instance.
+      */
     private external fun sendBufToSender(
         adapter: Long,
         info: StreamBufferInfo,
         buf: ByteArray,
     )
 
+     /**
+      * Creates the receiver, the return value indicates whether the creation
+      *  was successful or not.
+      */
     private external fun createReceiver(
         mirror: Long,
         id: Int,

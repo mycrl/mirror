@@ -141,6 +141,8 @@ extern "C"
     /// get the device screen or sound callback, callback can be null, if it is
     /// null then it means no callback data is needed.
 	EXPORT Sender mirror_create_sender(Mirror mirror, int id, struct FrameSink sink);
+    /// Get whether the sender uses multicast transmission.
+    EXPORT bool mirror_sender_get_multicast(Sender sender);
     /// Set whether the sender uses multicast transmission.
     EXPORT void mirror_sender_set_multicast(Sender sender, bool is_multicast);
     /// Close sender.
@@ -239,6 +241,11 @@ namespace mirror
 			void SetMulticast(bool is_multicast)
 			{
 				mirror_sender_set_multicast(_sender, is_multicast);
+			}
+
+            bool GetMulticast()
+			{
+				return mirror_sender_get_multicast(_sender);
 			}
 
 			void Close()

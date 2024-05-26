@@ -196,6 +196,20 @@ class MirrorSender constructor(
     }
 
     /**
+     * Get whether the sender uses multicast transmission
+     */
+    fun getMulticast() : Boolean {
+        return sender.getMulticast()
+    }
+
+    /**
+     * Set whether the sender uses multicast transmission
+     */
+    fun setMulticast(isMulticast: Boolean) {
+        sender.setMulticast(isMulticast)
+    }
+
+    /**
      * Get the surface inside the sender, you need to render the texture to this surface to pass the
      * screen to other receivers.
      */

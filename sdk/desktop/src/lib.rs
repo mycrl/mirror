@@ -410,6 +410,18 @@ pub extern "C" fn mirror_sender_set_multicast(sender: *const RawSender, is_multi
     log::info!("set sender transport use multicast={}", is_multicast);
 }
 
+/// Get whether the sender uses multicast transmission.
+///
+/// ```c
+/// EXPORT bool mirror_sender_get_multicast(Sender sender);
+/// ```
+#[no_mangle]
+pub extern "C" fn mirror_sender_get_multicast(sender: *const RawSender) -> bool {
+    assert!(!sender.is_null());
+
+    unsafe { &*sender }.adapter.get_multicast()
+}
+
 /// Close sender.
 ///
 /// ```c

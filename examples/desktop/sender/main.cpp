@@ -89,7 +89,6 @@ int main()
         mirror::DeviceManagerService::SetInputDevice(devices.device_list[0]);
     }
 
-    bool is_multicast = false;
     std::optional<mirror::MirrorService::MirrorSender> sender = std::nullopt;
     Render* render = new Render(&sdl_rect, sdl_texture, sdl_renderer, false, [&]
                                 {
@@ -111,8 +110,7 @@ int main()
                 case SDLK_t:
                     if (sender.has_value())
                     {
-                        is_multicast = !is_multicast;
-                        sender.value().SetMulticast(is_multicast);
+                        sender.value().SetMulticast(!sender.value().GetMulticast());
                     }
 
                     break;

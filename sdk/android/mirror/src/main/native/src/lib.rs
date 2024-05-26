@@ -414,6 +414,31 @@ impl Mirror {
     }
 
     /// /**
+    ///  * Get whether the sender uses multicast transmission
+    ///  */
+    /// private external fun senderGetMulticast(adapter: Long): Boolean
+    pub fn sender_get_multicast(
+        _env: JNIEnv,
+        _this: JClass,
+        ptr: *const Arc<StreamSenderAdapter>,
+    ) -> i32 {
+        unsafe { &*ptr }.get_multicast() as i32
+    }
+
+    /// /**
+    ///  * Set whether the sender uses multicast transmission
+    ///  */
+    /// private external fun senderSetMulticast(adapter: Long, is_multicast: Boolean)
+    pub fn sender_set_multicast(
+        _env: JNIEnv,
+        _this: JClass,
+        ptr: *const Arc<StreamSenderAdapter>,
+        is_multicast: i32,
+    ) {
+        unsafe { &*ptr }.set_multicast(is_multicast != 0)
+    }
+
+    /// /**
     ///  * Release the stream sender adapter.
     ///  */
     /// private external fun releaseStreamSenderAdapter(adapter: Long)
@@ -427,8 +452,7 @@ impl Mirror {
 
     /// /**
     ///  * Creates the sender, the return value indicates whether the creation
-    ///    was
-    ///  * successful or not.
+    ///  * was successful or not.
     ///  */
     /// private external fun createSender(
     ///     mirror: Long,
@@ -442,10 +466,12 @@ impl Mirror {
         mirror: *const Transport,
         id: i32,
         adapter: *const Arc<StreamSenderAdapter>,
-    ) {
+    ) -> i32 {
         catcher(&mut env, |_| {
-            Ok(unsafe { &*mirror }.create_sender(id as u32, unsafe { &*adapter })?)
-        });
+            unsafe { &*mirror }.create_sender(id as u32, unsafe { &*adapter })?;
+            Ok(true)
+        })
+        .unwrap_or(false) as i32
     }
 
     /// /**
@@ -474,8 +500,7 @@ impl Mirror {
 
     /// /**
     ///  * Creates the receiver, the return value indicates whether the creation
-    ///    was
-    ///  * successful or not.
+    ///  * was successful or not.
     ///  */
     /// private external fun createReceiver(
     ///     mirror: Long,

@@ -89,7 +89,7 @@ impl StreamSenderAdapter {
     }
 
     /// Get whether to use multicast
-    pub(crate) fn get_multicast(&self) -> bool {
+    pub fn get_multicast(&self) -> bool {
         self.is_multicast.get()
     }
 
