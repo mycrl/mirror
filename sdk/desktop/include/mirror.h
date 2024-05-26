@@ -243,7 +243,11 @@ namespace mirror
 
 			void Close()
 			{
-				mirror_close_sender(_sender);
+                if (_sender != nullptr)
+                {
+                    mirror_close_sender(_sender);
+                    _sender = nullptr;
+                }
 			}
 		private:
 			Sender _sender;
@@ -258,7 +262,10 @@ namespace mirror
 
 			void Close()
 			{
-				mirror_close_receiver(_receiver);
+                if (_receiver != nullptr) {
+                    mirror_close_receiver(_receiver);
+                    _receiver = nullptr;
+                }
 			}
 		private:
 			Receiver _receiver;
@@ -269,6 +276,7 @@ namespace mirror
         public:
             virtual bool OnVideoFrame(struct VideoFrame* frame) = 0;
             virtual bool OnAudioFrame(struct AudioFrame* frame) = 0;
+			virtual void OnClose() = 0;
         };
 
 		MirrorService()
@@ -285,6 +293,7 @@ namespace mirror
 			if (_mirror != nullptr)
 			{
 				mirror_drop(_mirror);
+                _mirror = nullptr;
 			}
 		}
 
@@ -293,6 +302,7 @@ namespace mirror
             FrameSink frame_sink;
             frame_sink.video = _video_proc;
             frame_sink.audio = _audio_proc;
+			frame_sink.close = _close_proc;
             frame_sink.ctx = static_cast<void*>(sink);
 			Sender sender = mirror_create_sender(_mirror, id, frame_sink);
 			return sender != nullptr ? std::optional(MirrorSender(sender)) : std::nullopt;
@@ -303,6 +313,7 @@ namespace mirror
 			FrameSink frame_sink;
             frame_sink.video = _video_proc;
             frame_sink.audio = _audio_proc;
+			frame_sink.close = _close_proc;
             frame_sink.ctx = static_cast<void*>(sink);
 			Receiver receiver = mirror_create_receiver(_mirror, id, frame_sink);
 			return receiver != nullptr ? std::optional(MirrorReceiver(receiver)) : std::nullopt;
@@ -316,6 +327,11 @@ namespace mirror
         static bool _audio_proc(void* ctx, struct AudioFrame* frame)
 		{
 			return ((AVFrameSink*)ctx)->OnAudioFrame(frame);
+		}
+
+		static void _close_proc(void* ctx)
+		{
+			((AVFrameSink*)ctx)->OnClose();
 		}
 
 		Mirror _mirror = nullptr;

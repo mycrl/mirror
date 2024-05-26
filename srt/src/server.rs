@@ -11,6 +11,8 @@ use common::strings::Strings;
 use libc::sockaddr;
 use os_socketaddr::OsSocketAddr;
 
+use crate::{srt_getsockstate, SRT_SOCKSTATUS};
+
 use super::{
     error, options::Options, socket::Socket, srt_bind, srt_close, srt_create_socket,
     srt_getsockname, srt_listen, srt_listen_callback, SRTSOCKET, SRT_INVALID_SOCK,
@@ -212,6 +214,11 @@ impl Server {
     /// a new background connection is attached to the group, although it's
     /// usually for internal use only.
     pub fn accept(&mut self) -> Result<(Socket, SocketInfo), Error> {
+        let status = unsafe { srt_getsockstate(self.fd) };
+        if status != SRT_SOCKSTATUS::SRTS_LISTENING {
+            return Err(Error::other(format!("{:?}", status)));
+        }
+
         if let Ok((fd, info)) = self.rx.recv() {
             Ok((Socket::new(fd, self.opt.clone()), info))
         } else {
@@ -240,9 +247,7 @@ impl Drop for Server {
     fn drop(&mut self) {
         unsafe {
             let _ = Box::from_raw(self.ctx);
-            if srt_close(self.fd) != 0 {
-                log::error!("not release the listener!");
-            }
+            srt_close(self.fd);
         }
     }
 }

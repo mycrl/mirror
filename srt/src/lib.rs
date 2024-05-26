@@ -94,14 +94,30 @@ pub fn cleanup() {
     }
 }
 
-pub type SRTSOCKET = i32;
-pub const SRT_INVALID_SOCK: i32 = -1;
+pub(crate) type SRTSOCKET = i32;
+pub(crate) const SRT_INVALID_SOCK: i32 = -1;
 
 #[repr(C)]
 #[allow(unused)]
 #[allow(non_camel_case_types)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SRT_TRANSTYPE {
+pub enum SRT_SOCKSTATUS {
+    SRTS_INIT = 1,
+    SRTS_OPENED,
+    SRTS_LISTENING,
+    SRTS_CONNECTING,
+    SRTS_CONNECTED,
+    SRTS_BROKEN,
+    SRTS_CLOSING,
+    SRTS_CLOSED,
+    SRTS_NONEXIST,
+}
+
+#[repr(C)]
+#[allow(unused)]
+#[allow(non_camel_case_types)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SRT_TRANSTYPE {
     SRTT_LIVE,
     SRTT_FILE,
     SRTT_INVALID,
@@ -111,7 +127,7 @@ pub enum SRT_TRANSTYPE {
 #[allow(unused)]
 #[allow(non_camel_case_types)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SRT_SOCKOPT {
+pub(crate) enum SRT_SOCKOPT {
     SRTO_MSS = 0,
     SRTO_SNDSYN = 1,
     SRTO_RCVSYN = 2,
@@ -175,7 +191,7 @@ pub enum SRT_SOCKOPT {
 }
 
 extern "C" {
-    pub fn srt_getlasterror_str() -> *const c_char;
+    pub(crate) fn srt_getlasterror_str() -> *const c_char;
     /// This function shall be called at the start of an application that
     /// uses the SRT library. It provides all necessary
     /// platform-specific initializations, sets up global data, and
@@ -183,17 +199,17 @@ extern "C" {
     /// called, it will be called automatically when creating the
     /// first socket. However, relying on this behavior is strongly
     /// discouraged.
-    pub fn srt_startup() -> c_int;
+    pub(crate) fn srt_startup() -> c_int;
     /// This function cleans up all global SRT resources and shall be called
     /// just before exiting the application that uses the SRT library. This
     /// cleanup function will still be called from the C++ global
     /// destructor, if not called by the application, although relying on
     /// this behavior is strongly discouraged.
-    pub fn srt_cleanup() -> c_int;
+    pub(crate) fn srt_cleanup() -> c_int;
     /// Creates an SRT socket.
     ///
     /// Note that socket IDs always have the `SRTGROUP_MASK` bit clear.
-    pub fn srt_create_socket() -> SRTSOCKET;
+    pub(crate) fn srt_create_socket() -> SRTSOCKET;
     /// Binds a socket to a local address and port. Binding specifies the
     /// local network interface and the UDP port number to be used
     /// for the socket. When the local address is a wildcard
@@ -308,11 +324,11 @@ extern "C" {
     /// 1, otherwise the binding will fail. In all other cases this
     /// option is meaningless. See `SRTO_IPV6ONLY` option for more
     /// information.
-    pub fn srt_bind(s: SRTSOCKET, name: *const sockaddr, name_len: c_int) -> c_int;
+    pub(crate) fn srt_bind(s: SRTSOCKET, name: *const sockaddr, name_len: c_int) -> c_int;
     /// Closes the socket or group and frees all used resources. Note that
     /// underlying UDP sockets may be shared between sockets, so these are
     /// freed only with the last user closed.
-    pub fn srt_close(s: SRTSOCKET) -> c_int;
+    pub(crate) fn srt_close(s: SRTSOCKET) -> c_int;
     /// This sets up the listening state on a socket with a backlog setting
     /// that defines how many sockets may be allowed to wait until
     /// they are accepted (excessive connection requests are
@@ -328,8 +344,8 @@ extern "C" {
     /// * [`SRTO_GROUPCONNECT`](API-socket-options.md#SRTO_GROUPCONNECT) option
     ///   allows
     /// the listener socket to accept group connections
-    pub fn srt_listen(s: SRTSOCKET, backlog: c_int) -> c_int;
-    pub fn srt_listen_callback(
+    pub(crate) fn srt_listen(s: SRTSOCKET, backlog: c_int) -> c_int;
+    pub(crate) fn srt_listen_callback(
         s: SRTSOCKET,
         hook_fn: extern "C" fn(
             opaque: *mut c_void,
@@ -405,7 +421,7 @@ extern "C" {
     /// error this function may return any additional information. In
     /// non-blocking mode a detailed "late" failure cannot be distinguished,
     /// and therefore it can also be obtained from this function.
-    pub fn srt_connect(s: SRTSOCKET, name: *const sockaddr, name_len: c_int) -> c_int;
+    pub(crate) fn srt_connect(s: SRTSOCKET, name: *const sockaddr, name_len: c_int) -> c_int;
     /// Extracts the payload waiting to be received. Note that
     /// [`srt_recv`](#srt_recv) and [`srt_recvmsg`](#srt_recvmsg) are
     /// identical functions, two different names being kept for historical
@@ -459,7 +475,7 @@ extern "C" {
     /// until then it will be kept in the receiver buffer. Also, when the
     /// time to play has come for a message that is next to the currently
     /// lost one, it will be delivered and the lost one dropped.
-    pub fn srt_recv(s: SRTSOCKET, buf: *mut c_char, len: c_int) -> c_int;
+    pub(crate) fn srt_recv(s: SRTSOCKET, buf: *mut c_char, len: c_int) -> c_int;
     /// Sends a payload to a remote party over a given socket.
     ///
     /// **Arguments**:
@@ -501,7 +517,7 @@ extern "C" {
     /// rest of the buffer next time to send it completely. In both **file/
     /// message** and **live mode** the successful return is always equal to
     /// `len`.
-    pub fn srt_send(s: SRTSOCKET, buf: *const c_char, len: c_int) -> c_int;
+    pub(crate) fn srt_send(s: SRTSOCKET, buf: *const c_char, len: c_int) -> c_int;
     /// Sets a value for a socket option in the socket or group.
     ///
     /// The first version (srt_setsockopt) follows the BSD socket API
@@ -517,7 +533,7 @@ extern "C" {
     /// only on groups, although most of the options can be set on
     /// the groups so that they are then derived by the member
     /// sockets.
-    pub fn srt_setsockflag(
+    pub(crate) fn srt_setsockflag(
         s: SRTSOCKET,
         opt: SRT_SOCKOPT,
         optval: *const c_void,
@@ -529,5 +545,8 @@ extern "C" {
     /// local outgoing port number when it was specified as 0 with
     /// binding for system autoselection. With this function you can
     /// extract the port number after it has been autoselected.
-    pub fn srt_getsockname(s: SRTSOCKET, addr: *mut sockaddr, addr_len: *mut c_int) -> c_int;
+    pub(crate) fn srt_getsockname(s: SRTSOCKET, addr: *mut sockaddr, addr_len: *mut c_int)
+        -> c_int;
+    /// Gets the current status of the socket.
+    pub(crate) fn srt_getsockstate(s: SRTSOCKET) -> SRT_SOCKSTATUS;
 }

@@ -1,12 +1,9 @@
-use std::{
-    io::Error,
-    net::SocketAddr,
-    sync::{atomic::AtomicBool, Arc},
-};
+use std::{io::Error, net::SocketAddr};
 
-use common::atomic::EasyAtomic;
 use libc::c_int;
 use os_socketaddr::OsSocketAddr;
+
+use crate::{srt_getsockstate, SRT_SOCKSTATUS};
 
 use super::{
     error, options::Options, srt_close, srt_connect, srt_create_socket, srt_recv, srt_send,
@@ -16,16 +13,11 @@ use super::{
 pub struct Socket {
     fd: SRTSOCKET,
     opt: Options,
-    is_closed: Arc<AtomicBool>,
 }
 
 impl Socket {
     pub(crate) fn new(fd: SRTSOCKET, opt: Options) -> Self {
-        Self {
-            is_closed: Arc::new(AtomicBool::new(false)),
-            opt,
-            fd,
-        }
+        Self { opt, fd }
     }
 
     /// Connects a socket or a group to a remote party with a specified address
@@ -159,11 +151,12 @@ impl Socket {
     /// time to play has come for a message that is next to the currently
     /// lost one, it will be delivered and the lost one dropped.
     pub fn read(&self, buf: &mut [u8]) -> Result<usize, Error> {
-        let ret = unsafe { srt_recv(self.fd, buf.as_mut_ptr() as *mut _, buf.len() as c_int) };
-        if ret <= 0 {
-            self.is_closed.update(true);
+        let status = unsafe { srt_getsockstate(self.fd) };
+        if status != SRT_SOCKSTATUS::SRTS_CONNECTED {
+            return Err(Error::other(format!("{:?}", status)));
         }
 
+        let ret = unsafe { srt_recv(self.fd, buf.as_mut_ptr() as *mut _, buf.len() as c_int) };
         if ret < 0 {
             Err(error())
         } else {
@@ -217,6 +210,11 @@ impl Socket {
             return Ok(());
         }
 
+        let status = unsafe { srt_getsockstate(self.fd) };
+        if status != SRT_SOCKSTATUS::SRTS_CONNECTED {
+            return Err(Error::other(format!("{:?}", status)));
+        }
+
         while !buf.is_empty() {
             buf = &buf[self.send_with_sized(buf)?..];
         }
@@ -229,10 +227,14 @@ impl Socket {
             return Ok(0);
         }
 
+        let status = unsafe { srt_getsockstate(self.fd) };
+        if status != SRT_SOCKSTATUS::SRTS_CONNECTED {
+            return Err(Error::other(format!("{:?}", status)));
+        }
+
         let size = std::cmp::min(buf.len(), self.opt.max_pkt_size());
         let ret = unsafe { srt_send(self.fd, buf.as_ptr() as *const _, size as c_int) } as usize;
         if ret != size {
-            self.is_closed.update(true);
             Err(error())
         } else {
             Ok(ret as usize)
@@ -243,13 +245,7 @@ impl Socket {
     /// underlying UDP sockets may be shared between sockets, so these are
     /// freed only with the last user closed.
     pub fn close(&self) {
-        if !self.is_closed.get() {
-            self.is_closed.update(true);
-
-            if unsafe { srt_close(self.fd) } != 0 {
-                log::error!("not release the socket!");
-            }
-        }
+        unsafe { srt_close(self.fd) };
     }
 }
 

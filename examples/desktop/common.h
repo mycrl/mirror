@@ -13,6 +13,7 @@
 
 #include <string>
 #include <vector>
+#include <functional>
 
 #include <mirror.h>
 #include <SDL_render.h>
@@ -24,11 +25,13 @@ public:
 	Render(SDL_Rect* sdl_rect,
 		   SDL_Texture* sdl_texture,
 		   SDL_Renderer* sdl_renderer,
-		   bool is_render)
+		   bool is_render,
+		   std::function<void()> closed_callback)
 		: _sdl_rect(sdl_rect)
 		, _sdl_texture(sdl_texture)
 		, _sdl_renderer(sdl_renderer)
 		, _is_render(is_render)
+		, _closed_callback(closed_callback)
 	{}
 
 	bool OnVideoFrame(struct VideoFrame* frame)
@@ -62,11 +65,17 @@ public:
 	{
 		return true;
 	}
+
+	void OnClose()
+	{
+		_closed_callback();
+	}
 private:
 	SDL_Rect* _sdl_rect;
 	SDL_Texture* _sdl_texture;
 	SDL_Renderer* _sdl_renderer;
 	bool _is_render;
+	std::function<void()> _closed_callback;
 };
 
 class Args

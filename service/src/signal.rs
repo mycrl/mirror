@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::route::Route;
 
-#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+#[derive(Debug, Clone, Copy, Deserialize, Serialize)]
 pub enum Signal {
     /// Start publishing a channel. The port number is the publisher's multicast
     /// port.

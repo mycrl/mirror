@@ -129,10 +129,6 @@ pub struct Server {
 }
 
 impl Server {
-    pub fn local_port(&self) -> u16 {
-        self.target.port()
-    }
-
     /// Creates a UDP socket from the given address.
     ///
     /// You need to specify the multicast group for the udp session to join to
@@ -145,14 +141,14 @@ impl Server {
     pub fn new(multicast: Ipv4Addr, bind: SocketAddr, mtu: usize) -> Result<Self, Error> {
         assert!(bind.is_ipv4());
 
-        let socket = UdpSocket::bind(bind)?;
+        let socket = UdpSocket::bind(SocketAddr::new(bind.ip(), 0))?;
         if let IpAddr::V4(bind) = bind.ip() {
             socket.join_multicast_v4(&multicast, &bind)?;
             socket.set_multicast_loop_v4(false)?;
         }
 
         Ok(Self {
-            target: SocketAddr::new(IpAddr::V4(multicast), socket.local_addr()?.port()),
+            target: SocketAddr::new(IpAddr::V4(multicast), bind.port()),
             encoder: FragmentEncoder::new(mtu),
             socket,
         })
@@ -174,4 +170,13 @@ impl Server {
 
         Ok(())
     }
+}
+
+/// Picks a free port, that is unused on both TCP and UDP
+pub fn alloc_port() -> Result<u16, Error> {
+    let socket = UdpSocket::bind("0.0.0.0:0")?;
+    let port = socket.local_addr()?.port();
+    drop(socket);
+
+    Ok(port)
 }
