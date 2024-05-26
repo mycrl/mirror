@@ -30,11 +30,20 @@ impl Drop for RawVideoEncoderSettings {
 
 #[derive(Debug, Clone)]
 pub struct VideoEncoderSettings {
+    /// Name of the codec implementation.
+    ///
+    /// The name is globally unique among encoders and among decoders (but an
+    /// encoder and a decoder can share the same name). This is the primary way
+    /// to find a codec from the user perspective.
     pub codec_name: String,
     pub frame_rate: u8,
+    /// picture width / height
     pub width: u32,
+    /// picture width / height
     pub height: u32,
+    /// the average bitrate
     pub bit_rate: u64,
+    /// the number of pictures in a group of pictures, or 0 for intra_only
     pub key_frame_interval: u32,
 }
 
@@ -81,6 +90,7 @@ unsafe impl Send for VideoEncoder {}
 unsafe impl Sync for VideoEncoder {}
 
 impl VideoEncoder {
+    /// Initialize the AVCodecContext to use the given AVCodec.
     pub fn new(settings: &VideoEncoderSettings) -> Result<Self, Error> {
         log::info!("create VideoEncoder: settings={:?}", settings);
 
@@ -93,10 +103,12 @@ impl VideoEncoder {
         }
     }
 
+    /// Supply a raw video or audio frame to the encoder.
     pub fn encode(&self, frame: &VideoFrame) -> bool {
         unsafe { codec_video_encoder_send_frame(self.0, frame) }
     }
 
+    /// Read encoded data from the encoder.
     pub fn read(&self) -> Option<VideoEncodePacket> {
         let packet = unsafe { codec_video_encoder_read_packet(self.0) };
         if !packet.is_null() {

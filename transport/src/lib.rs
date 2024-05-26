@@ -49,8 +49,11 @@ pub struct Transport {
 impl Transport {
     pub fn new(options: TransportOptions) -> Result<Self, Error> {
         let channels: Arc<RwLock<HashMap<u32, Sender<Signal>>>> = Default::default();
+
+        // Connecting to a mirror server
         let mut socket = TcpStream::connect(options.server)?;
 
+        // The role of this thread is to forward all received signals to all subscribers
         let channels_ = Arc::downgrade(&channels);
         thread::spawn(move || {
             let mut buf = [0u8; 1024];
@@ -61,6 +64,7 @@ impl Transport {
                     break;
                 }
 
+                // Try to decode all data received
                 bytes.extend_from_slice(&buf[..size]);
                 if let Some((size, signal)) = Signal::decode(&bytes) {
                     let _ = bytes.split_to(size);
@@ -68,6 +72,7 @@ impl Transport {
                     if let Some(channels) = channels_.upgrade() {
                         let mut closeds: SmallVec<[u32; 10]> = SmallVec::with_capacity(10);
 
+                        // Forwards the signal to all subscribers
                         {
                             for (id, tx) in channels.read().unwrap().iter() {
                                 if tx.send(signal).is_err() {
@@ -76,6 +81,7 @@ impl Transport {
                             }
                         }
 
+                        // Clean up closed subscribers
                         if !closeds.is_empty() {
                             for id in closeds {
                                 if channels.write().unwrap().remove(&id).is_some() {
@@ -98,12 +104,15 @@ impl Transport {
     }
 
     pub fn create_sender(&self, id: u32, adapter: &Arc<StreamSenderAdapter>) -> Result<(), Error> {
+        // Create a multicast sender, the port is automatically assigned an idle port by
+        // the system
         let mut mcast_sender = multicast::Server::new(
             self.options.multicast,
-            "0.0.0.0".parse().unwrap(),
+            "0.0.0.0:0".parse().unwrap(),
             self.options.mtu,
         )?;
 
+        // Create an srt configuration and carry stream information
         let mut opt = srt::Options::default();
         opt.fc = 32;
         opt.latency = 20;
@@ -117,18 +126,21 @@ impl Transport {
             .encode(),
         );
 
+        // Create an srt connection to the server
         let mut encoder = srt::FragmentEncoder::new(opt.max_pkt_size());
         let sender = srt::Socket::connect(self.options.server, opt)?;
         log::info!("sender connect to server={}", self.options.server);
 
         let adapter_ = Arc::downgrade(adapter);
         thread::spawn(move || {
+            // If the adapter has been released, close the current thread
             'a: while let Some(adapter) = adapter_.upgrade() {
                 if let Some((buf, kind, flags, timestamp)) = adapter.next() {
                     if buf.is_empty() {
                         continue;
                     }
 
+                    // Packaging audio and video information
                     let payload = Muxer::mux(
                         PacketInfo {
                             kind,
@@ -138,6 +150,8 @@ impl Transport {
                         buf.as_ref(),
                     );
 
+                    // Here we check whether the audio and video data are being multicasted, so as
+                    // to dynamically switch the protocol stack.
                     if adapter.get_multicast() {
                         if let Err(e) = mcast_sender.send(&payload) {
                             log::error!("failed to send buf in multicast, err={:?}", e);
@@ -145,6 +159,8 @@ impl Transport {
                             break 'a;
                         }
                     } else {
+                        // SRT does not perform data fragmentation. It needs to be split into
+                        // fragments that do not exceed the MTU size.
                         for chunk in encoder.encode(&payload) {
                             if let Err(e) = sender.send(chunk) {
                                 log::error!("failed to send buf in srt, err={:?}", e);
@@ -174,6 +190,7 @@ impl Transport {
         id: u32,
         adapter: &Arc<StreamReceiverAdapter>,
     ) -> Result<(), Error> {
+        // Create an srt configuration and carry stream information
         let mut opt = srt::Options::default();
         opt.fc = 32;
         opt.latency = 20;
@@ -187,16 +204,19 @@ impl Transport {
             .encode(),
         );
 
+        // Create an srt connection to the server
         let sequence = Arc::new(AtomicU64::new(0));
         let mut decoder = srt::FragmentDecoder::new();
         let receiver = Arc::new(srt::Socket::connect(self.options.server, opt)?);
         log::info!("receiver connect to server={}", self.options.server);
 
         {
+            // Assign a unique ID to each receiver
             let index = self.index.get();
             self.index
                 .update(if index == u32::MAX { 0 } else { index + 1 });
 
+            // Add a message receiver to the list
             let (tx, rx) = channel();
             self.channels.write().unwrap().insert(index, tx);
 
@@ -209,7 +229,9 @@ impl Transport {
                 while let Ok(signal) = rx.recv() {
                     match signal {
                         Signal::Start { id, port } => {
+                            // Only process messages from the current receiving end
                             if id == local_id {
+                                // Creating a multicast receiver
                                 let mcast_rceiver = if let Ok(socket) = multicast::Socket::new(
                                     multicast,
                                     SocketAddr::new("0.0.0.0".parse().unwrap(), port),
@@ -228,6 +250,8 @@ impl Transport {
                                         }
 
                                         if let Some(adapter) = adapter_.upgrade() {
+                                            // Check whether the sequence number is continuous, in
+                                            // order to check whether packet loss has occurred
                                             if seq + 1 == sequence_.get() {
                                                 if let Some((offset, info)) = Remuxer::remux(&bytes)
                                                 {
@@ -257,7 +281,9 @@ impl Transport {
                             }
                         }
                         Signal::Stop { id } => {
+                            // Only process messages from the current receiving end
                             if id == local_id {
+                                // Jump out of the loop and enter the closing process
                                 break;
                             }
                         }
@@ -280,8 +306,11 @@ impl Transport {
                     break;
                 }
 
+                // All the fragments received from SRT are split and need to be reassembled here
                 if let Some((seq, bytes)) = decoder.decode(&buf[..size]) {
                     if let Some(adapter) = adapter_.upgrade() {
+                        // Check whether the sequence number is continuous, in order to check
+                        // whether packet loss has occurred
                         if seq - 1 == sequence.get() {
                             if let Some((offset, info)) = Remuxer::remux(&bytes) {
                                 if !adapter.send(

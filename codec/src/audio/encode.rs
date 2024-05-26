@@ -72,6 +72,7 @@ unsafe impl Send for AudioEncoder {}
 unsafe impl Sync for AudioEncoder {}
 
 impl AudioEncoder {
+    /// Initialize the AVCodecContext to use the given AVCodec.
     pub fn new(settings: &AudioEncoderSettings) -> Result<Self, Error> {
         log::info!("create AudioEncoder: settings={:?}", settings);
 
@@ -84,10 +85,12 @@ impl AudioEncoder {
         }
     }
 
+    /// Supply a raw video or audio frame to the encoder.
     pub fn encode(&self, frame: &AudioFrame) -> bool {
         unsafe { codec_audio_encoder_send_frame(self.0, frame) }
     }
 
+    /// Read encoded data from the encoder.
     pub fn read(&self) -> Option<AudioEncodePacket> {
         let packet = unsafe { codec_audio_encoder_read_packet(self.0) };
         if !packet.is_null() {

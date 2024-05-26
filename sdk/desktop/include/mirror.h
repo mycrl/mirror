@@ -105,6 +105,7 @@ struct FrameSink
 {
     bool (*video)(void* ctx, struct VideoFrame* frame);
     bool (*audio)(void* ctx, struct AudioFrame* frame);
+    void (*close)(void* ctx);
     void* ctx;
 };
 

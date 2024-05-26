@@ -142,10 +142,14 @@ impl Server {
     ///
     /// MTU is used to specify the network unit size, this is used to limit the
     /// maximum size of packets sent.
-    pub fn new(multicast: Ipv4Addr, interface: Ipv4Addr, mtu: usize) -> Result<Self, Error> {
-        let socket = UdpSocket::bind(SocketAddr::new(IpAddr::V4(interface), 0))?;
-        socket.join_multicast_v4(&multicast, &interface)?;
-        socket.set_multicast_loop_v4(false)?;
+    pub fn new(multicast: Ipv4Addr, bind: SocketAddr, mtu: usize) -> Result<Self, Error> {
+        assert!(bind.is_ipv4());
+
+        let socket = UdpSocket::bind(bind)?;
+        if let IpAddr::V4(bind) = bind.ip() {
+            socket.join_multicast_v4(&multicast, &bind)?;
+            socket.set_multicast_loop_v4(false)?;
+        }
 
         Ok(Self {
             encoder: FragmentEncoder::new(mtu),

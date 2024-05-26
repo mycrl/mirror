@@ -6,9 +6,9 @@ edition = "2021"
 [dependencies]
 bytes = "1.5.0"
 log = "0.4.20"
+srt = { path = "../srt" }
+multicast = { path = "../multicast" }
 common = { path = "../common" }
-srt = { path = "../networks/srt" }
-multicast = { path = "../networks/multicast" }
 service = { path = "../service" }
 smallvec = "1.13.2"
 

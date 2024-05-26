@@ -17,6 +17,6 @@ members = [
     "sdk/desktop",
     "sdk/android/mirror/src/main/native",
     "sdk/android/mirror/src/main/macro",
-    "networks/multicast",
-    "networks/srt",
+    "multicast",
+    "srt",
 ]

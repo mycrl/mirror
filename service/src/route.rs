@@ -20,17 +20,27 @@ pub struct Route {
 }
 
 impl Route {
+    /// Add a channel to the route, where the port number is the multicast port
+    /// on the sender side
+    ///
+    /// This will trigger an event update, which will broadcast a channel
+    /// release event
     pub fn add(&self, id: u32, port: u16) {
         self.nodes.write().unwrap().insert(id, port);
         self.change(Signal::Start { id, port })
     }
 
+    /// Delete a published channel
+    ///
+    /// This will trigger an event update, which will broadcast a channel closed
+    /// event
     pub fn remove(&self, id: u32) {
         if self.nodes.write().unwrap().remove(&id).is_some() {
             self.change(Signal::Stop { id })
         }
     }
 
+    /// Get all channels that are publishing
     pub fn get_channels(&self) -> Vec<(u32, u16)> {
         self.nodes
             .read()
@@ -40,6 +50,8 @@ impl Route {
             .collect()
     }
 
+    /// Get the event update listener, which can listen to all subsequent events
+    /// triggered from the current listener
     pub fn get_changer(&self) -> Changer {
         let (tx, rx) = channel();
         let id = self.index.get();
@@ -86,6 +98,7 @@ pub struct Changer {
 }
 
 impl Changer {
+    /// Callback when the event is updated
     pub fn change(&self) -> Option<Signal> {
         self.rx.recv().ok()
     }

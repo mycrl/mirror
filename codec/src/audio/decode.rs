@@ -17,6 +17,7 @@ unsafe impl Send for AudioDecoder {}
 unsafe impl Sync for AudioDecoder {}
 
 impl AudioDecoder {
+    /// Initialize the AVCodecContext to use the given AVCodec.
     pub fn new(codec_name: &str) -> Result<Self, Error> {
         log::info!("create AudioDecoder: codec name={:?}", codec_name);
 
@@ -28,10 +29,13 @@ impl AudioDecoder {
         }
     }
 
+    /// Supply raw packet data as input to a decoder.
     pub fn decode(&self, pkt: &[u8]) -> bool {
         unsafe { codec_audio_decoder_send_packet(self.0, pkt.as_ptr(), pkt.len()) }
     }
 
+    /// Return decoded output data from a decoder or encoder (when the
+    /// AV_CODEC_FLAG_RECON_FRAME flag is used).
     pub fn read(&self) -> Option<&AudioFrame> {
         let frame = unsafe { codec_audio_decoder_read_frame(self.0) };
         if !frame.is_null() {

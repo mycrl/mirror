@@ -12,7 +12,10 @@ use crate::route::Route;
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
 pub enum Signal {
+    /// Start publishing a channel. The port number is the publisher's multicast
+    /// port.
     Start { id: u32, port: u16 },
+    /// Stop publishing to a channel
     Stop { id: u32 },
 }
 
@@ -49,6 +52,8 @@ pub fn start_server(bind: SocketAddr, route: Arc<Route>) -> Result<(), Error> {
 
         let route = route.clone();
         thread::spawn(move || {
+            // Every time a new connection comes online, notify the current link of all
+            // published channels.
             {
                 for (id, port) in route.get_channels() {
                     if socket
@@ -60,6 +65,9 @@ pub fn start_server(bind: SocketAddr, route: Arc<Route>) -> Result<(), Error> {
                 }
             }
 
+            // todo: The link is closed and the thread cannot be released in time
+
+            // Every time a new publisher comes online, the current connection is notified
             let changer = route.get_changer();
             while let Some(signal) = changer.change() {
                 if socket.write_all(&signal.encode()).is_err() {
