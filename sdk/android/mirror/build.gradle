@@ -33,6 +33,12 @@ android {
         }
 
         consumerProguardFiles 'consumer-rules.pro'
+        externalNativeBuild {
+            cmake {
+                arguments '-DANDROID_STL=c++_shared'
+                cppFlags ''
+            }
+        }
     }
 
     buildTypes {
@@ -55,7 +61,12 @@ android {
         jvmTarget = '1.8'
     }
 
-    ndkVersion '26.3.11579264'
+    externalNativeBuild {
+        cmake {
+            path file('src/main/cpp/CMakeLists.txt')
+            version '3.22.1'
+        }
+    }
 }
 
 cargo {

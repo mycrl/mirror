@@ -1,5 +1,7 @@
 package com.github.mycrl.mirror
 
+import android.util.Log
+
 class StreamKind {
     companion object {
         const val Video = 0;

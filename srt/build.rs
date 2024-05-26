@@ -69,7 +69,7 @@ fn main() -> anyhow::Result<()> {
             exec(
                 "wget \
                 -O libsrt.a \
-                https://github.com/mycrl/srt-distributions/releases/download/srt-android/libsrt-arm64-v8a.a",
+                https://github.com/mycrl/distributions/releases/download/distributions/libsrt-arm64-v8a.a",
                 &srt_dir,
             )?;
         }
@@ -78,7 +78,7 @@ fn main() -> anyhow::Result<()> {
             exec(
                 "wget \
                 -O libssl.a \
-                https://github.com/mycrl/srt-distributions/releases/download/srt-android/libssl-arm64-v8a.a",
+                https://github.com/mycrl/distributions/releases/download/distributions/libssl-arm64-v8a.a",
                 &srt_dir,
             )?;
         }
@@ -87,7 +87,7 @@ fn main() -> anyhow::Result<()> {
             exec(
                 "wget \
                 -O libcrypto.a \
-                https://github.com/mycrl/srt-distributions/releases/download/srt-android/libcrypto-arm64-v8a.a",
+                https://github.com/mycrl/distributions/releases/download/distributions/libcrypto-arm64-v8a.a",
                 &srt_dir,
             )?;
         }

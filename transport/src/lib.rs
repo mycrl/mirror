@@ -52,8 +52,12 @@ impl Transport {
         let channels: Arc<RwLock<HashMap<u32, Sender<Signal>>>> = Default::default();
         let publishs: Arc<RwLock<HashMap<u32, u16>>> = Default::default();
 
+        log::info!("================= 1111");
+
         // Connecting to a mirror server
         let mut socket = TcpStream::connect(options.server)?;
+
+        log::info!("================= 2222");
 
         // The role of this thread is to forward all received signals to all subscribers
         let channels_ = Arc::downgrade(&channels);
@@ -117,6 +121,8 @@ impl Transport {
                 }
             }
         });
+
+        log::info!("================= 3333");
 
         Ok(Self {
             index: AtomicU32::new(0),
