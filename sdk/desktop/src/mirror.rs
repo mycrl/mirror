@@ -144,10 +144,10 @@ pub fn init(options: MirrorOptions) -> Result<()> {
         std::env::set_current_dir(path)?;
     }
 
-    #[cfg(debug_assertions)]
-    {
+    // #[cfg(debug_assertions)]
+    // {
         simple_logger::init_with_level(log::Level::Debug)?;
-    }
+    // }
 
     *OPTIONS.write().unwrap() = options.clone();
     log::info!("mirror init: options={:?}", options);

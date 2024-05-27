@@ -102,7 +102,6 @@ fn main() -> anyhow::Result<()> {
                         "-DENABLE_STATIC=true",
                         "-DENABLE_ENCRYPTION=false",
                         "-DENABLE_UNITTESTS=false",
-                        "-DCMAKE_MSVC_RUNTIME_LIBRARY=\"MultiThreaded$<$<CONFIG:Debug>:Debug>\""
                     ]
                     .join(" ")
                 ),

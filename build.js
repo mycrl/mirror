@@ -1,4 +1,4 @@
-const { execSync } = require('child_process')
+const { exec } = require('child_process')
 const { join } = require('path')
 const fs = require('fs')
 
@@ -11,12 +11,23 @@ const Args = process
     }), {})
 
 const Profile = Args.release ? 'Release' : 'Debug'
-const Command = (cmd, options = {}) => execSync(cmd,  {
-    shell: 'powershell.exe',
-    stdio: process.stdio,
-    cwd: __dirname,
-    ...options,
+const Command = (cmd, options = {}) => new Promise((
+    resolve, 
+    reject, 
+    ps = exec(cmd,  {
+        shell: 'powershell.exe',
+        cwd: __dirname,
+        ...options,
+    }
+)) => {
+    ps.stdout.pipe(process.stdout)
+    ps.stderr.pipe(process.stderr)
+    
+    ps.on('close', resolve)
+    ps.on('error', reject)
 })
+
+/* async block */ void (async () => {
 
 for (const path of [
     './build', 
@@ -35,12 +46,12 @@ for (const path of [
 
 if (!fs.existsSync('./build/bin/data')) {
     if (!fs.existsSync('./build/distributions-windows.zip')) {
-        Command('Invoke-WebRequest \
+        await Command('Invoke-WebRequest \
             -Uri https://github.com/mycrl/distributions/releases/download/distributions/distributions-windows.zip \
             -OutFile build\\distributions-windows.zip')
     }
 
-    Command('Expand-Archive -Path build\\distributions-windows.zip -DestinationPath build\\bin -Force')
+    await Command('Expand-Archive -Path build\\distributions-windows.zip -DestinationPath build\\bin -Force')
     fs.unlinkSync('./build/distributions-windows.zip')
 }
 
@@ -52,7 +63,7 @@ fs.copyFileSync('./examples/desktop/receiver/main.cpp', './build/examples/receiv
 fs.copyFileSync('./sdk/desktop/include/mirror.h', './build/include/mirror.h')
 fs.copyFileSync('./common/include/frame.h', './build/include/frame.h')
 
-execSync(`cargo build ${Args.release ? '--release' : ''} ${Args.ffmpeg4 ? '--features ffmpeg4' : ''}`)
+await Command(`cargo build ${Args.release ? '--release' : ''} ${Args.ffmpeg4 ? '--features ffmpeg4' : ''}`)
 
 fs.copyFileSync(`./target/${Profile.toLowerCase()}/mirror.dll`, './build/bin/mirror.dll')
 fs.copyFileSync(`./target/${Profile.toLowerCase()}/mirror.dll.lib`, './build/lib/mirror.dll.lib')
@@ -78,8 +89,8 @@ if (!fs.existsSync('./examples/desktop/build')) {
     fs.mkdirSync('./examples/desktop/build')
 }
 
-Command(`cmake -DCMAKE_BUILD_TYPE=${Profile} ..`, { cwd: join(__dirname, './examples/desktop/build') })
-Command(`cmake --build . --config=${Profile}`, { cwd: join(__dirname, './examples/desktop/build') })
+await Command(`cmake -DCMAKE_BUILD_TYPE=${Profile} ..`, { cwd: join(__dirname, './examples/desktop/build') })
+await Command(`cmake --build . --config=${Profile}`, { cwd: join(__dirname, './examples/desktop/build') })
 
 fs.copyFileSync(`./examples/desktop/build/receiver/${Profile}/receiver.exe`, './build/bin/receiver.exe')
 fs.copyFileSync(`./examples/desktop/build/sender/${Profile}/sender.exe`, './build/bin/sender.exe')
@@ -99,3 +110,5 @@ fs.writeFileSync('./build/examples/receiver/CMakeLists.txt',
         .replace('../../../common/include', '../../include')
         .replace('../../../target/debug', '../../lib')
         .replace('../../../target/release', '../../lib'))
+
+/* async block end */ })()
