@@ -135,7 +135,7 @@ class SimpleMirrorService : Service() {
 
     private var receiverAdapter: ReceiverAdapterWrapper? = null
     private val mirror: MirrorService = MirrorService(
-        "192.168.8.174:8080",
+        "192.168.8.128:8080",
         "239.0.0.1",
         1400
     )

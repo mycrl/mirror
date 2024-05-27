@@ -16,6 +16,7 @@ import android.view.SurfaceView
 import android.view.View
 import android.view.WindowInsets
 import android.view.WindowManager
+import android.widget.EditText
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts

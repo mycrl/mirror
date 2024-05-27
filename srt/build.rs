@@ -35,22 +35,6 @@ fn main() -> anyhow::Result<()> {
     let out_dir = env::var("OUT_DIR")?;
     let srt_dir = join(&out_dir, "srt");
 
-    #[cfg(target_os = "windows")]
-    {
-        println!(
-            "cargo:rustc-link-search=all={}",
-            join(&srt_dir, "./Release")
-        );
-
-        println!("cargo:rustc-link-lib=srt_static");
-    }
-
-    #[cfg(not(target_os = "windows"))]
-    {
-        println!("cargo:rustc-link-search=all={}", srt_dir);
-        println!("cargo:rustc-link-lib=srt");
-    }
-
     #[cfg(target_os = "macos")]
     println!("cargo:rustc-link-lib=c++");
 
@@ -92,6 +76,8 @@ fn main() -> anyhow::Result<()> {
             )?;
         }
 
+        println!("cargo:rustc-link-search=all={}", srt_dir);
+        println!("cargo:rustc-link-lib=srt");
         println!("cargo:rustc-link-lib=static=ssl");
         println!("cargo:rustc-link-lib=static=crypto");
     } else {
@@ -124,6 +110,22 @@ fn main() -> anyhow::Result<()> {
             )?;
 
             exec("cmake --build . --config Release", &srt_dir)?;
+        }
+
+        #[cfg(target_os = "windows")]
+        {
+            println!(
+                "cargo:rustc-link-search=all={}",
+                join(&srt_dir, "./Release")
+            );
+
+            println!("cargo:rustc-link-lib=srt_static");
+        }
+
+        #[cfg(not(target_os = "windows"))]
+        {
+            println!("cargo:rustc-link-search=all={}", srt_dir);
+            println!("cargo:rustc-link-lib=srt");
         }
     }
 
