@@ -71,13 +71,18 @@ class Notify(service: SimpleMirrorService) {
     }
 }
 
+abstract class SimpleMirrorServiceObserver() {
+    abstract fun OnConnected();
+    abstract fun OnReceiverClosed();
+}
+
 class SimpleMirrorServiceBinder(private val service: SimpleMirrorService) : Binder() {
-    fun createSender(intent: Intent, displayMetrics: DisplayMetrics) {
-        service.createSender(intent, displayMetrics)
+    fun createSender(intent: Intent, displayMetrics: DisplayMetrics, id: Int) {
+        service.createSender(intent, displayMetrics, id)
     }
 
-    fun createReceiver(addr: String) {
-        service.createReceiver(addr)
+    fun createReceiver(id: Int) {
+        service.createReceiver(id)
     }
 
     fun setRenderSurface(surface: Surface) {
@@ -86,12 +91,8 @@ class SimpleMirrorServiceBinder(private val service: SimpleMirrorService) : Bind
         service.setOutputSurface(surface)
     }
 
-    fun registerReceivedHandler(handle: (Int, String) -> Unit) {
-        service.registerReceivedHandler(handle)
-    }
-
-    fun registerReceivedReleaseHandler(handle: (Int, String) -> Unit) {
-        service.registerReceivedReleaseHandler(handle)
+    fun connect(server: String) {
+        service.connect(server)
     }
 
     fun stopSender() {
@@ -100,16 +101,23 @@ class SimpleMirrorServiceBinder(private val service: SimpleMirrorService) : Bind
         service.stopSender()
     }
 
+    fun setMulticast(isMulticast: Boolean) {
+        service.setMulticast(isMulticast)
+    }
+
     fun stopReceiver() {
         Log.i("simple", "stop receiver.")
 
         service.stopReceiver()
     }
+
+    fun setObserver(observer: SimpleMirrorServiceObserver) {
+        service.setObserver(observer)
+    }
 }
 
 class SimpleMirrorService : Service() {
-    private var receivedReleaseHandler: ((Int, String) -> Unit)? = null
-    private var receivedHandler: ((Int, String) -> Unit)? = null
+    private var observer: SimpleMirrorServiceObserver? = null
     private var mediaProjection: MediaProjection? = null
     private var virtualDisplay: VirtualDisplay? = null
     private var outputSurface: Surface? = null
@@ -134,11 +142,7 @@ class SimpleMirrorService : Service() {
     }
 
     private var receiverAdapter: ReceiverAdapterWrapper? = null
-    private val mirror: MirrorService = MirrorService(
-        "192.168.8.128:8080",
-        "239.0.0.1",
-        1400
-    )
+    private var mirror: MirrorService? = null
 
     override fun onBind(intent: Intent?): IBinder {
         return SimpleMirrorServiceBinder(this)
@@ -146,12 +150,30 @@ class SimpleMirrorService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        mirror.release()
+        mirror?.release()
         sender?.release()
         mediaProjection?.stop()
         virtualDisplay?.release()
 
         Log.w("simple", "service destroy.")
+    }
+
+    fun connect(server: String) {
+        try {
+            mirror = MirrorService(
+                server,
+                "239.0.0.1",
+                1400
+            )
+
+            observer?.OnConnected()
+        } catch (e: Exception) {
+            Log.e(
+                "simple",
+                "Mirror connect exception",
+                e
+            )
+        }
     }
 
     fun stopSender() {
@@ -162,22 +184,22 @@ class SimpleMirrorService : Service() {
         receiverAdapter?.release()
     }
 
-    fun registerReceivedReleaseHandler(handle: (Int, String) -> Unit) {
-        receivedReleaseHandler = handle
+    fun setMulticast(isMulticast: Boolean) {
+        sender?.setMulticast(isMulticast)
     }
 
-    fun registerReceivedHandler(handle: (Int, String) -> Unit) {
-        receivedHandler = handle
+    fun setObserver(observer: SimpleMirrorServiceObserver) {
+        this.observer = observer
     }
 
     fun setOutputSurface(surface: Surface) {
         outputSurface = surface
     }
 
-    fun createReceiver(addr: String) {
+    fun createReceiver(id: Int) {
         Log.i("simple", "create receiver.")
 
-        mirror.createReceiver(0, object : MirrorAdapterConfigure {
+        mirror?.createReceiver(id, object : MirrorAdapterConfigure {
             override val video = VideoConfigure
             override val audio = AudioConfigure
         }, object : MirrorReceiver() {
@@ -186,7 +208,7 @@ class SimpleMirrorService : Service() {
 
             override fun released() {
                 super.released()
-                receivedReleaseHandler?.let { it(0, addr) }
+                observer?.OnReceiverClosed();
 
                 Log.w("simple", "receiver is released.")
             }
@@ -199,7 +221,7 @@ class SimpleMirrorService : Service() {
         })
     }
 
-    fun createSender(intent: Intent, displayMetrics: DisplayMetrics) {
+    fun createSender(intent: Intent, displayMetrics: DisplayMetrics, id: Int) {
         Notify(this)
 
         Log.i("simple", "create sender.")
@@ -213,8 +235,8 @@ class SimpleMirrorService : Service() {
             )
 
         mediaProjection?.registerCallback(object : MediaProjection.Callback() {}, null)
-        sender = mirror.createSender(
-            0,
+        sender = mirror?.createSender(
+            id,
             object : MirrorAdapterConfigure {
                 override val video = VideoConfigure
                 override val audio = AudioConfigure

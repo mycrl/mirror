@@ -242,5 +242,10 @@ impl StreamReceiverAdapter {
     /// Marks that the video packet has been lost.
     pub fn loss_pkt(&self) {
         self.video_readable.update(false);
+
+        log::warn!(
+            "Packet loss has occurred and the data stream is currently \
+            paused, waiting for the key frame to arrive.",
+        );
     }
 }

@@ -4,21 +4,21 @@ mod fragments;
 use std::{
     io::Error,
     net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
-    sync::{
-        mpsc::{self, channel},
-        Arc,
-    },
-    thread,
+    sync::mpsc::{self, channel},
 };
 
 use bytes::Bytes;
 use fragments::FragmentEncoder;
-use thread_priority::{set_current_thread_priority, ThreadPriority};
+use once_cell::sync::Lazy;
+use tokio::{runtime::Runtime, sync::mpsc::unbounded_channel};
 
 use crate::{
     dequeue::Dequeue,
     fragments::{Fragment, FragmentDecoder},
 };
+
+static RUNTIME: Lazy<Runtime> =
+    Lazy::new(|| Runtime::new().expect("failed to create tokio runtime, this is a bug"));
 
 /// A UDP socket.
 ///
@@ -36,10 +36,12 @@ use crate::{
 /// This client is only used to receive multicast packets and does not send
 /// multicast packets.
 pub struct Socket {
-    #[allow(unused)]
-    socket: Arc<UdpSocket>,
     rx: mpsc::Receiver<(u64, Bytes)>,
+    close_signal: tokio::sync::mpsc::UnboundedSender<()>,
 }
+
+unsafe impl Send for Socket {}
+unsafe impl Sync for Socket {}
 
 impl Socket {
     /// Creates a UDP socket from the given address.
@@ -51,49 +53,7 @@ impl Socket {
     pub fn new(multicast: Ipv4Addr, bind: SocketAddr) -> Result<Self, Error> {
         assert!(bind.is_ipv4());
 
-        let socket = UdpSocket::bind(bind)?;
-        let socket = socket2::Socket::from(socket);
-        socket.set_recv_buffer_size(4 * 1024 * 1024)?;
-
-        let socket: Arc<UdpSocket> = Arc::new(socket.into());
-        if let IpAddr::V4(bind) = bind.ip() {
-            socket.join_multicast_v4(&multicast, &bind)?;
-            socket.set_broadcast(true)?;
-        }
-
-        let (tx, rx) = channel();
-        let socket_ = Arc::downgrade(&socket);
-        thread::spawn(move || {
-            let _ = set_current_thread_priority(ThreadPriority::Max);
-
-            let mut buf = vec![0u8; 2048];
-            let mut queue = Dequeue::new(50);
-            let mut decoder = FragmentDecoder::new();
-
-            'a: while let Some(socket) = socket_.upgrade() {
-                if let Ok(size) = socket.recv(&mut buf[..]) {
-                    if size == 0 {
-                        break;
-                    }
-
-                    if let Ok(packet) = Fragment::try_from(&buf[..size]) {
-                        queue.push(packet);
-
-                        while let Some(chunk) = queue.pop() {
-                            if let Some(packet) = decoder.decode(chunk) {
-                                if tx.send(packet).is_err() {
-                                    break 'a;
-                                }
-                            }
-                        }
-                    }
-                } else {
-                    break;
-                };
-            }
-        });
-
-        Ok(Self { socket, rx })
+        RUNTIME.block_on(Self::create(multicast, bind))
     }
 
     /// Reads packets sent from the multicast server.
@@ -104,6 +64,61 @@ impl Socket {
     /// Note that there may be packet loss.
     pub fn read(&self) -> Option<(u64, Bytes)> {
         self.rx.recv().ok()
+    }
+
+    pub fn close(&self) {
+        let _ = self.close_signal.send(());
+    }
+
+    async fn create(multicast: Ipv4Addr, bind: SocketAddr) -> Result<Self, Error> {
+        let socket = socket2::Socket::from(UdpSocket::bind(bind)?);
+        socket.set_recv_buffer_size(4 * 1024 * 1024)?;
+        socket.set_reuse_address(true)?;
+
+        let socket = tokio::net::UdpSocket::from_std(socket.into())?;
+        if let IpAddr::V4(bind) = bind.ip() {
+            socket.join_multicast_v4(multicast, bind)?;
+            socket.set_broadcast(true)?;
+        }
+
+        let (close_signal, mut closed) = unbounded_channel();
+        let (tx, rx) = channel();
+
+        tokio::spawn(async move {
+            let mut buf = vec![0u8; 2048];
+            let mut queue = Dequeue::new(50);
+            let mut decoder = FragmentDecoder::new();
+
+            'a: loop {
+                tokio::select! {
+                    Ok(size) = socket.recv(&mut buf[..]) => {
+                        if size == 0 {
+                            break;
+                        } else {
+
+                        }
+
+                        if let Ok(packet) = Fragment::try_from(&buf[..size]) {
+                            queue.push(packet);
+
+                            while let Some(chunk) = queue.pop() {
+                                if let Some(packet) = decoder.decode(chunk) {
+                                    if tx.send(packet).is_err() {
+                                        break 'a;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Some(_) = closed.recv() => {
+                        break
+                    }
+                    else => break
+                }
+            }
+        });
+
+        Ok(Self { close_signal, rx })
     }
 }
 

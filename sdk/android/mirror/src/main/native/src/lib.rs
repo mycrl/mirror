@@ -340,8 +340,12 @@ impl Mirror {
                         if !adapter.sink(buf, kind, flags, timestamp) {
                             break;
                         }
+                    } else {
+                        break;
                     }
                 }
+
+                log::info!("StreamReceiverAdapter is closed");
 
                 adapter.close();
             });
@@ -428,7 +432,8 @@ impl Mirror {
     /// /**
     ///  * Set whether the sender uses multicast transmission
     ///  */
-    /// private external fun senderSetMulticast(adapter: Long, is_multicast: Boolean)
+    /// private external fun senderSetMulticast(adapter: Long, is_multicast:
+    /// Boolean)
     pub fn sender_set_multicast(
         _env: JNIEnv,
         _this: JClass,

@@ -8,19 +8,18 @@ use std::{
     sync::{
         atomic::{AtomicU32, AtomicU64},
         mpsc::{channel, Sender},
-        Arc, RwLock, Weak,
+        Arc, Mutex, RwLock, Weak,
     },
     thread,
 };
 
-use adapter::StreamReceiverAdapter;
 use bytes::BytesMut;
 use common::atomic::EasyAtomic;
 use service::{signal::Signal, SocketKind, StreamInfo};
 use smallvec::SmallVec;
 
 use crate::{
-    adapter::StreamSenderAdapter,
+    adapter::{StreamReceiverAdapter, StreamSenderAdapter},
     payload::{Muxer, PacketInfo, Remuxer},
 };
 
@@ -52,12 +51,8 @@ impl Transport {
         let channels: Arc<RwLock<HashMap<u32, Sender<Signal>>>> = Default::default();
         let publishs: Arc<RwLock<HashMap<u32, u16>>> = Default::default();
 
-        log::info!("================= 1111");
-
         // Connecting to a mirror server
         let mut socket = TcpStream::connect(options.server)?;
-
-        log::info!("================= 2222");
 
         // The role of this thread is to forward all received signals to all subscribers
         let channels_ = Arc::downgrade(&channels);
@@ -122,8 +117,6 @@ impl Transport {
             }
         });
 
-        log::info!("================= 3333");
-
         Ok(Self {
             index: AtomicU32::new(0),
             options,
@@ -132,7 +125,11 @@ impl Transport {
         })
     }
 
-    pub fn create_sender(&self, id: u32, adapter: &Arc<StreamSenderAdapter>) -> Result<(), Error> {
+    pub fn create_sender(
+        &self,
+        stream_id: u32,
+        adapter: &Arc<StreamSenderAdapter>,
+    ) -> Result<(), Error> {
         let port = multicast::alloc_port()?;
 
         // Create a multicast sender, the port is automatically assigned an idle port by
@@ -148,13 +145,13 @@ impl Transport {
         // Create an srt configuration and carry stream information
         let mut opt = srt::Options::default();
         opt.fc = 32;
-        opt.latency = 20;
+        opt.latency = 30;
         opt.mtu = self.options.mtu as u32;
         opt.stream_id = Some(
             StreamInfo {
                 kind: SocketKind::Publisher,
                 port: Some(port),
-                id,
+                id: stream_id,
             }
             .encode(),
         );
@@ -207,7 +204,7 @@ impl Transport {
                 }
             }
 
-            log::info!("sender is closed, id={}", id);
+            log::info!("sender is closed, id={}", stream_id);
 
             if let Some(adapter) = adapter_.upgrade() {
                 adapter.close();
@@ -220,20 +217,37 @@ impl Transport {
 
     pub fn create_receiver(
         &self,
-        id: u32,
+        stream_id: u32,
         adapter: &Arc<StreamReceiverAdapter>,
     ) -> Result<(), Error> {
+        let current_mcast_rceiver = Arc::new(Mutex::new(None));
+
         // Creating a multicast receiver
-        let create_mcast_receiver = move |sequence: Arc<AtomicU64>,
+        let current_mcast_rceiver_ = current_mcast_rceiver.clone();
+        let create_mcast_receiver = move |receiver: Weak<srt::Socket>,
+                                          sequence: Arc<AtomicU64>,
                                           adapter: Weak<StreamReceiverAdapter>,
                                           multicast,
                                           port| {
             let mcast_rceiver = if let Ok(socket) =
                 multicast::Socket::new(multicast, SocketAddr::new("0.0.0.0".parse().unwrap(), port))
             {
+                let socket = Arc::new(socket);
+                if let Some(socket) = current_mcast_rceiver_
+                    .lock()
+                    .unwrap()
+                    .replace(socket.clone())
+                {
+                    socket.close()
+                }
+
                 socket
             } else {
-                return false;
+                if let Some(receiver) = receiver.upgrade() {
+                    receiver.close();
+                }
+
+                return;
             };
 
             log::info!("create multicast receiver, port={}", port);
@@ -272,25 +286,32 @@ impl Transport {
                     }
                 }
 
-                log::info!("multicast socket is closed")
-            });
+                log::warn!("multicast receiver is closed, id={}", stream_id);
 
-            true
+                if let Some(receiver) = receiver.upgrade() {
+                    receiver.close();
+                }
+            });
         };
 
         // Create an srt configuration and carry stream information
         let mut opt = srt::Options::default();
         opt.fc = 32;
-        opt.latency = 20;
+        opt.latency = 30;
         opt.mtu = self.options.mtu as u32;
         opt.stream_id = Some(
             StreamInfo {
                 kind: SocketKind::Subscriber,
+                id: stream_id,
                 port: None,
-                id,
             }
             .encode(),
         );
+
+        // Assign a unique ID to each receiver
+        let index = self.index.get();
+        self.index
+            .update(if index == u32::MAX { 0 } else { index + 1 });
 
         // Create an srt connection to the server
         let sequence = Arc::new(AtomicU64::new(0));
@@ -298,59 +319,41 @@ impl Transport {
         let receiver = Arc::new(srt::Socket::connect(self.options.server, opt)?);
         log::info!("receiver connect to server={}", self.options.server);
 
-        if let Some(port) = self.publishs.read().unwrap().get(&id) {
-            if !create_mcast_receiver(
-                sequence.clone(),
-                Arc::downgrade(adapter),
-                self.options.multicast,
-                *port,
-            ) {
-                return Err(Error::other("failed to create multicast socket"));
-            }
-        } else {
-            // Assign a unique ID to each receiver
-            let index = self.index.get();
-            self.index
-                .update(if index == u32::MAX { 0 } else { index + 1 });
-
-            // Add a message receiver to the list
-            let (tx, rx) = channel();
-            self.channels.write().unwrap().insert(index, tx);
-
-            let local_id = id;
+        {
             let multicast = self.options.multicast;
-            let sequence_ = sequence.clone();
-            let receiver_ = Arc::downgrade(&receiver);
-            let adapter_ = Arc::downgrade(adapter);
-            thread::spawn(move || {
-                while let Ok(signal) = rx.recv() {
-                    match signal {
-                        Signal::Start { id, port } => {
-                            // Only process messages from the current receiving end
-                            if id == local_id {
-                                if !create_mcast_receiver(
-                                    sequence_.clone(),
-                                    adapter_.clone(),
-                                    multicast,
-                                    port,
-                                ) {
-                                    break;
+            let sequence = sequence.clone();
+            let adapter = Arc::downgrade(adapter);
+            let receiver = Arc::downgrade(&receiver);
+            if let Some(port) = self.publishs.read().unwrap().get(&stream_id) {
+                create_mcast_receiver(receiver, sequence, adapter, multicast, *port);
+            } else {
+                // Add a message receiver to the list
+                let (tx, rx) = channel();
+                self.channels.write().unwrap().insert(index, tx);
+
+                thread::spawn(move || {
+                    while let Ok(signal) = rx.recv() {
+                        match signal {
+                            Signal::Start { id, port } => {
+                                // Only process messages from the current receiving end
+                                if id == stream_id {
+                                    create_mcast_receiver(
+                                        receiver.clone(),
+                                        sequence.clone(),
+                                        adapter.clone(),
+                                        multicast,
+                                        port,
+                                    );
                                 }
                             }
+                            _ => (),
                         }
-                        _ => (),
                     }
-                }
-
-                log::warn!("multicast receiver is closed, id={}", id);
-
-                if let (Some(adapter), Some(receiver)) = (adapter_.upgrade(), receiver_.upgrade()) {
-                    adapter.close();
-                    receiver.close();
-                }
-            });
+                });
+            }
         }
 
+        let channels = self.channels.clone();
         let adapter_ = Arc::downgrade(adapter);
         thread::spawn(move || {
             let mut buf = [0u8; 2000];
@@ -391,11 +394,18 @@ impl Transport {
                 }
             }
 
-            log::warn!("srt receiver is closed, id={}", id);
+            log::warn!("srt receiver is closed, id={}", stream_id);
+
+            // Remove the sender, which is intended to stop the signal receiver thread.
+            let _ = channels.write().unwrap().remove(&index);
 
             if let Some(adapter) = adapter_.upgrade() {
                 adapter.close();
                 receiver.close();
+            }
+
+            if let Some(socket) = current_mcast_rceiver.lock().unwrap().take() {
+                socket.close()
             }
         });
 
