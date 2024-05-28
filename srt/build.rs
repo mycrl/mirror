@@ -41,13 +41,6 @@ fn main() -> anyhow::Result<()> {
     #[cfg(target_os = "linux")]
     println!("cargo:rustc-link-lib=stdc++");
 
-    if !is_exsit(&srt_dir) {
-        exec(
-            "git clone --branch v1.5.3 https://github.com/Haivision/srt",
-            &out_dir,
-        )?;
-    }
-
     if target.find("android").is_some() {
         if !is_exsit(&join(&srt_dir, "libsrt.a")) {
             exec(
@@ -77,10 +70,17 @@ fn main() -> anyhow::Result<()> {
         }
 
         println!("cargo:rustc-link-search=all={}", srt_dir);
-        println!("cargo:rustc-link-lib=srt");
+        println!("cargo:rustc-link-lib=static=srt");
         println!("cargo:rustc-link-lib=static=ssl");
         println!("cargo:rustc-link-lib=static=crypto");
     } else {
+        if !is_exsit(&srt_dir) {
+            exec(
+                "git clone --branch v1.5.3 https://github.com/Haivision/srt",
+                &out_dir,
+            )?;
+        }
+        
         if !is_exsit(&join(
             &srt_dir,
             if cfg!(windows) {
@@ -102,6 +102,11 @@ fn main() -> anyhow::Result<()> {
                         "-DENABLE_STATIC=true",
                         "-DENABLE_ENCRYPTION=false",
                         "-DENABLE_UNITTESTS=false",
+                        "-DENABLE_STDCXX_SYNC=true",
+                        "-DUSE_CXX_STD=20",
+                        "-DOPENSSL_USE_STATIC_LIBS=true",
+                        "-DUSE_STATIC_LIBSTDCXX=true",
+                        "-DENABLE_CXX_DEPS=true",
                     ]
                     .join(" ")
                 ),
@@ -118,13 +123,13 @@ fn main() -> anyhow::Result<()> {
                 join(&srt_dir, "./Release")
             );
 
-            println!("cargo:rustc-link-lib=srt_static");
+            println!("cargo:rustc-link-lib=static=srt_static");
         }
 
         #[cfg(not(target_os = "windows"))]
         {
             println!("cargo:rustc-link-search=all={}", srt_dir);
-            println!("cargo:rustc-link-lib=srt");
+            println!("cargo:rustc-link-lib=static=srt");
         }
     }
 
