@@ -1,32 +1,15 @@
-use std::{
-    ffi::{c_char, c_int},
-    io::Error,
-    mem::size_of,
-    net::SocketAddr,
-    os::raw::c_void,
-    sync::mpsc::{channel, Receiver, Sender},
-};
+use std::{ffi::c_int, io::Error, net::SocketAddr};
 
-use common::strings::Strings;
-use libc::sockaddr;
 use os_socketaddr::OsSocketAddr;
 
 use crate::{srt_getsockstate, SRT_SOCKSTATUS};
 
 use super::{
-    error, options::Options, socket::Socket, srt_bind, srt_close, srt_create_socket,
-    srt_getsockname, srt_listen, srt_listen_callback, SRTSOCKET, SRT_INVALID_SOCK,
+    error, options::Options, socket::Socket, srt_accept, srt_bind, srt_close, srt_create_socket,
+    srt_getsockname, srt_listen, SRTSOCKET, SRT_INVALID_SOCK,
 };
 
-#[derive(Debug)]
-pub struct SocketInfo {
-    pub addr: SocketAddr,
-    pub stream_id: Option<String>,
-}
-
 pub struct Server {
-    ctx: *mut Sender<(SRTSOCKET, SocketInfo)>,
-    rx: Receiver<(SRTSOCKET, SocketInfo)>,
     fd: SRTSOCKET,
     opt: Options,
 }
@@ -162,13 +145,7 @@ impl Server {
             return Err(error());
         }
 
-        let (tx, rx) = channel();
-        let ctx = Box::into_raw(Box::new(tx));
-        if unsafe { srt_listen_callback(fd, listener_fn, ctx as *mut _) } != 0 {
-            Err(error())
-        } else {
-            Ok(Self { fd, ctx, rx, opt })
-        }
+        Ok(Self { fd, opt })
     }
 
     /// Accepts a pending connection, then creates and returns a new socket or
@@ -213,17 +190,22 @@ impl Server {
     /// SRT_EPOLL_UPDATE) event is raised on the `lsn` socket when
     /// a new background connection is attached to the group, although it's
     /// usually for internal use only.
-    pub fn accept(&mut self) -> Result<(Socket, SocketInfo), Error> {
+    pub fn accept(&mut self) -> Result<(Socket, SocketAddr), Error> {
         let status = unsafe { srt_getsockstate(self.fd) };
         if status != SRT_SOCKSTATUS::SRTS_LISTENING {
             return Err(Error::other(format!("{:?}", status)));
         }
 
-        if let Ok((fd, info)) = self.rx.recv() {
-            Ok((Socket::new(fd, self.opt.clone()), info))
-        } else {
-            Err(error())
+        let mut addr = OsSocketAddr::new();
+        let mut addrlen = addr.capacity() as c_int;
+        let fd = unsafe { srt_accept(self.fd, addr.as_mut_ptr() as *mut _, &mut addrlen) };
+        if fd != SRT_INVALID_SOCK {
+            if let Some(addr) = addr.into() {
+                return Ok((Socket::new(fd, self.opt.clone()), addr));
+            }
         }
+
+        Err(error())
     }
 
     /// Extracts the address to which the socket was bound. Although you should
@@ -241,54 +223,17 @@ impl Server {
 
         addr.into()
     }
+
+    /// Closes the socket or group and frees all used resources. Note that
+    /// underlying UDP sockets may be shared between sockets, so these are
+    /// freed only with the last user closed.
+    pub fn close(&self) {
+        unsafe { srt_close(self.fd) };
+    }
 }
 
 impl Drop for Server {
     fn drop(&mut self) {
-        unsafe {
-            let _ = Box::from_raw(self.ctx);
-            srt_close(self.fd);
-        }
-    }
-}
-
-extern "C" fn listener_fn(
-    opaque: *mut c_void,
-    socket: SRTSOCKET,
-    _hs_version: c_int,
-    peeraddr: *const sockaddr,
-    stream_id: *const c_char,
-) -> c_int {
-    #[cfg(not(target_os = "windows"))]
-    use libc::sockaddr_in;
-
-    if socket == SRT_INVALID_SOCK {
-        return -1;
-    }
-
-    #[cfg(target_os = "windows")]
-    let size = size_of::<sockaddr>() as i32;
-
-    #[cfg(not(target_os = "windows"))]
-    let size = size_of::<sockaddr_in>() as u32;
-
-    let tx = unsafe { &*(opaque as *mut Sender<(SRTSOCKET, SocketInfo)>) };
-    if let Some(addr) = unsafe { OsSocketAddr::copy_from_raw(peeraddr as *const _, size) }.into() {
-        if tx
-            .send((
-                socket,
-                SocketInfo {
-                    stream_id: Strings::from(stream_id).to_string().ok(),
-                    addr,
-                },
-            ))
-            .is_ok()
-        {
-            0
-        } else {
-            -1
-        }
-    } else {
-        -1
+        self.close()
     }
 }

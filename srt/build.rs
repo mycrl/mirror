@@ -2,7 +2,7 @@
 
 use std::{env, fs, path::Path, process::Command};
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 
 fn is_exsit(dir: &str) -> bool {
     fs::metadata(dir).is_ok()
@@ -12,22 +12,23 @@ fn join(root: &str, next: &str) -> String {
     Path::new(root).join(next).to_str().unwrap().to_string()
 }
 
-#[cfg(not(target_os = "windows"))]
-fn exec(cmd: &str, work_dir: &str) -> Result<()> {
-    let _ = Command::new("/bin/bash")
-        .args(["-c", cmd])
+fn exec(command: &str, work_dir: &str) -> anyhow::Result<String> {
+    let output = Command::new(if cfg!(windows) { "powershell" } else { "bash" })
+        .arg(if cfg!(windows) { "-command" } else { "-c" })
+        .arg(if cfg!(windows) {
+            format!("$ProgressPreference = 'SilentlyContinue';{}", command)
+        } else {
+            command.to_string()
+        })
         .current_dir(work_dir)
-        .status()?;
-    Ok(())
-}
-
-#[cfg(target_os = "windows")]
-fn exec(cmd: &str, work_dir: &str) -> Result<()> {
-    let _ = Command::new("powershell")
-        .args(["-command", cmd])
-        .current_dir(work_dir)
-        .status()?;
-    Ok(())
+        .output()?;
+    if !output.status.success() {
+        Err(anyhow!("{}", unsafe {
+            String::from_utf8_unchecked(output.stderr)
+        }))
+    } else {
+        Ok(unsafe { String::from_utf8_unchecked(output.stdout) })
+    }
 }
 
 fn main() -> anyhow::Result<()> {
@@ -40,13 +41,6 @@ fn main() -> anyhow::Result<()> {
 
     #[cfg(target_os = "linux")]
     println!("cargo:rustc-link-lib=stdc++");
-
-    if !is_exsit(&srt_dir) {
-        exec(
-            "git clone --branch v1.5.3 https://github.com/Haivision/srt",
-            &out_dir,
-        )?;
-    }
 
     if target.find("android").is_some() {
         if !is_exsit(&join(&srt_dir, "libsrt.a")) {
@@ -81,6 +75,13 @@ fn main() -> anyhow::Result<()> {
         println!("cargo:rustc-link-lib=static=ssl");
         println!("cargo:rustc-link-lib=static=crypto");
     } else {
+        if !is_exsit(&srt_dir) {
+            exec(
+                "git clone --branch v1.5.3 https://github.com/Haivision/srt",
+                &out_dir,
+            )?;
+        }
+
         if !is_exsit(&join(
             &srt_dir,
             if cfg!(windows) {
@@ -115,7 +116,7 @@ fn main() -> anyhow::Result<()> {
                     ),
                     &srt_dir,
                 )?;
-    
+
                 exec("cmake --build . --config Release", &srt_dir)?;
             }
         }

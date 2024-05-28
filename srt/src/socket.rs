@@ -1,9 +1,8 @@
-use std::{io::Error, net::SocketAddr};
+use std::{ffi::c_int, io::Error, net::SocketAddr};
 
-use libc::c_int;
 use os_socketaddr::OsSocketAddr;
 
-use crate::{srt_getsockstate, SRT_SOCKSTATUS};
+use crate::{options::get_sock_opt_str, srt_getsockstate, SRT_SOCKOPT, SRT_SOCKSTATUS};
 
 use super::{
     error, options::Options, srt_close, srt_connect, srt_create_socket, srt_recv, srt_send,
@@ -18,6 +17,10 @@ pub struct Socket {
 impl Socket {
     pub(crate) fn new(fd: SRTSOCKET, opt: Options) -> Self {
         Self { opt, fd }
+    }
+
+    pub fn get_stream_id(&self) -> Option<String> {
+        get_sock_opt_str(self.fd, SRT_SOCKOPT::SRTO_STREAMID)
     }
 
     /// Connects a socket or a group to a remote party with a specified address

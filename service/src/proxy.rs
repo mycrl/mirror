@@ -25,8 +25,9 @@ pub fn start_server(config: Configure, route: Arc<Route>) -> Result<()> {
     let sockets = Arc::new(RwLock::new(HashMap::with_capacity(200)));
     let subscribers = Arc::new(RwLock::new(HashMap::with_capacity(200)));
 
-    while let Ok((socket, info)) = server.accept() {
-        log::info!("new srt socket, info={:?}", info);
+    while let Ok((socket, addr)) = server.accept() {
+        let stream_id = socket.get_stream_id();
+        log::info!("new srt socket, addr={:?}, stream_id={:?}", addr, stream_id);
 
         let route = route.clone();
         let socket = Arc::new(socket);
@@ -34,22 +35,21 @@ pub fn start_server(config: Configure, route: Arc<Route>) -> Result<()> {
         // Get the stream information carried in the srt link. If the stream information
         // does not exist or is invalid, the current connection is rejected. Skipping
         // this step directly will trigger the release of the link and close it.
-        let stream_info = if let Some(info) = info
-            .stream_id
+        let stream_info = if let Some(info) = stream_id
             .as_ref()
             .map(|it| StreamInfo::decode(it))
             .flatten()
         {
             info
         } else {
-            log::error!("invalid stream id, info={:?}", info);
+            log::error!("invalid stream id, addr={:?}", addr);
 
             continue;
         };
 
         log::info!(
             "accept a srt socket, addr={:?}, info={:?}",
-            info.addr,
+            addr,
             stream_info
         );
 
@@ -62,13 +62,13 @@ pub fn start_server(config: Configure, route: Arc<Route>) -> Result<()> {
             // If it is a subscriber, add the current connection to the subscription
             // connection pool
             if stream_info.kind == SocketKind::Subscriber {
-                sockets.write().unwrap().insert(info.addr, socket.clone());
+                sockets.write().unwrap().insert(addr, socket.clone());
                 subscribers
                     .write()
                     .unwrap()
                     .entry(stream_info.id)
                     .or_insert_with(|| HashSet::with_capacity(200))
-                    .insert(info.addr);
+                    .insert(addr);
             }
         }
 
@@ -121,11 +121,7 @@ pub fn start_server(config: Configure, route: Arc<Route>) -> Result<()> {
                 }
             }
 
-            log::info!(
-                "srt socket closed, addr={:?}, info={:?}",
-                info.addr,
-                stream_info
-            );
+            log::info!("srt socket closed, addr={:?}, info={:?}", addr, stream_info);
 
             let mut sockets = sockets.write().unwrap();
             let mut subscribers = subscribers.write().unwrap();
@@ -143,7 +139,7 @@ pub fn start_server(config: Configure, route: Arc<Route>) -> Result<()> {
             } else {
                 // Subscriber exits, deletes subscription group record
                 if let Some(items) = subscribers.get_mut(&stream_info.id) {
-                    items.remove(&info.addr);
+                    items.remove(&addr);
                 }
             }
 

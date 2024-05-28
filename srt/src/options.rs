@@ -1,8 +1,13 @@
-use std::{fmt::Debug, io::Error, mem::size_of};
+use std::{
+    ffi::{c_char, c_int},
+    fmt::Debug,
+    io::Error,
+    mem::size_of,
+};
 
-use libc::{c_char, c_int};
+use common::strings::Strings;
 
-use super::{error, srt_setsockflag, SRTSOCKET, SRT_SOCKOPT, SRT_TRANSTYPE};
+use super::{error, srt_getsockflag, srt_setsockflag, SRTSOCKET, SRT_SOCKOPT, SRT_TRANSTYPE};
 
 #[derive(Debug, Clone)]
 pub struct Options {
@@ -18,6 +23,7 @@ pub struct Options {
 impl Options {
     pub(crate) fn apply_socket(&self, fd: i32) -> Result<(), Error> {
         set_sock_opt(fd, SRT_SOCKOPT::SRTO_TRANSTYPE, &SRT_TRANSTYPE::SRTT_LIVE)?;
+        set_sock_opt(fd, SRT_SOCKOPT::SRTO_RCVSYN, &1_i32)?;
         set_sock_opt(fd, SRT_SOCKOPT::SRTO_TSBPDMODE, &1_i32)?;
         set_sock_opt(fd, SRT_SOCKOPT::SRTO_TLPKTDROP, &1_i32)?;
         set_sock_opt(fd, SRT_SOCKOPT::SRTO_REUSEADDR, &1_i32)?;
@@ -75,13 +81,28 @@ fn set_sock_opt<T: Sized + Debug + PartialEq>(
 }
 
 fn set_sock_opt_str(sock: SRTSOCKET, opt: SRT_SOCKOPT, flag: &str) -> Result<(), Error> {
-    if unsafe { srt_setsockflag(sock, opt, to_c_str(flag) as *const _, flag.len() as c_int) } == 0 {
+    if unsafe {
+        srt_setsockflag(
+            sock,
+            opt,
+            Strings::from(flag).as_ptr() as *const _,
+            flag.len() as c_int,
+        )
+    } == 0
+    {
         Ok(())
     } else {
         Err(error())
     }
 }
 
-fn to_c_str(str: &str) -> *const c_char {
-    std::ffi::CString::new(str).unwrap().into_raw()
+pub(crate) fn get_sock_opt_str(sock: SRTSOCKET, opt: SRT_SOCKOPT) -> Option<String> {
+    let mut optval: [c_char; 521] = [0; 521];
+    let mut optlen = 521;
+
+    if unsafe { srt_getsockflag(sock, opt, optval.as_mut_ptr() as *mut _, &mut optlen) } == 0 {
+        Strings::from(optval.as_ptr()).to_string().ok()
+    } else {
+        None
+    }
 }

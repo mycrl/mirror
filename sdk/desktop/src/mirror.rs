@@ -146,7 +146,7 @@ pub fn init(options: MirrorOptions) -> Result<()> {
 
     // #[cfg(debug_assertions)]
     // {
-        simple_logger::init_with_level(log::Level::Debug)?;
+    simple_logger::init_with_level(log::Level::Debug)?;
     // }
 
     *OPTIONS.write().unwrap() = options.clone();

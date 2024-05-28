@@ -14,7 +14,7 @@ const Profile = Args.release ? 'Release' : 'Debug'
 const Command = (cmd, options = {}) => new Promise((
     resolve, 
     reject, 
-    ps = exec(cmd,  {
+    ps = exec('$ProgressPreference = \'SilentlyContinue\';' + cmd,  {
         shell: 'powershell.exe',
         cwd: __dirname,
         ...options,
@@ -46,6 +46,7 @@ for (const path of [
 
 if (!fs.existsSync('./build/bin/data')) {
     if (!fs.existsSync('./build/distributions-windows.zip')) {
+        console.log('Start download distributions...')
         await Command('Invoke-WebRequest \
             -Uri https://github.com/mycrl/distributions/releases/download/distributions/distributions-windows.zip \
             -OutFile build\\distributions-windows.zip')

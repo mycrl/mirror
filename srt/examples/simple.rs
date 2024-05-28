@@ -20,10 +20,10 @@ fn main() -> Result<(), Error> {
     thread::spawn(move || {
         let mut server = Server::bind("0.0.0.0:8088".parse().unwrap(), opt_, 100).unwrap();
 
-        while let Ok((socket, info)) = server.accept() {
+        while let Ok((socket, addr)) = server.accept() {
             let bytes = bytes_.clone();
 
-            println!("new socket = {}", info.addr);
+            println!("new socket = {}", addr);
 
             thread::spawn(move || {
                 let mut buf = [0u8; 2000];

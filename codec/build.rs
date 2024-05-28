@@ -21,7 +21,11 @@ fn is_exsit(dir: &str) -> bool {
 fn exec(command: &str, work_dir: &str) -> anyhow::Result<String> {
     let output = Command::new(if cfg!(windows) { "powershell" } else { "bash" })
         .arg(if cfg!(windows) { "-command" } else { "-c" })
-        .arg(command)
+        .arg(if cfg!(windows) {
+            format!("$ProgressPreference = 'SilentlyContinue';{}", command)
+        } else {
+            command.to_string()
+        })
         .current_dir(work_dir)
         .output()?;
     if !output.status.success() {

@@ -345,17 +345,41 @@ extern "C" {
     ///   allows
     /// the listener socket to accept group connections
     pub(crate) fn srt_listen(s: SRTSOCKET, backlog: c_int) -> c_int;
-    pub(crate) fn srt_listen_callback(
-        s: SRTSOCKET,
-        hook_fn: extern "C" fn(
-            opaque: *mut c_void,
-            s: SRTSOCKET,
-            hs_version: c_int,
-            peeraddr: *const sockaddr,
-            streamid: *const c_char,
-        ) -> c_int,
-        hook_opaque: *mut c_void,
-    ) -> c_int;
+    /// Accepts a pending connection, then creates and returns a new socket or
+    /// group ID that handles this connection. The group and socket can be
+    /// distinguished by checking the SRTGROUP_MASK bit on the returned ID.
+    ///
+    /// lsn: the listener socket previously configured by srt_listen
+    /// addr: the IP address and port specification for the remote party
+    /// addrlen: INPUT: size of addr pointed object. OUTPUT: real size of the
+    /// returned object NOTE: addr is allowed to be NULL, in which case it's
+    /// understood that the application is not interested in the address from
+    /// which the connection originated. Otherwise addr should specify an object
+    /// into which the address will be written, and addrlen must also specify a
+    /// variable to contain the object size. Note also that in the case of group
+    /// connection only the initial connection that establishes the group
+    /// connection is returned, together with its address. As member connections
+    /// are added or broken within the group, you can obtain this information
+    /// through srt_group_data or the data filled by srt_sendmsg2 and
+    /// srt_recvmsg2.
+    ///
+    /// If the lsn listener socket is configured for blocking mode (SRTO_RCVSYN
+    /// set to true, default), the call will block until the incoming connection
+    /// is ready. Otherwise, the call always returns immediately. The
+    /// SRT_EPOLL_IN epoll event should be checked on the lsn socket prior to
+    /// calling this function in that case.
+    ///
+    /// If the pending connection is a group connection (initiated on the peer
+    /// side by calling the connection function using a group ID, and permitted
+    /// on the listener socket by the SRTO_GROUPCONNECT flag), then the value
+    /// returned is a group ID. This function then creates a new group, as well
+    /// as a new socket for this connection, that will be added to the group.
+    /// Once the group is created this way, further connections within the same
+    /// group, as well as sockets for them, will be created in the background.
+    /// The SRT_EPOLL_UPDATE event is raised on the lsn socket when a new
+    /// background connection is attached to the group, although it's usually
+    /// for internal use only.
+    pub(crate) fn srt_accept(s: SRTSOCKET, name: *mut sockaddr, name_len: *mut c_int) -> SRTSOCKET;
     /// Connects a socket or a group to a remote party with a specified
     /// address and port.
     ///
@@ -518,6 +542,16 @@ extern "C" {
     /// message** and **live mode** the successful return is always equal to
     /// `len`.
     pub(crate) fn srt_send(s: SRTSOCKET, buf: *const c_char, len: c_int) -> c_int;
+    /// Extracts the address to which the socket was bound. Although you
+    /// should know the address(es) that you have used for binding
+    /// yourself, this function can be useful for extracting the
+    /// local outgoing port number when it was specified as 0 with
+    /// binding for system autoselection. With this function you can
+    /// extract the port number after it has been autoselected.
+    pub(crate) fn srt_getsockname(s: SRTSOCKET, addr: *mut sockaddr, addr_len: *mut c_int)
+        -> c_int;
+    /// Gets the current status of the socket.
+    pub(crate) fn srt_getsockstate(s: SRTSOCKET) -> SRT_SOCKSTATUS;
     /// Sets a value for a socket option in the socket or group.
     ///
     /// The first version (srt_setsockopt) follows the BSD socket API
@@ -539,14 +573,26 @@ extern "C" {
         optval: *const c_void,
         optlen: c_int,
     ) -> c_int;
-    /// Extracts the address to which the socket was bound. Although you
-    /// should know the address(es) that you have used for binding
-    /// yourself, this function can be useful for extracting the
-    /// local outgoing port number when it was specified as 0 with
-    /// binding for system autoselection. With this function you can
-    /// extract the port number after it has been autoselected.
-    pub(crate) fn srt_getsockname(s: SRTSOCKET, addr: *mut sockaddr, addr_len: *mut c_int)
-        -> c_int;
-    /// Gets the current status of the socket.
-    pub(crate) fn srt_getsockstate(s: SRTSOCKET) -> SRT_SOCKSTATUS;
+    /// Gets the value of the given socket option (from a socket or a group).
+    ///
+    /// The first version (srt_getsockopt) follows the BSD socket API
+    /// convention, although the "level" parameter is ignored. The second
+    /// version (srt_getsockflag) omits the "level" parameter completely.
+    ///
+    /// Options correspond to various data types (see API-socket-options.md). A
+    /// variable optval of the appropriate data type has to be passed. The
+    /// integer value of optlen should originally contain the size of the optval
+    /// type provided; on return, it will be set to the size of the value
+    /// returned. For most options, it will be the size of an integer. Some
+    /// options, however, use types bool, int64_t, C string, etc. (see
+    /// API-socket-options.md).
+    ///
+    /// The application is responsible for allocating sufficient memory space as
+    /// defined and pointed to by optval.
+    pub(crate) fn srt_getsockflag(
+        s: SRTSOCKET,
+        opt: SRT_SOCKOPT,
+        optval: *mut c_void,
+        optlen: *mut c_int,
+    ) -> c_int;
 }
