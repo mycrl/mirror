@@ -15,8 +15,7 @@ pub fn start_server(config: Configure, route: Arc<Route>) -> Result<()> {
     // the delay is set to the minimum delay without considering network factors.
     let mut opt = Options::default();
     opt.mtu = config.mtu as u32;
-    opt.latency = 20;
-    opt.fc = 32;
+    opt.latency = 30;
 
     // Start the srt server
     let mut server = Server::bind(config.bind, opt, 100)?;
@@ -79,44 +78,53 @@ pub fn start_server(config: Configure, route: Arc<Route>) -> Result<()> {
             let mut buf = [0u8; 2000];
             let mut closed = Vec::with_capacity(100);
 
-            while let Ok(size) = socket.read(&mut buf) {
-                if size == 0 {
-                    break;
-                }
-
-                // Subscribers are not allowed to write any information to the server!
-                if stream_info.kind == SocketKind::Subscriber {
-                    break;
-                }
-
-                closed.clear();
-
-                {
-                    let sockets = sockets.read().unwrap();
-                    let subscribers = subscribers.read().unwrap();
-
-                    // Forwards all packets sent by the publisher to all subscribers of the same
-                    // channel
-                    if let Some(items) = subscribers.get(&stream_info.id) {
-                        for addr in items.iter() {
-                            if let Some(socket) = sockets.get(addr) {
-                                if socket.send(&buf[..size]).is_err() {
-                                    closed.push(*addr);
-
-                                    log::error!("not send a buf to srt socket, addr={:?}", addr);
+            loop {
+                match socket.read(&mut buf) {
+                    Ok(size) => {
+                        if size == 0 {
+                            break;
+                        }
+        
+                        // Subscribers are not allowed to write any information to the server!
+                        if stream_info.kind == SocketKind::Subscriber {
+                            break;
+                        }
+        
+                        closed.clear();
+        
+                        {
+                            let sockets = sockets.read().unwrap();
+                            let subscribers = subscribers.read().unwrap();
+        
+                            // Forwards all packets sent by the publisher to all subscribers of the same
+                            // channel
+                            if let Some(items) = subscribers.get(&stream_info.id) {
+                                for addr in items.iter() {
+                                    if let Some(socket) = sockets.get(addr) {
+                                        if let Err(e) = socket.send(&buf[..size]) {
+                                            closed.push(*addr);
+        
+                                            log::warn!("not send a buf to srt socket, addr={:?}, err={:?}", addr, e);
+                                        }
+                                    }
                                 }
                             }
                         }
-                    }
-                }
-
-                // Some subscribers have expired, clean up all expired subscribers
-                if !closed.is_empty() {
-                    let mut sockets = sockets.write().unwrap();
-                    for addr in &closed {
-                        if let Some(socket) = sockets.remove(addr) {
-                            socket.close()
+        
+                        // Some subscribers have expired, clean up all expired subscribers
+                        if !closed.is_empty() {
+                            let mut sockets = sockets.write().unwrap();
+                            for addr in &closed {
+                                if let Some(socket) = sockets.remove(addr) {
+                                    socket.close()
+                                }
+                            }
                         }
+                    },
+                    Err(e) => {
+                        log::warn!("not recv a buf to srt socket, addr={:?}, err={:?}", addr, e);
+
+                        break;
                     }
                 }
             }

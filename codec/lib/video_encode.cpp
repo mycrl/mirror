@@ -46,6 +46,9 @@ struct VideoEncoder* codec_create_video_encoder(struct VideoEncoderSettings* set
 	codec->context->width = settings->width;
 	codec->context->height = settings->height;
 	codec->context->bit_rate = settings->bit_rate;
+    codec->context->rc_max_rate = settings->bit_rate;
+    codec->context->rc_min_rate = settings->bit_rate;
+    codec->context->rc_buffer_size = settings->bit_rate;
 	codec->context->framerate = av_make_q(settings->frame_rate, 1);
 	codec->context->time_base = av_make_q(1, settings->frame_rate);
 	codec->context->pkt_timebase = av_make_q(1, settings->frame_rate);
@@ -54,14 +57,17 @@ struct VideoEncoder* codec_create_video_encoder(struct VideoEncoderSettings* set
 	auto name = std::string(settings->codec_name);
 	if (name == "h264_qsv")
 	{
-		av_opt_set_int(codec->context->priv_data, "async_depth", 1, 0);
+        av_opt_set_int(codec->context->priv_data, "async_depth", 1, 0);
+        av_opt_set_int(codec->context->priv_data, "low_power", 1 /* true */, 0);
 		av_opt_set_int(codec->context->priv_data, "preset", 7 /* veryfast */, 0);
 		av_opt_set_int(codec->context->priv_data, "scenario", 1 /* displayremoting */, 0);
 	    av_opt_set_int(codec->context->priv_data, "look_ahead", 0 /* false */, 0);
-		av_opt_set_int(codec->context->priv_data, "bitrate_limit", 1 /* true */, 0);
-		av_opt_set_int(codec->context->priv_data, "mbbrc", 1 /* true */, 0);
-		av_opt_set_int(codec->context->priv_data, "forced_idr", 1 /* true */, 0);
 		av_opt_set_int(codec->context->priv_data, "skip_frame", 3 /* brc_only */, 0);
+        av_opt_set_int(codec->context->priv_data, "low_delay_brc", 1 /* true */, 0);
+        av_opt_set_int(codec->context->priv_data, "bitrate_limit", 1 /* true */, 0);
+        av_opt_set_int(codec->context->priv_data, "max_frame_size", codec->context->rc_max_rate / 8, 0);
+        av_opt_set_int(codec->context->priv_data, "max_frame_size_i", codec->context->rc_max_rate / 8, 0);
+        av_opt_set_int(codec->context->priv_data, "max_frame_size_p", codec->context->rc_max_rate / 8, 0);
 	}
 	else if (name == "h264_nvenc")
 	{
@@ -71,7 +77,6 @@ struct VideoEncoder* codec_create_video_encoder(struct VideoEncoderSettings* set
 		av_opt_set_int(codec->context->priv_data, "cbr", 1 /* true */, 0);
 		av_opt_set_int(codec->context->priv_data, "preset", 7 /* low latency */, 0);
 		av_opt_set_int(codec->context->priv_data, "tune", 3 /* ultra low latency */, 0);
-		av_opt_set_int(codec->context->priv_data, "cq", 30, 0);
 	}
 	else if (name == "libx264")
 	{
