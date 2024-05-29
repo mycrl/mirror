@@ -144,7 +144,6 @@ impl Transport {
 
         // Create an srt configuration and carry stream information
         let mut opt = srt::Options::default();
-        opt.fc = 32;
         opt.latency = 30;
         opt.mtu = self.options.mtu as u32;
         opt.stream_id = Some(
@@ -296,7 +295,6 @@ impl Transport {
 
         // Create an srt configuration and carry stream information
         let mut opt = srt::Options::default();
-        opt.fc = 32;
         opt.latency = 30;
         opt.mtu = self.options.mtu as u32;
         opt.stream_id = Some(

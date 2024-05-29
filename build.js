@@ -64,7 +64,7 @@ fs.copyFileSync('./examples/desktop/receiver/main.cpp', './build/examples/receiv
 fs.copyFileSync('./sdk/desktop/include/mirror.h', './build/include/mirror.h')
 fs.copyFileSync('./common/include/frame.h', './build/include/frame.h')
 
-await Command(`cargo build ${Args.release ? '--release' : ''} ${Args.ffmpeg4 ? '--features ffmpeg4' : ''}`)
+await Command(`cargo build ${Args.release ? '--release' : ''} ${Args.ffmpeg4 ? '--features ffmpeg4' : ''} -p mirror`)
 
 fs.copyFileSync(`./target/${Profile.toLowerCase()}/mirror.dll`, './build/bin/mirror.dll')
 fs.copyFileSync(`./target/${Profile.toLowerCase()}/mirror.dll.lib`, './build/lib/mirror.dll.lib')

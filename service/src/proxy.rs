@@ -84,33 +84,37 @@ pub fn start_server(config: Configure, route: Arc<Route>) -> Result<()> {
                         if size == 0 {
                             break;
                         }
-        
+
                         // Subscribers are not allowed to write any information to the server!
                         if stream_info.kind == SocketKind::Subscriber {
                             break;
                         }
-        
+
                         closed.clear();
-        
+
                         {
                             let sockets = sockets.read().unwrap();
                             let subscribers = subscribers.read().unwrap();
-        
-                            // Forwards all packets sent by the publisher to all subscribers of the same
-                            // channel
+
+                            // Forwards all packets sent by the publisher to all subscribers of the
+                            // same channel
                             if let Some(items) = subscribers.get(&stream_info.id) {
                                 for addr in items.iter() {
                                     if let Some(socket) = sockets.get(addr) {
                                         if let Err(e) = socket.send(&buf[..size]) {
                                             closed.push(*addr);
-        
-                                            log::warn!("not send a buf to srt socket, addr={:?}, err={:?}", addr, e);
+
+                                            log::warn!(
+                                                "not send a buf to srt socket, addr={:?}, err={:?}",
+                                                addr,
+                                                e
+                                            );
                                         }
                                     }
                                 }
                             }
                         }
-        
+
                         // Some subscribers have expired, clean up all expired subscribers
                         if !closed.is_empty() {
                             let mut sockets = sockets.write().unwrap();
@@ -120,7 +124,7 @@ pub fn start_server(config: Configure, route: Arc<Route>) -> Result<()> {
                                 }
                             }
                         }
-                    },
+                    }
                     Err(e) => {
                         log::warn!("not recv a buf to srt socket, addr={:?}, err={:?}", addr, e);
 

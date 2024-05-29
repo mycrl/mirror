@@ -34,7 +34,9 @@ fn exec(command: &str, work_dir: &str) -> anyhow::Result<String> {
 fn main() -> anyhow::Result<()> {
     let target = env::var("TARGET")?;
     let out_dir = env::var("OUT_DIR")?;
-    let srt_dir = join(&out_dir, "srt");
+    let is_debug = env::var("DEBUG")
+        .map(|label| label == "true")
+        .unwrap_or(true);
 
     #[cfg(target_os = "macos")]
     println!("cargo:rustc-link-lib=c++");
@@ -43,38 +45,39 @@ fn main() -> anyhow::Result<()> {
     println!("cargo:rustc-link-lib=stdc++");
 
     if target.find("android").is_some() {
-        if !is_exsit(&join(&srt_dir, "libsrt.a")) {
+        if !is_exsit(&join(&out_dir, "libsrt.a")) {
             exec(
                 "wget \
                 -O libsrt.a \
                 https://github.com/mycrl/distributions/releases/download/distributions/libsrt-arm64-v8a.a",
-                &srt_dir,
+                &out_dir,
             )?;
         }
 
-        if !is_exsit(&join(&srt_dir, "libssl.a")) {
+        if !is_exsit(&join(&out_dir, "libssl.a")) {
             exec(
                 "wget \
                 -O libssl.a \
                 https://github.com/mycrl/distributions/releases/download/distributions/libssl-arm64-v8a.a",
-                &srt_dir,
+                &out_dir,
             )?;
         }
 
-        if !is_exsit(&join(&srt_dir, "libcrypto.a")) {
+        if !is_exsit(&join(&out_dir, "libcrypto.a")) {
             exec(
                 "wget \
                 -O libcrypto.a \
                 https://github.com/mycrl/distributions/releases/download/distributions/libcrypto-arm64-v8a.a",
-                &srt_dir,
+                &out_dir,
             )?;
         }
 
-        println!("cargo:rustc-link-search=all={}", srt_dir);
+        println!("cargo:rustc-link-search=all={}", out_dir);
         println!("cargo:rustc-link-lib=srt");
         println!("cargo:rustc-link-lib=static=ssl");
         println!("cargo:rustc-link-lib=static=crypto");
     } else {
+        let srt_dir = join(&out_dir, "srt");
         if !is_exsit(&srt_dir) {
             exec(
                 "git clone --branch v1.5.3 https://github.com/Haivision/srt",
@@ -103,14 +106,15 @@ fn main() -> anyhow::Result<()> {
                         "cmake {} .",
                         [
                             "-DCMAKE_BUILD_TYPE=Release",
-                            "-DENABLE_APPS=false",
-                            "-DENABLE_BONDING=true",
-                            "-DENABLE_CODE_COVERAGE=false",
-                            "-DENABLE_DEBUG=false",
-                            "-DENABLE_SHARED=false",
-                            "-DENABLE_STATIC=true",
-                            "-DENABLE_ENCRYPTION=false",
-                            "-DENABLE_UNITTESTS=false",
+                            "-DENABLE_APPS=OFF",
+                            "-DENABLE_BONDING=ON",
+                            "-DENABLE_CODE_COVERAGE=OFF",
+                            &format!("-DENABLE_DEBUG={}", if is_debug { "ON" } else { "OFF" }),
+                            "-DENABLE_SHARED=OFF",
+                            "-DENABLE_STATIC=ON",
+                            "-DENABLE_ENCRYPTION=OFF",
+                            "-DENABLE_UNITTESTS=OFF",
+                            "-DENABLE_STDCXX_SYNC=ON"
                         ]
                         .join(" ")
                     ),
