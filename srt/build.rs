@@ -38,12 +38,6 @@ fn main() -> anyhow::Result<()> {
         .map(|label| label == "true")
         .unwrap_or(true);
 
-    #[cfg(target_os = "macos")]
-    println!("cargo:rustc-link-lib=c++");
-
-    #[cfg(target_os = "linux")]
-    println!("cargo:rustc-link-lib=stdc++");
-
     if target.find("android").is_some() {
         if !is_exsit(&join(&out_dir, "libsrt.a")) {
             exec(
@@ -73,9 +67,10 @@ fn main() -> anyhow::Result<()> {
         }
 
         println!("cargo:rustc-link-search=all={}", out_dir);
-        println!("cargo:rustc-link-lib=srt");
+        println!("cargo:rustc-link-lib=static=srt");
         println!("cargo:rustc-link-lib=static=ssl");
         println!("cargo:rustc-link-lib=static=crypto");
+        println!("cargo:rustc-link-lib=c++");
     } else {
         let srt_dir = join(&out_dir, "srt");
         if !is_exsit(&srt_dir) {
@@ -105,11 +100,11 @@ fn main() -> anyhow::Result<()> {
                     &format!(
                         "cmake {} .",
                         [
+                            &format!("-DENABLE_DEBUG={}", if is_debug { "ON" } else { "OFF" }),
                             "-DCMAKE_BUILD_TYPE=Release",
                             "-DENABLE_APPS=OFF",
                             "-DENABLE_BONDING=ON",
                             "-DENABLE_CODE_COVERAGE=OFF",
-                            &format!("-DENABLE_DEBUG={}", if is_debug { "ON" } else { "OFF" }),
                             "-DENABLE_SHARED=OFF",
                             "-DENABLE_STATIC=ON",
                             "-DENABLE_ENCRYPTION=OFF",
@@ -139,6 +134,12 @@ fn main() -> anyhow::Result<()> {
         {
             println!("cargo:rustc-link-search=all={}", srt_dir);
             println!("cargo:rustc-link-lib=srt");
+
+            #[cfg(target_os = "macos")]
+            println!("cargo:rustc-link-lib=c++");
+
+            #[cfg(target_os = "linux")]
+            println!("cargo:rustc-link-lib=stdc++");
         }
     }
 

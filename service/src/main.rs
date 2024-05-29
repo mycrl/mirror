@@ -19,10 +19,12 @@ pub struct Configure {
     pub mtu: usize,
 }
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     // Parse command line parameters. Note that if the command line parameters are
     // incorrect, panic will occur.
     let config = Configure::parse();
+    let route = Arc::new(Route::default());
 
     // Initialize srt and logger
     srt::startup();
@@ -30,21 +32,20 @@ fn main() -> Result<()> {
 
     log::info!("configure: {:?}", config);
 
-    let route = Arc::new(Route::default());
+    // Start the forwarding server
     let route_ = route.clone();
+    let config_ = config.clone();
+    thread::spawn(move || {
+        if proxy::start_server(config_, route_).is_err() {
+            exit(-11);
+        }
+    });
 
     // Start the signaling server. If the signaling server exits, the entire process
     // will exit. This is because if the signaling exits, it is meaningless to
     // continue running.
-    thread::spawn(move || {
-        if let Err(e) = service::signal::start_server(config.bind, route_) {
-            log::error!("{:?}", e);
-            exit(-1);
-        }
-    });
-
-    // Start the forwarding server
-    proxy::start_server(config, route)?;
+    service::signal::start_server(config.bind, route).await?;
     srt::cleanup();
+
     Ok(())
 }

@@ -1,12 +1,11 @@
-use std::{
-    io::{Error, Write},
-    net::{SocketAddr, TcpListener},
-    sync::Arc,
-    thread,
-};
+use std::{io::Error, net::SocketAddr, sync::Arc};
 
 use bytes::{BufMut, Bytes, BytesMut};
 use serde::{Deserialize, Serialize};
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    net::TcpListener,
+};
 
 use crate::route::Route;
 
@@ -45,19 +44,20 @@ impl Signal {
     }
 }
 
-pub fn start_server(bind: SocketAddr, route: Arc<Route>) -> Result<(), Error> {
-    let listener = TcpListener::bind(bind)?;
-    while let Ok((mut socket, addr)) = listener.accept() {
+pub async fn start_server(bind: SocketAddr, route: Arc<Route>) -> Result<(), Error> {
+    let listener = TcpListener::bind(bind).await?;
+    while let Ok((mut socket, addr)) = listener.accept().await {
         log::info!("new signal socket, addr={}", addr);
 
         let route = route.clone();
-        thread::spawn(move || {
+        tokio::spawn(async move {
             // Every time a new connection comes online, notify the current link of all
             // published channels.
             {
                 for (id, port) in route.get_channels() {
                     if socket
                         .write_all(&Signal::Start { id, port }.encode())
+                        .await
                         .is_err()
                     {
                         return;
@@ -68,10 +68,21 @@ pub fn start_server(bind: SocketAddr, route: Arc<Route>) -> Result<(), Error> {
             // todo: The link is closed and the thread cannot be released in time
 
             // Every time a new publisher comes online, the current connection is notified
-            let changer = route.get_changer();
-            while let Some(signal) = changer.change() {
-                if socket.write_all(&signal.encode()).is_err() {
-                    break;
+            let mut buf = [0u8; 1024];
+            let mut changer = route.get_changer();
+            loop {
+                tokio::select! {
+                    Some(signal) = changer.change() => {
+                        if socket.write_all(&signal.encode()).await.is_err() {
+                            break;
+                        }
+                    }
+                    Ok(size) = socket.read(&mut buf) => {
+                        if size == 0 {
+                            break;
+                        }
+                    }
+                    else => break
                 }
             }
 
