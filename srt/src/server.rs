@@ -11,7 +11,6 @@ use super::{
 
 pub struct Server {
     fd: SRTSOCKET,
-    opt: Options,
 }
 
 unsafe impl Send for Server {}
@@ -145,7 +144,7 @@ impl Server {
             return Err(error());
         }
 
-        Ok(Self { fd, opt })
+        Ok(Self { fd })
     }
 
     /// Accepts a pending connection, then creates and returns a new socket or
@@ -201,7 +200,7 @@ impl Server {
         let fd = unsafe { srt_accept(self.fd, addr.as_mut_ptr() as *mut _, &mut addrlen) };
         if fd != SRT_INVALID_SOCK {
             if let Some(addr) = addr.into() {
-                return Ok((Socket::new(fd, self.opt.clone()), addr));
+                return Ok((Socket::new(fd), addr));
             }
         }
 

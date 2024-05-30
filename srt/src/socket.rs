@@ -2,7 +2,7 @@ use std::{ffi::c_int, io::Error, net::SocketAddr};
 
 use os_socketaddr::OsSocketAddr;
 
-use crate::{options::get_sock_opt_str, srt_getsockstate, SRT_SOCKOPT, SRT_SOCKSTATUS};
+use crate::{options::get_sock_opt_str, SRT_SOCKOPT};
 
 use super::{
     error, options::Options, srt_close, srt_connect, srt_create_socket, srt_recv, srt_send,
@@ -11,12 +11,11 @@ use super::{
 
 pub struct Socket {
     fd: SRTSOCKET,
-    opt: Options,
 }
 
 impl Socket {
-    pub(crate) fn new(fd: SRTSOCKET, opt: Options) -> Self {
-        Self { opt, fd }
+    pub(crate) fn new(fd: SRTSOCKET) -> Self {
+        Self { fd }
     }
 
     pub fn get_stream_id(&self) -> Option<String> {
@@ -97,7 +96,7 @@ impl Socket {
             return Err(error());
         }
 
-        Ok(Self::new(fd, opt))
+        Ok(Self::new(fd))
     }
 
     /// Extracts the payload waiting to be received. Note that
@@ -154,11 +153,6 @@ impl Socket {
     /// time to play has come for a message that is next to the currently
     /// lost one, it will be delivered and the lost one dropped.
     pub fn read(&self, buf: &mut [u8]) -> Result<usize, Error> {
-        let status = unsafe { srt_getsockstate(self.fd) };
-        if status != SRT_SOCKSTATUS::SRTS_CONNECTED {
-            return Err(Error::other(format!("{:?}", status)));
-        }
-
         let ret = unsafe { srt_recv(self.fd, buf.as_mut_ptr() as *mut _, buf.len() as c_int) };
         if ret < 0 {
             Err(error())
@@ -208,39 +202,17 @@ impl Socket {
     /// rest of the buffer next time to send it completely. In both **file/
     /// message** and **live mode** the successful return is always equal to
     /// `len`.
-    pub fn send(&self, mut buf: &[u8]) -> Result<(), Error> {
+    pub fn send(&self, buf: &[u8]) -> Result<(), Error> {
         if buf.len() == 0 {
             return Ok(());
         }
 
-        let status = unsafe { srt_getsockstate(self.fd) };
-        if status != SRT_SOCKSTATUS::SRTS_CONNECTED {
-            return Err(Error::other(format!("{:?}", status)));
-        }
-
-        while !buf.is_empty() {
-            buf = &buf[self.send_with_sized(buf)?..];
-        }
-
-        Ok(())
-    }
-
-    fn send_with_sized(&self, buf: &[u8]) -> Result<usize, Error> {
-        if buf.len() == 0 {
-            return Ok(0);
-        }
-
-        let status = unsafe { srt_getsockstate(self.fd) };
-        if status != SRT_SOCKSTATUS::SRTS_CONNECTED {
-            return Err(Error::other(format!("{:?}", status)));
-        }
-
-        let size = std::cmp::min(buf.len(), self.opt.max_pkt_size());
-        let ret = unsafe { srt_send(self.fd, buf.as_ptr() as *const _, size as c_int) } as usize;
-        if ret != size {
+        if unsafe { srt_send(self.fd, buf.as_ptr() as *const _, buf.len() as c_int) } as usize
+            != buf.len()
+        {
             Err(error())
         } else {
-            Ok(ret as usize)
+            Ok(())
         }
     }
 

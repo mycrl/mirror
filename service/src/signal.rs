@@ -65,8 +65,6 @@ pub async fn start_server(bind: SocketAddr, route: Arc<Route>) -> Result<(), Err
                 }
             }
 
-            // todo: The link is closed and the thread cannot be released in time
-
             // Every time a new publisher comes online, the current connection is notified
             let mut buf = [0u8; 1024];
             let mut changer = route.get_changer();

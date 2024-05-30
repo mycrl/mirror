@@ -47,6 +47,7 @@ pub struct AudioEncodePacket<'a> {
     codec: *const c_void,
     pub buffer: &'a [u8],
     pub flags: i32,
+    pub timestamp: u64,
 }
 
 impl Drop for AudioEncodePacket<'_> {
@@ -60,6 +61,7 @@ impl<'a> AudioEncodePacket<'a> {
         let raw = unsafe { &*ptr };
         Self {
             buffer: unsafe { std::slice::from_raw_parts(raw.buffer, raw.len) },
+            timestamp: raw.timestamp,
             flags: raw.flags,
             codec,
         }

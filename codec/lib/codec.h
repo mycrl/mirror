@@ -30,6 +30,7 @@ struct EncodePacket
 	uint8_t* buffer;
 	size_t len;
 	int flags;
+    uint64_t timestamp;
 };
 
 struct VideoEncoderSettings

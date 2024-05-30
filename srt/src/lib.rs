@@ -190,6 +190,21 @@ pub(crate) enum SRT_SOCKOPT {
     SRTO_E_SIZE,
 }
 
+#[repr(C)]
+#[allow(unused)]
+#[allow(non_camel_case_types)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SRT_LOG_LEVEL {
+    LOG_EMERG = 0,
+    LOG_ALERT,
+    LOG_CRIT,
+    LOG_ERR,
+    LOG_WARNING,
+    LOG_NOTICE,
+    LOG_INFO,
+    LOG_DEBUG,
+}
+
 extern "C" {
     pub(crate) fn srt_getlasterror_str() -> *const c_char;
     /// This function shall be called at the start of an application that

@@ -65,6 +65,7 @@ pub struct VideoEncodePacket<'a> {
     codec: *const c_void,
     pub buffer: &'a [u8],
     pub flags: i32,
+    pub timestamp: u64,
 }
 
 impl Drop for VideoEncodePacket<'_> {
@@ -78,6 +79,7 @@ impl<'a> VideoEncodePacket<'a> {
         let raw = unsafe { &*ptr };
         Self {
             buffer: unsafe { std::slice::from_raw_parts(raw.buffer, raw.len) },
+            timestamp: raw.timestamp,
             flags: raw.flags,
             codec,
         }

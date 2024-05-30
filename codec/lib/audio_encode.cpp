@@ -26,12 +26,14 @@ struct AudioEncoder* codec_create_audio_encoder(struct AudioEncoderSettings* set
 		return nullptr;
 	}
 
-	codec->context->channels = 2;
+    codec->context->channels = 1;
+    codec->context->sample_fmt = AV_SAMPLE_FMT_S16;
+    codec->context->channel_layout = AV_CH_LAYOUT_MONO;
+    codec->context->flags = AV_CODEC_FLAG_LOW_DELAY;
+
 	codec->context->bit_rate = settings->bit_rate;
 	codec->context->sample_rate = settings->sample_rate;
-	codec->context->channel_layout = AV_CH_LAYOUT_STEREO;
-	codec->context->sample_fmt = AV_SAMPLE_FMT_S16;
-
+	
 	if (avcodec_open2(codec->context, codec->codec, nullptr) != 0)
 	{
 		codec_release_audio_encoder(codec);
@@ -112,6 +114,7 @@ struct EncodePacket* codec_audio_encoder_read_packet(struct AudioEncoder* codec)
 	codec->output_packet->buffer = codec->packet->data;
 	codec->output_packet->len = codec->packet->size;
 	codec->output_packet->flags = codec->packet->flags;
+    codec->output_packet->timestamp = codec->packet->pts;
 	return codec->output_packet;
 }
 

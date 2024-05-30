@@ -226,7 +226,7 @@ impl AVFrameSink for SenderObserver {
                 while let Some(packet) = self.video_encoder.read() {
                     adapter.send(
                         Bytes::copy_from_slice(packet.buffer),
-                        StreamBufferInfo::Video(packet.flags, 0),
+                        StreamBufferInfo::Video(packet.flags, packet.timestamp),
                     );
                 }
             }
@@ -242,7 +242,7 @@ impl AVFrameSink for SenderObserver {
                     while let Some(packet) = self.audio_encoder.read() {
                         adapter.send(
                             Bytes::copy_from_slice(packet.buffer),
-                            StreamBufferInfo::Audio(packet.flags, 0),
+                            StreamBufferInfo::Audio(packet.flags, packet.timestamp),
                         );
                     }
                 }

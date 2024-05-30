@@ -55,7 +55,7 @@ impl Default for Options {
             max_bandwidth: -1,
             stream_id: None,
             timeout: 5000,
-            latency: 120,
+            latency: 20,
             mtu: 1400,
             fc: 25600,
         }

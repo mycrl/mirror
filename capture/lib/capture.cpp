@@ -201,7 +201,7 @@ int capture_initialization()
 	obs_add_raw_video_callback(&video_scale_info, raw_video_callback, nullptr);
 
 	struct audio_convert_info audio_convert_info;
-	audio_convert_info.speakers = SPEAKERS_STEREO;
+	audio_convert_info.speakers = SPEAKERS_MONO;
 	audio_convert_info.format = AUDIO_FORMAT_16BIT;
 	audio_convert_info.samples_per_sec = GLOBAL.audio_info.samples_per_sec;
 	obs_add_raw_audio_callback(1, &audio_convert_info, raw_audio_callback, nullptr);
