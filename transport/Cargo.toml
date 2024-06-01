@@ -11,12 +11,3 @@ multicast = { path = "../multicast" }
 common = { path = "../common" }
 service = { path = "../service" }
 smallvec = "1.13.2"
-
-[target.'cfg(target_os = "windows")'.dev-dependencies]
-libyuv = "0.1.2"
-
-[dev-dependencies]
-clap = { version = "4", features = ["derive", "env"] }
-codec = { path = "../codec" }
-anyhow = "1.0.79"
-simple_logger = "4"

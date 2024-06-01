@@ -25,15 +25,15 @@ use mirror::{
 )]
 struct Args {
     #[arg(long)]
-    kind: String,
+    server: String,
 }
 
 #[cfg(any(target_os = "windows", target_os = "linux"))]
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
-    let server = CString::new("127.0.0.1:8080")?;
-    let multicast = CString::new("239.0.0.1")?;
 
+    let server = CString::new(args.server)?;
+    let multicast = CString::new("239.0.0.1")?;
     mirror_init(RawMirrorOptions {
         multicast: multicast.as_ptr(),
         server: server.as_ptr(),
@@ -42,10 +42,10 @@ fn main() -> anyhow::Result<()> {
             encoder: unsafe { codec_find_video_encoder() },
             decoder: unsafe { codec_find_video_decoder() },
             frame_rate: 30,
-            width: 1280,
-            height: 720,
-            bit_rate: 500 * 1024 * 8,
-            key_frame_interval: 10,
+            width: 1920,
+            height: 1080,
+            bit_rate: 200 * 1024 * 8,
+            key_frame_interval: 30,
         },
         audio: RawAudioOptions {
             sample_rate: 48000,
@@ -54,42 +54,24 @@ fn main() -> anyhow::Result<()> {
     });
 
     let mirror = mirror_create();
-    if args.kind == "sender" {
-        let devices = mirror_get_devices(DeviceKind::Screen);
-        mirror_set_input_device(
-            &unsafe { std::slice::from_raw_parts(devices.list, devices.size) }[0],
-        );
+    let devices = mirror_get_devices(DeviceKind::Screen);
+    mirror_set_input_device(&unsafe { std::slice::from_raw_parts(devices.list, devices.size) }[0]);
 
-        mirror_drop_devices(&devices);
+    mirror_drop_devices(&devices);
 
-        let sender = mirror_create_sender(
-            mirror,
-            0,
-            RawFrameSink {
-                video: None,
-                audio: None,
-                close: None,
-                ctx: null(),
-            },
-        );
+    let sender = mirror_create_sender(
+        mirror,
+        0,
+        RawFrameSink {
+            video: None,
+            audio: None,
+            close: None,
+            ctx: null(),
+        },
+    );
 
-        thread::sleep(Duration::from_secs(9999));
-        mirror_close_sender(sender);
-    } else {
-        let receiver = mirror_create_receiver(
-            mirror,
-            0,
-            RawFrameSink {
-                video: None,
-                audio: None,
-                close: None,
-                ctx: null(),
-            },
-        );
-
-        thread::sleep(Duration::from_secs(9999));
-        mirror_close_receiver(receiver);
-    }
+    thread::sleep(Duration::from_secs(9999));
+    mirror_close_sender(sender);
 
     mirror_drop(mirror);
     mirror_quit();
