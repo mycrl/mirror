@@ -97,7 +97,7 @@ void update_monitor_settings(struct DeviceDescription* description)
 #ifdef WIN32
 	obs_data_set_bool(settings, "force_sdr", true);
 	obs_data_set_bool(settings, "compatibility", true);
-	obs_data_set_bool(settings, "capture_cursor", true);
+	obs_data_set_bool(settings, "capture_cursor", false);
 	obs_data_set_int(settings, "method", 2 /* METHOD_WGC */); // windows 10+ only
 	obs_data_set_string(settings, "monitor_id", description->id);
 #endif
@@ -118,7 +118,7 @@ void update_window_settings(struct DeviceDescription* description)
 #ifdef WIN32
 	obs_data_set_bool(settings, "force_sdr", true);
 	obs_data_set_bool(settings, "compatibility", true);
-	obs_data_set_bool(settings, "capture_cursor", true);
+	obs_data_set_bool(settings, "capture_cursor", false);
 	obs_data_set_int(settings, "method", 2 /* METHOD_WGC */); // windows 10+ only
 	obs_data_set_string(settings, "window", description->id);
 #endif

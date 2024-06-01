@@ -17,5 +17,6 @@ libyuv = "0.1.2"
 
 [dev-dependencies]
 clap = { version = "4", features = ["derive", "env"] }
+codec = { path = "../codec" }
 anyhow = "1.0.79"
 simple_logger = "4"

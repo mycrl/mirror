@@ -46,17 +46,18 @@ struct VideoEncoder* codec_create_video_encoder(struct VideoEncoderSettings* set
 	codec->context->flags = AV_CODEC_FLAG_PASS2 | AV_CODEC_FLAG_LOW_DELAY;
 	codec->context->profile = FF_PROFILE_H264_BASELINE;
 
-    int bit_rate = settings->bit_rate;
-    if (name == "h264_qsv")
-    {
-        bit_rate  = bit_rate / 2;
-    }
+	int bit_rate = settings->bit_rate;
+	if (name == "h264_qsv")
+	{
+		bit_rate = bit_rate / 2;
+	}
 
-	codec->context->width = settings->width;
-	codec->context->height = settings->height;
+#ifdef VERSION_6
+	codec->context->bit_rate = bit_rate / 2;
+#else
 	codec->context->bit_rate = bit_rate;
+#endif // VERSION_6
     codec->context->rc_max_rate = bit_rate;
-    codec->context->rc_min_rate = bit_rate;
     codec->context->rc_buffer_size = bit_rate;
     codec->context->bit_rate_tolerance = bit_rate;
     codec->context->rc_initial_buffer_occupancy = bit_rate * 3 / 4;
@@ -64,13 +65,19 @@ struct VideoEncoder* codec_create_video_encoder(struct VideoEncoderSettings* set
 	codec->context->time_base = av_make_q(1, settings->frame_rate);
 	codec->context->pkt_timebase = av_make_q(1, settings->frame_rate);
 	codec->context->gop_size = settings->key_frame_interval;
+	codec->context->height = settings->height;
+	codec->context->width = settings->width;
 	
 	if (name == "h264_qsv")
 	{
         av_opt_set_int(codec->context->priv_data, "async_depth", 1, 0);
-        av_opt_set_int(codec->context->priv_data, "vcm", 1 /* true */, 0);
-        av_opt_set_int(codec->context->priv_data, "low_power", 1 /* true */, 0);
         av_opt_set_int(codec->context->priv_data, "forced_idr", 1 /* true */, 0);
+        av_opt_set_int(codec->context->priv_data, "low_power", 1 /* true */, 0);
+#ifdef VERSION_6
+        av_opt_set_int(codec->context->priv_data, "vcm", 1 /* true */, 0);
+#else
+		av_opt_set_int(codec->context->priv_data, "cavlc", 1 /* true */, 0);
+#endif // VERSION_6
 	}
 	else if (name == "h264_nvenc")
 	{

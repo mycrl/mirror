@@ -189,11 +189,21 @@ pub struct FrameSink {
     pub close: Box<dyn Fn() + Send>,
 }
 
-struct SenderObserver {
+pub struct SenderObserver {
     audio_encoder: AudioEncoder,
     video_encoder: VideoEncoder,
     adapter: Weak<StreamSenderAdapter>,
     sink: FrameSink,
+}
+
+impl AVFrameSink for SenderObserver {
+    fn video(&self, frame: &VideoFrame) {
+        self.on_video(frame)
+    }
+
+    fn audio(&self, frame: &AudioFrame) {
+        self.on_audio(frame)
+    }
 }
 
 impl SenderObserver {
@@ -215,10 +225,8 @@ impl SenderObserver {
             sink,
         })
     }
-}
 
-impl AVFrameSink for SenderObserver {
-    fn video(&self, frame: &VideoFrame) {
+    pub fn on_video(&self, frame: &VideoFrame) {
         (self.sink.video)(frame);
 
         if let Some(adapter) = self.adapter.upgrade().as_ref() {
@@ -233,7 +241,7 @@ impl AVFrameSink for SenderObserver {
         }
     }
 
-    fn audio(&self, frame: &AudioFrame) {
+    fn on_audio(&self, frame: &AudioFrame) {
         (self.sink.audio)(frame);
 
         if self.audio_encoder.encode(frame) {
