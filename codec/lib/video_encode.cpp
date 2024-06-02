@@ -136,28 +136,22 @@ struct VideoEncoder* codec_create_video_encoder(struct VideoEncoderSettings* set
 	return codec;
 }
 
-bool codec_video_encoder_send_frame(struct VideoEncoder* codec, struct VideoFrame* frame)
+bool codec_video_encoder_copy_frame(struct VideoEncoder* codec, struct VideoFrame* frame)
 {
 	if (av_frame_make_writable(codec->frame) != 0)
 	{
 		return false;
 	}
 
-	int linesize[4] = { (int)frame->linesize[0], (int)frame->linesize[1], 0, 0 };
-#ifdef VERSION_6
-	uint8_t* data[4] = { frame->data[0], frame->data[1], nullptr, nullptr };
-#else
-	const uint8_t* data[4] = { frame->data[0], frame->data[1], nullptr, nullptr };
-#endif // VERSION_6
+    codec->frame->data[0] = frame->data[0];
+    codec->frame->data[1] = frame->data[1];
+    codec->frame->linesize[0] = frame->linesize[0];
+    codec->frame->linesize[1] = frame->linesize[1];
+	return true;
+}
 
-	av_image_copy(codec->frame->data,
-				  codec->frame->linesize,
-				  data,
-				  linesize,
-				  codec->context->pix_fmt,
-				  codec->context->width,
-				  codec->context->height);
-
+bool codec_video_encoder_send_frame(struct VideoEncoder* codec)
+{
 #ifdef VERSION_6
 	auto count = codec->context->frame_num;
 #else

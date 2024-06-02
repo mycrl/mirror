@@ -6,7 +6,8 @@ use crate::{Error, RawEncodePacket};
 
 extern "C" {
     fn codec_create_audio_encoder(settings: *const RawAudioEncoderSettings) -> *const c_void;
-    fn codec_audio_encoder_send_frame(codec: *const c_void, frame: *const AudioFrame) -> bool;
+    fn codec_audio_encoder_copy_frame(codec: *const c_void, frame: *const AudioFrame) -> bool;
+    fn codec_audio_encoder_send_frame(codec: *const c_void) -> bool;
     fn codec_audio_encoder_read_packet(codec: *const c_void) -> *const RawEncodePacket;
     fn codec_unref_audio_encoder_packet(codec: *const c_void);
     fn codec_release_audio_encoder(codec: *const c_void);
@@ -87,9 +88,13 @@ impl AudioEncoder {
         }
     }
 
+    pub fn send_frame(&self, frame: &AudioFrame) -> bool {
+        unsafe { codec_audio_encoder_copy_frame(self.0, frame) }
+    }
+
     /// Supply a raw video or audio frame to the encoder.
-    pub fn encode(&self, frame: &AudioFrame) -> bool {
-        unsafe { codec_audio_encoder_send_frame(self.0, frame) }
+    pub fn encode(&self) -> bool {
+        unsafe { codec_audio_encoder_send_frame(self.0) }
     }
 
     /// Read encoded data from the encoder.

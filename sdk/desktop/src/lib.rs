@@ -1,6 +1,7 @@
 #![cfg(any(target_os = "windows", target_os = "linux"))]
 
-pub mod mirror;
+mod mirror;
+mod sender;
 
 use std::{
     ffi::{c_char, c_int, c_void},

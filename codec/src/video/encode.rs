@@ -6,7 +6,8 @@ use crate::{Error, RawEncodePacket};
 
 extern "C" {
     fn codec_create_video_encoder(settings: *const RawVideoEncoderSettings) -> *const c_void;
-    fn codec_video_encoder_send_frame(codec: *const c_void, frame: *const VideoFrame) -> bool;
+    fn codec_video_encoder_copy_frame(codec: *const c_void, frame: *const VideoFrame) -> bool;
+    fn codec_video_encoder_send_frame(codec: *const c_void) -> bool;
     fn codec_video_encoder_read_packet(codec: *const c_void) -> *const RawEncodePacket;
     fn codec_unref_video_encoder_packet(codec: *const c_void);
     fn codec_release_video_encoder(codec: *const c_void);
@@ -105,9 +106,13 @@ impl VideoEncoder {
         }
     }
 
+    pub fn send_frame(&self, frame: &VideoFrame) -> bool {
+        unsafe { codec_video_encoder_copy_frame(self.0, frame) }
+    }
+
     /// Supply a raw video or audio frame to the encoder.
-    pub fn encode(&self, frame: &VideoFrame) -> bool {
-        unsafe { codec_video_encoder_send_frame(self.0, frame) }
+    pub fn encode(&self) -> bool {
+        unsafe { codec_video_encoder_send_frame(self.0) }
     }
 
     /// Read encoded data from the encoder.
