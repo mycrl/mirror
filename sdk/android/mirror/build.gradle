@@ -13,7 +13,6 @@ dependencies {
     implementation 'androidx.core:core-ktx:1.13.1'
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.12.0'
-    implementation 'com.ensarsarajcic.kotlinx:serialization-msgpack:0.5.5'
 }
 
 android {
@@ -34,6 +33,12 @@ android {
         }
 
         consumerProguardFiles 'consumer-rules.pro'
+        externalNativeBuild {
+            cmake {
+                arguments '-DANDROID_STL=c++_shared'
+                cppFlags ''
+            }
+        }
     }
 
     buildTypes {
@@ -54,6 +59,13 @@ android {
 
     kotlinOptions {
         jvmTarget = '1.8'
+    }
+
+    externalNativeBuild {
+        cmake {
+            path file('src/main/cpp/CMakeLists.txt')
+            version '3.22.1'
+        }
     }
 }
 
@@ -97,7 +109,7 @@ publishing {
         release(MavenPublication) {
             groupId = 'com.github.mycrl'
             artifactId = 'mirror'
-            version = '0.4.2'
+            version = '0.5.0'
 
             afterEvaluate {
                 from components.release

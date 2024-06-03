@@ -1,9 +1,10 @@
 #![cfg(any(target_os = "windows", target_os = "linux"))]
 
-pub mod mirror;
+mod mirror;
+mod sender;
 
 use std::{
-    ffi::{c_char, c_void},
+    ffi::{c_char, c_int, c_void},
     fmt::Debug,
     ptr::null_mut,
     sync::Arc,
@@ -43,9 +44,6 @@ pub struct RawVideoOptions {
     /// Video decoder settings, possible values are `h264_qsv`, `h264_cuvid`,
     /// `h264`, etc.
     pub decoder: *const c_char,
-    /// Maximum number of B-frames, if low latency encoding is performed, it is
-    /// recommended to set it to 0 to indicate that no B-frames are encoded.
-    pub max_b_frames: u8,
     /// Frame rate setting in seconds.
     pub frame_rate: u8,
     /// The width of the video.
@@ -70,7 +68,6 @@ impl TryInto<VideoOptions> for RawVideoOptions {
             encoder: Strings::from(self.encoder).to_string()?,
             decoder: Strings::from(self.decoder).to_string()?,
             key_frame_interval: self.key_frame_interval,
-            max_b_frames: self.max_b_frames,
             frame_rate: self.frame_rate,
             width: self.width,
             height: self.height,
@@ -118,6 +115,8 @@ pub struct RawMirrorOptions {
     pub video: RawVideoOptions,
     /// Audio Codec Configuration.
     pub audio: RawAudioOptions,
+    /// mirror server address.
+    pub server: *const c_char,
     /// Multicast address, e.g. `239.0.0.1`.
     pub multicast: *const c_char,
     /// The size of the maximum transmission unit of the network, which is
@@ -135,6 +134,7 @@ impl TryInto<MirrorOptions> for RawMirrorOptions {
     fn try_into(self) -> Result<MirrorOptions, Self::Error> {
         Ok(MirrorOptions {
             multicast: Strings::from(self.multicast).to_string()?,
+            server: Strings::from(self.server).to_string()?,
             video: self.video.try_into()?,
             audio: self.audio.into(),
             mtu: self.mtu,
@@ -304,11 +304,30 @@ pub extern "C" fn mirror_drop(mirror: *const RawMirror) {
     log::info!("close mirror");
 }
 
+/// ```c
+/// struct FrameSink
+/// {
+///     bool (*video)(void* ctx, struct VideoFrame* frame);
+///     bool (*audio)(void* ctx, struct AudioFrame* frame);
+///     void (*close)(void* ctx);
+///     void* ctx;
+/// };
+/// ```
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct RawFrameSink {
+    /// ```c
+    /// bool (*video)(void* ctx, struct VideoFrame* frame);
+    /// ```
     pub video: Option<extern "C" fn(ctx: *const c_void, frame: *const VideoFrame) -> bool>,
+    /// ```c
+    /// bool (*audio)(void* ctx, struct AudioFrame* frame);
+    /// ```
     pub audio: Option<extern "C" fn(ctx: *const c_void, frame: *const AudioFrame) -> bool>,
+    /// ```c
+    /// void (*close)(void* ctx);
+    /// ```
+    pub close: Option<extern "C" fn(ctx: *const c_void)>,
     pub ctx: *const c_void,
 }
 
@@ -331,6 +350,22 @@ impl RawFrameSink {
             true
         }
     }
+
+    fn closed(&self) {
+        if let Some(callback) = &self.close {
+            callback(self.ctx)
+        }
+    }
+}
+
+impl Into<FrameSink> for RawFrameSink {
+    fn into(self) -> FrameSink {
+        FrameSink {
+            video: Box::new(move |frame: &VideoFrame| self.send_video(frame)),
+            audio: Box::new(move |frame: &AudioFrame| self.send_audio(frame)),
+            close: Box::new(move || self.closed()),
+        }
+    }
 }
 
 #[repr(C)]
@@ -348,23 +383,44 @@ pub struct RawSender {
 #[no_mangle]
 pub extern "C" fn mirror_create_sender(
     mirror: *const RawMirror,
-    bind: *const c_char,
+    id: c_int,
     sink: RawFrameSink,
 ) -> *const RawSender {
     assert!(!mirror.is_null());
-    assert!(!bind.is_null());
 
     checker((|| {
-        unsafe { &*mirror }.mirror.create_sender(
-            &Strings::from(bind).to_string()?,
-            FrameSink {
-                video: move |frame: &VideoFrame| sink.send_video(frame),
-                audio: move |frame: &AudioFrame| sink.send_audio(frame),
-            },
-        )
+        unsafe { &*mirror }
+            .mirror
+            .create_sender(id as u32, sink.into())
     })())
     .map(|adapter| Box::into_raw(Box::new(RawSender { adapter })))
     .unwrap_or_else(|_| null_mut())
+}
+
+/// Set whether the sender uses multicast transmission.
+///
+/// ```c
+/// EXPORT void mirror_sender_set_multicast(Sender sender, bool is_multicast);
+/// ```
+#[no_mangle]
+pub extern "C" fn mirror_sender_set_multicast(sender: *const RawSender, is_multicast: bool) {
+    assert!(!sender.is_null());
+
+    unsafe { &*sender }.adapter.set_multicast(is_multicast);
+
+    log::info!("set sender transport use multicast={}", is_multicast);
+}
+
+/// Get whether the sender uses multicast transmission.
+///
+/// ```c
+/// EXPORT bool mirror_sender_get_multicast(Sender sender);
+/// ```
+#[no_mangle]
+pub extern "C" fn mirror_sender_get_multicast(sender: *const RawSender) -> bool {
+    assert!(!sender.is_null());
+
+    unsafe { &*sender }.adapter.get_multicast()
 }
 
 /// Close sender.
@@ -380,6 +436,7 @@ pub extern "C" fn mirror_close_sender(sender: *const RawSender) {
         .adapter
         .close();
 
+    capture::set_frame_sink::<()>(None);
     log::info!("close sender");
 }
 
@@ -397,20 +454,15 @@ pub struct RawReceiver {
 #[no_mangle]
 pub extern "C" fn mirror_create_receiver(
     mirror: *const RawMirror,
-    bind: *const c_char,
+    id: c_int,
     sink: RawFrameSink,
 ) -> *const RawReceiver {
     assert!(!mirror.is_null());
-    assert!(!bind.is_null());
 
     checker((|| {
-        unsafe { &*mirror }.mirror.create_receiver(
-            &Strings::from(bind).to_string()?,
-            FrameSink {
-                video: move |frame: &VideoFrame| sink.send_video(frame),
-                audio: move |frame: &AudioFrame| sink.send_audio(frame),
-            },
-        )
+        unsafe { &*mirror }
+            .mirror
+            .create_receiver(id as u32, sink.into())
     })())
     .map(|adapter| Box::into_raw(Box::new(RawReceiver { adapter })))
     .unwrap_or_else(|_| null_mut())

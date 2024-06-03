@@ -143,6 +143,8 @@ pub trait AVFrameSink {
     fn audio(&self, frame: &AudioFrame) {}
 }
 
+impl AVFrameSink for () {}
+
 struct Context(Arc<dyn AVFrameSink>);
 
 extern "C" fn video_sink_proc(ctx: *const c_void, frame: *const VideoFrame) {
@@ -191,13 +193,20 @@ extern "C" fn audio_sink_proc(ctx: *const c_void, frame: *const AudioFrame) {
 /// let frame = Arc::new(Mutex::new(vec![0u8; (1920 * 1080 * 4) as usize]));
 /// set_frame_sink(FrameSink { frame });
 /// ```
-pub fn set_frame_sink<S: AVFrameSink + 'static>(sink: S) {
+pub fn set_frame_sink<S: AVFrameSink + 'static>(sink: Option<S>) {
     let previous = unsafe {
-        capture_set_output_callback(RawOutputCallback {
-            ctx: Box::into_raw(Box::new(Context(Arc::new(sink)))) as *const c_void,
-            video: Some(video_sink_proc),
-            audio: Some(audio_sink_proc),
-        })
+        capture_set_output_callback(
+            sink.map(|it| RawOutputCallback {
+                ctx: Box::into_raw(Box::new(Context(Arc::new(it)))) as *const c_void,
+                video: Some(video_sink_proc),
+                audio: Some(audio_sink_proc),
+            })
+            .unwrap_or_else(|| RawOutputCallback {
+                video: None,
+                audio: None,
+                ctx: null(),
+            }),
+        )
     };
 
     if !previous.is_null() {

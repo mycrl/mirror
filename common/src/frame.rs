@@ -1,5 +1,3 @@
-use std::slice::from_raw_parts;
-
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct VideoFrameRect {
@@ -32,47 +30,6 @@ pub struct VideoFrame {
     pub rect: VideoFrameRect,
     pub data: [*const u8; 2],
     pub linesize: [usize; 2],
-}
-
-impl VideoFrame {
-    /// All of these four formats are "planar", meaning that the Y, U, and V
-    /// values are grouped together instead of interspersed. They all occupy 12
-    /// bits per pixel, assuming a 8-bit channel.
-    pub fn new(data: [&[u8]; 2], linesize: [usize; 2], rect: VideoFrameRect) -> Self {
-        Self {
-            data: [data[0].as_ptr(), data[1].as_ptr()],
-            linesize,
-            rect,
-        }
-    }
-
-    /// NV12 is possibly the most commonly-used 8-bit 4:2:0 format. It is the
-    /// default for Android camera preview. The entire image in Y is written
-    /// out, followed by interleaved lines that go U0, V0, U1, V1, etc.
-    #[inline]
-    pub fn get_y_planar(&self) -> &[u8] {
-        unsafe {
-            from_raw_parts(
-                self.data[0],
-                // Y: Y stride * height
-                self.linesize[0] * self.rect.height,
-            )
-        }
-    }
-
-    /// NV12 is a simpler design and is more commonly used. The entire image in
-    /// Y is written out, followed by the image in V, then by the whole image in
-    /// U.
-    #[inline]
-    pub fn get_uv_planar(&self) -> &[u8] {
-        unsafe {
-            from_raw_parts(
-                self.data[1],
-                // Y: U stride * height
-                self.linesize[1] * self.rect.height,
-            )
-        }
-    }
 }
 
 /// Pulse-code modulation

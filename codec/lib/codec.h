@@ -30,12 +30,12 @@ struct EncodePacket
 	uint8_t* buffer;
 	size_t len;
 	int flags;
+    uint64_t timestamp;
 };
 
 struct VideoEncoderSettings
 {
 	const char* codec_name;
-	uint8_t max_b_frames;
 	uint8_t frame_rate;
 	uint32_t width;
 	uint32_t height;
@@ -122,7 +122,8 @@ extern "C"
 	EXPORT const char* codec_find_video_encoder();
 	EXPORT const char* codec_find_video_decoder();
 	EXPORT struct VideoEncoder* codec_create_video_encoder(struct VideoEncoderSettings* settings);
-	EXPORT bool codec_video_encoder_send_frame(struct VideoEncoder* codec, struct VideoFrame* frame);
+    EXPORT bool codec_video_encoder_copy_frame(struct VideoEncoder* codec, struct VideoFrame* frame);
+	EXPORT bool codec_video_encoder_send_frame(struct VideoEncoder* codec);
 	EXPORT struct EncodePacket* codec_video_encoder_read_packet(struct VideoEncoder* codec);
 	EXPORT void codec_unref_video_encoder_packet(struct VideoEncoder* codec);
 	EXPORT void codec_release_video_encoder(struct VideoEncoder* codec);
@@ -131,7 +132,8 @@ extern "C"
 	EXPORT bool codec_video_decoder_send_packet(struct VideoDecoder* codec, uint8_t* buf, size_t size);
 	EXPORT struct VideoFrame* codec_video_decoder_read_frame(struct VideoDecoder* codec);
 	EXPORT struct AudioEncoder* codec_create_audio_encoder(struct AudioEncoderSettings* settings);
-	EXPORT bool codec_audio_encoder_send_frame(struct AudioEncoder* codec, struct AudioFrame* frame);
+    EXPORT bool codec_audio_encoder_copy_frame(struct AudioEncoder* codec, struct AudioFrame* frame);
+	EXPORT bool codec_audio_encoder_send_frame(struct AudioEncoder* codec);
 	EXPORT struct EncodePacket* codec_audio_encoder_read_packet(struct AudioEncoder* codec);
 	EXPORT void codec_unref_audio_encoder_packet(struct AudioEncoder* codec);
 	EXPORT void codec_release_audio_encoder(struct AudioEncoder* codec);

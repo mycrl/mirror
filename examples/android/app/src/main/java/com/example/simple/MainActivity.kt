@@ -19,17 +19,19 @@ import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -38,25 +40,32 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 
+abstract class Observer {
+    abstract fun OnConnect(server: String);
+    abstract fun OnPublish(id: Int);
+    abstract fun OnSubscribe(id: Int);
+    abstract fun OnStop();
+    abstract fun SetMulticast(isMulticast: Boolean);
+}
+
 open class Layout : ComponentActivity() {
+    private var observer: Observer? = null
     private var surfaceView: SurfaceView? = null
     private var clickStartHandler: (() -> Unit)? = null
-    private var buttonAlign by mutableStateOf(Alignment.Center)
-    private var icon by mutableIntStateOf(R.drawable.cell_tower)
-    private var state: Int = State.New
-    private var socketaddr: String? = null
+    private var server by mutableStateOf("127.0.0.1:8080")
+    private var id by mutableStateOf("0")
+    private var state by mutableIntStateOf(State.New)
+    private var isMulticast by mutableIntStateOf(0)
 
     class State {
         companion object {
             const val New = 0;
-            const val Started = 1;
-            const val Receiving = 2;
-            const val StopReceiving = 3;
+            const val Connected = 1;
+            const val Publishing = 2;
+            const val Subscribeing = 3;
         }
     }
 
@@ -68,8 +77,8 @@ open class Layout : ComponentActivity() {
         }
     }
 
-    fun layoutGetPeerAddr(): String? {
-        return socketaddr
+    fun layoutSetObserver(observer: Observer) {
+        this.observer = observer
     }
 
     fun layoutGetSurface(): Surface? {
@@ -80,47 +89,13 @@ open class Layout : ComponentActivity() {
         return state
     }
 
-    fun layoutRegisterClickStart(handler: () -> Unit) {
-        clickStartHandler = handler
+    fun layoutSetState(state: Int) {
+        this.state = state
     }
 
-    fun layoutChangeReceived(addr: String?) {
-        if (addr != null) {
-            socketaddr = addr
-        }
-
-        state = State.Receiving
-        icon = R.drawable.stop_circle
-        buttonAlign = Alignment.BottomStart
-
-        runOnUiThread {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                window.insetsController?.hide(WindowInsets.Type.statusBars() or WindowInsets.Type.navigationBars())
-            } else {
-                window.decorView.systemUiVisibility = (View.SYSTEM_UI_FLAG_FULLSCREEN
-                        or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                        or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY)
-                window.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
-            }
-        }
-    }
-
-    fun layoutChangeStarted() {
-        state = State.Started
-        icon = R.drawable.wifi_tethering
-        buttonAlign = Alignment.Center
-    }
-
-    fun layoutStopReceiving() {
-        state = State.StopReceiving
-        icon = R.drawable.link
-        buttonAlign = Alignment.Center
-    }
-
-    fun layoutChangeReset() {
-        state = State.New
-        icon = R.drawable.cell_tower
-        buttonAlign = Alignment.Center
+    fun layoutStop() {
+        state = State.Connected
+        isMulticast = 0
 
         runOnUiThread {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -166,31 +141,114 @@ open class Layout : ComponentActivity() {
             )
 
             Box(modifier = Modifier.fillMaxSize()) {
-                Button(
-                    onClick = {
-                        clickStartHandler?.let { it() }
+                Column(
+                    modifier = Modifier.align(
+                        if (state == State.Subscribeing) {
+                            Alignment.BottomStart
+                        } else {
+                            Alignment.Center
+                        }
+                    ),
+                    verticalArrangement = if (state == State.Subscribeing) {
+                        Arrangement.Bottom
+                    } else {
+                        Arrangement.Center
                     },
-                    modifier = Modifier
-                        .padding(20.dp)
-                        .align(buttonAlign),
-                    shape = RoundedCornerShape(8.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0C9CF8)),
+                    horizontalAlignment = if (state == State.Subscribeing) {
+                        Alignment.Start
+                    } else {
+                        Alignment.CenterHorizontally
+                    },
                 ) {
-                    Icon(
-                        painter = painterResource(id = icon),
-                        contentDescription = "Cell Tower",
-                        tint = Color.White
-                    )
-
-                    if (state != State.New) {
-                        Spacer(modifier = Modifier.width(15.dp))
-                        Text(
-                            text = when (state) {
-                                State.StopReceiving -> "$socketaddr"
-                                State.Started -> "Screen casting, Click to stop"
-                                else -> "Receiving screen casting, Click to stop"
-                            }, modifier = Modifier
+                    if (state == State.New) {
+                        TextField(
+                            value = server,
+                            label = { Text(text = "Server Address") },
+                            onValueChange = { server = it },
+                            modifier = Modifier
+                                .padding(6.dp)
+                                .width(300.dp),
+                            shape = RoundedCornerShape(6.dp),
                         )
+                    }
+
+                    if (state == State.Connected) {
+                        TextField(
+                            value = id,
+                            label = { Text(text = "Stream ID") },
+                            onValueChange = { id = it },
+                            modifier = Modifier
+                                .padding(6.dp)
+                                .width(300.dp),
+                            shape = RoundedCornerShape(6.dp),
+                        )
+                    }
+
+                    Row() {
+                        if (state == State.New) {
+                            Button(
+                                onClick = { observer?.OnConnect(server) },
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.width(300.dp),
+                            ) {
+                                Text(text = "Connect")
+                            }
+                        } else if (state == State.Connected) {
+                            Button(
+                                onClick = { ->
+                                    state = State.Publishing
+                                    observer?.OnPublish(id.toInt())
+                                },
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.width(140.dp),
+                            ) {
+                                Text(text = "Publish")
+                            }
+                            Spacer(modifier = Modifier.width(20.dp))
+                            Button(
+                                onClick = { ->
+                                    state = State.Subscribeing
+                                    observer?.OnSubscribe(id.toInt())
+                                },
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.width(140.dp),
+                            ) {
+                                Text(text = "Subscribe")
+                            }
+                        } else {
+                            Button(
+                                onClick = { observer?.OnStop() },
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.width(140.dp),
+                            ) {
+                                Text(text = "Stop")
+                            }
+
+                            if (state == State.Publishing) {
+                                Spacer(modifier = Modifier.width(20.dp))
+                                Button(
+                                    onClick = { ->
+                                        isMulticast = if (isMulticast == 0) {
+                                            1
+                                        } else {
+                                            0
+                                        }
+
+                                        observer?.SetMulticast(isMulticast != 0)
+                                    },
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier.width(150.dp),
+                                ) {
+                                    Text(
+                                        text = if (isMulticast == 0) {
+                                            "Enable Multicast"
+                                        } else {
+                                            "Disable Multicast"
+                                        }
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -251,17 +309,15 @@ class MainActivity : Permissions() {
             Log.i("simple", "service connected.")
 
             simpleMirrorServiceBinder = service as SimpleMirrorServiceBinder
-            simpleMirrorServiceBinder?.registerReceivedHandler { id, addr ->
-                Log.i("simple", "start receiving sender stream. id=$id, addr=$addr")
+            simpleMirrorServiceBinder?.setObserver(object : SimpleMirrorServiceObserver() {
+                override fun OnConnected() {
+                    layoutSetState(State.Connected)
+                }
 
-                layoutChangeReceived(addr)
-            }
-
-            simpleMirrorServiceBinder?.registerReceivedReleaseHandler { id, addr ->
-                Log.i("simple", "receiver is released. id=$id, ip=$addr")
-
-                layoutStopReceiving()
-            }
+                override fun OnReceiverClosed() {
+                    layoutStop()
+                }
+            })
 
             layoutGetSurface()?.let { surface ->
                 simpleMirrorServiceBinder?.setRenderSurface(surface)
@@ -274,34 +330,42 @@ class MainActivity : Permissions() {
     }
 
     init {
+        var senderId = 0
+
         registerPermissionsHandler { intent ->
             if (intent != null) {
-                simpleMirrorServiceBinder?.createSender(intent, resources.displayMetrics)
-                layoutChangeStarted()
+                simpleMirrorServiceBinder?.createSender(intent, resources.displayMetrics, senderId)
             }
         }
 
-        layoutRegisterClickStart {
-            val state = layoutGetState()
-            Log.i("simple", "click start button. state=${state}")
+        layoutSetObserver(object : Observer() {
+            override fun OnConnect(server: String) {
+                simpleMirrorServiceBinder?.connect(server)
+            }
 
-            when (state) {
-                State.New -> requestPermissions()
-                State.StopReceiving -> {
-                    simpleMirrorServiceBinder?.createReceiver(layoutGetPeerAddr()!!)
-                    layoutChangeReceived(null)
-                }
+            override fun OnPublish(id: Int) {
+                senderId = id
+                requestPermissions()
+            }
 
-                State.Receiving -> {
+            override fun OnSubscribe(id: Int) {
+                simpleMirrorServiceBinder?.createReceiver(id)
+            }
+
+            override fun OnStop() {
+                val state = layoutGetState()
+                if (state == State.Publishing) {
+                    simpleMirrorServiceBinder?.stopSender()
+                    layoutSetState(State.Connected)
+                } else {
                     simpleMirrorServiceBinder?.stopReceiver()
                 }
-
-                State.Started -> {
-                    simpleMirrorServiceBinder?.stopSender()
-                    layoutChangeReset()
-                }
             }
-        }
+
+            override fun SetMulticast(isMulticast: Boolean) {
+                simpleMirrorServiceBinder?.setMulticast(isMulticast)
+            }
+        })
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

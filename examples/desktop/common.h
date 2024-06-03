@@ -13,6 +13,7 @@
 
 #include <string>
 #include <vector>
+#include <functional>
 
 #include <mirror.h>
 #include <SDL_render.h>
@@ -23,14 +24,23 @@ class Render : public mirror::MirrorService::AVFrameSink
 public:
 	Render(SDL_Rect* sdl_rect,
 		   SDL_Texture* sdl_texture,
-		   SDL_Renderer* sdl_renderer)
+		   SDL_Renderer* sdl_renderer,
+		   bool is_render,
+		   std::function<void()> closed_callback)
 		: _sdl_rect(sdl_rect)
 		, _sdl_texture(sdl_texture)
 		, _sdl_renderer(sdl_renderer)
+		, _is_render(is_render)
+		, _closed_callback(closed_callback)
 	{}
 
 	bool OnVideoFrame(struct VideoFrame* frame)
 	{
+		if (!_is_render)
+		{
+			return true;
+		}
+
 		if (SDL_UpdateNVTexture(_sdl_texture,
 								_sdl_rect,
 								frame->data[0],
@@ -55,10 +65,17 @@ public:
 	{
 		return true;
 	}
+
+	void OnClose()
+	{
+		_closed_callback();
+	}
 private:
 	SDL_Rect* _sdl_rect;
 	SDL_Texture* _sdl_texture;
 	SDL_Renderer* _sdl_renderer;
+	bool _is_render;
+	std::function<void()> _closed_callback;
 };
 
 class Args
@@ -66,10 +83,11 @@ class Args
 public:
 	struct Params
 	{
+		int id = 0;
         int fps = 30;
 		int width = 1280;
 		int height = 720;
-		std::string bind = "0.0.0.0:8080";
+		std::string server = "127.0.0.1:8080";
 		std::string encoder = mirror_find_video_encoder();
 		std::string decoder = mirror_find_video_decoder();
 	};
@@ -84,11 +102,14 @@ public:
 				continue;
 			}
 
-            if (kv[0] == "fps")
+			if (kv[0] == "id")
+			{
+				ArgsParams.id = std::stoi(kv[1]);
+			}
+			else if (kv[0] == "fps")
 			{
 				ArgsParams.fps = std::stoi(kv[1]);
-			}
-			if (kv[0] == "width")
+			} else if (kv[0] == "width")
 			{
 				ArgsParams.width = std::stoi(kv[1]);
 			}
@@ -104,9 +125,9 @@ public:
 			{
 				ArgsParams.decoder = kv[1];
 			}
-			else if (kv[0] == "bind")
+			else if (kv[0] == "server")
 			{
-				ArgsParams.bind = kv[1];
+				ArgsParams.server = kv[1];
 			}
 		}
 	}

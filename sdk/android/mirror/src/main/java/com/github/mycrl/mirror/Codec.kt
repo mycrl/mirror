@@ -10,11 +10,6 @@ import android.os.Build
 import android.os.Process
 import android.util.Log
 import android.view.Surface
-import com.ensarsarajcic.kotlinx.serialization.msgpack.MsgPack
-import kotlinx.serialization.SerialName
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.decodeFromByteArray
-import kotlinx.serialization.encodeToByteArray
 import java.lang.Exception
 import java.nio.ByteBuffer
 
@@ -444,36 +439,6 @@ class Audio {
              * [MediaFormat#KEY_BIT_RATE](https://developer.android.com/reference/android/media/MediaFormat#KEY_BIT_RATE)
              */
             val bitRate: Int
-        }
-    }
-}
-
-class CodecDescriptionFactory {
-    @Serializable
-    data class CodecDescription(
-        @SerialName("v") val video: VideoDescription,
-        @SerialName("a") val audio: AudioDescription,
-    )
-
-    @Serializable
-    data class VideoDescription(
-        @SerialName("w") val width: Int,
-        @SerialName("h") val height: Int,
-    )
-
-    @Serializable
-    data class AudioDescription(
-        @SerialName("sr") val sampleRate: Int,
-        @SerialName("cs") val channels: Int,
-    )
-
-    companion object {
-        fun encode(value: CodecDescription): ByteArray {
-            return MsgPack.encodeToByteArray(value)
-        }
-
-        fun decode(value: ByteArray): CodecDescription {
-            return MsgPack.decodeFromByteArray<CodecDescription>(value)
         }
     }
 }

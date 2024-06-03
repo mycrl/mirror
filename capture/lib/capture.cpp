@@ -97,7 +97,7 @@ void update_monitor_settings(struct DeviceDescription* description)
 #ifdef WIN32
 	obs_data_set_bool(settings, "force_sdr", true);
 	obs_data_set_bool(settings, "compatibility", true);
-	obs_data_set_bool(settings, "capture_cursor", true);
+	obs_data_set_bool(settings, "capture_cursor", false);
 	obs_data_set_int(settings, "method", 2 /* METHOD_WGC */); // windows 10+ only
 	obs_data_set_string(settings, "monitor_id", description->id);
 #endif
@@ -118,7 +118,7 @@ void update_window_settings(struct DeviceDescription* description)
 #ifdef WIN32
 	obs_data_set_bool(settings, "force_sdr", true);
 	obs_data_set_bool(settings, "compatibility", true);
-	obs_data_set_bool(settings, "capture_cursor", true);
+	obs_data_set_bool(settings, "capture_cursor", false);
 	obs_data_set_int(settings, "method", 2 /* METHOD_WGC */); // windows 10+ only
 	obs_data_set_string(settings, "window", description->id);
 #endif
@@ -201,7 +201,7 @@ int capture_initialization()
 	obs_add_raw_video_callback(&video_scale_info, raw_video_callback, nullptr);
 
 	struct audio_convert_info audio_convert_info;
-	audio_convert_info.speakers = SPEAKERS_STEREO;
+	audio_convert_info.speakers = SPEAKERS_MONO;
 	audio_convert_info.format = AUDIO_FORMAT_16BIT;
 	audio_convert_info.samples_per_sec = GLOBAL.audio_info.samples_per_sec;
 	obs_add_raw_audio_callback(1, &audio_convert_info, raw_audio_callback, nullptr);

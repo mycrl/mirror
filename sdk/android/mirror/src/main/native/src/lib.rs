@@ -4,7 +4,7 @@ mod logger;
 
 use std::{ffi::c_void, ptr::null_mut, sync::Arc, thread};
 
-use adapter::{AndroidStreamReceiverAdapter, AndroidStreamReceiverAdapterFactory};
+use adapter::AndroidStreamReceiverAdapter;
 use command::{catcher, copy_from_byte_array, JVM};
 use jni::{
     objects::{JByteArray, JClass, JObject, JString},
@@ -14,10 +14,9 @@ use jni::{
 
 use jni_macro::jni_exports;
 use logger::AndroidLogger;
-use transport::Transport;
 use transport::{
     adapter::{StreamReceiverAdapter, StreamSenderAdapter},
-    TransportOptions,
+    Transport, TransportOptions,
 };
 
 /// JNI_OnLoad
@@ -49,6 +48,7 @@ use transport::{
 #[no_mangle]
 pub extern "system" fn JNI_OnLoad(vm: JavaVM, _: *mut c_void) -> i32 {
     AndroidLogger::init();
+    transport::init();
     JVM.lock().unwrap().replace(vm);
 
     JNI_VERSION_1_6
@@ -90,7 +90,9 @@ pub extern "system" fn JNI_OnLoad(vm: JavaVM, _: *mut c_void) -> i32 {
 /// LINKAGE:
 /// Exported from native libraries that contain native method implementation.
 #[no_mangle]
-pub extern "system" fn JNI_OnUnload(_: JavaVM, _: *mut c_void) {}
+pub extern "system" fn JNI_OnUnload(_: JavaVM, _: *mut c_void) {
+    transport::exit();
+}
 
 mod objects {
     use anyhow::{anyhow, Ok};
@@ -98,6 +100,7 @@ mod objects {
         objects::{JObject, JValueGen},
         JNIEnv,
     };
+
     use transport::adapter::{StreamBufferInfo, StreamKind};
 
     /// /**
@@ -313,29 +316,6 @@ struct Mirror;
 #[jni_exports(package = "com.github.mycrl.mirror")]
 impl Mirror {
     /// /**
-    ///  * Create a stream receiver adapter factory where the return value is a
-    ///  * pointer to the instance, and you need to check that the returned
-    ///    pointer
-    ///  * is not Null.
-    ///  */
-    /// private external fun createStreamReceiverAdapterFactory(adapterFactory:
-    /// ReceiverAdapterFactory): Long
-    pub fn create_stream_receiver_adapter_factory(
-        mut env: JNIEnv,
-        _this: JClass,
-        callback: JObject,
-    ) -> *const AndroidStreamReceiverAdapterFactory {
-        catcher(&mut env, |env| {
-            Ok(Box::into_raw(Box::new(
-                AndroidStreamReceiverAdapterFactory {
-                    callback: env.new_global_ref(callback)?,
-                },
-            )))
-        })
-        .unwrap_or_else(null_mut)
-    }
-
-    /// /**
     ///  * Create a stream receiver adapter where the return value is a
     ///  * pointer to the instance, and you need to check that the returned
     ///  * pointer is not Null.
@@ -360,8 +340,12 @@ impl Mirror {
                         if !adapter.sink(buf, kind, flags, timestamp) {
                             break;
                         }
+                    } else {
+                        break;
                     }
                 }
+
+                log::info!("StreamReceiverAdapter is closed");
 
                 adapter.close();
             });
@@ -395,30 +379,19 @@ impl Mirror {
     pub fn create_mirror(
         mut env: JNIEnv,
         _this: JClass,
-        mtu: i32,
+        server: JString,
         multicast: JString,
-        bind: JString,
-        adapter_factory: *const AndroidStreamReceiverAdapterFactory,
+        mtu: i32,
     ) -> *const Transport {
         catcher(&mut env, |env| {
-            let bind: String = env.get_string(&bind)?.into();
+            let server: String = env.get_string(&server)?.into();
             let multicast: String = env.get_string(&multicast)?.into();
-            let options = if adapter_factory.is_null() {
-                None
-            } else {
-                Some(TransportOptions {
-                    bind: bind.parse()?,
-                    adapter_factory: unsafe {
-                        *Box::from_raw(adapter_factory as *mut AndroidStreamReceiverAdapterFactory)
-                    },
-                })
-            };
 
-            Ok(Box::into_raw(Box::new(Transport::new(
-                mtu as usize,
-                multicast.parse()?,
-                options,
-            )?)))
+            Ok(Box::into_raw(Box::new(Transport::new(TransportOptions {
+                server: server.parse()?,
+                multicast: multicast.parse()?,
+                mtu: mtu as usize,
+            })?)))
         })
         .unwrap_or_else(null_mut)
     }
@@ -427,7 +400,7 @@ impl Mirror {
     ///  * Free the mirror instance pointer.
     ///  */
     /// private external fun releaseMirror(mirror: Long)
-    pub fn release_mirror(_env: JNIEnv, _this: JClass, ptr: *const transport::Transport) {
+    pub fn release_mirror(_env: JNIEnv, _this: JClass, ptr: *const Transport) {
         drop(unsafe { Box::from_raw(ptr as *mut Transport) })
     }
 
@@ -445,6 +418,32 @@ impl Mirror {
     }
 
     /// /**
+    ///  * Get whether the sender uses multicast transmission
+    ///  */
+    /// private external fun senderGetMulticast(adapter: Long): Boolean
+    pub fn sender_get_multicast(
+        _env: JNIEnv,
+        _this: JClass,
+        ptr: *const Arc<StreamSenderAdapter>,
+    ) -> i32 {
+        unsafe { &*ptr }.get_multicast() as i32
+    }
+
+    /// /**
+    ///  * Set whether the sender uses multicast transmission
+    ///  */
+    /// private external fun senderSetMulticast(adapter: Long, is_multicast:
+    /// Boolean)
+    pub fn sender_set_multicast(
+        _env: JNIEnv,
+        _this: JClass,
+        ptr: *const Arc<StreamSenderAdapter>,
+        is_multicast: i32,
+    ) {
+        unsafe { &*ptr }.set_multicast(is_multicast != 0)
+    }
+
+    /// /**
     ///  * Release the stream sender adapter.
     ///  */
     /// private external fun releaseStreamSenderAdapter(adapter: Long)
@@ -458,8 +457,7 @@ impl Mirror {
 
     /// /**
     ///  * Creates the sender, the return value indicates whether the creation
-    ///    was
-    ///  * successful or not.
+    ///  * was successful or not.
     ///  */
     /// private external fun createSender(
     ///     mirror: Long,
@@ -472,16 +470,13 @@ impl Mirror {
         _this: JClass,
         mirror: *const Transport,
         id: i32,
-        bind: JString,
-        description: JByteArray,
         adapter: *const Arc<StreamSenderAdapter>,
-    ) {
-        catcher(&mut env, |env| {
-            let bind: String = env.get_string(&bind)?.into();
-            let buf = env.convert_byte_array(&description)?;
-            Ok(unsafe { &*mirror }
-                .create_sender(id as u8, bind.parse()?, buf, unsafe { &*adapter })?)
-        });
+    ) -> i32 {
+        catcher(&mut env, |_| {
+            unsafe { &*mirror }.create_sender(id as u32, unsafe { &*adapter })?;
+            Ok(true)
+        })
+        .unwrap_or(false) as i32
     }
 
     /// /**
@@ -510,8 +505,7 @@ impl Mirror {
 
     /// /**
     ///  * Creates the receiver, the return value indicates whether the creation
-    ///    was
-    ///  * successful or not.
+    ///  * was successful or not.
     ///  */
     /// private external fun createReceiver(
     ///     mirror: Long,
@@ -522,12 +516,11 @@ impl Mirror {
         mut env: JNIEnv,
         _this: JClass,
         mirror: *const Transport,
-        bind: JString,
+        id: i32,
         adapter: *const Arc<StreamReceiverAdapter>,
     ) -> i32 {
-        catcher(&mut env, |env| {
-            let bind: String = env.get_string(&bind)?.into();
-            unsafe { &*mirror }.create_receiver(bind.parse()?, unsafe { &*adapter })?;
+        catcher(&mut env, |_| {
+            unsafe { &*mirror }.create_receiver(id as u32, unsafe { &*adapter })?;
             Ok(true)
         })
         .unwrap_or(false) as i32

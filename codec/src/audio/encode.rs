@@ -6,7 +6,8 @@ use crate::{Error, RawEncodePacket};
 
 extern "C" {
     fn codec_create_audio_encoder(settings: *const RawAudioEncoderSettings) -> *const c_void;
-    fn codec_audio_encoder_send_frame(codec: *const c_void, frame: *const AudioFrame) -> bool;
+    fn codec_audio_encoder_copy_frame(codec: *const c_void, frame: *const AudioFrame) -> bool;
+    fn codec_audio_encoder_send_frame(codec: *const c_void) -> bool;
     fn codec_audio_encoder_read_packet(codec: *const c_void) -> *const RawEncodePacket;
     fn codec_unref_audio_encoder_packet(codec: *const c_void);
     fn codec_release_audio_encoder(codec: *const c_void);
@@ -47,6 +48,7 @@ pub struct AudioEncodePacket<'a> {
     codec: *const c_void,
     pub buffer: &'a [u8],
     pub flags: i32,
+    pub timestamp: u64,
 }
 
 impl Drop for AudioEncodePacket<'_> {
@@ -60,6 +62,7 @@ impl<'a> AudioEncodePacket<'a> {
         let raw = unsafe { &*ptr };
         Self {
             buffer: unsafe { std::slice::from_raw_parts(raw.buffer, raw.len) },
+            timestamp: raw.timestamp,
             flags: raw.flags,
             codec,
         }
@@ -72,6 +75,7 @@ unsafe impl Send for AudioEncoder {}
 unsafe impl Sync for AudioEncoder {}
 
 impl AudioEncoder {
+    /// Initialize the AVCodecContext to use the given AVCodec.
     pub fn new(settings: &AudioEncoderSettings) -> Result<Self, Error> {
         log::info!("create AudioEncoder: settings={:?}", settings);
 
@@ -84,10 +88,16 @@ impl AudioEncoder {
         }
     }
 
-    pub fn encode(&self, frame: &AudioFrame) -> bool {
-        unsafe { codec_audio_encoder_send_frame(self.0, frame) }
+    pub fn send_frame(&self, frame: &AudioFrame) -> bool {
+        unsafe { codec_audio_encoder_copy_frame(self.0, frame) }
     }
 
+    /// Supply a raw video or audio frame to the encoder.
+    pub fn encode(&self) -> bool {
+        unsafe { codec_audio_encoder_send_frame(self.0) }
+    }
+
+    /// Read encoded data from the encoder.
     pub fn read(&self) -> Option<AudioEncodePacket> {
         let packet = unsafe { codec_audio_encoder_read_packet(self.0) };
         if !packet.is_null() {

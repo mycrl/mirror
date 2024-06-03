@@ -45,119 +45,16 @@ abstract class MirrorReceiver {
     open fun onStart(adapter: ReceiverAdapterWrapper) {}
 }
 
-abstract class MirrorServiceObserver {
-
-    /**
-     * This function is called when another sender is found on the LAN, and you can not accept this
-     * sender by returning null.
-     */
-    abstract fun accept(id: Int, ip: String): MirrorReceiver?;
-}
-
 /**
  * Create a mirror service, note that observer can be null, when observer is null, it will not
  * automatically respond to any sender push.
  */
 class MirrorService constructor(
-    private val mtu: Int,
+    private val server: String,
     private val multicast: String,
-    private val bind: String?,
-    private val observer: MirrorServiceObserver?
+    private val mtu: Int,
 ) {
-    private val mirror: Mirror = Mirror(mtu, multicast, bind, if (observer != null) {
-        object : ReceiverAdapterFactory() {
-            override fun connect(
-                id: Int,
-                addr: String,
-                description: ByteArray
-            ): ReceiverAdapter? {
-                val receiver = observer.accept(id, addr)
-                return if (receiver != null) {
-                    object : ReceiverAdapter() {
-                        private var isReleased: Boolean = false
-                        private val codecDescription = CodecDescriptionFactory.decode(description)
-                        private val videoDecoder = Video.VideoDecoder(
-                            receiver.surface,
-                            object : Video.VideoDecoder.VideoDecoderConfigure {
-                                override val height = codecDescription.video.height
-                                override val width = codecDescription.video.width
-                            })
-
-                        private var audioDecoder = if (receiver.track != null) {
-                            Audio.AudioDecoder(
-                                receiver.track!!,
-                                object : Audio.AudioDecoder.AudioDecoderConfigure {
-                                    override val sampleRate = codecDescription.audio.sampleRate
-                                    override val channels = codecDescription.audio.channels
-                                })
-                        } else {
-                            null
-                        }
-
-                        init {
-                            videoDecoder.start()
-                            audioDecoder?.start()
-                            receiver.onStart(ReceiverAdapterWrapper { -> close() })
-                        }
-
-                        override fun sink(kind: Int, flags: Int, timestamp: Long, buf: ByteArray): Boolean {
-                            try {
-                                if (isReleased) {
-                                    return false
-                                }
-
-                                when (kind) {
-                                    StreamKind.Video -> {
-                                        if (videoDecoder.isRunning) {
-                                            videoDecoder.sink(buf, flags, timestamp)
-                                        }
-                                    }
-
-                                    StreamKind.Audio -> {
-                                        if (audioDecoder != null && audioDecoder!!.isRunning) {
-                                            audioDecoder!!.sink(buf, flags, timestamp)
-                                        }
-                                    }
-                                }
-
-                                receiver.sink(buf, kind)
-                                return true
-                            } catch (e: Exception) {
-                                Log.e(
-                                    "com.github.mycrl.mirror",
-                                    "Mirror ReceiverAdapter sink exception",
-                                    e
-                                )
-
-                                return false
-                            }
-                        }
-
-                        override fun close() {
-                            try {
-                                if (!isReleased) {
-                                    isReleased = true
-                                    audioDecoder?.release()
-                                    videoDecoder.release()
-                                    receiver.released()
-                                }
-                            } catch (e: Exception) {
-                                Log.e(
-                                    "com.github.mycrl.mirror",
-                                    "Mirror ReceiverAdapter close exception",
-                                    e
-                                )
-                            }
-                        }
-                    }
-                } else {
-                    null
-                }
-            }
-        }
-    } else {
-        null
-    })
+    private val mirror: Mirror = Mirror(server, multicast, mtu)
 
     /**
      * Release this mirror instance.
@@ -172,27 +69,11 @@ class MirrorService constructor(
      */
     fun createSender(
         id: Int,
-        bind: String,
         configure: MirrorAdapterConfigure,
         record: AudioRecord?
     ): MirrorSender {
         return MirrorSender(
-            mirror.createSender(
-                id,
-                bind,
-                CodecDescriptionFactory.encode(
-                    CodecDescriptionFactory.CodecDescription(
-                        CodecDescriptionFactory.VideoDescription(
-                            configure.video.width,
-                            configure.video.height,
-                        ),
-                        CodecDescriptionFactory.AudioDescription(
-                            configure.audio.sampleRate,
-                            configure.audio.channels,
-                        )
-                    )
-                ),
-            ),
+            mirror.createSender(id),
             configure,
             record,
         )
@@ -205,12 +86,12 @@ class MirrorService constructor(
      * `port` The port number from the created sender.
      */
     fun createReceiver(
-        bind: String,
+        id: Int,
         configure: MirrorAdapterConfigure,
         observer: MirrorReceiver
     ) {
         var adapter: ReceiverAdapterWrapper? = null
-        adapter = mirror.createReceiver(bind, object : ReceiverAdapter() {
+        adapter = mirror.createReceiver(id, object : ReceiverAdapter() {
             private var isReleased: Boolean = false
             private val videoDecoder = Video.VideoDecoder(
                 observer.surface,
@@ -312,6 +193,20 @@ class MirrorSender constructor(
     init {
         videoEncoder.start()
         audioEncoder.start()
+    }
+
+    /**
+     * Get whether the sender uses multicast transmission
+     */
+    fun getMulticast() : Boolean {
+        return sender.getMulticast()
+    }
+
+    /**
+     * Set whether the sender uses multicast transmission
+     */
+    fun setMulticast(isMulticast: Boolean) {
+        sender.setMulticast(isMulticast)
     }
 
     /**

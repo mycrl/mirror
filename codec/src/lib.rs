@@ -38,4 +38,5 @@ pub struct RawEncodePacket {
     pub buffer: *const u8,
     pub len: usize,
     pub flags: c_int,
+    pub timestamp: u64,
 }
