@@ -45,7 +45,7 @@ int main()
     options.video.height = sdl_rect.h;
     options.video.frame_rate = args.ArgsParams.fps;
     options.video.key_frame_interval = args.ArgsParams.fps;
-    options.video.bit_rate = 500 * 1024 * 8;
+    options.video.bit_rate = 300 * 1024 * 8;
     options.audio.sample_rate = 48000;
     options.audio.bit_rate = 64000;
     options.server = const_cast<char*>(args.ArgsParams.server.c_str());
@@ -53,7 +53,7 @@ int main()
     options.mtu = 1400;
     mirror::Init(options);
 
-    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER))
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER))
     {
         return -1;
     }
@@ -83,6 +83,16 @@ int main()
                                     receiver = std::nullopt;
                                     MessageBox(nullptr, TEXT("receiver is closed!"), TEXT("Info"), 0);
                                 });
+
+    receiver = mirror->CreateReceiver(args.ArgsParams.id, render);
+    if (!receiver.has_value())
+    {
+        MessageBox(nullptr, TEXT("Failed to create receiver!"), TEXT("Error"), 0);
+        SDL_Quit();
+        mirror::Quit();
+
+        return -1;
+    }
 
     SDL_Event event;
     while (SDL_WaitEvent(&event))

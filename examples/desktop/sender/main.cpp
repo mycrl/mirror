@@ -35,14 +35,14 @@ int main()
     SDL_Rect sdl_rect;
     sdl_rect.x = 0;
     sdl_rect.y = 0;
-    sdl_rect.w = args.ArgsParams.width;
-    sdl_rect.h = args.ArgsParams.height;
+    sdl_rect.w = 800;
+    sdl_rect.h = 600;
 
     MirrorOptions options;
     options.video.encoder = const_cast<char*>(args.ArgsParams.encoder.c_str());
     options.video.decoder = const_cast<char*>(args.ArgsParams.decoder.c_str());
-    options.video.width = sdl_rect.w;
-    options.video.height = sdl_rect.h;
+    options.video.width = args.ArgsParams.width;
+    options.video.height = args.ArgsParams.height;
     options.video.frame_rate = args.ArgsParams.fps;
     options.video.key_frame_interval = args.ArgsParams.fps;
     options.video.bit_rate = 500 * 1024 * 8;
@@ -53,7 +53,7 @@ int main()
     options.mtu = 1400;
     mirror::Init(options);
 
-    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER))
+    if (SDL_Init(SDL_INIT_TIMER))
     {
         return -1;
     }
@@ -95,6 +95,16 @@ int main()
                                     sender = std::nullopt;
                                     MessageBox(nullptr, TEXT("sender is closed!"), TEXT("Info"), 0);
                                 });
+
+    sender = mirror->CreateSender(args.ArgsParams.id, render);
+    if (!sender.has_value())
+    {
+        MessageBox(nullptr, TEXT("Failed to create sender!"), TEXT("Error"), 0);
+        SDL_Quit();
+        mirror::Quit();
+
+        return -1;
+    }
 
     SDL_Event event;
     while (SDL_WaitEvent(&event))

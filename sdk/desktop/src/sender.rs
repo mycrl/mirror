@@ -9,6 +9,7 @@ use codec::{
 
 use common::frame::{AudioFrame, VideoFrame};
 use crossbeam::sync::{Parker, Unparker};
+use thread_priority::ThreadPriority;
 use transport::adapter::{BufferFlag, StreamBufferInfo, StreamSenderAdapter};
 
 use crate::mirror::{FrameSink, OPTIONS};
@@ -38,6 +39,8 @@ impl VideoSender {
         let sender_ = sender.clone();
         let adapter_ = Arc::downgrade(adapter);
         thread::spawn(move || {
+            ThreadPriority::Max.set_for_current().unwrap();
+            
             while let Some(adapter) = adapter_.upgrade() {
                 // Waiting for external audio and video frame updates.
                 parker.park();
@@ -50,7 +53,7 @@ impl VideoSender {
                     while let Some(packet) = sender_.encoder.read() {
                         adapter.send(
                             Bytes::copy_from_slice(packet.buffer),
-                            StreamBufferInfo::Video(packet.flags, packet.timestamp),
+                            StreamBufferInfo::Video(packet.flags, 0),
                         );
                     }
                 }
@@ -94,6 +97,8 @@ impl AudioSender {
         let sender_ = sender.clone();
         let adapter_ = Arc::downgrade(adapter);
         thread::spawn(move || {
+            ThreadPriority::Max.set_for_current().unwrap();
+
             while let Some(adapter) = adapter_.upgrade() {
                 // Waiting for external audio and video frame updates.
                 parker.park();
@@ -106,7 +111,7 @@ impl AudioSender {
                     while let Some(packet) = sender_.encoder.read() {
                         adapter.send(
                             Bytes::copy_from_slice(packet.buffer),
-                            StreamBufferInfo::Audio(packet.flags, packet.timestamp),
+                            StreamBufferInfo::Audio(packet.flags, 0),
                         );
                     }
                 }
