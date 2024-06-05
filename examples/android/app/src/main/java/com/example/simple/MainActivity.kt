@@ -58,7 +58,7 @@ open class Layout : ComponentActivity() {
     private var server by mutableStateOf("127.0.0.1:8080")
     private var id by mutableStateOf("0")
     private var state by mutableIntStateOf(State.New)
-    private var isMulticast by mutableIntStateOf(0)
+    private var isMulticast by mutableIntStateOf(1)
 
     class State {
         companion object {

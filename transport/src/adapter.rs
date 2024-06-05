@@ -76,7 +76,7 @@ impl StreamSenderAdapter {
         Arc::new(Self {
             video_config: AtomicOption::new(None),
             audio_config: AtomicOption::new(None),
-            is_multicast: AtomicBool::new(false),
+            is_multicast: AtomicBool::new(true),
             audio_interval: AtomicU8::new(0),
             rx: Mutex::new(rx),
             tx,

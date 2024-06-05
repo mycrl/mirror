@@ -29,10 +29,10 @@ pub fn start_server(config: Configure, route: Arc<Route>) -> Result<()> {
             Ok((socket, addr)) => {
                 let stream_id = socket.get_stream_id();
                 log::info!("new srt socket, addr={:?}, stream_id={:?}", addr, stream_id);
-        
+
                 let route = route.clone();
                 let socket = Arc::new(socket);
-        
+
                 // Get the stream information carried in the srt link. If the stream information
                 // does not exist or is invalid, the current connection is rejected. Skipping
                 // this step directly will trigger the release of the link and close it.
@@ -44,21 +44,21 @@ pub fn start_server(config: Configure, route: Arc<Route>) -> Result<()> {
                     info
                 } else {
                     log::error!("invalid stream id, addr={:?}", addr);
-        
+
                     continue;
                 };
-        
+
                 log::info!(
                     "accept a srt socket, addr={:?}, info={:?}",
                     addr,
                     stream_info
                 );
-        
+
                 // The multicast port number exists only for publishers
                 if let Some(port) = stream_info.port {
                     route.add(stream_info.id, port)
                 }
-        
+
                 {
                     // If it is a subscriber, add the current connection to the subscription
                     // connection pool
@@ -72,40 +72,41 @@ pub fn start_server(config: Configure, route: Arc<Route>) -> Result<()> {
                             .insert(addr);
                     }
                 }
-        
+
                 let socket = socket.clone();
                 let sockets = sockets.clone();
                 let subscribers = subscribers.clone();
                 thread::spawn(move || {
                     let mut buf = [0u8; 2000];
                     let mut closed = Vec::with_capacity(100);
-        
+
                     loop {
                         match socket.read(&mut buf) {
                             Ok(size) => {
                                 if size == 0 {
                                     break;
                                 }
-        
-                                // Subscribers are not allowed to write any information to the server!
+
+                                // Subscribers are not allowed to write any information to the
+                                // server!
                                 if stream_info.kind == SocketKind::Subscriber {
                                     break;
                                 }
-        
+
                                 closed.clear();
-        
+
                                 {
                                     let sockets = sockets.read().unwrap();
                                     let subscribers = subscribers.read().unwrap();
-        
-                                    // Forwards all packets sent by the publisher to all subscribers of the
-                                    // same channel
+
+                                    // Forwards all packets sent by the publisher to all subscribers
+                                    // of the same channel
                                     if let Some(items) = subscribers.get(&stream_info.id) {
                                         for addr in items.iter() {
                                             if let Some(socket) = sockets.get(addr) {
                                                 if let Err(e) = socket.send(&buf[..size]) {
                                                     closed.push(*addr);
-        
+
                                                     log::warn!(
                                                         "not send a buf to srt socket, addr={:?}, err={:?}",
                                                         addr,
@@ -116,7 +117,7 @@ pub fn start_server(config: Configure, route: Arc<Route>) -> Result<()> {
                                         }
                                     }
                                 }
-        
+
                                 // Some subscribers have expired, clean up all expired subscribers
                                 if !closed.is_empty() {
                                     let mut sockets = sockets.write().unwrap();
@@ -128,18 +129,22 @@ pub fn start_server(config: Configure, route: Arc<Route>) -> Result<()> {
                                 }
                             }
                             Err(e) => {
-                                log::warn!("not recv a buf to srt socket, addr={:?}, err={:?}", addr, e);
-        
+                                log::warn!(
+                                    "not recv a buf to srt socket, addr={:?}, err={:?}",
+                                    addr,
+                                    e
+                                );
+
                                 break;
                             }
                         }
                     }
-        
+
                     log::info!("srt socket closed, addr={:?}, info={:?}", addr, stream_info);
-        
+
                     let mut sockets = sockets.write().unwrap();
                     let mut subscribers = subscribers.write().unwrap();
-        
+
                     // If the publisher has exited, it is necessary to close all subscribers of the
                     // current channel and inform the client that the publisher has exited.
                     if stream_info.kind == SocketKind::Publisher {
@@ -156,14 +161,14 @@ pub fn start_server(config: Configure, route: Arc<Route>) -> Result<()> {
                             items.remove(&addr);
                         }
                     }
-        
+
                     // If the publisher exits, inform the router that the publisher has exited and
                     // start cleaning up
                     if stream_info.kind == SocketKind::Publisher {
                         route.remove(stream_info.id)
                     }
                 });
-            },
+            }
             Err(e) => {
                 log::error!("{:?}", e);
 

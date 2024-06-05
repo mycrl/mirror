@@ -27,10 +27,8 @@ impl Options {
         set_sock_opt(fd, SRT_SOCKOPT::SRTO_SNDSYN, &0_i32)?;
         set_sock_opt(fd, SRT_SOCKOPT::SRTO_TSBPDMODE, &1_i32)?;
         set_sock_opt(fd, SRT_SOCKOPT::SRTO_TLPKTDROP, &1_i32)?;
-        set_sock_opt(fd, SRT_SOCKOPT::SRTO_REUSEADDR, &1_i32)?;
         set_sock_opt(fd, SRT_SOCKOPT::SRTO_FC, &self.fc)?;
         set_sock_opt(fd, SRT_SOCKOPT::SRTO_MSS, &self.mtu)?;
-        set_sock_opt(fd, SRT_SOCKOPT::SRTO_OHEADBW, &100_i32)?;
         set_sock_opt(fd, SRT_SOCKOPT::SRTO_RCVLATENCY, &self.latency)?;
         set_sock_opt(fd, SRT_SOCKOPT::SRTO_MAXBW, &self.max_bandwidth)?;
         set_sock_opt(fd, SRT_SOCKOPT::SRTO_PEERIDLETIMEO, &self.timeout)?;

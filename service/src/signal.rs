@@ -48,9 +48,9 @@ pub async fn start_server(bind: SocketAddr, route: Arc<Route>) -> Result<(), Err
     let listener = TcpListener::bind(bind).await?;
     loop {
         match listener.accept().await {
-            Ok((mut socket, addr)) =>  {
+            Ok((mut socket, addr)) => {
                 log::info!("new signal socket, addr={}", addr);
-        
+
                 let route = route.clone();
                 tokio::spawn(async move {
                     // Every time a new connection comes online, notify the current link of all
@@ -66,7 +66,7 @@ pub async fn start_server(bind: SocketAddr, route: Arc<Route>) -> Result<(), Err
                             }
                         }
                     }
-        
+
                     // Every time a new publisher comes online, the current connection is notified
                     let mut buf = [0u8; 1024];
                     let mut changer = route.get_changer();
@@ -85,10 +85,10 @@ pub async fn start_server(bind: SocketAddr, route: Arc<Route>) -> Result<(), Err
                             else => break
                         }
                     }
-        
+
                     log::info!("signal socket close, addr={}", addr);
                 });
-            },
+            }
             Err(e) => {
                 log::error!("{:?}", e);
 
