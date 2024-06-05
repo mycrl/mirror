@@ -16,6 +16,7 @@ pub fn start_server(config: Configure, route: Arc<Route>) -> Result<()> {
     let mut opt = Options::default();
     opt.mtu = config.mtu as u32;
     opt.latency = 30;
+    opt.fc = 32;
 
     // Start the srt server
     let mut server = Server::bind(config.bind, opt, 100)?;
