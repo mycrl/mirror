@@ -39,7 +39,7 @@ impl VideoSender {
         let sender_ = sender.clone();
         let adapter_ = Arc::downgrade(adapter);
         thread::spawn(move || {
-            ThreadPriority::Max.set_for_current().unwrap();
+            let _ = ThreadPriority::Max.set_for_current();
             
             while let Some(adapter) = adapter_.upgrade() {
                 // Waiting for external audio and video frame updates.
@@ -97,7 +97,7 @@ impl AudioSender {
         let sender_ = sender.clone();
         let adapter_ = Arc::downgrade(adapter);
         thread::spawn(move || {
-            ThreadPriority::Max.set_for_current().unwrap();
+            let _ = ThreadPriority::Max.set_for_current();
 
             while let Some(adapter) = adapter_.upgrade() {
                 // Waiting for external audio and video frame updates.

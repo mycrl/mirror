@@ -63,22 +63,15 @@ int main()
                                           SDL_WINDOWPOS_UNDEFINED,
                                           sdl_rect.w,
                                           sdl_rect.h,
-                                          SDL_WINDOW_OPENGL | SDL_WINDOW_MAXIMIZED);
+                                          SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
     if (screen == NULL)
     {
         return -2;
     }
 
-    SDL_Renderer* sdl_renderer = SDL_CreateRenderer(screen, -1, SDL_RENDERER_ACCELERATED);
-    SDL_Texture* sdl_texture = SDL_CreateTexture(sdl_renderer,
-                                                 SDL_PIXELFORMAT_NV12,
-                                                 SDL_TEXTUREACCESS_STREAMING,
-                                                 sdl_rect.w,
-                                                 sdl_rect.h);
-
     mirror::MirrorService* mirror = new mirror::MirrorService();
     std::optional<mirror::MirrorService::MirrorReceiver> receiver = std::nullopt;
-    Render* render = new Render(&sdl_rect, sdl_texture, sdl_renderer, true, [&]
+    Render* render = new Render(&sdl_rect, screen, true, [&]
                                 {
                                     receiver = std::nullopt;
                                     MessageBox(nullptr, TEXT("receiver is closed!"), TEXT("Info"), 0);

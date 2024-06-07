@@ -53,6 +53,10 @@ pub async fn start_server(bind: SocketAddr, route: Arc<Route>) -> Result<(), Err
 
                 let route = route.clone();
                 tokio::spawn(async move {
+                    if socket.set_nodelay(true).is_err() {
+                        return;
+                    }
+
                     // Every time a new connection comes online, notify the current link of all
                     // published channels.
                     {
@@ -68,11 +72,11 @@ pub async fn start_server(bind: SocketAddr, route: Arc<Route>) -> Result<(), Err
                     }
 
                     // Every time a new publisher comes online, the current connection is notified
-                    let mut buf = [0u8; 1024];
+                    let mut buf = [0u8; 1];
                     let mut changer = route.get_changer();
                     loop {
                         tokio::select! {
-                            Some(signal) = changer.change() => {
+                            Ok(signal) = changer.recv() => {
                                 if socket.write_all(&signal.encode()).await.is_err() {
                                     break;
                                 }

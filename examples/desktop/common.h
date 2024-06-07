@@ -23,15 +23,13 @@ class Render : public mirror::MirrorService::AVFrameSink
 {
 public:
 	Render(SDL_Rect* sdl_rect,
-		   SDL_Texture* sdl_texture,
-		   SDL_Renderer* sdl_renderer,
+		   SDL_Window* screen,
 		   bool is_render,
 		   std::function<void()> closed_callback)
-		: _sdl_rect(sdl_rect)
-		, _sdl_texture(sdl_texture)
-		, _sdl_renderer(sdl_renderer)
-		, _is_render(is_render)
+		: _is_render(is_render)
 		, _closed_callback(closed_callback)
+		, _sdl_rect(sdl_rect)
+		, _screen(screen)
 	{}
 
 	bool OnVideoFrame(struct VideoFrame* frame)
@@ -41,8 +39,28 @@ public:
 			return true;
 		}
 
+		if (_sdl_renderer == nullptr)
+		{
+			_sdl_renderer = SDL_CreateRenderer(_screen, -1, SDL_RENDERER_ACCELERATED);
+		}
+
+		if (_sdl_texture == nullptr)
+		{
+			_sdl_texture = SDL_CreateTexture(_sdl_renderer,
+											 SDL_PIXELFORMAT_NV12,
+											 SDL_TEXTUREACCESS_STREAMING,
+											 frame->rect.width,
+											 frame->rect.height);
+		}
+
+		SDL_Rect sdl_rect;
+		sdl_rect.w = frame->rect.width;
+		sdl_rect.h = frame->rect.height;
+		sdl_rect.x = 0;
+		sdl_rect.y = 0;
+
 		if (SDL_UpdateNVTexture(_sdl_texture,
-								_sdl_rect,
+								&sdl_rect,
 								frame->data[0],
 								frame->linesize[0],
 								frame->data[1],
@@ -71,10 +89,11 @@ public:
 		_closed_callback();
 	}
 private:
-	SDL_Rect* _sdl_rect;
-	SDL_Texture* _sdl_texture;
-	SDL_Renderer* _sdl_renderer;
 	bool _is_render;
+	SDL_Window* _screen = nullptr;
+	SDL_Rect* _sdl_rect = nullptr;
+	SDL_Texture* _sdl_texture = nullptr;
+	SDL_Renderer* _sdl_renderer = nullptr;
 	std::function<void()> _closed_callback;
 };
 

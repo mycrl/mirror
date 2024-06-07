@@ -73,6 +73,7 @@ impl Socket {
     async fn create(multicast: Ipv4Addr, bind: SocketAddr) -> Result<Self, Error> {
         let socket = socket2::Socket::from(UdpSocket::bind(bind)?);
         socket.set_recv_buffer_size(4 * 1024 * 1024)?;
+        socket.set_nonblocking(true)?;
 
         let socket = tokio::net::UdpSocket::from_std(socket.into())?;
         if let IpAddr::V4(bind) = bind.ip() {

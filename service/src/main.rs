@@ -6,6 +6,9 @@ use anyhow::Result;
 use clap::Parser;
 use service::route::Route;
 
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 #[derive(Parser, Clone, Debug)]
 #[command(
     about = env!("CARGO_PKG_DESCRIPTION"),

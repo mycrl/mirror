@@ -55,10 +55,10 @@ open class Layout : ComponentActivity() {
     private var observer: Observer? = null
     private var surfaceView: SurfaceView? = null
     private var clickStartHandler: (() -> Unit)? = null
-    private var server by mutableStateOf("127.0.0.1:8080")
+    private var server by mutableStateOf("192.168.8.230:8080")
     private var id by mutableStateOf("0")
     private var state by mutableIntStateOf(State.New)
-    private var isMulticast by mutableIntStateOf(1)
+    private var isMulticast by mutableIntStateOf(0)
 
     class State {
         companion object {

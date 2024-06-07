@@ -69,13 +69,6 @@ int main()
         return -2;
     }
 
-    SDL_Renderer* sdl_renderer = SDL_CreateRenderer(screen, -1, SDL_RENDERER_ACCELERATED);
-    SDL_Texture* sdl_texture = SDL_CreateTexture(sdl_renderer,
-                                                 SDL_PIXELFORMAT_NV12,
-                                                 SDL_TEXTUREACCESS_STREAMING,
-                                                 sdl_rect.w,
-                                                 sdl_rect.h);
-
     mirror::MirrorService* mirror = new mirror::MirrorService();
 
     auto devices = mirror::DeviceManagerService::GetDevices(DeviceKind::Screen);
@@ -90,7 +83,7 @@ int main()
     }
 
     std::optional<mirror::MirrorService::MirrorSender> sender = std::nullopt;
-    Render* render = new Render(&sdl_rect, sdl_texture, sdl_renderer, false, [&]
+    Render* render = new Render(&sdl_rect, screen, false, [&]
                                 {
                                     sender = std::nullopt;
                                     MessageBox(nullptr, TEXT("sender is closed!"), TEXT("Info"), 0);

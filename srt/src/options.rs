@@ -49,12 +49,12 @@ impl Options {
 impl Default for Options {
     fn default() -> Self {
         Self {
-            fec: "fec,layout:even,rows:20,cols:10,arq:always".to_string(),
+            fec: "fec,layout:staircase,rows:5,cols:10,arq:onreq".to_string(),
             max_bandwidth: -1,
             stream_id: None,
             timeout: 5000,
-            latency: 20,
-            mtu: 1400,
+            latency: 120,
+            mtu: 1500,
             fc: 25600,
         }
     }

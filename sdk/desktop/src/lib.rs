@@ -18,7 +18,10 @@ use common::{
 use mirror::{AudioOptions, Mirror, MirrorOptions, VideoOptions};
 use transport::adapter::{StreamReceiverAdapter, StreamSenderAdapter};
 
-use crate::mirror::FrameSink;
+use self::mirror::FrameSink;
+
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 /// Video Codec Configuration.
 ///

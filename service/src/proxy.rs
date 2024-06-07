@@ -15,7 +15,7 @@ pub fn start_server(config: Configure, route: Arc<Route>) -> Result<()> {
     // the delay is set to the minimum delay without considering network factors.
     let mut opt = Options::default();
     opt.mtu = config.mtu as u32;
-    opt.latency = 30;
+    opt.latency = 40;
     opt.fc = 32;
 
     // Start the srt server

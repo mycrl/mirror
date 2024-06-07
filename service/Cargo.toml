@@ -13,3 +13,4 @@ srt = { path = "../srt" }
 clap = { version = "4", features = ["derive"] }
 serde = { version = "1.0.202", features = ["derive"] }
 tokio = { version = "1.37.0", features = ["full"] }
+mimalloc = { version = "*", default-features = false }
