@@ -31,7 +31,6 @@ fn main() -> Result<()> {
     let route = Arc::new(Route::default());
 
     // Initialize srt and logger
-    srt::startup();
     simple_logger::init_with_level(log::Level::Info)?;
 
     log::info!("configure: {:?}", config);
