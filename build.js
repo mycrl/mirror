@@ -73,6 +73,7 @@ fs.copyFileSync(`./target/${Profile.toLowerCase()}/service.exe`, './build/server
 
 if (!Args.release) {
     fs.copyFileSync('./target/debug/mirror.pdb', './build/bin/mirror.pdb')
+    fs.copyFileSync('./target/debug/service.pdb', './build/server/service.pdb')
 }
 
 if (!Args.ffmpeg4) {
