@@ -12,7 +12,6 @@ jobs:
           - debug
           - release
         version:
-          - ffmpeg6
           - ffmpeg4
     steps:
       - uses: actions/checkout@v4
