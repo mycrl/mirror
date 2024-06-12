@@ -39,33 +39,33 @@ enum DeviceKind
 
 struct VideoOptions
 {
-    /*
+    /**
      * Video encoder settings, possible values are `h264_qsv`, `h264_nvenc`,
      * `libx264` and so on.
      */
 	char* encoder;
-    /*
+    /**
      * Video decoder settings, possible values are `h264_qsv`, `h264_cuvid`,
      * `h264`, etc.
      */
 	char* decoder;
-    /*
+    /**
      * Frame rate setting in seconds.
      */
 	uint8_t frame_rate;
-    /*
+    /**
      * The width of the video.
      */
 	uint32_t width;
-    /*
+    /**
      * The height of the video.
      */
 	uint32_t height;
-    /*
+    /**
      * The bit rate of the video encoding.
      */
 	uint64_t bit_rate;
-    /*
+    /**
      * Keyframe Interval, used to specify how many frames apart to output a
      * keyframe.
      */
@@ -74,11 +74,11 @@ struct VideoOptions
 
 struct AudioOptions
 {
-    /*
+    /**
      * The sample rate of the audio, in seconds.
      */
     uint64_t sample_rate;
-    /*
+    /**
      * The bit rate of the video encoding.
      */
     uint64_t bit_rate;
@@ -86,23 +86,23 @@ struct AudioOptions
 
 struct MirrorOptions
 {
-    /*
+    /**
      * Video Codec Configuration.
      */
 	VideoOptions video;
-    /*
+    /**
      * Audio Codec Configuration.
      */
     AudioOptions audio;
-    /*
+    /**
      * mirror server address.
      */
     char* server;
-    /*
+    /**
      * Multicast address, e.g. `239.0.0.1`.
      */
 	char* multicast;
-    /*
+    /**
      * The size of the maximum transmission unit of the network, which is
      * related to the settings of network devices such as routers or switches,
      * the recommended value is 1400.
@@ -117,15 +117,15 @@ struct Device
 
 struct Devices
 {
-    /*
+    /**
 	 * device list.
      */
 	const struct Device* devices;
-    /*
+    /**
 	 * device vector capacity.
      */
 	size_t capacity;
-    /*
+    /**
 	 * device vector size.
      */
 	size_t size;
@@ -137,7 +137,7 @@ typedef const void* Receiver;
 
 struct FrameSink
 {
-    /*
+    /**
      * Callback occurs when the video frame is updated. The video frame format
      * is fixed to NV12. Be careful not to call blocking methods inside the
      * callback, which will seriously slow down the encoding and decoding
@@ -166,7 +166,7 @@ struct FrameSink
      * primaries of most images are BT.709.
      */
     bool (*video)(void* ctx, struct VideoFrame* frame);
-    /*
+    /**
      * Callback is called when the audio frame is updated. The audio frame
      * format is fixed to PCM. Be careful not to call blocking methods inside
      * the callback, which will seriously slow down the encoding and decoding
@@ -195,7 +195,7 @@ struct FrameSink
      * can be used to represent each sample.
      */
     bool (*audio)(void* ctx, struct AudioFrame* frame);
-    /*
+    /**
      * Callback when the sender is closed. This may be because the external
      * side actively calls the close, or the audio and video packets cannot be
      * sent (the network is disconnected), etc.
@@ -206,78 +206,78 @@ struct FrameSink
 
 extern "C"
 {
-    /*
+    /**
      * Automatically search for encoders, limited hardware, fallback to software
      * implementation if hardware acceleration unit is not found.
      */
     EXPORT const char* mirror_find_video_encoder();
-    /*
+    /**
      * Automatically search for decoders, limited hardware, fallback to software
      * implementation if hardware acceleration unit is not found.
      */
     EXPORT const char* mirror_find_video_decoder();
-    /*
+    /**
      * Cleans up the environment when the SDK exits, and is recommended to be
      * called when the application exits.
      */
 	EXPORT void mirror_quit();
-    /*
+    /**
      * Initialize the environment, which must be initialized before using the SDK.
      */
 	EXPORT bool mirror_init(struct MirrorOptions options);
-    /*
+    /**
      * Get device name.
      */
 	EXPORT const char* mirror_get_device_name(const struct Device* device);
-    /*
+    /**
      * Get device kind.
      */
 	EXPORT enum DeviceKind mirror_get_device_kind(const struct Device* device);
-    /*
+    /**
      * Get devices from device manager.
      */
 	EXPORT struct Devices mirror_get_devices(enum DeviceKind kind);
-    /*
+    /**
      * Release devices.
      */
 	EXPORT void mirror_drop_devices(struct Devices* devices);
-    /*
+    /**
      * Setting up an input device, repeated settings for the same type of device
      * will overwrite the previous device.
      */
 	EXPORT bool mirror_set_input_device(const struct Device* device);
-    /*
+    /**
      * Create mirror.
      */
 	EXPORT Mirror mirror_create();
-    /*
+    /**
      * Release mirror.
      */
 	EXPORT void mirror_drop(Mirror mirror);
-    /*
+    /**
      * Create a sender, specify a bound NIC address, you can pass callback to
      * get the device screen or sound callback, callback can be null, if it is
      * null then it means no callback data is needed.
      */
 	EXPORT Sender mirror_create_sender(Mirror mirror, int id, struct FrameSink sink);
-    /*
+    /**
      * Get whether the sender uses multicast transmission.
      */
     EXPORT bool mirror_sender_get_multicast(Sender sender);
-    /*
+    /**
      * Set whether the sender uses multicast transmission.
      */
     EXPORT void mirror_sender_set_multicast(Sender sender, bool is_multicast);
-    /*
+    /**
      * Close sender.
      */
 	EXPORT void mirror_close_sender(Sender sender);
-    /*
+    /**
      * Create a receiver, specify a bound NIC address, you can pass callback to
      * get the sender's screen or sound callback, callback can not be null.
      */
 	EXPORT Receiver mirror_create_receiver(Mirror mirror, int id, struct FrameSink sink);
-    /*
+    /**
      * Close receiver.
      */
 	EXPORT void mirror_close_receiver(Receiver receiver);
