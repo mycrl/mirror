@@ -83,7 +83,7 @@ fn main() -> anyhow::Result<()> {
         if !is_exsit(&join(
             &srt_dir,
             if cfg!(windows) {
-                "./Release/srt_static.lib"
+                "./srt.lib"
             } else {
                 "libsrt.a"
             },
@@ -96,51 +96,20 @@ fn main() -> anyhow::Result<()> {
 
             #[cfg(not(target_os = "linux"))]
             {
-                exec(
-                    &format!(
-                        "cmake {} .",
-                        [
-                            &format!("-DENABLE_DEBUG={}", if is_debug { "ON" } else { "OFF" }),
-                            "-DCMAKE_BUILD_TYPE=Release",
-                            "-DENABLE_APPS=OFF",
-                            "-DENABLE_BONDING=ON",
-                            "-DENABLE_CODE_COVERAGE=OFF",
-                            "-DENABLE_SHARED=OFF",
-                            "-DENABLE_STATIC=ON",
-                            "-DENABLE_ENCRYPTION=OFF",
-                            "-DENABLE_UNITTESTS=OFF",
-                            "-DENABLE_STDCXX_SYNC=ON"
-                        ]
-                        .join(" ")
-                    ),
-                    &srt_dir,
-                )?;
-
-                exec("cmake --build . --config Release", &srt_dir)?;
+                exec("Invoke-WebRequest \
+                    -Uri https://github.com/mycrl/distributions/releases/download/distributions/srt-windows-x64.lib \
+                    -OutFile srt.lib", &srt_dir)?;
             }
         }
 
-        #[cfg(target_os = "windows")]
-        {
-            println!(
-                "cargo:rustc-link-search=all={}",
-                join(&srt_dir, "./Release")
-            );
+        println!("cargo:rustc-link-search=all={}", srt_dir);
+        println!("cargo:rustc-link-lib=srt");
 
-            println!("cargo:rustc-link-lib=srt_static");
-        }
+        #[cfg(target_os = "macos")]
+        println!("cargo:rustc-link-lib=c++");
 
-        #[cfg(not(target_os = "windows"))]
-        {
-            println!("cargo:rustc-link-search=all={}", srt_dir);
-            println!("cargo:rustc-link-lib=srt");
-
-            #[cfg(target_os = "macos")]
-            println!("cargo:rustc-link-lib=c++");
-
-            #[cfg(target_os = "linux")]
-            println!("cargo:rustc-link-lib=stdc++");
-        }
+        #[cfg(target_os = "linux")]
+        println!("cargo:rustc-link-lib=stdc++");
     }
 
     Ok(())
