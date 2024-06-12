@@ -40,7 +40,7 @@ impl VideoSender {
         let adapter_ = Arc::downgrade(adapter);
         thread::spawn(move || {
             let _ = ThreadPriority::Max.set_for_current();
-            
+
             while let Some(adapter) = adapter_.upgrade() {
                 // Waiting for external audio and video frame updates.
                 parker.park();
