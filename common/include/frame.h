@@ -11,7 +11,7 @@
 
 #include <stdint.h>
 
- struct VideoFrameRect
+struct VideoFrameRect
 {
     size_t width;
     size_t height;
