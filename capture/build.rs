@@ -51,7 +51,7 @@ fn main() -> anyhow::Result<()> {
         if !is_exsit(&join(&out_dir, "obs.lib")?) {
             exec(
                 "Invoke-WebRequest \
-                    -Uri https://github.com/mycrl/distributions/releases/download/distributions/obs.lib \
+                    -Uri https://github.com/mycrl/distributions/releases/download/distributions/obs-windows-x64.lib \
                     -OutFile obs.lib",
                 &out_dir,
             )?;
@@ -70,7 +70,7 @@ fn main() -> anyhow::Result<()> {
         .cpp(true)
         .std("c++20")
         .debug(is_debug)
-        .static_crt(false)
+        .static_crt(true)
         .target(&target)
         .warnings(false)
         .out_dir(&out_dir)

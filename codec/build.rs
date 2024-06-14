@@ -73,7 +73,7 @@ fn main() -> anyhow::Result<()> {
     )?) {
         if cfg!(target_os = "windows") {
             exec("Invoke-WebRequest \
-                -Uri https://github.com/mycrl/libyuv-rs/releases/download/v0.1.2/yuv-windows-x86_64.lib \
+                -Uri https://github.com/mycrl/distributions/releases/download/distributions/yuv-windows-x64.lib \
                 -OutFile yuv.lib", &settings.out_dir)?;
         } else {
             exec(
@@ -102,7 +102,7 @@ fn main() -> anyhow::Result<()> {
         .cpp(true)
         .std("c++20")
         .debug(settings.is_debug)
-        .static_crt(false)
+        .static_crt(true)
         .target(&settings.target)
         .warnings(false)
         .out_dir(&settings.out_dir)
@@ -183,7 +183,7 @@ fn find_ffmpeg_prefix(out_dir: &str) -> anyhow::Result<(Vec<String>, Vec<String>
         #[cfg(feature = "ffmpeg6")]
         exec(
             "Invoke-WebRequest \
-                -Uri https://github.com/mycrl/distributions/releases/download/distributions/ffmpeg-6.1.zip \
+                -Uri https://github.com/mycrl/distributions/releases/download/distributions/ffmpeg-6.1-windows-x64.zip \
                 -OutFile ffmpeg.zip",
             out_dir,
         )?;
@@ -191,7 +191,7 @@ fn find_ffmpeg_prefix(out_dir: &str) -> anyhow::Result<(Vec<String>, Vec<String>
         #[cfg(feature = "ffmpeg4")]
         exec(
             "Invoke-WebRequest \
-                -Uri https://github.com/mycrl/distributions/releases/download/distributions/ffmpeg-4.4.zip \
+                -Uri https://github.com/mycrl/distributions/releases/download/distributions/ffmpeg-4.4-windows-x64.zip \
                 -OutFile ffmpeg.zip",
             out_dir,
         )?;

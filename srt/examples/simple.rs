@@ -18,7 +18,7 @@ fn main() -> Result<(), Error> {
     let opt_ = opt.clone();
     let bytes_ = bytes.clone();
     thread::spawn(move || {
-        let mut server = Server::bind("0.0.0.0:8088".parse().unwrap(), opt_, 100).unwrap();
+        let server = Server::bind("0.0.0.0:8088".parse().unwrap(), opt_, 100).unwrap();
 
         while let Ok((socket, addr)) = server.accept() {
             let bytes = bytes_.clone();

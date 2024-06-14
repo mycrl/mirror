@@ -6,10 +6,10 @@ edition = "2021"
 [dependencies]
 bytes = "1.5.0"
 anyhow = "1.0.79"
-simple_logger = "4"
 log = "0.4.20"
 rmp-serde = "1.3.0"
 srt = { path = "../srt" }
+common = { path = "../common" }
 clap = { version = "4", features = ["derive"] }
 serde = { version = "1.0.202", features = ["derive"] }
 tokio = { version = "1.37.0", features = ["full"] }

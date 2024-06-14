@@ -4,6 +4,8 @@ use std::{net::SocketAddr, process::exit, sync::Arc, thread};
 
 use anyhow::Result;
 use clap::Parser;
+use common::{jump_current_exe_dir, logger};
+use log::LevelFilter;
 use service::route::Route;
 use tokio::runtime::Runtime;
 
@@ -24,14 +26,15 @@ pub struct Configure {
 }
 
 fn main() -> Result<()> {
+    // Initialize srt and logger
+    srt::startup();
+    jump_current_exe_dir()?;
+    logger::init("mirror-service.log", LevelFilter::Info)?;
+
     // Parse command line parameters. Note that if the command line parameters are
     // incorrect, panic will occur.
     let config = Configure::parse();
     let route = Arc::new(Route::default());
-
-    // Initialize srt and logger
-    srt::startup();
-    simple_logger::init_with_level(log::Level::Info)?;
 
     log::info!("configure: {:?}", config);
 

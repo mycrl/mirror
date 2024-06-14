@@ -5,8 +5,8 @@ use os_socketaddr::OsSocketAddr;
 use crate::{options::get_sock_opt_str, SRT_SOCKOPT};
 
 use super::{
-    error, options::Options, srt_close, srt_connect, srt_create_socket, srt_recv, srt_send,
-    SRTSOCKET, SRT_INVALID_SOCK,
+    error, options::Options, srt_bstats, srt_close, srt_connect, srt_create_socket, srt_recv,
+    srt_send, TraceStats, SRTSOCKET, SRT_INVALID_SOCK,
 };
 
 pub struct Socket {
@@ -20,6 +20,22 @@ impl Socket {
 
     pub fn get_stream_id(&self) -> Option<String> {
         get_sock_opt_str(self.fd, SRT_SOCKOPT::SRTO_STREAMID)
+    }
+
+    /// Reports the current statistics
+    ///
+    /// Arguments:
+    ///
+    /// u: Socket from which to get statistics
+    /// perf: Pointer to an object to be written with the statistics
+    /// clear: 1 if the statistics should be cleared after retrieval
+    pub fn get_stats(&self) -> Result<TraceStats, Error> {
+        let mut stats = TraceStats::default();
+        if unsafe { srt_bstats(self.fd, &mut stats, true as i32) } != 0 {
+            return Err(error());
+        }
+
+        Ok(stats)
     }
 
     /// Connects a socket or a group to a remote party with a specified address

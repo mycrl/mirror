@@ -48,7 +48,7 @@ if (!fs.existsSync('./build/bin/data')) {
     if (!fs.existsSync('./build/distributions-windows.zip')) {
         console.log('Start download distributions...')
         await Command('Invoke-WebRequest \
-            -Uri https://github.com/mycrl/distributions/releases/download/distributions/distributions-windows.zip \
+            -Uri https://github.com/mycrl/distributions/releases/download/distributions/distributions-windows-x64.zip \
             -OutFile build\\distributions-windows.zip')
     }
 

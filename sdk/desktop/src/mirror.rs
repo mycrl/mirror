@@ -3,18 +3,22 @@ use std::{
     thread,
 };
 
+use crate::sender::SenderObserver;
+
 use anyhow::Result;
 use capture::{AudioInfo, Device, DeviceManager, DeviceManagerOptions, VideoInfo};
 use codec::{AudioDecoder, AudioEncoderSettings, VideoDecoder, VideoEncoderSettings};
+use common::{
+    frame::{AudioFrame, VideoFrame},
+    jump_current_exe_dir, logger,
+};
 
-use common::frame::{AudioFrame, VideoFrame};
+use log::LevelFilter;
 use once_cell::sync::Lazy;
 use transport::{
     adapter::{StreamKind, StreamReceiverAdapter, StreamSenderAdapter},
     Transport, TransportOptions,
 };
-
-use crate::sender::SenderObserver;
 
 pub static OPTIONS: Lazy<RwLock<MirrorOptions>> = Lazy::new(Default::default);
 
@@ -131,19 +135,10 @@ impl Default for MirrorOptions {
 
 /// Initialize the environment, which must be initialized before using the SDK.
 pub fn init(options: MirrorOptions) -> Result<()> {
-    // Because of the path issues with OBS looking for plugins as well as data, the
-    // working directory has to be adjusted to the directory where the current
-    // executable is located.
-    {
-        let mut path = std::env::current_exe()?;
-        path.pop();
-        std::env::set_current_dir(path)?;
-    }
+    jump_current_exe_dir()?;
 
-    // #[cfg(debug_assertions)]
-    // {
-    simple_logger::init_with_level(log::Level::Debug)?;
-    // }
+    #[cfg(debug_assertions)]
+    logger::init("mirror.log", LevelFilter::Info)?;
 
     *OPTIONS.write().unwrap() = options.clone();
     log::info!("mirror init: options={:?}", options);
