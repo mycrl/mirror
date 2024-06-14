@@ -2,11 +2,9 @@ use std::{
     collections::{HashMap, HashSet},
     sync::{Arc, RwLock},
     thread,
-    time::Duration,
 };
 
 use anyhow::Result;
-use common::logger::FormatLogger;
 use service::{route::Route, SocketKind, StreamInfo};
 use srt::{Options, Server};
 
@@ -21,28 +19,8 @@ pub fn start_server(config: Configure, route: Arc<Route>) -> Result<()> {
     opt.fc = 32;
 
     // Start the srt server
-    let server = Arc::new(Server::bind(config.bind, opt, 100)?);
+    let server = Server::bind(config.bind, opt, 100)?;
     log::info!("starting srt server...");
-
-    #[cfg(debug_assertions)]
-    {
-        let server_ = Arc::downgrade(&server);
-        thread::spawn(move || {
-            let mut logger = FormatLogger::new("mirror-service.stats").unwrap();
-
-            while let Some(server) = server_.upgrade() {
-                if let Ok(stats) = server.get_stats() {
-                    if logger.log(&stats).is_err() {
-                        break;
-                    }
-                } else {
-                    break;
-                }
-
-                thread::sleep(Duration::from_secs(5));
-            }
-        });
-    }
 
     let sockets = Arc::new(RwLock::new(HashMap::with_capacity(200)));
     let subscribers = Arc::new(RwLock::new(HashMap::with_capacity(200)));

@@ -101,7 +101,7 @@ extern "C" fn loghandler(
                 _ => SRT_LOG_LEVEL::LOG_DEBUG,
             },
             area,
-            message
+            message.replace('\r', "").replace('\n', ""),
         )
     }
 }
