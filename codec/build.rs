@@ -166,11 +166,11 @@ impl Settings {
 
 #[cfg(target_os = "windows")]
 fn find_ffmpeg_prefix(out_dir: &str) -> anyhow::Result<(Vec<String>, Vec<String>)> {
-    let ffmpeg_prefix = join(out_dir, "ffmpeg-6.1").unwrap();
+    let ffmpeg_prefix = join(out_dir, "ffmpeg-4.4").unwrap();
     if !is_exsit(&ffmpeg_prefix) {
         exec(
             "Invoke-WebRequest \
-                -Uri https://github.com/mycrl/distributions/releases/download/distributions/ffmpeg-6.1-windows-x64.zip \
+                -Uri https://github.com/mycrl/distributions/releases/download/distributions/ffmpeg-4.4-windows-x64.zip \
                 -OutFile ffmpeg.zip",
             out_dir,
         )?;

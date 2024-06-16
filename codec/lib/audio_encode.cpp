@@ -87,7 +87,7 @@ bool codec_audio_encoder_copy_frame(struct AudioEncoder* codec, struct AudioFram
 
 bool codec_audio_encoder_send_frame(struct AudioEncoder* codec)
 {
-    auto count = codec->context->frame_num;
+    auto count = codec->context->frame_number;
 	codec->frame->pts = count * codec->context->frame_size;
 	if (avcodec_send_frame(codec->context, codec->frame) != 0)
 	{
