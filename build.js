@@ -64,7 +64,7 @@ fs.copyFileSync('./examples/desktop/receiver/main.cpp', './build/examples/receiv
 fs.copyFileSync('./sdk/desktop/include/mirror.h', './build/include/mirror.h')
 fs.copyFileSync('./common/include/frame.h', './build/include/frame.h')
 
-await Command(`cargo build ${Args.release ? '--release' : ''} ${Args.ffmpeg4 ? '--features ffmpeg4' : ''} -p mirror`)
+await Command(`cargo build ${Args.release ? '--release' : ''} -p mirror`)
 await Command(`cargo build ${Args.release ? '--release' : ''} -p service`)
 
 fs.copyFileSync(`./target/${Profile.toLowerCase()}/mirror.dll`, './build/bin/mirror.dll')
@@ -74,18 +74,6 @@ fs.copyFileSync(`./target/${Profile.toLowerCase()}/service.exe`, './build/server
 if (!Args.release) {
     fs.copyFileSync('./target/debug/mirror.pdb', './build/bin/mirror.pdb')
     fs.copyFileSync('./target/debug/service.pdb', './build/server/service.pdb')
-}
-
-if (!Args.ffmpeg4) {
-    for (const item of [
-        './build/bin/swresample-3.dll',
-        './build/bin/avcodec-58.dll',
-        './build/bin/avutil-56.dll',
-    ]) {
-        if (fs.existsSync(item)) {
-            fs.unlinkSync(item)
-        }
-    }
 }
 
 if (!fs.existsSync('./examples/desktop/build')) {

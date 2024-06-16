@@ -91,12 +91,6 @@ if(MSVC)
     endif()
 endif()
 
-if (FFMPEG_VERSION STREQUAL "6")
-    add_compile_definitions(VERSION_6)
-else()
-    add_compile_definitions(VERSION_4)
-endif()
-
 # Build header.
 if(WIN32)
     add_compile_definitions(WIN32)

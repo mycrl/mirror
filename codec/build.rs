@@ -92,12 +92,6 @@ fn main() -> anyhow::Result<()> {
         )?;
     }
 
-    #[cfg(feature = "ffmpeg6")]
-    let version_define = "VERSION_6";
-
-    #[cfg(feature = "ffmpeg4")]
-    let version_define = "VERSION_4";
-
     cc::Build::new()
         .cpp(true)
         .std("c++20")
@@ -122,7 +116,6 @@ fn main() -> anyhow::Result<()> {
             },
             None,
         )
-        .define(version_define, None)
         .compile("codec");
 
     println!("cargo:rustc-link-search=all={}", &settings.out_dir);
@@ -173,25 +166,11 @@ impl Settings {
 
 #[cfg(target_os = "windows")]
 fn find_ffmpeg_prefix(out_dir: &str) -> anyhow::Result<(Vec<String>, Vec<String>)> {
-    #[cfg(feature = "ffmpeg6")]
     let ffmpeg_prefix = join(out_dir, "ffmpeg-6.1").unwrap();
-
-    #[cfg(feature = "ffmpeg4")]
-    let ffmpeg_prefix = join(out_dir, "ffmpeg-4.4").unwrap();
-
     if !is_exsit(&ffmpeg_prefix) {
-        #[cfg(feature = "ffmpeg6")]
         exec(
             "Invoke-WebRequest \
                 -Uri https://github.com/mycrl/distributions/releases/download/distributions/ffmpeg-6.1-windows-x64.zip \
-                -OutFile ffmpeg.zip",
-            out_dir,
-        )?;
-
-        #[cfg(feature = "ffmpeg4")]
-        exec(
-            "Invoke-WebRequest \
-                -Uri https://github.com/mycrl/distributions/releases/download/distributions/ffmpeg-4.4-windows-x64.zip \
                 -OutFile ffmpeg.zip",
             out_dir,
         )?;
