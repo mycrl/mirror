@@ -9,3 +9,4 @@ socket2 = "0.5.6"
 once_cell = "1.19.0"
 xxhash-rust = { version = "0.8.5", features = ["xxh3"]}
 tokio = { version = "1.37.0", features = ["net", "sync", "macros", "rt-multi-thread"]}
+crossbeam = "0.8.4"

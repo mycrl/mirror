@@ -12,3 +12,4 @@ common = { path = "../common" }
 service = { path = "../service" }
 xxhash-rust = { version = "0.8.5", features = ["xxh3"]}
 smallvec = "1.13.2"
+crossbeam = "0.8.4"

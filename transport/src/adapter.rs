@@ -2,13 +2,13 @@ use std::{
     fmt,
     sync::{
         atomic::{AtomicBool, AtomicU8},
-        mpsc::{channel, Receiver, Sender},
-        Arc, Mutex,
+        Arc,
     },
 };
 
 use bytes::{BufMut, Bytes, BytesMut};
 use common::atomic::{AtomicOption, EasyAtomic};
+use crossbeam::channel::{bounded, Receiver, Sender};
 
 #[repr(i32)]
 #[derive(Debug, Clone, Copy)]
@@ -55,6 +55,11 @@ pub enum StreamBufferInfo {
     Audio(i32, u64),
 }
 
+type Channel = (
+    Sender<Option<(Bytes, StreamKind, u8, u64)>>,
+    Receiver<Option<(Bytes, StreamKind, u8, u64)>>,
+);
+
 /// Video Audio Streaming Send Processing
 ///
 /// Because the receiver will normally join the stream in the middle of the
@@ -66,20 +71,17 @@ pub struct StreamSenderAdapter {
     audio_interval: AtomicU8,
     video_config: AtomicOption<Bytes>,
     audio_config: AtomicOption<Bytes>,
-    tx: Sender<Option<(Bytes, StreamKind, u8, u64)>>,
-    rx: Mutex<Receiver<Option<(Bytes, StreamKind, u8, u64)>>>,
+    channel: Channel,
 }
 
 impl StreamSenderAdapter {
     pub fn new() -> Arc<Self> {
-        let (tx, rx) = channel();
         Arc::new(Self {
             video_config: AtomicOption::new(None),
             audio_config: AtomicOption::new(None),
             is_multicast: AtomicBool::new(false),
             audio_interval: AtomicU8::new(0),
-            rx: Mutex::new(rx),
-            tx,
+            channel: bounded(10),
         })
     }
 
@@ -94,7 +96,7 @@ impl StreamSenderAdapter {
     }
 
     pub fn close(&self) {
-        self.tx.send(None).expect(
+        self.channel.0.send(None).expect(
             "Failed to close, this is because it is not possible to send None to the \
              channel, this is a bug.",
         );
@@ -122,7 +124,8 @@ impl StreamSenderAdapter {
                     }
                 }
 
-                self.tx
+                self.channel
+                    .0
                     .send(Some((buf, StreamKind::Video, flags as u8, timestamp)))
                     .is_ok()
             }
@@ -136,7 +139,8 @@ impl StreamSenderAdapter {
                 self.audio_interval.update(if count == 30 {
                     if let Some(config) = self.audio_config.get() {
                         if self
-                            .tx
+                            .channel
+                            .0
                             .send(Some((
                                 config.clone(),
                                 StreamKind::Audio,
@@ -154,7 +158,8 @@ impl StreamSenderAdapter {
                     count + 1
                 });
 
-                self.tx
+                self.channel
+                    .0
                     .send(Some((buf, StreamKind::Audio, flags as u8, timestamp)))
                     .is_ok()
             }
@@ -162,7 +167,7 @@ impl StreamSenderAdapter {
     }
 
     pub fn next(&self) -> Option<(Bytes, StreamKind, u8, u64)> {
-        self.rx.lock().unwrap().recv().ok().flatten()
+        self.channel.1.recv().ok().flatten()
     }
 }
 
@@ -174,30 +179,27 @@ impl StreamSenderAdapter {
 pub struct StreamReceiverAdapter {
     audio_ready: AtomicBool,
     video_readable: AtomicBool,
-    tx: Sender<Option<(Bytes, StreamKind, u8, u64)>>,
-    rx: Mutex<Receiver<Option<(Bytes, StreamKind, u8, u64)>>>,
+    channel: Channel,
 }
 
 impl StreamReceiverAdapter {
     pub fn new() -> Arc<Self> {
-        let (tx, rx) = channel();
         Arc::new(Self {
             video_readable: AtomicBool::new(false),
             audio_ready: AtomicBool::new(false),
-            rx: Mutex::new(rx),
-            tx,
+            channel: bounded(10),
         })
     }
 
     pub fn close(&self) {
-        self.tx.send(None).expect(
+        self.channel.0.send(None).expect(
             "Failed to close, this is because it is not possible to send None to the \
              channel, this is a bug.",
         );
     }
 
     pub fn next(&self) -> Option<(Bytes, StreamKind, u8, u64)> {
-        self.rx.lock().unwrap().recv().ok().flatten()
+        self.channel.1.recv().ok().flatten()
     }
 
     /// As soon as a keyframe is received, the keyframe is cached, and when a
@@ -236,7 +238,10 @@ impl StreamReceiverAdapter {
             }
         }
 
-        self.tx.send(Some((buf, kind, flags, timestamp))).is_ok()
+        self.channel
+            .0
+            .send(Some((buf, kind, flags, timestamp)))
+            .is_ok()
     }
 
     /// Marks that the video packet has been lost.
