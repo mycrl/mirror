@@ -30,6 +30,7 @@ const Command = (cmd, options = {}) => new Promise((
 /* async block */ void (async () => {
 
 for (const path of [
+    './target',
     './build', 
     './build/bin', 
     './build/lib',
@@ -45,15 +46,29 @@ for (const path of [
 }
 
 if (!fs.existsSync('./build/bin/data')) {
-    if (!fs.existsSync('./build/distributions-windows.zip')) {
+    if (!fs.existsSync('./target/distributions.zip')) {
         console.log('Start download distributions...')
         await Command('Invoke-WebRequest \
             -Uri https://github.com/mycrl/distributions/releases/download/distributions/distributions-windows-x64.zip \
-            -OutFile build\\distributions-windows.zip')
+            -OutFile target\\distributions.zip')
     }
 
-    await Command('Expand-Archive -Path build\\distributions-windows.zip -DestinationPath build\\bin -Force')
-    fs.unlinkSync('./build/distributions-windows.zip')
+    await Command('Expand-Archive -Path target\\distributions.zip -DestinationPath build\\bin -Force')
+}
+
+if (!fs.existsSync('./target/ffmpeg')) {
+    console.log('Start download ffmpeg...')
+    if (Args.debug) {
+        await Command('Invoke-WebRequest \
+            -Uri https://github.com/mycrl/distributions/releases/download/distributions/ffmpeg-windows-x64-debug.zip \
+            -OutFile target\\ffmpeg.zip')
+    } else {
+        await Command('Invoke-WebRequest \
+            -Uri https://github.com/mycrl/distributions/releases/download/distributions/ffmpeg-windows-x64-release.zip \
+            -OutFile target\\ffmpeg.zip')
+    }
+
+    await Command('Expand-Archive -Path target\\ffmpeg.zip -DestinationPath target -Force')
 }
 
 fs.copyFileSync('./examples/desktop/common.h', './build/examples/common.h')
