@@ -130,6 +130,11 @@ bool codec_video_decoder_send_packet(struct VideoDecoder* codec,
 									 uint8_t* buf,
 									 size_t size)
 {
+    if (buf == nullptr)
+    {
+        return true;
+    }
+    
 	while (size)
 	{
 		int len = av_parser_parse2(codec->parser,

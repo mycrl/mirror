@@ -148,7 +148,7 @@ void update_audio_settings(struct DeviceDescription* description)
 
 void raw_video_callback(void* _, struct video_data* frame)
 {
-	if (GLOBAL.output_callback.video == nullptr || GLOBAL.output_callback.ctx == nullptr)
+	if (GLOBAL.output_callback.video == nullptr || GLOBAL.output_callback.ctx == nullptr || frame == nullptr)
 	{
 		return;
 	}
@@ -162,7 +162,7 @@ void raw_video_callback(void* _, struct video_data* frame)
 
 void raw_audio_callback(void* _, size_t mix_idx, struct audio_data* data)
 {
-	if (GLOBAL.output_callback.audio == nullptr || GLOBAL.output_callback.ctx == nullptr)
+	if (GLOBAL.output_callback.audio == nullptr || GLOBAL.output_callback.ctx == nullptr  || data == nullptr)
 	{
 		return;
 	}

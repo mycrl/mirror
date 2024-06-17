@@ -98,6 +98,11 @@ bool codec_audio_decoder_send_packet(struct AudioDecoder* codec,
 									 uint8_t* buf,
 									 size_t size)
 {
+    if (buf == nullptr)
+    {
+        return true;
+    }
+
 	while (size > 0)
 	{
 		int ret = av_parser_parse2(codec->parser,
