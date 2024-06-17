@@ -144,8 +144,8 @@ impl Settings {
         let _ = dotenv();
         let out_dir = env::var("OUT_DIR")?;
         let is_debug = env::var("DEBUG")
-                .map(|label| label == "true")
-                .unwrap_or(true);
+            .map(|label| label == "true")
+            .unwrap_or(true);
         let (ffmpeg_include_prefix, ffmpeg_lib_prefix) = if let (Some(include), Some(lib)) = (
             env::var("FFMPEG_INCLUDE_PREFIX").ok(),
             env::var("FFMPEG_LIB_PREFIX").ok(),
@@ -170,9 +170,9 @@ fn find_ffmpeg_prefix(out_dir: &str, is_debug: bool) -> anyhow::Result<(Vec<Stri
     let ffmpeg_prefix = join(out_dir, "ffmpeg-4.4").unwrap();
     if !is_exsit(&ffmpeg_prefix) {
         exec(
-            "Invoke-WebRequest \
-                -Uri https://github.com/mycrl/distributions/releases/download/distributions/ffmpeg-4.4-windows-x64.zip \
-                -OutFile ffmpeg.zip",
+            &format!("Invoke-WebRequest \
+                -Uri https://github.com/mycrl/distributions/releases/download/distributions/ffmpeg-windows-x64-{}.zip \
+                -OutFile ffmpeg.zip", if is_debug { "debug" } else { "release" }),
             out_dir,
         )?;
 

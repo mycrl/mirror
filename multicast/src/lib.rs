@@ -7,7 +7,7 @@ use std::{
 };
 
 use bytes::Bytes;
-use crossbeam::channel::bounded;
+use crossbeam::channel::{bounded, Receiver};
 use fragments::FragmentEncoder;
 use once_cell::sync::Lazy;
 use tokio::{runtime::Runtime, sync::mpsc::unbounded_channel};
