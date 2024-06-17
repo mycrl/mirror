@@ -38,7 +38,7 @@ for (const path of [
     './build/include', 
     './build/examples', 
     './build/examples/receiver', 
-    './build/examples/sender'
+    './build/examples/sender',
 ]) {
     if (!fs.existsSync(path)) {
         fs.mkdirSync(path)
@@ -71,20 +71,25 @@ if (!fs.existsSync('./target/ffmpeg')) {
     await Command('Expand-Archive -Path target\\ffmpeg.zip -DestinationPath target -Force')
 }
 
-fs.copyFileSync('./examples/desktop/common.h', './build/examples/common.h')
-fs.copyFileSync('./examples/desktop/CMakeLists.txt', './build/examples/CMakeLists.txt')
-fs.copyFileSync('./examples/desktop/sender/main.cpp', './build/examples/sender/main.cpp')
-fs.copyFileSync('./examples/desktop/receiver/main.cpp', './build/examples/receiver/main.cpp')
-
-fs.copyFileSync('./sdk/desktop/include/mirror.h', './build/include/mirror.h')
-fs.copyFileSync('./common/include/frame.h', './build/include/frame.h')
-
 await Command(`cargo build ${Args.release ? '--release' : ''} -p mirror`)
 await Command(`cargo build ${Args.release ? '--release' : ''} -p service`)
 
-fs.copyFileSync(`./target/${Profile.toLowerCase()}/mirror.dll`, './build/bin/mirror.dll')
-fs.copyFileSync(`./target/${Profile.toLowerCase()}/mirror.dll.lib`, './build/lib/mirror.dll.lib')
-fs.copyFileSync(`./target/${Profile.toLowerCase()}/service.exe`, './build/server/mirror-service.exe')
+for (const item of [
+    ['./examples/desktop/common.h', './build/examples/common.h'],
+    ['./examples/desktop/CMakeLists.txt', './build/examples/CMakeLists.txt'],
+    ['./examples/desktop/sender/main.cpp', './build/examples/sender/main.cpp'],
+    ['./examples/desktop/receiver/main.cpp', './build/examples/receiver/main.cpp'],
+    ['./sdk/desktop/include/mirror.h', './build/include/mirror.h'],
+    ['./common/include/frame.h', './build/include/frame.h'],
+    [`./target/${Profile.toLowerCase()}/mirror.dll`, './build/bin/mirror.dll'],
+    [`./target/${Profile.toLowerCase()}/mirror.dll.lib`, './build/lib/mirror.dll.lib'],
+    [`./target/${Profile.toLowerCase()}/service.exe`, './build/server/mirror-service.exe'],
+    ['./target/ffmpeg/bin/avcodec-58.dll', './build/bin/avcodec-58.dll'],
+    ['./target/ffmpeg/bin/avutil-56.dll', './build/bin/avutil-56.dll'],
+    ['./target/ffmpeg/bin/swresample-3.dll', './build/bin/swresample-3.dll'],
+]) {
+    fs.copyFileSync(...item)
+}
 
 if (!Args.release) {
     fs.copyFileSync('./target/debug/mirror.pdb', './build/bin/mirror.pdb')
