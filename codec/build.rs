@@ -167,7 +167,7 @@ impl Settings {
 
 #[cfg(target_os = "windows")]
 fn find_ffmpeg_prefix(out_dir: &str, is_debug: bool) -> anyhow::Result<(Vec<String>, Vec<String>)> {
-    let ffmpeg_prefix = join(out_dir, "ffmpeg-4.4").unwrap();
+    let ffmpeg_prefix = join(out_dir, "ffmpeg").unwrap();
     if !is_exsit(&ffmpeg_prefix) {
         exec(
             &format!("Invoke-WebRequest \
