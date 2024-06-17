@@ -58,15 +58,9 @@ if (!fs.existsSync('./build/bin/data')) {
 
 if (!fs.existsSync('./target/ffmpeg')) {
     console.log('Start download ffmpeg...')
-    if (Args.debug) {
-        await Command('Invoke-WebRequest \
-            -Uri https://github.com/mycrl/distributions/releases/download/distributions/ffmpeg-windows-x64-debug.zip \
-            -OutFile target\\ffmpeg.zip')
-    } else {
-        await Command('Invoke-WebRequest \
-            -Uri https://github.com/mycrl/distributions/releases/download/distributions/ffmpeg-windows-x64-release.zip \
-            -OutFile target\\ffmpeg.zip')
-    }
+    await Command(`Invoke-WebRequest \
+        -Uri https://github.com/mycrl/distributions/releases/download/distributions/ffmpeg-windows-x64-${Args.release ? 'release' : 'debug'}.zip \
+        -OutFile target\\ffmpeg.zip`)
 
     await Command('Expand-Archive -Path target\\ffmpeg.zip -DestinationPath target -Force')
 }
