@@ -15,7 +15,6 @@
 #define EXPORT
 #endif
 
-#include <optional>
 #include <frame.h>
 
 extern "C"
@@ -54,13 +53,14 @@ struct VideoEncoder
 
 struct VideoDecoder
 {
+	AVBufferRef* hw_device_ctx;
+	AVFrame* sw_frame;
     const AVCodec* codec;
 	AVCodecContext* context;
 	AVCodecParserContext* parser;
 	AVPacket* packet;
 	AVFrame* frame;
 	struct VideoFrame* output_frame;
-	std::optional<int> format_format;
 };
 
 struct AudioEncoderSettings

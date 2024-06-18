@@ -10,10 +10,6 @@ if (NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE "Debug")
 endif()
 
-if (NOT FFMPEG_VERSION)
-    set(FFMPEG_VERSION "6")
-endif()
-
 # Used to download or initialize third-party dependent libraries.
 set(THIRD_PARTY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party")
 
@@ -30,27 +26,15 @@ if (WIN32)
     set(ENV{PATH} "${THIRD_PARTY_DIR};$ENV{PATH}")
 endif()
 
-if (FFMPEG_VERSION STREQUAL "6")
-    set(FFMPEG_PREFIX "${THIRD_PARTY_DIR}/ffmpeg-6.1")
-else()
-    set(FFMPEG_PREFIX "${THIRD_PARTY_DIR}/ffmpeg-4.4")
-endif()
+set(FFMPEG_PREFIX "${THIRD_PARTY_DIR}/ffmpeg")
 
 if (NOT EXISTS "${FFMPEG_PREFIX}")
     if (WIN32)
-        if (FFMPEG_VERSION STREQUAL "6")
-            execute_process(
-                WORKING_DIRECTORY "${THIRD_PARTY_DIR}"
-                COMMAND powershell.exe -Command "Invoke-WebRequest \
-                        -Uri https://github.com/mycrl/distributions/releases/download/distributions/ffmpeg-6.1.zip \
-                        -OutFile ffmpeg.zip")
-        else()
-            execute_process(
-                WORKING_DIRECTORY "${THIRD_PARTY_DIR}"
-                COMMAND powershell.exe -Command "Invoke-WebRequest \
-                        -Uri https://github.com/mycrl/distributions/releases/download/distributions/ffmpeg-4.4.zip \
-                        -OutFile ffmpeg.zip")
-        endif()
+        execute_process(
+            WORKING_DIRECTORY "${THIRD_PARTY_DIR}"
+            COMMAND powershell.exe -Command "Invoke-WebRequest \
+                    -Uri https://github.com/mycrl/distributions/releases/download/distributions/ffmpeg-windows-x64-debug.zip \
+                    -OutFile ffmpeg.zip")
 
         execute_process(
             WORKING_DIRECTORY "${THIRD_PARTY_DIR}"

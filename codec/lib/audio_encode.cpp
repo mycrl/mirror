@@ -29,7 +29,7 @@ struct AudioEncoder* codec_create_audio_encoder(struct AudioEncoderSettings* set
     codec->context->channels = 1;
     codec->context->sample_fmt = AV_SAMPLE_FMT_S16;
     codec->context->channel_layout = AV_CH_LAYOUT_MONO;
-    codec->context->flags = AV_CODEC_FLAG_LOW_DELAY;
+    codec->context->flags |= AV_CODEC_FLAG_LOW_DELAY;
 
 	codec->context->bit_rate = settings->bit_rate;
 	codec->context->sample_rate = settings->sample_rate;
