@@ -45,7 +45,7 @@ struct VideoEncoderSettings
 
 struct VideoEncoder
 {
-    AVCodec* codec;
+    const AVCodec* codec;
 	AVCodecContext* context;
 	AVPacket* packet;
 	AVFrame* frame;
@@ -54,7 +54,7 @@ struct VideoEncoder
 
 struct VideoDecoder
 {
-    AVCodec* codec;
+    const AVCodec* codec;
 	AVCodecContext* context;
 	AVCodecParserContext* parser;
 	AVPacket* packet;
@@ -72,7 +72,7 @@ struct AudioEncoderSettings
 
 struct AudioEncoder
 {
-    AVCodec* codec;
+    const AVCodec* codec;
 	AVCodecContext* context;
 	AVPacket* packet;
 	AVFrame* frame;
@@ -81,7 +81,7 @@ struct AudioEncoder
 
 struct AudioDecoder
 {
-    AVCodec* codec;
+    const AVCodec* codec;
 	AVCodecContext* context;
 	AVCodecParserContext* parser;
 	AVPacket* packet;

@@ -68,7 +68,7 @@ struct VideoEncoder* codec_create_video_encoder(struct VideoEncoderSettings* set
 	{
         av_opt_set_int(codec->context->priv_data, "async_depth", 1, 0);
         av_opt_set_int(codec->context->priv_data, "low_power", 1 /* true */, 0);
-        av_opt_set_int(codec->context->priv_data, "cavlc", 1 /* true */, 0);
+        av_opt_set_int(codec->context->priv_data, "vcm", 1 /* true */, 0);
 	}
 	else if (name == "h264_nvenc")
 	{
@@ -143,7 +143,7 @@ bool codec_video_encoder_copy_frame(struct VideoEncoder* codec, struct VideoFram
 
 bool codec_video_encoder_send_frame(struct VideoEncoder* codec)
 {
-    auto count = codec->context->frame_number;
+    auto count = codec->context->frame_num;
 	codec->frame->pts = av_rescale_q(count,
 									 codec->context->pkt_timebase,
 									 codec->context->time_base);

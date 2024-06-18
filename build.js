@@ -46,14 +46,14 @@ for (const path of [
 }
 
 if (!fs.existsSync('./build/bin/data')) {
-    if (!fs.existsSync('./target/distributions.zip')) {
+    if (!fs.existsSync('./target/obs.zip')) {
         console.log('Start download distributions...')
         await Command('Invoke-WebRequest \
-            -Uri https://github.com/mycrl/distributions/releases/download/distributions/distributions-windows-x64.zip \
-            -OutFile target\\distributions.zip')
+            -Uri https://github.com/mycrl/distributions/releases/download/distributions/obs-windows-x64.zip \
+            -OutFile target\\obs.zip')
     }
 
-    await Command('Expand-Archive -Path target\\distributions.zip -DestinationPath build\\bin -Force')
+    await Command('Expand-Archive -Path target\\obs.zip -DestinationPath build\\bin -Force')
 }
 
 if (!fs.existsSync('./target/ffmpeg')) {
@@ -78,9 +78,14 @@ for (const item of [
     [`./target/${Profile.toLowerCase()}/mirror.dll`, './build/bin/mirror.dll'],
     [`./target/${Profile.toLowerCase()}/mirror.dll.lib`, './build/lib/mirror.dll.lib'],
     [`./target/${Profile.toLowerCase()}/service.exe`, './build/server/mirror-service.exe'],
-    ['./target/ffmpeg/bin/avcodec-58.dll', './build/bin/avcodec-58.dll'],
-    ['./target/ffmpeg/bin/avutil-56.dll', './build/bin/avutil-56.dll'],
-    ['./target/ffmpeg/bin/swresample-3.dll', './build/bin/swresample-3.dll'],
+    ['./target/ffmpeg/bin/avcodec-60.dll', './build/bin/avcodec-60.dll'],
+    ['./target/ffmpeg/bin/avdevice-60.dll', './build/bin/avdevice-60.dll'],
+    ['./target/ffmpeg/bin/avfilter-9.dll', './build/bin/avfilter-9.dll'],
+    ['./target/ffmpeg/bin/avformat-60.dll', './build/bin/avformat-60.dll'],
+    ['./target/ffmpeg/bin/avutil-58.dll', './build/bin/avutil-58.dll'],
+    ['./target/ffmpeg/bin/postproc-57.dll', './build/bin/postproc-57.dll'],
+    ['./target/ffmpeg/bin/swresample-4.dll', './build/bin/swresample-4.dll'],
+    ['./target/ffmpeg/bin/swscale-7.dll', './build/bin/swscale-7.dll'],
 ]) {
     fs.copyFileSync(...item)
 }
