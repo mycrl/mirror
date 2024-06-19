@@ -9,7 +9,6 @@ use codec::{
 
 use common::frame::{AudioFrame, VideoFrame};
 use crossbeam::sync::{Parker, Unparker};
-use thread_priority::ThreadPriority;
 use transport::adapter::{BufferFlag, StreamBufferInfo, StreamSenderAdapter};
 
 use crate::mirror::{FrameSink, OPTIONS};
@@ -39,8 +38,6 @@ impl VideoSender {
         let sender_ = sender.clone();
         let adapter_ = Arc::downgrade(adapter);
         thread::spawn(move || {
-            let _ = ThreadPriority::Max.set_for_current();
-
             while let Some(adapter) = adapter_.upgrade() {
                 // Waiting for external audio and video frame updates.
                 parker.park();
@@ -97,8 +94,6 @@ impl AudioSender {
         let sender_ = sender.clone();
         let adapter_ = Arc::downgrade(adapter);
         thread::spawn(move || {
-            let _ = ThreadPriority::Max.set_for_current();
-
             while let Some(adapter) = adapter_.upgrade() {
                 // Waiting for external audio and video frame updates.
                 parker.park();

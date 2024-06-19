@@ -15,7 +15,6 @@ use common::{
 
 use log::LevelFilter;
 use once_cell::sync::Lazy;
-use thread_priority::ThreadPriority;
 use transport::{
     adapter::{StreamReceiverAdapter, StreamSenderAdapter},
     Transport, TransportOptions,
@@ -291,13 +290,7 @@ impl Mirror {
         let sink_ = sink.clone();
         let adapter_ = adapter.clone();
         thread::spawn(move || {
-            let _ = ThreadPriority::Max.set_for_current();
-
             'a: while let Some((packet, _, _)) = adapter_.next_video() {
-                if packet.is_empty() {
-                    continue;
-                }
-
                 if video_decoder.decode(&packet) {
                     while let Some(frame) = video_decoder.read() {
                         if !(sink_.video)(frame) {
@@ -315,13 +308,7 @@ impl Mirror {
         let sink_ = sink.clone();
         let adapter_ = adapter.clone();
         thread::spawn(move || {
-            let _ = ThreadPriority::Max.set_for_current();
-
             'a: while let Some((packet, _, _)) = adapter_.next_audio() {
-                if packet.is_empty() {
-                    continue;
-                }
-
                 if audio_decoder.decode(&packet) {
                     while let Some(frame) = audio_decoder.read() {
                         if !(sink_.audio)(frame) {
