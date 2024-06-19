@@ -5,19 +5,26 @@ use std::{
 };
 
 use log::LevelFilter;
-use simplelog::{ColorChoice, CombinedLogger, Config, TermLogger, TerminalMode, WriteLogger};
+use simplelog::{
+    ColorChoice, CombinedLogger, ConfigBuilder, TermLogger, TerminalMode, WriteLogger,
+};
 
 pub fn init(name: &str, level: LevelFilter) -> anyhow::Result<()> {
+    let config = ConfigBuilder::new()
+        .set_time_offset_to_local()
+        .unwrap()
+        .build();
+
     CombinedLogger::init(vec![
         TermLogger::new(
             level,
-            Config::default(),
+            config.clone(),
             TerminalMode::Mixed,
             ColorChoice::Auto,
         ),
         WriteLogger::new(
             level,
-            Config::default(),
+            config,
             OpenOptions::new()
                 .create(true)
                 .write(true)

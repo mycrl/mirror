@@ -20,6 +20,8 @@ use transport::{
     Transport, TransportOptions,
 };
 
+use windows::Win32::System::Threading::{GetCurrentProcess, SetPriorityClass, HIGH_PRIORITY_CLASS};
+
 pub static OPTIONS: Lazy<RwLock<MirrorOptions>> = Lazy::new(Default::default);
 
 /// Audio Codec Configuration.
@@ -139,6 +141,18 @@ pub fn init(options: MirrorOptions) -> Result<()> {
 
     #[cfg(debug_assertions)]
     logger::init("mirror.log", LevelFilter::Info)?;
+
+    // In order to prevent other programs from affecting the delay performance of
+    // the current program, set the priority of the current process to high.
+    #[cfg(target_os = "windows")]
+    {
+        if unsafe { SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS) }.is_err() {
+            log::error!(
+                "failed to set current process priority, Maybe it's \
+                because you didn't run it with administrator privileges."
+            );
+        }
+    }
 
     *OPTIONS.write().unwrap() = options.clone();
     log::info!("mirror init: options={:?}", options);
