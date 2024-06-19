@@ -16,6 +16,7 @@
 #endif
 
 #include <frame.h>
+#include <optional>
 
 extern "C"
 {
@@ -59,6 +60,7 @@ struct VideoDecoder
 	AVPacket* packet;
 	AVFrame* frame;
 	struct VideoFrame* output_frame;
+	std::optional<int> format_format;
 };
 
 struct AudioEncoderSettings
