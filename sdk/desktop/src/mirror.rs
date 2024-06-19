@@ -309,15 +309,15 @@ impl Mirror {
         let adapter_ = adapter.clone();
         thread::spawn(move || {
             'a: while let Some((packet, _, _)) = adapter_.next_audio() {
-                if audio_decoder.decode(&packet) {
-                    while let Some(frame) = audio_decoder.read() {
-                        if !(sink_.audio)(frame) {
-                            break 'a;
-                        }
-                    }
-                } else {
-                    break;
-                }
+                // if audio_decoder.decode(&packet) {
+                //     while let Some(frame) = audio_decoder.read() {
+                //         if !(sink_.audio)(frame) {
+                //             break 'a;
+                //         }
+                //     }
+                // } else {
+                //     break;
+                // }
             }
 
             (sink_.close)();
