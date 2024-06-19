@@ -1,5 +1,4 @@
 pub mod adapter;
-mod license;
 mod payload;
 
 use std::{
@@ -50,8 +49,6 @@ pub struct Transport {
 
 impl Transport {
     pub fn new(options: TransportOptions) -> Result<Self, Error> {
-        license::checked_license();
-
         let channels: Arc<RwLock<HashMap<u32, Sender<Signal>>>> = Default::default();
         let publishs: Arc<RwLock<HashMap<u32, u16>>> = Default::default();
 
