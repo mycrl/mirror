@@ -123,6 +123,7 @@ fn main() -> anyhow::Result<()> {
         println!("cargo:rustc-link-search=all={}", path);
     }
 
+    println!("cargo:rustc-link-lib=yuv");
     println!("cargo:rustc-link-lib=avcodec");
     println!("cargo:rustc-link-lib=avutil");
     println!("cargo:rustc-link-lib=codec");
