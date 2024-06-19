@@ -317,7 +317,7 @@ impl Mirror {
         thread::spawn(move || {
             let _ = ThreadPriority::Max.set_for_current();
 
-            'a: while let Some((packet, _, _)) = adapter_.next_video() {
+            'a: while let Some((packet, _, _)) = adapter_.next_audio() {
                 if packet.is_empty() {
                     continue;
                 }
