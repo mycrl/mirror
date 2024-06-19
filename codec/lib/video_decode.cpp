@@ -144,8 +144,6 @@ bool codec_video_decoder_send_packet(struct VideoDecoder* codec,
     return true;
 }
 
-#include <windows.h>
-
 struct VideoFrame* codec_video_decoder_read_frame(struct VideoDecoder* codec)
 {
     av_frame_unref(codec->frame);
@@ -154,8 +152,6 @@ struct VideoFrame* codec_video_decoder_read_frame(struct VideoDecoder* codec)
     {
         return nullptr;
     }
-
-    DebugBreak();
 
     codec->output_frame->rect.width = codec->frame->width;
     codec->output_frame->rect.height = codec->frame->height;
