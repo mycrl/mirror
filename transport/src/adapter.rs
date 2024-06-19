@@ -67,10 +67,10 @@ type Channel = (
 /// sps and pps as well as the key frame information.
 #[allow(clippy::type_complexity)]
 pub struct StreamSenderAdapter {
-    is_multicast: AtomicBool,
-    audio_interval: AtomicU8,
     video_config: AtomicOption<Bytes>,
     audio_config: AtomicOption<Bytes>,
+    audio_interval: AtomicU8,
+    is_multicast: AtomicBool,
     channel: Channel,
 }
 
@@ -123,7 +123,7 @@ impl StreamSenderAdapter {
                             .send(Some((
                                 config.clone(),
                                 StreamKind::Video,
-                                BufferFlag::Config as i32,
+                                BufferFlag::KeyFrame as i32,
                                 timestamp,
                             )))
                             .is_err()
@@ -186,8 +186,8 @@ impl StreamSenderAdapter {
 /// receiver side, since the SRT communication protocol does not completely
 /// guarantee no packet loss.
 pub struct StreamReceiverAdapter {
-    audio_ready: AtomicBool,
     video_readable: AtomicBool,
+    audio_ready: AtomicBool,
     channel: Channel,
 }
 
@@ -221,8 +221,7 @@ impl StreamReceiverAdapter {
                 // When keyframes are received, the video stream can be played back
                 // normally without corruption.
                 let mut readable = self.video_readable.get();
-                if (flags == BufferFlag::KeyFrame as i32 || flags == BufferFlag::Config as i32)
-                    && !readable
+                if flags == BufferFlag::KeyFrame as i32 && !readable
                 {
                     self.video_readable.update(true);
                     readable = true;
