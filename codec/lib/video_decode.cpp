@@ -42,23 +42,6 @@ struct VideoDecoder* codec_create_video_decoder(const char* codec_name)
     codec->context->pix_fmt = AV_PIX_FMT_NV12;
     codec->context->flags = AV_CODEC_FLAG_LOW_DELAY;
 
-#ifdef WIN32
-    if (decoder == "libopenh264")
-    {
-        if (av_hwdevice_ctx_create(&codec->hw_device_ctx,
-                                   AV_HWDEVICE_TYPE_DXVA2,
-                                   NULL,
-                                   NULL,
-                                   0) < 0)
-        {
-            codec_release_video_decoder(codec);
-            return nullptr;
-        }
-
-        codec->context->hw_device_ctx = av_buffer_ref(codec->hw_device_ctx);
-    }
-#endif
-
     if (decoder == "h264_qsv")
     {
         av_opt_set_int(codec->context->priv_data, "async_depth", 1, 0);
@@ -97,13 +80,6 @@ struct VideoDecoder* codec_create_video_decoder(const char* codec_name)
         return nullptr;
     }
 
-    codec->sw_frame = av_frame_alloc();
-    if (codec->sw_frame == nullptr)
-    {
-        codec_release_video_decoder(codec);
-        return nullptr;
-    }
-
     return codec;
 }
 
@@ -127,16 +103,6 @@ void codec_release_video_decoder(struct VideoDecoder* codec)
     if (codec->frame != nullptr)
     {
         av_frame_free(&codec->frame);
-    }
-
-    if (codec->sw_frame != nullptr)
-    {
-        av_frame_free(&codec->sw_frame);
-    }
-
-    if (codec->hw_device_ctx != nullptr)
-    {
-        av_buffer_unref(&codec->hw_device_ctx);
     }
 
     delete codec->output_frame;
@@ -178,35 +144,26 @@ bool codec_video_decoder_send_packet(struct VideoDecoder* codec,
     return true;
 }
 
+#include <windows.h>
+
 struct VideoFrame* codec_video_decoder_read_frame(struct VideoDecoder* codec)
 {
     av_frame_unref(codec->frame);
-    av_frame_unref(codec->sw_frame);
 
     if (avcodec_receive_frame(codec->context, codec->frame) != 0)
     {
         return nullptr;
     }
 
+    DebugBreak();
+
     codec->output_frame->rect.width = codec->frame->width;
     codec->output_frame->rect.height = codec->frame->height;
 
-    if (codec->frame->format == AV_PIX_FMT_DXVA2_VLD)
-    {
-        if (av_hwframe_transfer_data(codec->sw_frame, codec->frame, 0) < 0)
-        {
-            return nullptr;
-        }
-    }
-
-    auto frame = codec->frame->format == AV_PIX_FMT_DXVA2_VLD ? 
-        codec->sw_frame : 
-        codec->frame;
-
     for (int i = 0; i < 2; i++)
     {
-        codec->output_frame->linesize[i] = frame->linesize[i];
-        codec->output_frame->data[i] = frame->data[i];
+        codec->output_frame->linesize[i] = codec->frame->linesize[i];
+        codec->output_frame->data[i] = codec->frame->data[i];
     }
 
     return codec->output_frame;

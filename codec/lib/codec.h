@@ -53,8 +53,6 @@ struct VideoEncoder
 
 struct VideoDecoder
 {
-	AVBufferRef* hw_device_ctx;
-	AVFrame* sw_frame;
     const AVCodec* codec;
 	AVCodecContext* context;
 	AVCodecParserContext* parser;
