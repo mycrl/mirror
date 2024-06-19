@@ -7,7 +7,7 @@ use std::{
     },
 };
 
-use bytes::{BufMut, Bytes, BytesMut};
+use bytes::Bytes;
 use common::atomic::{AtomicOption, EasyAtomic};
 
 #[repr(i32)]
@@ -56,8 +56,8 @@ pub enum StreamBufferInfo {
 }
 
 type Channel = (
-    Sender<Option<(Bytes, StreamKind, u8, u64)>>,
-    Mutex<Receiver<Option<(Bytes, StreamKind, u8, u64)>>>,
+    Sender<Option<(Bytes, StreamKind, i32, u64)>>,
+    Mutex<Receiver<Option<(Bytes, StreamKind, i32, u64)>>>,
 );
 
 /// Video Audio Streaming Send Processing
@@ -107,7 +107,7 @@ impl StreamSenderAdapter {
     // frames, so the configuration frames are saved here, although it
     // should be noted that the configuration frames will only be
     // generated once.
-    pub fn send(&self, mut buf: Bytes, info: StreamBufferInfo) -> bool {
+    pub fn send(&self, buf: Bytes, info: StreamBufferInfo) -> bool {
         match info {
             StreamBufferInfo::Video(flags, timestamp) => {
                 if flags == BufferFlag::Config as i32 {
@@ -117,17 +117,25 @@ impl StreamSenderAdapter {
                 // Add SPS and PPS units in front of each keyframe (only use android)
                 if flags == BufferFlag::KeyFrame as i32 {
                     if let Some(config) = self.video_config.get() {
-                        let mut bytes = BytesMut::with_capacity(config.len() + buf.len());
-                        bytes.put(&config[..]);
-                        bytes.put(buf);
-
-                        buf = bytes.freeze();
+                        if self
+                            .channel
+                            .0
+                            .send(Some((
+                                config.clone(),
+                                StreamKind::Video,
+                                BufferFlag::Config as i32,
+                                timestamp,
+                            )))
+                            .is_err()
+                        {
+                            return false;
+                        }
                     }
                 }
 
                 self.channel
                     .0
-                    .send(Some((buf, StreamKind::Video, flags as u8, timestamp)))
+                    .send(Some((buf, StreamKind::Video, flags, timestamp)))
                     .is_ok()
             }
             StreamBufferInfo::Audio(flags, timestamp) => {
@@ -145,7 +153,7 @@ impl StreamSenderAdapter {
                             .send(Some((
                                 config.clone(),
                                 StreamKind::Audio,
-                                BufferFlag::Config as u8,
+                                BufferFlag::Config as i32,
                                 timestamp,
                             )))
                             .is_err()
@@ -161,13 +169,13 @@ impl StreamSenderAdapter {
 
                 self.channel
                     .0
-                    .send(Some((buf, StreamKind::Audio, flags as u8, timestamp)))
+                    .send(Some((buf, StreamKind::Audio, flags, timestamp)))
                     .is_ok()
             }
         }
     }
 
-    pub fn next(&self) -> Option<(Bytes, StreamKind, u8, u64)> {
+    pub fn next(&self) -> Option<(Bytes, StreamKind, i32, u64)> {
         self.channel.1.lock().unwrap().recv().ok().flatten()
     }
 }
@@ -200,20 +208,22 @@ impl StreamReceiverAdapter {
         );
     }
 
-    pub fn next(&self) -> Option<(Bytes, StreamKind, u8, u64)> {
+    pub fn next(&self) -> Option<(Bytes, StreamKind, i32, u64)> {
         self.channel.1.lock().unwrap().recv().ok().flatten()
     }
 
     /// As soon as a keyframe is received, the keyframe is cached, and when a
     /// packet loss occurs, the previous keyframe is retransmitted directly into
     /// the decoder.
-    pub fn send(&self, buf: Bytes, kind: StreamKind, flags: u8, timestamp: u64) -> bool {
+    pub fn send(&self, buf: Bytes, kind: StreamKind, flags: i32, timestamp: u64) -> bool {
         match kind {
             StreamKind::Video => {
                 // When keyframes are received, the video stream can be played back
                 // normally without corruption.
                 let mut readable = self.video_readable.get();
-                if flags == BufferFlag::KeyFrame as u8 && !readable {
+                if (flags == BufferFlag::KeyFrame as i32 || flags == BufferFlag::Config as i32)
+                    && !readable
+                {
                     self.video_readable.update(true);
                     readable = true;
                 }
@@ -226,7 +236,7 @@ impl StreamReceiverAdapter {
             StreamKind::Audio => {
                 // The audio configuration package only needs to be processed once.
                 let ready = self.audio_ready.get();
-                if flags == BufferFlag::Config as u8 {
+                if flags == BufferFlag::Config as i32 {
                     if !ready {
                         self.audio_ready.update(true);
                     } else {

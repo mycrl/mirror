@@ -6,7 +6,7 @@ use xxhash_rust::xxh3::xxh3_64;
 #[derive(Debug)]
 pub struct PacketInfo {
     pub kind: StreamKind,
-    pub flags: u8,
+    pub flags: i32,
     pub timestamp: u64,
 }
 
@@ -24,7 +24,7 @@ impl Muxer {
         let mut bytes = BytesMut::with_capacity(buf.len() + Self::HEAD_SIZE);
         bytes.put_u64(0);
         bytes.put_u8(info.kind as u8);
-        bytes.put_u8(info.flags);
+        bytes.put_u8(info.flags as u8);
         bytes.put_u64(info.timestamp);
         bytes.put(buf);
 
@@ -46,7 +46,7 @@ impl Remuxer {
                 Muxer::HEAD_SIZE,
                 PacketInfo {
                     kind: StreamKind::try_from(bytes.get_u8()).ok()?,
-                    flags: bytes.get_u8(),
+                    flags: bytes.get_u8() as i32,
                     timestamp: bytes.get_u64(),
                 },
             ))
