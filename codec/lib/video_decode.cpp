@@ -40,10 +40,10 @@ struct VideoDecoder* codec_create_video_decoder(const char* codec_name)
     codec->context->thread_count = 1;
     codec->context->skip_alpha = true;
     codec->context->pix_fmt = AV_PIX_FMT_NV12;
-    codec->context->flags |= AV_CODEC_FLAG_LOW_DELAY;
+    codec->context->flags = AV_CODEC_FLAG_LOW_DELAY;
 
 #ifdef WIN32
-    if (decoder == "h264")
+    if (decoder == "libopenh264")
     {
         if (av_hwdevice_ctx_create(&codec->hw_device_ctx,
                                    AV_HWDEVICE_TYPE_DXVA2,
@@ -180,6 +180,9 @@ bool codec_video_decoder_send_packet(struct VideoDecoder* codec,
 
 struct VideoFrame* codec_video_decoder_read_frame(struct VideoDecoder* codec)
 {
+    av_frame_unref(codec->frame);
+    av_frame_unref(codec->sw_frame);
+
     if (avcodec_receive_frame(codec->context, codec->frame) != 0)
     {
         return nullptr;

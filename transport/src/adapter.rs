@@ -1,14 +1,12 @@
 use std::{
     fmt,
     sync::{
-        atomic::{AtomicBool, AtomicU8},
-        Arc,
+        atomic::{AtomicBool, AtomicU8}, mpsc::{channel, Receiver, Sender}, Arc, Mutex
     },
 };
 
 use bytes::{BufMut, Bytes, BytesMut};
 use common::atomic::{AtomicOption, EasyAtomic};
-use crossbeam::channel::{bounded, Receiver, Sender};
 
 #[repr(i32)]
 #[derive(Debug, Clone, Copy)]
@@ -57,7 +55,7 @@ pub enum StreamBufferInfo {
 
 type Channel = (
     Sender<Option<(Bytes, StreamKind, u8, u64)>>,
-    Receiver<Option<(Bytes, StreamKind, u8, u64)>>,
+    Mutex<Receiver<Option<(Bytes, StreamKind, u8, u64)>>>,
 );
 
 /// Video Audio Streaming Send Processing
@@ -76,12 +74,13 @@ pub struct StreamSenderAdapter {
 
 impl StreamSenderAdapter {
     pub fn new() -> Arc<Self> {
+        let (tx, rx) = channel();
         Arc::new(Self {
             video_config: AtomicOption::new(None),
             audio_config: AtomicOption::new(None),
             is_multicast: AtomicBool::new(false),
             audio_interval: AtomicU8::new(0),
-            channel: bounded(10),
+            channel: (tx, Mutex::new(rx)),
         })
     }
 
@@ -167,7 +166,7 @@ impl StreamSenderAdapter {
     }
 
     pub fn next(&self) -> Option<(Bytes, StreamKind, u8, u64)> {
-        self.channel.1.recv().ok().flatten()
+        self.channel.1.lock().unwrap().recv().ok().flatten()
     }
 }
 
@@ -184,10 +183,11 @@ pub struct StreamReceiverAdapter {
 
 impl StreamReceiverAdapter {
     pub fn new() -> Arc<Self> {
+        let (tx, rx) = channel();
         Arc::new(Self {
             video_readable: AtomicBool::new(false),
             audio_ready: AtomicBool::new(false),
-            channel: bounded(10),
+            channel: (tx, Mutex::new(rx)),
         })
     }
 
@@ -199,7 +199,7 @@ impl StreamReceiverAdapter {
     }
 
     pub fn next(&self) -> Option<(Bytes, StreamKind, u8, u64)> {
-        self.channel.1.recv().ok().flatten()
+        self.channel.1.lock().unwrap().recv().ok().flatten()
     }
 
     /// As soon as a keyframe is received, the keyframe is cached, and when a

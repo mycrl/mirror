@@ -402,37 +402,46 @@ impl Transport {
         thread::spawn(move || {
             let mut buf = [0u8; 2000];
 
-            while let Ok(size) = receiver.read(&mut buf) {
-                if size == 0 {
-                    break;
-                }
-
-                // All the fragments received from SRT are split and need to be reassembled here
-                if let Some((seq, bytes)) = decoder.decode(&buf[..size]) {
-                    if let Some(adapter) = adapter_.upgrade() {
-                        // Check whether the sequence number is continuous, in order to check
-                        // whether packet loss has occurred
-                        if seq == 0 || seq - 1 == sequence.get() {
-                            if let Some((offset, info)) = Remuxer::remux(&bytes) {
-                                if !adapter.send(
-                                    bytes.slice(offset..),
-                                    info.kind,
-                                    info.flags,
-                                    info.timestamp,
-                                ) {
-                                    log::error!("adapter on buf failed.");
-
-                                    break;
-                                }
-                            } else {
-                                adapter.loss_pkt();
-                            }
-                        } else {
-                            adapter.loss_pkt()
+            loop {
+                match receiver.read(&mut buf) {
+                    Ok(size) => {
+                        if size == 0 {
+                            break;
                         }
 
-                        sequence.update(seq);
-                    } else {
+                        // All the fragments received from SRT are split and need to be reassembled here
+                        if let Some((seq, bytes)) = decoder.decode(&buf[..size]) {
+                            if let Some(adapter) = adapter_.upgrade() {
+                                // Check whether the sequence number is continuous, in order to check
+                                // whether packet loss has occurred
+                                if seq == 0 || seq - 1 == sequence.get() {
+                                    if let Some((offset, info)) = Remuxer::remux(&bytes) {
+                                        if !adapter.send(
+                                            bytes.slice(offset..),
+                                            info.kind,
+                                            info.flags,
+                                            info.timestamp,
+                                        ) {
+                                            log::error!("adapter on buf failed.");
+
+                                            break;
+                                        }
+                                    } else {
+                                        adapter.loss_pkt();
+                                    }
+                                } else {
+                                    adapter.loss_pkt()
+                                }
+
+                                sequence.update(seq);
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        log::error!("{:?}", e);
+
                         break;
                     }
                 }

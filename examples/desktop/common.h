@@ -11,8 +11,10 @@
 
 #include <windows.h>
 
+#include <mutex>
 #include <string>
 #include <vector>
+#include <thread>
 #include <functional>
 
 #include <mirror.h>
@@ -30,18 +32,33 @@ public:
 		, _closed_callback(closed_callback)
 		, _sdl_rect(sdl_rect)
 		, _screen(screen)
-	{}
+	{
+		_sdl_renderer = SDL_CreateRenderer(screen, -1, SDL_RENDERER_ACCELERATED);
+        _worker = std::thread([=]() {
+            for (;;)
+            {
+                if (_sdl_texture != nullptr)
+                {
+                    std::lock_guard<std::mutex> guard(_mutex);
+                    if (SDL_RenderClear(_sdl_renderer) == 0)
+                    {
+                        if (SDL_RenderCopy(_sdl_renderer, _sdl_texture, nullptr, _sdl_rect) == 0)
+                        {
+                            SDL_RenderPresent(_sdl_renderer);
+                        }
+                    }
+                }
+
+                Sleep(1000 / 30);
+            }
+        });
+	}
 
 	bool OnVideoFrame(struct VideoFrame* frame)
 	{
 		if (!_is_render)
 		{
 			return true;
-		}
-
-		if (_sdl_renderer == nullptr)
-		{
-			_sdl_renderer = SDL_CreateRenderer(_screen, -1, SDL_RENDERER_ACCELERATED);
 		}
 
 		if (_sdl_texture == nullptr)
@@ -59,24 +76,14 @@ public:
 		sdl_rect.x = 0;
 		sdl_rect.y = 0;
 
-		if (SDL_UpdateNVTexture(_sdl_texture,
-								&sdl_rect,
-								frame->data[0],
-								frame->linesize[0],
-								frame->data[1],
-								frame->linesize[1]) == 0)
-		{
-			if (SDL_RenderClear(_sdl_renderer) == 0)
-			{
-				if (SDL_RenderCopy(_sdl_renderer, _sdl_texture, nullptr, _sdl_rect) == 0)
-				{
-					SDL_RenderPresent(_sdl_renderer);
-					return true;
-				}
-			}
-		}
-
-		return false;
+        std::lock_guard<std::mutex> guard(_mutex);
+		SDL_UpdateNVTexture(_sdl_texture,
+							&sdl_rect,
+							frame->data[0],
+							frame->linesize[0],
+							frame->data[1],
+							frame->linesize[1]);
+		return true;
 	}
 
 	bool OnAudioFrame(struct AudioFrame* frame)
@@ -95,6 +102,8 @@ private:
 	SDL_Texture* _sdl_texture = nullptr;
 	SDL_Renderer* _sdl_renderer = nullptr;
 	std::function<void()> _closed_callback;
+	std::thread _worker;
+    std::mutex _mutex;
 };
 
 class Args
