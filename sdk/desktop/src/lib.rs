@@ -7,11 +7,12 @@ use std::{
     ffi::{c_char, c_int, c_void},
     fmt::Debug,
     ptr::null_mut,
-    sync::Arc,
+    sync::{atomic::AtomicBool, Arc},
 };
 
 use capture::{Device, DeviceKind, DeviceManager};
 use common::{
+    atomic::EasyAtomic,
     frame::{AudioFrame, VideoFrame},
     strings::Strings,
 };
@@ -363,10 +364,16 @@ impl RawFrameSink {
 
 impl Into<FrameSink> for RawFrameSink {
     fn into(self) -> FrameSink {
+        let is_closed = AtomicBool::new(false);
         FrameSink {
             video: Box::new(move |frame: &VideoFrame| self.send_video(frame)),
             audio: Box::new(move |frame: &AudioFrame| self.send_audio(frame)),
-            close: Box::new(move || self.closed()),
+            close: Box::new(move || {
+                if !is_closed.get() {
+                    self.closed();
+                    is_closed.update(true);
+                }
+            }),
         }
     }
 }

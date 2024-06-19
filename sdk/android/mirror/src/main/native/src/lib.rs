@@ -2,10 +2,16 @@ mod adapter;
 mod command;
 mod logger;
 
-use std::{ffi::c_void, ptr::null_mut, sync::Arc, thread};
+use std::{
+    ffi::c_void,
+    ptr::null_mut,
+    sync::{atomic::AtomicBool, Arc},
+    thread,
+};
 
 use adapter::AndroidStreamReceiverAdapter;
 use command::{catcher, copy_from_byte_array, JVM};
+use common::atomic::EasyAtomic;
 use jni::{
     objects::{JByteArray, JClass, JObject, JString},
     sys::JNI_VERSION_1_6,
@@ -15,7 +21,7 @@ use jni::{
 use jni_macro::jni_exports;
 use logger::AndroidLogger;
 use transport::{
-    adapter::{StreamReceiverAdapter, StreamSenderAdapter},
+    adapter::{StreamKind, StreamReceiverAdapter, StreamSenderAdapter},
     Transport, TransportOptions,
 };
 
@@ -328,16 +334,19 @@ impl Mirror {
         callback: JObject,
     ) -> *const Arc<StreamReceiverAdapter> {
         catcher(&mut env, |env| {
-            let adapter = AndroidStreamReceiverAdapter {
-                callback: env.new_global_ref(callback)?,
-            };
-
+            let is_closed = Arc::new(AtomicBool::new(false));
             let stream_adapter = StreamReceiverAdapter::new();
+            let adapter = Arc::new(AndroidStreamReceiverAdapter {
+                callback: env.new_global_ref(callback)?,
+            });
+
+            let adapter_ = adapter.clone();
+            let is_closed_ = is_closed.clone();
             let stream_adapter_ = Arc::downgrade(&stream_adapter);
             thread::spawn(move || {
                 while let Some(stream_adapter) = stream_adapter_.upgrade() {
-                    if let Some((buf, kind, flags, timestamp)) = stream_adapter.next() {
-                        if !adapter.sink(buf, kind, flags, timestamp) {
+                    if let Some((buf, flags, timestamp)) = stream_adapter.next_video() {
+                        if !adapter_.sink(buf, StreamKind::Video, flags, timestamp) {
                             break;
                         }
                     } else {
@@ -345,9 +354,32 @@ impl Mirror {
                     }
                 }
 
-                log::info!("StreamReceiverAdapter is closed");
+                if !is_closed_.get() {
+                    log::info!("StreamReceiverAdapter is closed");
 
-                adapter.close();
+                    adapter_.close();
+                    is_closed_.update(true);
+                }
+            });
+
+            let stream_adapter_ = Arc::downgrade(&stream_adapter);
+            thread::spawn(move || {
+                while let Some(stream_adapter) = stream_adapter_.upgrade() {
+                    if let Some((buf, flags, timestamp)) = stream_adapter.next_audio() {
+                        if !adapter.sink(buf, StreamKind::Audio, flags, timestamp) {
+                            break;
+                        }
+                    } else {
+                        break;
+                    }
+                }
+
+                if !is_closed.get() {
+                    log::info!("StreamReceiverAdapter is closed");
+
+                    adapter.close();
+                    is_closed.update(true);
+                }
             });
 
             Ok(Box::into_raw(Box::new(stream_adapter)))

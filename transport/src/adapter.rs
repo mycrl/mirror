@@ -55,35 +55,23 @@ pub enum StreamBufferInfo {
     Audio(i32, u64),
 }
 
-type Channel = (
-    Sender<Option<(Bytes, StreamKind, i32, u64)>>,
-    Mutex<Receiver<Option<(Bytes, StreamKind, i32, u64)>>>,
-);
-
 /// Video Audio Streaming Send Processing
 ///
 /// Because the receiver will normally join the stream in the middle of the
 /// stream, and in the face of this situation, it is necessary to process the
 /// sps and pps as well as the key frame information.
-#[allow(clippy::type_complexity)]
+#[derive(Default)]
 pub struct StreamSenderAdapter {
+    is_multicast: AtomicBool,
+    audio_interval: AtomicU8,
     video_config: AtomicOption<Bytes>,
     audio_config: AtomicOption<Bytes>,
-    audio_interval: AtomicU8,
-    is_multicast: AtomicBool,
-    channel: Channel,
+    channel: Channel<(Bytes, StreamKind, i32, u64)>,
 }
 
 impl StreamSenderAdapter {
     pub fn new() -> Arc<Self> {
-        let (tx, rx) = channel();
-        Arc::new(Self {
-            video_config: AtomicOption::new(None),
-            audio_config: AtomicOption::new(None),
-            is_multicast: AtomicBool::new(false),
-            audio_interval: AtomicU8::new(0),
-            channel: (tx, Mutex::new(rx)),
-        })
+        Arc::new(Self::default())
     }
 
     /// Toggle whether to use multicast
@@ -97,10 +85,7 @@ impl StreamSenderAdapter {
     }
 
     pub fn close(&self) {
-        self.channel.0.send(None).expect(
-            "Failed to close, this is because it is not possible to send None to the \
-             channel, this is a bug.",
-        );
+        self.channel.send(None);
     }
 
     // h264 decoding any p-frames and i-frames requires sps and pps
@@ -117,26 +102,19 @@ impl StreamSenderAdapter {
                 // Add SPS and PPS units in front of each keyframe (only use android)
                 if flags == BufferFlag::KeyFrame as i32 {
                     if let Some(config) = self.video_config.get() {
-                        if self
-                            .channel
-                            .0
-                            .send(Some((
-                                config.clone(),
-                                StreamKind::Video,
-                                BufferFlag::KeyFrame as i32,
-                                timestamp,
-                            )))
-                            .is_err()
-                        {
+                        if !self.channel.send(Some((
+                            config.clone(),
+                            StreamKind::Video,
+                            BufferFlag::KeyFrame as i32,
+                            timestamp,
+                        ))) {
                             return false;
                         }
                     }
                 }
 
                 self.channel
-                    .0
                     .send(Some((buf, StreamKind::Video, flags, timestamp)))
-                    .is_ok()
             }
             StreamBufferInfo::Audio(flags, timestamp) => {
                 if flags == BufferFlag::Config as i32 {
@@ -147,17 +125,12 @@ impl StreamSenderAdapter {
                 let count = self.audio_interval.get();
                 self.audio_interval.update(if count == 30 {
                     if let Some(config) = self.audio_config.get() {
-                        if self
-                            .channel
-                            .0
-                            .send(Some((
-                                config.clone(),
-                                StreamKind::Audio,
-                                BufferFlag::Config as i32,
-                                timestamp,
-                            )))
-                            .is_err()
-                        {
+                        if !self.channel.send(Some((
+                            config.clone(),
+                            StreamKind::Audio,
+                            BufferFlag::Config as i32,
+                            timestamp,
+                        ))) {
                             return false;
                         }
                     }
@@ -168,15 +141,13 @@ impl StreamSenderAdapter {
                 });
 
                 self.channel
-                    .0
                     .send(Some((buf, StreamKind::Audio, flags, timestamp)))
-                    .is_ok()
             }
         }
     }
 
     pub fn next(&self) -> Option<(Bytes, StreamKind, i32, u64)> {
-        self.channel.1.lock().unwrap().recv().ok().flatten()
+        self.channel.recv()
     }
 }
 
@@ -185,31 +156,30 @@ impl StreamSenderAdapter {
 /// The main purpose is to deal with cases where packet loss occurs at the
 /// receiver side, since the SRT communication protocol does not completely
 /// guarantee no packet loss.
+#[derive(Default)]
 pub struct StreamReceiverAdapter {
-    video_readable: AtomicBool,
     audio_ready: AtomicBool,
-    channel: Channel,
+    video_readable: AtomicBool,
+    video_channel: Channel<(Bytes, i32, u64)>,
+    audio_channel: Channel<(Bytes, i32, u64)>,
 }
 
 impl StreamReceiverAdapter {
     pub fn new() -> Arc<Self> {
-        let (tx, rx) = channel();
-        Arc::new(Self {
-            video_readable: AtomicBool::new(false),
-            audio_ready: AtomicBool::new(false),
-            channel: (tx, Mutex::new(rx)),
-        })
+        Arc::new(Self::default())
     }
 
     pub fn close(&self) {
-        self.channel.0.send(None).expect(
-            "Failed to close, this is because it is not possible to send None to the \
-             channel, this is a bug.",
-        );
+        self.video_channel.send(None);
+        self.audio_channel.send(None);
     }
 
-    pub fn next(&self) -> Option<(Bytes, StreamKind, i32, u64)> {
-        self.channel.1.lock().unwrap().recv().ok().flatten()
+    pub fn next_video(&self) -> Option<(Bytes, i32, u64)> {
+        self.video_channel.recv()
+    }
+
+    pub fn next_audio(&self) -> Option<(Bytes, i32, u64)> {
+        self.audio_channel.recv()
     }
 
     /// As soon as a keyframe is received, the keyframe is cached, and when a
@@ -221,8 +191,7 @@ impl StreamReceiverAdapter {
                 // When keyframes are received, the video stream can be played back
                 // normally without corruption.
                 let mut readable = self.video_readable.get();
-                if flags == BufferFlag::KeyFrame as i32 && !readable
-                {
+                if flags == BufferFlag::KeyFrame as i32 && !readable {
                     self.video_readable.update(true);
                     readable = true;
                 }
@@ -231,6 +200,8 @@ impl StreamReceiverAdapter {
                 if !readable {
                     return true;
                 }
+
+                self.video_channel.send(Some((buf, flags, timestamp)))
             }
             StreamKind::Audio => {
                 // The audio configuration package only needs to be processed once.
@@ -246,13 +217,10 @@ impl StreamReceiverAdapter {
                         return true;
                     }
                 }
+
+                self.audio_channel.send(Some((buf, flags, timestamp)))
             }
         }
-
-        self.channel
-            .0
-            .send(Some((buf, kind, flags, timestamp)))
-            .is_ok()
     }
 
     /// Marks that the video packet has been lost.
@@ -263,5 +231,24 @@ impl StreamReceiverAdapter {
             "Packet loss has occurred and the data stream is currently \
             paused, waiting for the key frame to arrive.",
         );
+    }
+}
+
+struct Channel<T>(Sender<Option<T>>, Mutex<Receiver<Option<T>>>);
+
+impl<T> Default for Channel<T> {
+    fn default() -> Self {
+        let (tx, rx) = channel();
+        Self(tx, Mutex::new(rx))
+    }
+}
+
+impl<T> Channel<T> {
+    fn send(&self, item: Option<T>) -> bool {
+        self.0.send(item).is_ok()
+    }
+
+    fn recv(&self) -> Option<T> {
+        self.1.lock().unwrap().recv().ok().flatten()
     }
 }
