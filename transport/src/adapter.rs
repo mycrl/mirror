@@ -313,11 +313,12 @@ impl PacketFilter {
         // whether the configuration information has arrived. If the configuration
         // information has arrived, the decoder initialization is marked as completed.
         if !self.initialized.get() {
-            if flag == BufferFlag::Config as i32 {
-                self.initialized.update(true);
-            } else {
+            if flag != BufferFlag::Config as i32 {
                 return false;
             }
+
+            self.initialized.update(true);
+            return true;
         }
 
         // The configuration information only needs to be filled into the decoder once.
