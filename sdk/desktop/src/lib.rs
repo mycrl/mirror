@@ -5,15 +5,15 @@ use std::{
     ffi::{c_char, c_int},
     fmt::Debug,
     ptr::null_mut,
-    sync::{atomic::AtomicBool, Arc},
+    sync::Arc,
 };
 
 use capture::{Device, DeviceKind, DeviceManager};
 use common::{
-    atomic::EasyAtomic,
     frame::{AudioFrame, VideoFrame},
     strings::Strings,
 };
+
 use mirror::{AudioOptions, Mirror, MirrorOptions, VideoOptions};
 use transport::adapter::{
     StreamMultiReceiverAdapter, StreamReceiverAdapterExt, StreamSenderAdapter,
@@ -340,7 +340,6 @@ unsafe impl Sync for RawFrameSink {}
 
 impl Into<FrameSink> for RawFrameSink {
     fn into(self) -> FrameSink {
-        let is_closed = AtomicBool::new(false);
         FrameSink {
             video: Box::new(move |frame: &VideoFrame| {
                 if let Some(callback) = &self.video {
@@ -357,12 +356,8 @@ impl Into<FrameSink> for RawFrameSink {
                 }
             }),
             close: Box::new(move || {
-                if !is_closed.get() {
-                    if let Some(callback) = &self.close {
-                        callback(self.ctx)
-                    }
-
-                    is_closed.update(true);
+                if let Some(callback) = &self.close {
+                    callback(self.ctx)
                 }
             }),
         }

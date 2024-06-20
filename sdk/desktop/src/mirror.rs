@@ -323,8 +323,6 @@ impl Mirror {
                     break;
                 }
             }
-
-            (sink.close)()
         });
 
         Ok(adapter)
