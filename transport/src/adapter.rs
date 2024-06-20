@@ -63,10 +63,10 @@ pub enum StreamBufferInfo {
 #[derive(Default)]
 pub struct StreamSenderAdapter {
     is_multicast: AtomicBool,
-    audio_interval: AtomicU8,
     video_config: AtomicOption<Bytes>,
     audio_config: AtomicOption<Bytes>,
-    channel: Channel<(Bytes, StreamKind, i32, u64)>,
+    audio_interval: AtomicU8,
+    channel: Channel,
 }
 
 impl StreamSenderAdapter {
@@ -158,10 +158,9 @@ impl StreamSenderAdapter {
 /// guarantee no packet loss.
 #[derive(Default)]
 pub struct StreamReceiverAdapter {
-    audio_ready: AtomicBool,
     video_readable: AtomicBool,
-    video_channel: Channel<(Bytes, i32, u64)>,
-    audio_channel: Channel<(Bytes, i32, u64)>,
+    audio_ready: AtomicBool,
+    channel: Channel,
 }
 
 impl StreamReceiverAdapter {
@@ -170,16 +169,11 @@ impl StreamReceiverAdapter {
     }
 
     pub fn close(&self) {
-        self.video_channel.send(None);
-        self.audio_channel.send(None);
+        self.channel.send(None);
     }
 
-    pub fn next_video(&self) -> Option<(Bytes, i32, u64)> {
-        self.video_channel.recv()
-    }
-
-    pub fn next_audio(&self) -> Option<(Bytes, i32, u64)> {
-        self.audio_channel.recv()
+    pub fn next(&self) -> Option<(Bytes, StreamKind, i32, u64)> {
+        self.channel.recv()
     }
 
     /// As soon as a keyframe is received, the keyframe is cached, and when a
@@ -200,8 +194,6 @@ impl StreamReceiverAdapter {
                 if !readable {
                     return true;
                 }
-
-                self.video_channel.send(Some((buf, flags, timestamp)))
             }
             StreamKind::Audio => {
                 // The audio configuration package only needs to be processed once.
@@ -217,10 +209,10 @@ impl StreamReceiverAdapter {
                         return true;
                     }
                 }
-
-                self.audio_channel.send(Some((buf, flags, timestamp)))
             }
         }
+
+        self.channel.send(Some((buf, kind, flags, timestamp)))
     }
 
     /// Marks that the video packet has been lost.
@@ -234,21 +226,24 @@ impl StreamReceiverAdapter {
     }
 }
 
-struct Channel<T>(Sender<Option<T>>, Mutex<Receiver<Option<T>>>);
+struct Channel(
+    Sender<Option<(Bytes, StreamKind, i32, u64)>>,
+    Mutex<Receiver<Option<(Bytes, StreamKind, i32, u64)>>>,
+);
 
-impl<T> Default for Channel<T> {
+impl Default for Channel {
     fn default() -> Self {
         let (tx, rx) = channel();
         Self(tx, Mutex::new(rx))
     }
 }
 
-impl<T> Channel<T> {
-    fn send(&self, item: Option<T>) -> bool {
+impl Channel {
+    fn send(&self, item: Option<(Bytes, StreamKind, i32, u64)>) -> bool {
         self.0.send(item).is_ok()
     }
 
-    fn recv(&self) -> Option<T> {
+    fn recv(&self) -> Option<(Bytes, StreamKind, i32, u64)> {
         self.1.lock().unwrap().recv().ok().flatten()
     }
 }
