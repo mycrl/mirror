@@ -11,7 +11,7 @@ use bytes::Bytes;
 use common::atomic::{AtomicOption, EasyAtomic};
 
 #[repr(i32)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BufferFlag {
     KeyFrame = 1,
     Config = 2,
@@ -105,7 +105,7 @@ impl StreamSenderAdapter {
                         if !self.channel.send(Some((
                             config.clone(),
                             StreamKind::Video,
-                            BufferFlag::KeyFrame as i32,
+                            BufferFlag::Config as i32,
                             timestamp,
                         ))) {
                             return false;
@@ -158,8 +158,8 @@ impl StreamSenderAdapter {
 /// guarantee no packet loss.
 #[derive(Default)]
 pub struct StreamReceiverAdapter {
-    video_readable: AtomicBool,
-    audio_ready: AtomicBool,
+    video_filter: PacketFilter,
+    audio_filter: PacketFilter,
     channel: Channel,
 }
 
@@ -180,44 +180,19 @@ impl StreamReceiverAdapter {
     /// packet loss occurs, the previous keyframe is retransmitted directly into
     /// the decoder.
     pub fn send(&self, buf: Bytes, kind: StreamKind, flags: i32, timestamp: u64) -> bool {
-        match kind {
-            StreamKind::Video => {
-                // When keyframes are received, the video stream can be played back
-                // normally without corruption.
-                let mut readable = self.video_readable.get();
-                if flags == BufferFlag::KeyFrame as i32 && !readable {
-                    self.video_readable.update(true);
-                    readable = true;
-                }
-
-                // In case of packet loss, no packet is sent to the decoder.
-                if !readable {
-                    return true;
-                }
-            }
-            StreamKind::Audio => {
-                // The audio configuration package only needs to be processed once.
-                let ready = self.audio_ready.get();
-                if flags == BufferFlag::Config as i32 {
-                    if !ready {
-                        self.audio_ready.update(true);
-                    } else {
-                        return true;
-                    }
-                } else {
-                    if !ready {
-                        return true;
-                    }
-                }
-            }
+        if match kind {
+            StreamKind::Video => self.video_filter.filter(flags),
+            StreamKind::Audio => self.audio_filter.filter(flags),
+        } {
+            return self.channel.send(Some((buf, kind, flags, timestamp)));
         }
 
-        self.channel.send(Some((buf, kind, flags, timestamp)))
+        true
     }
 
     /// Marks that the video packet has been lost.
     pub fn loss_pkt(&self) {
-        self.video_readable.update(false);
+        self.video_filter.loss();
 
         log::warn!(
             "Packet loss has occurred and the data stream is currently \
@@ -245,5 +220,51 @@ impl Channel {
 
     fn recv(&self) -> Option<(Bytes, StreamKind, i32, u64)> {
         self.1.lock().unwrap().recv().ok().flatten()
+    }
+}
+
+#[derive(Default)]
+struct PacketFilter {
+    initialized: AtomicBool,
+    readable: AtomicBool,
+}
+
+impl PacketFilter {
+    fn filter(&self, flag: i32) -> bool {
+        // First check whether the decoder has been initialized. Here, it is judged
+        // whether the configuration information has arrived. If the configuration
+        // information has arrived, the decoder initialization is marked as completed.
+        if !self.initialized.get() {
+            if flag == BufferFlag::Config as i32 {
+                self.initialized.update(true);
+            } else {
+                return false;
+            }
+        }
+
+        // The configuration information only needs to be filled into the decoder once.
+        // If it has been initialized, it means that the configuration information has
+        // been received. It is meaningless to receive it again later. Here, duplicate
+        // configuration information is filtered out.
+        if flag == BufferFlag::Config as i32 {
+            return false;
+        }
+
+        // Check whether the current stream is in a readable state. When packet loss
+        // occurs, the entire stream should be paused and wait for the next key frame to
+        // arrive.
+        if !self.readable.get() {
+            if flag == BufferFlag::KeyFrame as i32 {
+                self.readable.update(true);
+            } else {
+                return false;
+            }
+        }
+
+        true
+    }
+
+    fn loss(&self) {
+        self.readable.update(false);
     }
 }
