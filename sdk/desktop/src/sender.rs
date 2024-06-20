@@ -2,14 +2,11 @@ use std::{sync::Arc, thread};
 
 use bytes::Bytes;
 use capture::AVFrameSink;
-use codec::{
-    audio::create_opus_identification_header, AudioEncoder, AudioEncoderSettings, VideoEncoder,
-    VideoEncoderSettings,
-};
+use codec::{AudioEncoder, AudioEncoderSettings, VideoEncoder, VideoEncoderSettings};
 
 use common::frame::{AudioFrame, VideoFrame};
 use crossbeam::sync::{Parker, Unparker};
-use transport::adapter::{BufferFlag, StreamBufferInfo, StreamSenderAdapter};
+use transport::adapter::{StreamBufferInfo, StreamSenderAdapter};
 
 use crate::mirror::{FrameSink, OPTIONS};
 
