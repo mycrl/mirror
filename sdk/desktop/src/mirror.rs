@@ -16,7 +16,7 @@ use common::{
 use log::LevelFilter;
 use once_cell::sync::Lazy;
 use transport::{
-    adapter::{StreamKind, StreamReceiverAdapter, StreamSenderAdapter},
+    adapter::{StreamKind, StreamMultiReceiverAdapter, StreamSenderAdapter},
     Transport, TransportOptions,
 };
 
@@ -216,7 +216,7 @@ pub struct FrameSink {
     /// allows BT.2020 primaries (since 2021). The same happens with
     /// JPEG: it has BT.601 matrix derived from System M primaries, yet the
     /// primaries of most images are BT.709.
-    pub video: Box<dyn Fn(&VideoFrame) -> bool + Send>,
+    pub video: Box<dyn Fn(&VideoFrame) -> bool + Send + Sync>,
     /// Callback is called when the audio frame is updated. The audio frame
     /// format is fixed to PCM. Be careful not to call blocking methods inside
     /// the callback, which will seriously slow down the encoding and decoding
@@ -243,11 +243,11 @@ pub struct FrameSink {
     /// the number of times per second that samples are taken; and the bit
     /// depth, which determines the number of possible digital values that
     /// can be used to represent each sample.
-    pub audio: Box<dyn Fn(&AudioFrame) -> bool + Send>,
+    pub audio: Box<dyn Fn(&AudioFrame) -> bool + Send + Sync>,
     /// Callback when the sender is closed. This may be because the external
     /// side actively calls the close, or the audio and video packets cannot be
     /// sent (the network is disconnected), etc.
-    pub close: Box<dyn Fn() + Send>,
+    pub close: Box<dyn Fn() + Send + Sync>,
 }
 
 pub struct Mirror(Transport);
@@ -277,43 +277,50 @@ impl Mirror {
 
     /// Create a receiver, specify a bound NIC address, you can pass callback to
     /// get the sender's screen or sound callback, callback can not be null.
-    pub fn create_receiver(&self, id: u32, sink: FrameSink) -> Result<Arc<StreamReceiverAdapter>> {
+    pub fn create_receiver(
+        &self,
+        id: u32,
+        sink: FrameSink,
+    ) -> Result<Arc<StreamMultiReceiverAdapter>> {
         log::info!("create receiver: id={}", id);
 
         let options = OPTIONS.read().unwrap();
-        let adapter = StreamReceiverAdapter::new();
+        let adapter = StreamMultiReceiverAdapter::new();
         self.0.create_receiver(id, &adapter)?;
 
+        let sink = Arc::new(sink);
         let video_decoder = VideoDecoder::new(&options.video.decoder)?;
         let audio_decoder = AudioDecoder::new(&options.audio.decoder)?;
 
+        let sink_ = sink.clone();
         let adapter_ = adapter.clone();
         thread::spawn(move || {
-            'a: while let Some((packet, kind, _, _)) = adapter_.next() {
-                if packet.is_empty() {
-                    continue;
+            'a: while let Some((packet, _, _)) = adapter_.next(StreamKind::Video) {
+                if video_decoder.decode(&packet) {
+                    while let Some(frame) = video_decoder.read() {
+                        if !(sink_.video)(frame) {
+                            break 'a;
+                        }
+                    }
+                } else {
+                    break;
                 }
+            }
 
-                if kind == StreamKind::Video {
-                    if video_decoder.decode(&packet) {
-                        while let Some(frame) = video_decoder.read() {
-                            if !(sink.video)(frame) {
-                                break 'a;
-                            }
+            (sink_.close)()
+        });
+
+        let adapter_ = adapter.clone();
+        thread::spawn(move || {
+            'a: while let Some((packet, _, _)) = adapter_.next(StreamKind::Audio) {
+                if audio_decoder.decode(&packet) {
+                    while let Some(frame) = audio_decoder.read() {
+                        if !(sink.audio)(frame) {
+                            break 'a;
                         }
-                    } else {
-                        break;
                     }
-                } else if kind == StreamKind::Audio {
-                    if audio_decoder.decode(&packet) {
-                        while let Some(frame) = audio_decoder.read() {
-                            if !(sink.audio)(frame) {
-                                break 'a;
-                            }
-                        }
-                    } else {
-                        break;
-                    }
+                } else {
+                    break;
                 }
             }
 

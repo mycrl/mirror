@@ -20,7 +20,7 @@ use service::{signal::Signal, SocketKind, StreamInfo};
 use smallvec::SmallVec;
 
 use crate::{
-    adapter::{StreamReceiverAdapter, StreamSenderAdapter},
+    adapter::{StreamReceiverAdapterExt, StreamSenderAdapter},
     payload::{Muxer, PacketInfo, Remuxer},
 };
 
@@ -236,18 +236,17 @@ impl Transport {
         Ok(())
     }
 
-    pub fn create_receiver(
-        &self,
-        stream_id: u32,
-        adapter: &Arc<StreamReceiverAdapter>,
-    ) -> Result<(), Error> {
+    pub fn create_receiver<T>(&self, stream_id: u32, adapter: &Arc<T>) -> Result<(), Error>
+    where
+        T: StreamReceiverAdapterExt + 'static,
+    {
         let current_mcast_rceiver = Arc::new(Mutex::new(None));
 
         // Creating a multicast receiver
         let current_mcast_rceiver_ = current_mcast_rceiver.clone();
         let create_mcast_receiver = move |receiver: Weak<srt::Socket>,
                                           sequence: Arc<AtomicU64>,
-                                          adapter: Weak<StreamReceiverAdapter>,
+                                          adapter: Weak<T>,
                                           multicast,
                                           port| {
             let mcast_rceiver = if let Ok(socket) =

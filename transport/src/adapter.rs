@@ -63,10 +63,10 @@ pub enum StreamBufferInfo {
 #[derive(Default)]
 pub struct StreamSenderAdapter {
     is_multicast: AtomicBool,
+    audio_interval: AtomicU8,
     video_config: AtomicOption<Bytes>,
     audio_config: AtomicOption<Bytes>,
-    audio_interval: AtomicU8,
-    channel: Channel,
+    channel: Channel<(Bytes, StreamKind, i32, u64)>,
 }
 
 impl StreamSenderAdapter {
@@ -93,6 +93,10 @@ impl StreamSenderAdapter {
     // should be noted that the configuration frames will only be
     // generated once.
     pub fn send(&self, buf: Bytes, info: StreamBufferInfo) -> bool {
+        if buf.is_empty() {
+            return true;
+        }
+
         match info {
             StreamBufferInfo::Video(flags, timestamp) => {
                 if flags == BufferFlag::Config as i32 {
@@ -151,6 +155,12 @@ impl StreamSenderAdapter {
     }
 }
 
+pub trait StreamReceiverAdapterExt: Sync + Send {
+    fn close(&self);
+    fn loss_pkt(&self);
+    fn send(&self, buf: Bytes, kind: StreamKind, flags: i32, timestamp: u64) -> bool;
+}
+
 /// Video Audio Streaming Receiver Processing
 ///
 /// The main purpose is to deal with cases where packet loss occurs at the
@@ -158,9 +168,9 @@ impl StreamSenderAdapter {
 /// guarantee no packet loss.
 #[derive(Default)]
 pub struct StreamReceiverAdapter {
+    channel: Channel<(Bytes, StreamKind, i32, u64)>,
     video_filter: PacketFilter,
     audio_filter: PacketFilter,
-    channel: Channel,
 }
 
 impl StreamReceiverAdapter {
@@ -168,18 +178,33 @@ impl StreamReceiverAdapter {
         Arc::new(Self::default())
     }
 
-    pub fn close(&self) {
+    pub fn next(&self) -> Option<(Bytes, StreamKind, i32, u64)> {
+        self.channel.recv()
+    }
+}
+
+impl StreamReceiverAdapterExt for StreamReceiverAdapter {
+    fn close(&self) {
         self.channel.send(None);
     }
 
-    pub fn next(&self) -> Option<(Bytes, StreamKind, i32, u64)> {
-        self.channel.recv()
+    fn loss_pkt(&self) {
+        self.video_filter.loss();
+
+        log::warn!(
+            "Packet loss has occurred and the data stream is currently \
+            paused, waiting for the key frame to arrive.",
+        );
     }
 
     /// As soon as a keyframe is received, the keyframe is cached, and when a
     /// packet loss occurs, the previous keyframe is retransmitted directly into
     /// the decoder.
-    pub fn send(&self, buf: Bytes, kind: StreamKind, flags: i32, timestamp: u64) -> bool {
+    fn send(&self, buf: Bytes, kind: StreamKind, flags: i32, timestamp: u64) -> bool {
+        if buf.is_empty() {
+            return true;
+        }
+
         if match kind {
             StreamKind::Video => self.video_filter.filter(flags),
             StreamKind::Audio => self.audio_filter.filter(flags),
@@ -189,9 +214,41 @@ impl StreamReceiverAdapter {
 
         true
     }
+}
 
-    /// Marks that the video packet has been lost.
-    pub fn loss_pkt(&self) {
+/// Video Audio Streaming Receiver Processing
+///
+/// The main purpose is to deal with cases where packet loss occurs at the
+/// receiver side, since the SRT communication protocol does not completely
+/// guarantee no packet loss.
+#[derive(Default)]
+pub struct StreamMultiReceiverAdapter {
+    video_channel: Channel<(Bytes, i32, u64)>,
+    audio_channel: Channel<(Bytes, i32, u64)>,
+    video_filter: PacketFilter,
+    audio_filter: PacketFilter,
+}
+
+impl StreamMultiReceiverAdapter {
+    pub fn new() -> Arc<Self> {
+        Arc::new(Self::default())
+    }
+
+    pub fn next(&self, kind: StreamKind) -> Option<(Bytes, i32, u64)> {
+        match kind {
+            StreamKind::Video => self.video_channel.recv(),
+            StreamKind::Audio => self.audio_channel.recv(),
+        }
+    }
+}
+
+impl StreamReceiverAdapterExt for StreamMultiReceiverAdapter {
+    fn close(&self) {
+        self.video_channel.send(None);
+        self.audio_channel.send(None);
+    }
+
+    fn loss_pkt(&self) {
         self.video_filter.loss();
 
         log::warn!(
@@ -199,26 +256,47 @@ impl StreamReceiverAdapter {
             paused, waiting for the key frame to arrive.",
         );
     }
+
+    /// As soon as a keyframe is received, the keyframe is cached, and when a
+    /// packet loss occurs, the previous keyframe is retransmitted directly into
+    /// the decoder.
+    fn send(&self, buf: Bytes, kind: StreamKind, flags: i32, timestamp: u64) -> bool {
+        if buf.is_empty() {
+            return true;
+        }
+
+        match kind {
+            StreamKind::Video => {
+                if self.video_filter.filter(flags) {
+                    return self.video_channel.send(Some((buf, flags, timestamp)));
+                }
+            }
+            StreamKind::Audio => {
+                if self.audio_filter.filter(flags) {
+                    return self.audio_channel.send(Some((buf, flags, timestamp)));
+                }
+            }
+        }
+
+        true
+    }
 }
 
-struct Channel(
-    Sender<Option<(Bytes, StreamKind, i32, u64)>>,
-    Mutex<Receiver<Option<(Bytes, StreamKind, i32, u64)>>>,
-);
+struct Channel<T>(Sender<Option<T>>, Mutex<Receiver<Option<T>>>);
 
-impl Default for Channel {
+impl<T> Default for Channel<T> {
     fn default() -> Self {
         let (tx, rx) = channel();
         Self(tx, Mutex::new(rx))
     }
 }
 
-impl Channel {
-    fn send(&self, item: Option<(Bytes, StreamKind, i32, u64)>) -> bool {
+impl<T> Channel<T> {
+    fn send(&self, item: Option<T>) -> bool {
         self.0.send(item).is_ok()
     }
 
-    fn recv(&self) -> Option<(Bytes, StreamKind, i32, u64)> {
+    fn recv(&self) -> Option<T> {
         self.1.lock().unwrap().recv().ok().flatten()
     }
 }
