@@ -153,17 +153,6 @@ impl SenderObserver {
     pub(crate) fn new(adapter: &Arc<StreamSenderAdapter>, sink: FrameSink) -> anyhow::Result<Self> {
         let options = OPTIONS.read().unwrap();
 
-        // Create an opus header data. The opus decoder needs this data to obtain audio
-        // information. Here, actively add an opus header information to the queue, and
-        // the transport layer will automatically cache it.
-        adapter.send(
-            Bytes::copy_from_slice(&create_opus_identification_header(
-                1,
-                options.audio.sample_rate as u32,
-            )),
-            StreamBufferInfo::Audio(BufferFlag::Config as i32, 0),
-        );
-
         Ok(Self {
             video: VideoSender::new(adapter, &options.video.clone().into())?,
             audio: AudioSender::new(adapter, &options.audio.clone().into())?,
