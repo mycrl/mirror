@@ -303,18 +303,17 @@ impl Mirror {
                     } else {
                         break;
                     }
+                } else if kind == StreamKind::Audio {
+                    if audio_decoder.decode(&packet) {
+                        while let Some(frame) = audio_decoder.read() {
+                            if !(sink.audio)(frame) {
+                                break 'a;
+                            }
+                        }
+                    } else {
+                        break;
+                    }
                 }
-                // } else if kind == StreamKind::Audio {
-                //     if audio_decoder.decode(&packet) {
-                //         while let Some(frame) = audio_decoder.read() {
-                //             if !(sink.audio)(frame) {
-                //                 break 'a;
-                //             }
-                //         }
-                //     } else {
-                //         break;
-                //     }
-                // }
             }
 
             (sink.close)()
