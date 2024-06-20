@@ -94,7 +94,7 @@ fn main() -> anyhow::Result<()> {
                 exec("make", &srt_dir)?;
             }
 
-            #[cfg(not(target_os = "linux"))]
+            #[cfg(target_os = "windows")]
             {
                 exec("Invoke-WebRequest \
                     -Uri https://github.com/mycrl/distributions/releases/download/distributions/srt-windows-x64.lib \
@@ -104,9 +104,6 @@ fn main() -> anyhow::Result<()> {
 
         println!("cargo:rustc-link-search=all={}", srt_dir);
         println!("cargo:rustc-link-lib=srt");
-
-        #[cfg(target_os = "macos")]
-        println!("cargo:rustc-link-lib=c++");
 
         #[cfg(target_os = "linux")]
         println!("cargo:rustc-link-lib=stdc++");

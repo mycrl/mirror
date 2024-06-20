@@ -1,10 +1,8 @@
-#![cfg(any(target_os = "windows", target_os = "linux"))]
-
 mod mirror;
 mod sender;
 
 use std::{
-    ffi::{c_char, c_int, c_void},
+    ffi::{c_char, c_int},
     fmt::Debug,
     ptr::null_mut,
     sync::Arc,
@@ -322,51 +320,43 @@ pub struct RawFrameSink {
     /// ```c
     /// bool (*video)(void* ctx, struct VideoFrame* frame);
     /// ```
-    pub video: Option<extern "C" fn(ctx: *const c_void, frame: *const VideoFrame) -> bool>,
+    pub video: Option<extern "C" fn(ctx: usize, frame: *const VideoFrame) -> bool>,
     /// ```c
     /// bool (*audio)(void* ctx, struct AudioFrame* frame);
     /// ```
-    pub audio: Option<extern "C" fn(ctx: *const c_void, frame: *const AudioFrame) -> bool>,
+    pub audio: Option<extern "C" fn(ctx: usize, frame: *const AudioFrame) -> bool>,
     /// ```c
     /// void (*close)(void* ctx);
     /// ```
-    pub close: Option<extern "C" fn(ctx: *const c_void)>,
-    pub ctx: *const c_void,
+    pub close: Option<extern "C" fn(ctx: usize)>,
+    pub ctx: usize,
 }
 
 unsafe impl Send for RawFrameSink {}
 unsafe impl Sync for RawFrameSink {}
 
-impl RawFrameSink {
-    fn send_video(&self, frame: &VideoFrame) -> bool {
-        if let Some(callback) = &self.video {
-            callback(self.ctx, frame)
-        } else {
-            true
-        }
-    }
-
-    fn send_audio(&self, frame: &AudioFrame) -> bool {
-        if let Some(callback) = &self.audio {
-            callback(self.ctx, frame)
-        } else {
-            true
-        }
-    }
-
-    fn closed(&self) {
-        if let Some(callback) = &self.close {
-            callback(self.ctx)
-        }
-    }
-}
-
 impl Into<FrameSink> for RawFrameSink {
     fn into(self) -> FrameSink {
         FrameSink {
-            video: Box::new(move |frame: &VideoFrame| self.send_video(frame)),
-            audio: Box::new(move |frame: &AudioFrame| self.send_audio(frame)),
-            close: Box::new(move || self.closed()),
+            video: Box::new(move |frame: &VideoFrame| {
+                if let Some(callback) = &self.video {
+                    callback(self.ctx, frame)
+                } else {
+                    true
+                }
+            }),
+            audio: Box::new(move |frame: &AudioFrame| {
+                if let Some(callback) = &self.audio {
+                    callback(self.ctx, frame)
+                } else {
+                    true
+                }
+            }),
+            close: Box::new(move || {
+                if let Some(callback) = &self.close {
+                    callback(self.ctx)
+                }
+            }),
         }
     }
 }

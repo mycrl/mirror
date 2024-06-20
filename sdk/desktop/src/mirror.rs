@@ -20,6 +20,7 @@ use transport::{
     Transport, TransportOptions,
 };
 
+#[cfg(target_os = "windows")]
 use windows::Win32::System::Threading::{GetCurrentProcess, SetPriorityClass, HIGH_PRIORITY_CLASS};
 
 pub static OPTIONS: Lazy<RwLock<MirrorOptions>> = Lazy::new(Default::default);
