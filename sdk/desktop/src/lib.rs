@@ -277,6 +277,16 @@ pub extern "C" fn mirror_set_input_device(device: *const Device) -> bool {
     checker(mirror::set_input_device(unsafe { &*device })).is_ok()
 }
 
+/// Close obs and stop capturing any audio or video sources.
+///
+/// ```c
+/// EXPORT void mirror_stop_capture();
+/// ```
+#[no_mangle]
+pub extern "C" fn mirror_stop_capture() {
+    capture::quit();
+}
+
 #[repr(C)]
 pub struct RawMirror {
     mirror: Mirror,
@@ -303,6 +313,7 @@ pub extern "C" fn mirror_create() -> *const RawMirror {
 pub extern "C" fn mirror_drop(mirror: *const RawMirror) {
     assert!(!mirror.is_null());
 
+    capture::set_frame_sink::<()>(None);
     drop(unsafe { Box::from_raw(mirror as *mut RawMirror) });
 
     log::info!("close mirror");
@@ -428,11 +439,11 @@ pub extern "C" fn mirror_sender_get_multicast(sender: *const RawSender) -> bool 
 pub extern "C" fn mirror_close_sender(sender: *const RawSender) {
     assert!(!sender.is_null());
 
+    capture::set_frame_sink::<()>(None);
     unsafe { Box::from_raw(sender as *mut RawSender) }
         .adapter
         .close();
 
-    capture::set_frame_sink::<()>(None);
     log::info!("close sender");
 }
 

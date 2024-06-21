@@ -175,6 +175,11 @@ void raw_audio_callback(void* _, size_t mix_idx, struct audio_data* data)
 
 int capture_initialization()
 {
+    if (obs_initialized())
+	{
+		return -1;
+	}
+    
 	if (!obs_startup("en-US", nullptr, nullptr))
 	{
 		return -2;
@@ -307,11 +312,6 @@ void* capture_set_output_callback(struct OutputCallback proc)
 
 int capture_init(VideoInfo* video_info, AudioInfo* audio_info)
 {
-	if (obs_initialized())
-	{
-		return -1;
-	}
-
 #ifdef WIN32
 	GLOBAL.video_info.graphics_module = "libobs-d3d11";
 #endif
@@ -338,6 +338,15 @@ int capture_init(VideoInfo* video_info, AudioInfo* audio_info)
 
 void capture_quit()
 {
+    if (obs_initialized())
+	{
+		obs_shutdown();
+	}
+    else
+    {
+        return;
+    }
+    
 	if (GLOBAL.video_source != nullptr)
 	{
 		obs_source_release(GLOBAL.video_source);
@@ -376,11 +385,6 @@ void capture_quit()
     if (GLOBAL.scene != nullptr)
 	{
 		obs_scene_release(GLOBAL.scene);
-	}
-
-	if (obs_initialized())
-	{
-		obs_shutdown();
 	}
 }
 

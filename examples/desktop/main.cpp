@@ -325,6 +325,7 @@ public:
         {
             _sender.value().Close();
             _sender = std::nullopt;
+            mirror::DeviceManagerService::Stop();
         }
 
         if (_receiver.has_value())
