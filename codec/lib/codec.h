@@ -73,7 +73,6 @@ struct AudioEncoderSettings
 
 struct AudioEncoder
 {
-	bool initialized;
     const AVCodec* codec;
 	AVCodecContext* context;
 	AVPacket* packet;

@@ -68,12 +68,19 @@ if (!fs.existsSync('./target/ffmpeg')) {
 await Command(`cargo build ${Args.release ? '--release' : ''} -p mirror`)
 await Command(`cargo build ${Args.release ? '--release' : ''} -p service`)
 
+if (!fs.existsSync('./examples/desktop/build')) {
+    fs.mkdirSync('./examples/desktop/build')
+}
+
+await Command(`cmake -DCMAKE_BUILD_TYPE=${Profile} ..`, { cwd: join(__dirname, './examples/desktop/build') })
+await Command(`cmake --build . --config=${Profile}`, { cwd: join(__dirname, './examples/desktop/build') })
+
 for (const item of [
-    ['./examples/desktop/common.h', './build/examples/common.h'],
+    ['./examples/desktop/main.cpp', './build/examples/main.cpp'],
     ['./examples/desktop/CMakeLists.txt', './build/examples/CMakeLists.txt'],
-    ['./examples/desktop/sender/main.cpp', './build/examples/sender/main.cpp'],
-    ['./examples/desktop/receiver/main.cpp', './build/examples/receiver/main.cpp'],
+    ['./examples/desktop/README.md', './build/examples/README.md'],
     ['./sdk/desktop/include/mirror.h', './build/include/mirror.h'],
+    [`./examples/desktop/build/${Profile}/example.exe`, './build/bin/example.exe'],
     ['./common/include/frame.h', './build/include/frame.h'],
     [`./target/${Profile.toLowerCase()}/mirror.dll`, './build/bin/mirror.dll'],
     [`./target/${Profile.toLowerCase()}/mirror.dll.lib`, './build/lib/mirror.dll.lib'],
@@ -95,30 +102,12 @@ if (!Args.release) {
     fs.copyFileSync('./target/debug/service.pdb', './build/server/service.pdb')
 }
 
-if (!fs.existsSync('./examples/desktop/build')) {
-    fs.mkdirSync('./examples/desktop/build')
-}
-
-await Command(`cmake -DCMAKE_BUILD_TYPE=${Profile} ..`, { cwd: join(__dirname, './examples/desktop/build') })
-await Command(`cmake --build . --config=${Profile}`, { cwd: join(__dirname, './examples/desktop/build') })
-
-fs.copyFileSync(`./examples/desktop/build/receiver/${Profile}/receiver.exe`, './build/bin/receiver.exe')
-fs.copyFileSync(`./examples/desktop/build/sender/${Profile}/sender.exe`, './build/bin/sender.exe')
-
-fs.writeFileSync('./build/examples/sender/CMakeLists.txt', 
-    fs.readFileSync('./examples/desktop/sender/CMakeLists.txt')
+fs.writeFileSync('./build/examples/CMakeLists.txt', 
+    fs.readFileSync('./examples/desktop/CMakeLists.txt')
         .toString()
-        .replace('../../../sdk/desktop/include', '../../include')
-        .replace('../../../common/include', '../../include')
-        .replace('../../../target/debug', '../../lib')
-        .replace('../../../target/release', '../../lib'))
-
-fs.writeFileSync('./build/examples/receiver/CMakeLists.txt', 
-    fs.readFileSync('./examples/desktop/receiver/CMakeLists.txt')
-        .toString()
-        .replace('../../../sdk/desktop/include', '../../include')
-        .replace('../../../common/include', '../../include')
-        .replace('../../../target/debug', '../../lib')
-        .replace('../../../target/release', '../../lib'))
+        .replace('../../sdk/desktop/include', '../include')
+        .replace('../../common/include', '../include')
+        .replace('../../target/debug', '../lib')
+        .replace('../../target/release', '../lib'))
 
 /* async block end */ })()

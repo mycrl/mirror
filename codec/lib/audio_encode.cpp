@@ -104,16 +104,6 @@ struct EncodePacket* codec_audio_encoder_read_packet(struct AudioEncoder* codec)
 		return nullptr;
 	}
 
-	if (!codec->initialized)
-	{
-		codec->initialized = true;
-		codec->output_packet->buffer = codec->context->extradata;
-		codec->output_packet->flags = 2; // BufferFlag::Config
-		codec->output_packet->len = codec->context->extradata_size;
-		codec->output_packet->timestamp = codec->packet->pts;
-		return codec->output_packet;
-	}
-
 	if (avcodec_receive_packet(codec->context, codec->packet) != 0)
 	{
 		return nullptr;

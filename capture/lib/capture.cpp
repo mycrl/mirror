@@ -338,11 +338,6 @@ int capture_init(VideoInfo* video_info, AudioInfo* audio_info)
 
 void capture_quit()
 {
-	if (GLOBAL.scene != nullptr)
-	{
-		obs_scene_release(GLOBAL.scene);
-	}
-
 	if (GLOBAL.video_source != nullptr)
 	{
 		obs_source_release(GLOBAL.video_source);
@@ -376,6 +371,11 @@ void capture_quit()
 	if (GLOBAL.audio_source != nullptr)
 	{
 		obs_source_release(GLOBAL.audio_source);
+	}
+
+    if (GLOBAL.scene != nullptr)
+	{
+		obs_scene_release(GLOBAL.scene);
 	}
 
 	if (obs_initialized())

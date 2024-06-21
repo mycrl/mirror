@@ -2,11 +2,14 @@ use std::{sync::Arc, thread};
 
 use bytes::Bytes;
 use capture::AVFrameSink;
-use codec::{AudioEncoder, AudioEncoderSettings, VideoEncoder, VideoEncoderSettings};
+use codec::{
+    audio::create_opus_identification_header, AudioEncoder, AudioEncoderSettings, VideoEncoder,
+    VideoEncoderSettings,
+};
 
 use common::frame::{AudioFrame, VideoFrame};
 use crossbeam::sync::{Parker, Unparker};
-use transport::adapter::{StreamBufferInfo, StreamSenderAdapter};
+use transport::adapter::{BufferFlag, StreamBufferInfo, StreamSenderAdapter};
 
 use crate::mirror::{FrameSink, OPTIONS};
 
@@ -149,6 +152,14 @@ impl AVFrameSink for SenderObserver {
 impl SenderObserver {
     pub(crate) fn new(adapter: &Arc<StreamSenderAdapter>, sink: FrameSink) -> anyhow::Result<Self> {
         let options = OPTIONS.read().unwrap();
+
+        // Create an opus header data. The opus decoder needs this data to obtain audio
+        // information. Here, actively add an opus header information to the queue, and
+        // the transport layer will automatically cache it.
+        adapter.send(
+            create_opus_identification_header(1, options.audio.sample_rate as u32).try_into()?,
+            StreamBufferInfo::Audio(BufferFlag::Config as i32, 0),
+        );
 
         Ok(Self {
             video: VideoSender::new(adapter, &options.video.clone().into())?,
