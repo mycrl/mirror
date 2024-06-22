@@ -27,6 +27,7 @@ struct AudioEncoder* codec_create_audio_encoder(struct AudioEncoderSettings* set
 	}
 
     codec->context->channels = 1;
+    codec->context->frame_size = 1024;
     codec->context->sample_fmt = AV_SAMPLE_FMT_S16;
     codec->context->channel_layout = AV_CH_LAYOUT_MONO;
     codec->context->flags = AV_CODEC_FLAG_LOW_DELAY;
@@ -80,8 +81,7 @@ bool codec_audio_encoder_copy_frame(struct AudioEncoder* codec, struct AudioFram
 		return false;
 	}
 
-	codec->frame->data[0] = frame->data[0];
-	codec->frame->data[1] = frame->data[1];
+	codec->frame->data[0] = frame->data;
 	return true;
 }
 
@@ -113,6 +113,7 @@ struct EncodePacket* codec_audio_encoder_read_packet(struct AudioEncoder* codec)
 	codec->output_packet->len = codec->packet->size;
 	codec->output_packet->flags = codec->packet->flags;
     codec->output_packet->timestamp = codec->packet->pts;
+    
 	return codec->output_packet;
 }
 

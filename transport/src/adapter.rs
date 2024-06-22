@@ -206,8 +206,8 @@ impl StreamReceiverAdapterExt for StreamReceiverAdapter {
         }
 
         if match kind {
-            StreamKind::Video => self.video_filter.filter(flags),
-            StreamKind::Audio => self.audio_filter.filter(flags),
+            StreamKind::Video => self.video_filter.filter(flags, true),
+            StreamKind::Audio => self.audio_filter.filter(flags, false),
         } {
             return self.channel.send(Some((buf, kind, flags, timestamp)));
         }
@@ -267,12 +267,12 @@ impl StreamReceiverAdapterExt for StreamMultiReceiverAdapter {
 
         match kind {
             StreamKind::Video => {
-                if self.video_filter.filter(flags) {
+                if self.video_filter.filter(flags, true) {
                     return self.video_channel.send(Some((buf, flags, timestamp)));
                 }
             }
             StreamKind::Audio => {
-                if self.audio_filter.filter(flags) {
+                if self.audio_filter.filter(flags, false) {
                     return self.audio_channel.send(Some((buf, flags, timestamp)));
                 }
             }
@@ -308,7 +308,7 @@ struct PacketFilter {
 }
 
 impl PacketFilter {
-    fn filter(&self, flag: i32) -> bool {
+    fn filter(&self, flag: i32, keyframe: bool) -> bool {
         // First check whether the decoder has been initialized. Here, it is judged
         // whether the configuration information has arrived. If the configuration
         // information has arrived, the decoder initialization is marked as completed.
@@ -321,22 +321,25 @@ impl PacketFilter {
             return true;
         }
 
-        // The configuration information only needs to be filled into the decoder once.
-        // If it has been initialized, it means that the configuration information has
-        // been received. It is meaningless to receive it again later. Here, duplicate
-        // configuration information is filtered out.
-        if flag == BufferFlag::Config as i32 {
-            return false;
-        }
-
-        // Check whether the current stream is in a readable state. When packet loss
-        // occurs, the entire stream should be paused and wait for the next key frame to
-        // arrive.
-        if !self.readable.get() {
-            if flag == BufferFlag::KeyFrame as i32 {
-                self.readable.update(true);
-            } else {
+        // The audio does not have keyframes
+        if keyframe {
+            // The configuration information only needs to be filled into the decoder once.
+            // If it has been initialized, it means that the configuration information has
+            // been received. It is meaningless to receive it again later. Here, duplicate
+            // configuration information is filtered out.
+            if flag == BufferFlag::Config as i32 {
                 return false;
+            }
+
+            // Check whether the current stream is in a readable state. When packet loss
+            // occurs, the entire stream should be paused and wait for the next key frame to
+            // arrive.
+            if !self.readable.get() {
+                if flag == BufferFlag::KeyFrame as i32 {
+                    self.readable.update(true);
+                } else {
+                    return false;
+                }
             }
         }
 

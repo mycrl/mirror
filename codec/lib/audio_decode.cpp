@@ -25,12 +25,8 @@ struct AudioDecoder* codec_create_audio_decoder(const char* codec_name)
 		codec_release_audio_decoder(codec);
 		return nullptr;
 	}
-	else
-	{
-		codec->context->channels = 2;
-		codec->context->channel_layout = AV_CH_LAYOUT_STEREO;
-		codec->context->sample_fmt = AV_SAMPLE_FMT_S16;
-	}
+
+    codec->context->flags = AV_CODEC_FLAG_LOW_DELAY;
 
 	if (avcodec_open2(codec->context, codec->codec, nullptr) != 0)
 	{
@@ -143,8 +139,9 @@ struct AudioFrame* codec_audio_decoder_read_frame(struct AudioDecoder* codec)
 		return nullptr;
 	}
 
-	codec->output_frame->data[0] = codec->frame->data[0];
-	codec->output_frame->data[1] = codec->frame->data[1];
+    codec->output_frame->format = (AudioFormat)codec->frame->format;
 	codec->output_frame->frames = codec->frame->nb_samples;
+    codec->output_frame->data = codec->frame->data[0];
+    
 	return codec->output_frame;
 }

@@ -167,9 +167,8 @@ void raw_audio_callback(void* _, size_t mix_idx, struct audio_data* data)
 		return;
 	}
 
+    GLOBAL.audio_frame.data = data->data[0];
 	GLOBAL.audio_frame.frames = data->frames;
-	GLOBAL.audio_frame.data[0] = data->data[0];
-	GLOBAL.audio_frame.data[1] = data->data[1];
 	GLOBAL.output_callback.audio(GLOBAL.output_callback.ctx, &GLOBAL.audio_frame);
 }
 
@@ -200,9 +199,9 @@ int capture_initialization()
 	obs_post_load_modules();
 
 	struct video_scale_info video_scale_info;
+    video_scale_info.format = VIDEO_FORMAT_NV12;
 	video_scale_info.width = GLOBAL.video_info.base_width;
 	video_scale_info.height = GLOBAL.video_info.base_height;
-	video_scale_info.format = VIDEO_FORMAT_NV12;
 	obs_add_raw_video_callback(&video_scale_info, raw_video_callback, nullptr);
 
 	struct audio_convert_info audio_convert_info;

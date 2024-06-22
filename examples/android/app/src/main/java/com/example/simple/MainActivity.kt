@@ -55,7 +55,7 @@ open class Layout : ComponentActivity() {
     private var observer: Observer? = null
     private var surfaceView: SurfaceView? = null
     private var clickStartHandler: (() -> Unit)? = null
-    private var server by mutableStateOf("192.168.2.251:8080")
+    private var server by mutableStateOf("192.168.2.155:8080")
     private var id by mutableStateOf("0")
     private var state by mutableIntStateOf(State.New)
     private var isMulticast by mutableIntStateOf(0)

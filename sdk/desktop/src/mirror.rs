@@ -323,6 +323,8 @@ impl Mirror {
                     break;
                 }
             }
+
+            log::warn!("audio decoder thread is closed!");
         });
 
         Ok(adapter)

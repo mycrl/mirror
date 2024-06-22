@@ -169,6 +169,7 @@ struct EncodePacket* codec_video_encoder_read_packet(struct VideoEncoder* codec)
 		codec->output_packet->flags = 2; // BufferFlag::Config
 		codec->output_packet->len = codec->context->extradata_size;
 		codec->output_packet->timestamp = codec->packet->pts;
+        
 		return codec->output_packet;
 	}
 
@@ -181,6 +182,7 @@ struct EncodePacket* codec_video_encoder_read_packet(struct VideoEncoder* codec)
 	codec->output_packet->flags = codec->packet->flags;
 	codec->output_packet->len = codec->packet->size;
     codec->output_packet->timestamp = codec->packet->pts;
+
 	return codec->output_packet;
 }
 

@@ -9,6 +9,7 @@
 #include <windows.h>
 #endif
 
+#define SDL_MAIN_HANDLED
 #include <mirror.h>
 #include <SDL.h>
 #include <SDL_video.h>
@@ -26,13 +27,13 @@ class Args
 public:
     struct Params
     {
-        int id = 0;
-        int fps = 24;
-        int width = 1280;
-        int height = 720;
-        std::string server = "127.0.0.1:8080";
         std::string encoder = mirror_find_video_encoder();
         std::string decoder = mirror_find_video_decoder();
+        std::string server = "127.0.0.1:8080";
+        int width = 1280;
+        int height = 720;
+        int fps = 24;
+        int id = 0;
     };
 
     Args(std::string args)
@@ -105,31 +106,43 @@ public:
            std::function<void()> closed_callback)
         : _closed_callback(closed_callback)
     {
-        sdl_rect.x = 0;
-        sdl_rect.y = 0;
-        sdl_rect.w = args.ArgsParams.width;
-        sdl_rect.h = args.ArgsParams.height;
+        _sdl_rect.w = args.ArgsParams.width;
+        _sdl_rect.h = args.ArgsParams.height;
+        _sdl_rect.x = 0;
+        _sdl_rect.y = 0;
 
-        SDL_Init(SDL_INIT_TIMER | SDL_INIT_VIDEO);
+        _sdl_spec.freq = 48000;
+        _sdl_spec.channels = 1;
+        _sdl_spec.silence = 0;
+        _sdl_spec.samples = 960;
+        _sdl_spec.size = 960 * 4;
+        _sdl_spec.format = AUDIO_S16;
+        _sdl_spec.callback = nullptr;
+
+        SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER);
+
+        _sdl_audio = SDL_OpenAudioDevice(nullptr, 0, &_sdl_spec, nullptr, SDL_AUDIO_ALLOW_FREQUENCY_CHANGE);
+        SDL_PauseAudioDevice(_sdl_audio, 0);
+
         _screen = SDL_CreateWindow("example - s/create sender, r/create receiver, k/stop",
                                    SDL_WINDOWPOS_UNDEFINED,
                                    SDL_WINDOWPOS_UNDEFINED,
-                                   sdl_rect.w,
-                                   sdl_rect.h,
+                                   _sdl_rect.w,
+                                   _sdl_rect.h,
                                    SDL_WINDOW_RESIZABLE);
 
         _sdl_renderer = SDL_CreateRenderer(_screen, -1, SDL_RENDERER_ACCELERATED);
         std::thread(
             [&]()
             {
-                while (runing)
+                while (_runing)
                 {
                     if (_sdl_texture != nullptr)
                     {
                         std::lock_guard<std::mutex> guard(_mutex);
                         if (SDL_RenderClear(_sdl_renderer) == 0)
                         {
-                            if (SDL_RenderCopy(_sdl_renderer, _sdl_texture, nullptr, &sdl_rect) == 0)
+                            if (SDL_RenderCopy(_sdl_renderer, _sdl_texture, nullptr, &_sdl_rect) == 0)
                             {
                                 SDL_RenderPresent(_sdl_renderer);
                             }
@@ -145,7 +158,7 @@ public:
 
     ~Render()
     {
-        runing = false;
+        _runing = false;
     }
 
     void SetTitle(std::string title)
@@ -177,15 +190,14 @@ public:
                                              frame->rect.height);
         }
 
-        SDL_Rect sdl_rect;
-        sdl_rect.w = frame->rect.width;
-        sdl_rect.h = frame->rect.height;
-        sdl_rect.x = 0;
-        sdl_rect.y = 0;
+        _frame_rect.w = frame->rect.width;
+        _frame_rect.h = frame->rect.height;
+        _frame_rect.x = 0;
+        _frame_rect.y = 0;
 
         std::lock_guard<std::mutex> guard(_mutex);
         SDL_UpdateNVTexture(_sdl_texture,
-                            &sdl_rect,
+                            &_frame_rect,
                             frame->data[0],
                             frame->linesize[0],
                             frame->data[1],
@@ -195,7 +207,12 @@ public:
 
     bool OnAudioFrame(struct AudioFrame* frame)
     {
-        return true;
+        if (!IsRender)
+        {
+            return true;
+        }
+
+        return SDL_QueueAudio(_sdl_audio, frame->data, frame->frames * 2) == 0;
     }
 
     void OnClose()
@@ -209,23 +226,26 @@ public:
     {
         std::lock_guard<std::mutex> guard(_mutex);
 
-        size_t size = sdl_rect.w * sdl_rect.h * 2;
+        size_t size = _frame_rect.w * _frame_rect.h;
         uint8_t* buf = (uint8_t*)malloc(sizeof(uint8_t) * size);
 
         SDL_UpdateNVTexture(_sdl_texture,
-                            &sdl_rect,
+                            &_frame_rect,
                             buf,
-                            sdl_rect.w,
-                            buf + (sdl_rect.w * sdl_rect.h),
-                            sdl_rect.w);
+                            _frame_rect.w,
+                            buf,
+                            _frame_rect.w);
 
         free(buf);
     }
 
     bool IsRender = true;
 private:
-    bool runing = true;
-    SDL_Rect sdl_rect;
+    bool _runing = true;
+    SDL_Rect _sdl_rect;
+    SDL_Rect _frame_rect;
+    SDL_AudioSpec _sdl_spec;
+    SDL_AudioDeviceID _sdl_audio;
     SDL_Window* _screen = nullptr;
     SDL_Texture* _sdl_texture = nullptr;
     SDL_Renderer* _sdl_renderer = nullptr;
@@ -343,7 +363,7 @@ private:
     mirror::MirrorService* _mirror = nullptr;
     std::optional<mirror::MirrorService::MirrorSender> _sender = std::nullopt;
     std::optional<mirror::MirrorService::MirrorReceiver> _receiver = std::nullopt;
-    };
+};
 
 #ifdef WIN32
 int WinMain(HINSTANCE _instance,
