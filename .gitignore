@@ -7,3 +7,4 @@ Cargo.lock
 /build
 /doc
 /out
+/third_party
