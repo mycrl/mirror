@@ -277,14 +277,28 @@ pub extern "C" fn mirror_set_input_device(device: *const Device) -> bool {
     checker(mirror::set_input_device(unsafe { &*device })).is_ok()
 }
 
-/// Close obs and stop capturing any audio or video sources.
+/// Start capturing audio and video data.
+///
+/// ```c
+/// EXPORT void mirror_start_capture();
+/// ```
+#[no_mangle]
+pub extern "C" fn mirror_start_capture() {
+    capture::start();
+
+    log::info!("start capture devices.")
+}
+
+/// Stop capturing audio and video data.
 ///
 /// ```c
 /// EXPORT void mirror_stop_capture();
 /// ```
 #[no_mangle]
 pub extern "C" fn mirror_stop_capture() {
-    capture::quit();
+    capture::stop();
+
+    log::info!("stop capture devices.")
 }
 
 #[repr(C)]

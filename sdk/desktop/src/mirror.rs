@@ -175,7 +175,6 @@ pub fn init(options: MirrorOptions) -> Result<()> {
 /// called when the application exits.
 pub fn quit() {
     transport::exit();
-    capture::quit();
 
     log::info!("close mirror");
 }

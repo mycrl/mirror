@@ -247,7 +247,11 @@ extern "C"
      */
 	EXPORT bool mirror_set_input_device(const struct Device* device);
     /**
-     * Close obs and stop capturing any audio or video sources.
+     * Start capturing audio and video data.
+     */
+    EXPORT void mirror_start_capture();
+    /**
+     * Stop capturing audio and video data.
      */
     EXPORT void mirror_stop_capture();
     /**
@@ -349,6 +353,11 @@ namespace mirror
 		{
 			return mirror_set_input_device(device.AsRaw());
 		}
+
+        static void Start()
+        {
+            mirror_start_capture();
+        }
 
         static void Stop()
         {

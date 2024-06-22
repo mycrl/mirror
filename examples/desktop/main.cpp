@@ -176,10 +176,10 @@ public:
 
     bool OnVideoFrame(struct VideoFrame* frame)
     {
-        if (!IsRender)
+        /*if (!IsRender)
         {
             return true;
-        }
+        }*/
 
         if (_sdl_texture == nullptr)
         {
@@ -301,6 +301,7 @@ public:
             _render->IsRender = false;
         }
 
+        mirror::DeviceManagerService::Start();
         auto devices = mirror::DeviceManagerService::GetDevices(DeviceKind::Screen);
         if (devices.device_list.size() == 0)
         {
