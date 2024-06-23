@@ -41,7 +41,7 @@ extern "C" {
     /// video frames without necessarily using an output.
     fn capture_set_output_callback(proc: RawOutputCallback) -> *const c_void;
     /// Start capturing audio and video data.
-    fn capture_start();
+    fn capture_start() -> c_int;
     /// Stop capturing audio and video data.
     fn capture_stop();
 }
@@ -241,7 +241,7 @@ pub fn init(options: DeviceManagerOptions) -> Result<(), DeviceError> {
 }
 
 /// Start capturing audio and video data.
-pub fn start() {
+pub fn start() -> c_int {
     unsafe { capture_start() }
 }
 

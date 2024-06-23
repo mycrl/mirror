@@ -249,7 +249,7 @@ extern "C"
     /**
      * Start capturing audio and video data.
      */
-    EXPORT void mirror_start_capture();
+    EXPORT int mirror_start_capture();
     /**
      * Stop capturing audio and video data.
      */
