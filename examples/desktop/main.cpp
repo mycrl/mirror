@@ -104,47 +104,43 @@ class Render : public mirror::MirrorService::AVFrameSink
 public:
     Render(Args& args,
            std::function<void()> closed_callback)
-        : _closed_callback(closed_callback)
+        : _callback(closed_callback)
     {
-        _sdl_rect.w = args.ArgsParams.width;
-        _sdl_rect.h = args.ArgsParams.height;
-        _sdl_rect.x = 0;
-        _sdl_rect.y = 0;
 
-        _sdl_spec.freq = 48000;
-        _sdl_spec.channels = 1;
-        _sdl_spec.silence = 0;
-        _sdl_spec.samples = 960;
-        _sdl_spec.size = 960 * 4;
-        _sdl_spec.format = AUDIO_S16;
-        _sdl_spec.callback = nullptr;
+        _audio_spec.freq = 48000;
+        _audio_spec.channels = 1;
+        _audio_spec.silence = 0;
+        _audio_spec.samples = 960;
+        _audio_spec.size = 960 * 4;
+        _audio_spec.format = AUDIO_S16;
+        _audio_spec.callback = nullptr;
 
         SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER);
 
-        _sdl_audio = SDL_OpenAudioDevice(nullptr, 0, &_sdl_spec, nullptr, SDL_AUDIO_ALLOW_FREQUENCY_CHANGE);
-        SDL_PauseAudioDevice(_sdl_audio, 0);
+        _audio = SDL_OpenAudioDevice(nullptr, 0, &_audio_spec, nullptr, SDL_AUDIO_ALLOW_FREQUENCY_CHANGE);
+        SDL_PauseAudioDevice(_audio, 0);
 
-        _screen = SDL_CreateWindow("example - s/create sender, r/create receiver, k/stop",
+        _window = SDL_CreateWindow("example - s/create sender, r/create receiver, k/stop",
                                    SDL_WINDOWPOS_UNDEFINED,
                                    SDL_WINDOWPOS_UNDEFINED,
-                                   _sdl_rect.w,
-                                   _sdl_rect.h,
+                                   args.ArgsParams.width,
+                                   args.ArgsParams.height,
                                    SDL_WINDOW_RESIZABLE);
 
-        _sdl_renderer = SDL_CreateRenderer(_screen, -1, SDL_RENDERER_ACCELERATED);
+        _renderer = SDL_CreateRenderer(_window, -1, SDL_RENDERER_ACCELERATED);
         std::thread(
             [&]()
             {
                 while (_runing)
                 {
-                    if (_sdl_texture != nullptr)
+                    if (_texture != nullptr)
                     {
                         std::lock_guard<std::mutex> guard(_mutex);
-                        if (SDL_RenderClear(_sdl_renderer) == 0)
+                        if (SDL_RenderClear(_renderer) == 0)
                         {
-                            if (SDL_RenderCopy(_sdl_renderer, _sdl_texture, nullptr, &_sdl_rect) == 0)
+                            if (SDL_RenderCopy(_renderer, _texture, nullptr, nullptr) == 0)
                             {
-                                SDL_RenderPresent(_sdl_renderer);
+                                SDL_RenderPresent(_renderer);
                             }
                         }
                     }
@@ -171,33 +167,24 @@ public:
             base += "]";
         }
 
-        SDL_SetWindowTitle(_screen, base.c_str());
+        SDL_SetWindowTitle(_window, base.c_str());
     }
 
     bool OnVideoFrame(struct VideoFrame* frame)
     {
-        /*if (!IsRender)
+        if (_texture == nullptr)
         {
-            return true;
-        }*/
-
-        if (_sdl_texture == nullptr)
-        {
-            _sdl_texture = SDL_CreateTexture(_sdl_renderer,
-                                             SDL_PIXELFORMAT_NV12,
-                                             SDL_TEXTUREACCESS_STREAMING,
-                                             frame->rect.width,
-                                             frame->rect.height);
+            _rect = frame->rect;
+            _texture = SDL_CreateTexture(_renderer,
+                                         SDL_PIXELFORMAT_NV12,
+                                         SDL_TEXTUREACCESS_STREAMING,
+                                         frame->rect.width,
+                                         frame->rect.height);
         }
 
-        _frame_rect.w = frame->rect.width;
-        _frame_rect.h = frame->rect.height;
-        _frame_rect.x = 0;
-        _frame_rect.y = 0;
-
         std::lock_guard<std::mutex> guard(_mutex);
-        SDL_UpdateNVTexture(_sdl_texture,
-                            &_frame_rect,
+        SDL_UpdateNVTexture(_texture,
+                            nullptr,
                             frame->data[0],
                             frame->linesize[0],
                             frame->data[1],
@@ -212,12 +199,12 @@ public:
             return true;
         }
 
-        return SDL_QueueAudio(_sdl_audio, frame->data, frame->frames * 2) == 0;
+        return SDL_QueueAudio(_audio, frame->data, frame->frames * 2) == 0;
     }
 
     void OnClose()
     {
-        _closed_callback();
+        _callback();
         SetTitle("");
         Clear();
     }
@@ -226,30 +213,29 @@ public:
     {
         std::lock_guard<std::mutex> guard(_mutex);
 
-        size_t size = _frame_rect.w * _frame_rect.h;
-        uint8_t* buf = (uint8_t*)malloc(sizeof(uint8_t) * size);
+        size_t size = _rect.width * _rect.height;
+        uint8_t* buf = new uint8_t[size];
 
-        SDL_UpdateNVTexture(_sdl_texture,
-                            &_frame_rect,
+        SDL_UpdateNVTexture(_texture,
+                            nullptr,
                             buf,
-                            _frame_rect.w,
+                            _rect.width,
                             buf,
-                            _frame_rect.w);
+                            _rect.width);
 
-        free(buf);
+        delete buf;
     }
 
     bool IsRender = true;
 private:
     bool _runing = true;
-    SDL_Rect _sdl_rect;
-    SDL_Rect _frame_rect;
-    SDL_AudioSpec _sdl_spec;
-    SDL_AudioDeviceID _sdl_audio;
-    SDL_Window* _screen = nullptr;
-    SDL_Texture* _sdl_texture = nullptr;
-    SDL_Renderer* _sdl_renderer = nullptr;
-    std::function<void()> _closed_callback;
+    SDL_AudioDeviceID _audio;
+    VideoFrameRect _rect = { 0 };
+    SDL_AudioSpec _audio_spec = { 0 };
+    SDL_Window* _window = nullptr;
+    SDL_Texture* _texture = nullptr;
+    SDL_Renderer* _renderer = nullptr;
+    std::function<void()> _callback;
     std::mutex _mutex;
 };
 
