@@ -105,6 +105,7 @@ public:
     Render(Args& args,
            std::function<void()> closed_callback)
         : _callback(closed_callback)
+        , _args(args)
     {
 
         _audio_spec.freq = 48000;
@@ -132,12 +133,16 @@ public:
                                    SDL_WINDOW_RESIZABLE);
 
         _renderer = SDL_CreateRenderer(_window, -1, SDL_RENDERER_ACCELERATED);
+        _texture = SDL_CreateTexture(_renderer,
+                                     SDL_PIXELFORMAT_NV12,
+                                     SDL_TEXTUREACCESS_STREAMING,
+                                     args.ArgsParams.width,
+                                     args.ArgsParams.height);
         std::thread(
             [&]()
             {
                 while (_runing)
                 {
-                    if (_texture != nullptr)
                     {
                         std::lock_guard<std::mutex> guard(_mutex);
                         if (SDL_RenderClear(_renderer) == 0)
@@ -181,16 +186,6 @@ public:
             return true;
         }
 
-        if (_texture == nullptr)
-        {
-            _rect = frame->rect;
-            _texture = SDL_CreateTexture(_renderer,
-                                         SDL_PIXELFORMAT_NV12,
-                                         SDL_TEXTUREACCESS_STREAMING,
-                                         frame->rect.width,
-                                         frame->rect.height);
-        }
-
         std::lock_guard<std::mutex> guard(_mutex);
         SDL_UpdateNVTexture(_texture,
                             nullptr,
@@ -222,24 +217,24 @@ public:
     {
         std::lock_guard<std::mutex> guard(_mutex);
 
-        size_t size = _rect.width * _rect.height;
+        size_t size = _args.ArgsParams.width * _args.ArgsParams.height;
         uint8_t* buf = new uint8_t[size];
 
         SDL_UpdateNVTexture(_texture,
                             nullptr,
                             buf,
-                            _rect.width,
+                            _args.ArgsParams.width,
                             buf,
-                            _rect.width);
+                            _args.ArgsParams.width);
 
         delete buf;
     }
 
     bool IsRender = true;
 private:
+    Args& _args;
     bool _runing = true;
     SDL_AudioDeviceID _audio;
-    VideoFrameRect _rect = { 0 };
     SDL_AudioSpec _audio_spec = { 0 };
     SDL_Window* _window = nullptr;
     SDL_Texture* _texture = nullptr;

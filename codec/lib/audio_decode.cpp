@@ -26,7 +26,10 @@ struct AudioDecoder* codec_create_audio_decoder(const char* codec_name)
 		return nullptr;
 	}
 
-    codec->context->flags = AV_CODEC_FLAG_LOW_DELAY;
+	codec->context->channels = 1;
+	codec->context->sample_fmt = AV_SAMPLE_FMT_S16;
+	codec->context->channel_layout = AV_CH_LAYOUT_MONO;
+	codec->context->flags = AV_CODEC_FLAG_LOW_DELAY;
 
 	if (avcodec_open2(codec->context, codec->codec, nullptr) != 0)
 	{
