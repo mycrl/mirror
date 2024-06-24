@@ -117,7 +117,11 @@ public:
 
         SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER);
 
-        _audio = SDL_OpenAudioDevice(SDL_GetAudioDeviceName(3, 0), 0, &_audio_spec, nullptr, SDL_AUDIO_ALLOW_FREQUENCY_CHANGE);
+        _audio = SDL_OpenAudioDevice(SDL_GetAudioDeviceName(3, 0), 
+                                     0, 
+                                     &_audio_spec, 
+                                     nullptr, 
+                                     SDL_AUDIO_ALLOW_FREQUENCY_CHANGE);
         SDL_PauseAudioDevice(_audio, 0);
 
         _window = SDL_CreateWindow("example - s/create sender, r/create receiver, k/stop",

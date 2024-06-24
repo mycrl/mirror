@@ -78,6 +78,7 @@ struct AudioEncoder
 	AVPacket* packet;
 	AVFrame* frame;
 	struct EncodePacket* output_packet;
+	uint64_t pts;
 };
 
 struct AudioDecoder

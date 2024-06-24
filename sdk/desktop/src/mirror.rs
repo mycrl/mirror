@@ -41,8 +41,8 @@ pub struct AudioOptions {
 impl Default for AudioOptions {
     fn default() -> Self {
         Self {
-            encoder: "libopus".to_string(),
-            decoder: "libopus".to_string(),
+            encoder: "opus".to_string(),
+            decoder: "opus".to_string(),
             sample_rate: 48000,
             bit_rate: 64000,
         }

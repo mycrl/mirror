@@ -134,6 +134,10 @@ bool codec_video_encoder_copy_frame(struct VideoEncoder* codec, struct VideoFram
 		return false;
 	}
 
+	codec->frame->pts = av_rescale_q(codec->context->frame_num,
+									 codec->context->pkt_timebase,
+									 codec->context->time_base);
+
     codec->frame->data[0] = frame->data[0];
     codec->frame->data[1] = frame->data[1];
     codec->frame->linesize[0] = frame->linesize[0];
@@ -143,10 +147,6 @@ bool codec_video_encoder_copy_frame(struct VideoEncoder* codec, struct VideoFram
 
 bool codec_video_encoder_send_frame(struct VideoEncoder* codec)
 {
-    auto count = codec->context->frame_num;
-	codec->frame->pts = av_rescale_q(count,
-									 codec->context->pkt_timebase,
-									 codec->context->time_base);
 	if (avcodec_send_frame(codec->context, codec->frame) != 0)
 	{
 		return false;

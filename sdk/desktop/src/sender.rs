@@ -53,7 +53,7 @@ impl VideoSender {
                     while let Some(packet) = sender_.encoder.read() {
                         adapter.send(
                             Bytes::copy_from_slice(packet.buffer),
-                            StreamBufferInfo::Video(packet.flags, 0),
+                            StreamBufferInfo::Video(packet.flags, packet.timestamp),
                         );
                     }
                 }
@@ -119,12 +119,12 @@ impl AudioSender {
                     // Push the audio and video frames into the encoder.
                     if self.encoder.encode() {
                         // Try to get the encoded data packets. The audio and video frames do not
-                        // correspond to the data packets one by one, so you need to try to get multiple
-                        // packets until they are empty.
+                        // correspond to the data packets one by one, so you need to try to get
+                        // multiple packets until they are empty.
                         while let Some(packet) = self.encoder.read() {
                             adapter.send(
                                 Bytes::copy_from_slice(packet.buffer),
-                                StreamBufferInfo::Audio(packet.flags, 0),
+                                StreamBufferInfo::Audio(packet.flags, packet.timestamp),
                             );
                         }
                     }
