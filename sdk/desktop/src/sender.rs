@@ -1,4 +1,4 @@
-use std::{sync::Arc, thread};
+use std::{sync::{Arc, Weak}, thread};
 
 use bytes::Bytes;
 use capture::AVFrameSink;
@@ -71,7 +71,7 @@ impl VideoSender {
 
 struct AudioSender {
     encoder: AudioEncoder,
-    unparker: Unparker,
+    adapter: Weak<StreamSenderAdapter>,
 }
 
 impl AudioSender {
@@ -85,25 +85,23 @@ impl AudioSender {
         adapter: &Arc<StreamSenderAdapter>,
         settings: &AudioEncoderSettings,
     ) -> anyhow::Result<Arc<Self>> {
-        let parker = Parker::new();
-        let sender = Arc::new(AudioSender {
+        Ok(Arc::new(AudioSender {
             encoder: AudioEncoder::new(settings)?,
-            unparker: parker.unparker().clone(),
-        });
+            adapter: Arc::downgrade(adapter),
+        }))
+    }
 
-        let sender_ = sender.clone();
-        let adapter_ = Arc::downgrade(adapter);
-        thread::spawn(move || {
-            while let Some(adapter) = adapter_.upgrade() {
-                // Waiting for external audio and video frame updates.
-                parker.park();
-
+    // Copy the audio and video frames to the encoder and notify the encoding
+    // thread.
+    fn sink(&self, frame: &AudioFrame) {
+        if let Some(adapter) = self.adapter.upgrade() {
+            if self.encoder.send_frame(frame) {
                 // Push the audio and video frames into the encoder.
-                if sender_.encoder.encode() {
+                if self.encoder.encode() {
                     // Try to get the encoded data packets. The audio and video frames do not
                     // correspond to the data packets one by one, so you need to try to get multiple
                     // packets until they are empty.
-                    while let Some(packet) = sender_.encoder.read() {
+                    while let Some(packet) = self.encoder.read() {
                         adapter.send(
                             Bytes::copy_from_slice(packet.buffer),
                             StreamBufferInfo::Audio(packet.flags, 0),
@@ -111,16 +109,6 @@ impl AudioSender {
                     }
                 }
             }
-        });
-
-        Ok(sender)
-    }
-
-    // Copy the audio and video frames to the encoder and notify the encoding
-    // thread.
-    fn sink(&self, frame: &AudioFrame) {
-        if self.encoder.send_frame(frame) {
-            self.unparker.unpark();
         }
     }
 }
