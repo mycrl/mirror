@@ -7,6 +7,11 @@
 
 #include "./codec.h"
 
+extern "C"
+{
+#include <libavutil/opt.h>
+}
+
 struct AudioEncoder* codec_create_audio_encoder(struct AudioEncoderSettings* settings)
 {
 	struct AudioEncoder* codec = new AudioEncoder{};
@@ -27,13 +32,15 @@ struct AudioEncoder* codec_create_audio_encoder(struct AudioEncoderSettings* set
 	}
 
     codec->context->channels = 1;
-    codec->context->frame_size = 1024;
     codec->context->sample_fmt = AV_SAMPLE_FMT_S16;
     codec->context->channel_layout = AV_CH_LAYOUT_MONO;
     codec->context->flags = AV_CODEC_FLAG_LOW_DELAY;
 
 	codec->context->bit_rate = settings->bit_rate;
 	codec->context->sample_rate = settings->sample_rate;
+
+    av_opt_set(codec->context->priv_data, "frame_duration", "100", 0);
+	av_opt_set_int(codec->context->priv_data, "application", 2051, 0);
 	
 	if (avcodec_open2(codec->context, codec->codec, nullptr) != 0)
 	{
@@ -62,7 +69,7 @@ struct AudioEncoder* codec_create_audio_encoder(struct AudioEncoderSettings* set
 	}
 
 	codec->frame->format = codec->context->sample_fmt;
-	codec->frame->nb_samples = codec->context->frame_size;
+	codec->frame->nb_samples = settings->sample_rate / 10;
 	codec->frame->channel_layout = codec->context->channel_layout;
 
 	if (av_frame_get_buffer(codec->frame, 0) < 0)
@@ -81,6 +88,8 @@ bool codec_audio_encoder_copy_frame(struct AudioEncoder* codec, struct AudioFram
 		return false;
 	}
 
+	codec->frame->linesize[0] = frame->frames;
+	codec->frame->nb_samples = frame->frames;
 	codec->frame->data[0] = frame->data;
 	return true;
 }

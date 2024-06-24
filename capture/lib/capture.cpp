@@ -71,7 +71,15 @@ void update_video_settings(struct DeviceDescription* description)
 	obs_data_apply(settings, obs_source_get_settings(GLOBAL.video_source));
 
 #ifdef WIN32
+	std::string resolution = std::format("{}x{}",
+										 GLOBAL.video_info.base_width,
+										 GLOBAL.video_info.base_height);
+
+	obs_data_set_int(settings, "res_type", 1);
 	obs_data_set_bool(settings, "hw_decode", true);
+	obs_data_set_int(settings, "frame_interval", 24);
+	obs_data_set_string(settings, "resolution", resolution.c_str());
+	obs_data_set_string(settings, "last_resolution", resolution.c_str());
 	obs_data_set_string(settings, "video_device_id", description->id);
 #endif
 

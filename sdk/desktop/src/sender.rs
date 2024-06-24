@@ -1,13 +1,16 @@
-use std::{sync::{Arc, Weak}, thread};
+use std::{
+    sync::{Arc, Mutex, Weak},
+    thread,
+};
 
-use bytes::Bytes;
+use bytes::{Bytes, BytesMut};
 use capture::AVFrameSink;
 use codec::{
     audio::create_opus_identification_header, AudioEncoder, AudioEncoderSettings, VideoEncoder,
     VideoEncoderSettings,
 };
 
-use common::frame::{AudioFrame, VideoFrame};
+use common::frame::{AudioFormat, AudioFrame, VideoFrame};
 use crossbeam::sync::{Parker, Unparker};
 use transport::adapter::{BufferFlag, StreamBufferInfo, StreamSenderAdapter};
 
@@ -72,6 +75,8 @@ impl VideoSender {
 struct AudioSender {
     encoder: AudioEncoder,
     adapter: Weak<StreamSenderAdapter>,
+    buffer: Mutex<BytesMut>,
+    frames: usize,
 }
 
 impl AudioSender {
@@ -88,6 +93,8 @@ impl AudioSender {
         Ok(Arc::new(AudioSender {
             encoder: AudioEncoder::new(settings)?,
             adapter: Arc::downgrade(adapter),
+            buffer: Mutex::new(BytesMut::with_capacity(48000)),
+            frames: settings.sample_rate as usize / 1000 * 100,
         }))
     }
 
@@ -95,17 +102,31 @@ impl AudioSender {
     // thread.
     fn sink(&self, frame: &AudioFrame) {
         if let Some(adapter) = self.adapter.upgrade() {
-            if self.encoder.send_frame(frame) {
-                // Push the audio and video frames into the encoder.
-                if self.encoder.encode() {
-                    // Try to get the encoded data packets. The audio and video frames do not
-                    // correspond to the data packets one by one, so you need to try to get multiple
-                    // packets until they are empty.
-                    while let Some(packet) = self.encoder.read() {
-                        adapter.send(
-                            Bytes::copy_from_slice(packet.buffer),
-                            StreamBufferInfo::Audio(packet.flags, 0),
-                        );
+            let mut buffer = self.buffer.lock().unwrap();
+            buffer.extend_from_slice(unsafe {
+                std::slice::from_raw_parts(frame.data, frame.frames as usize * 2)
+            });
+
+            if buffer.len() >= self.frames * 2 {
+                let payload = buffer.split_to(self.frames * 2);
+                let frame = AudioFrame {
+                    format: AudioFormat::AUDIO_S16,
+                    frames: self.frames as u32,
+                    data: payload.as_ptr(),
+                };
+
+                if self.encoder.send_frame(&frame) {
+                    // Push the audio and video frames into the encoder.
+                    if self.encoder.encode() {
+                        // Try to get the encoded data packets. The audio and video frames do not
+                        // correspond to the data packets one by one, so you need to try to get multiple
+                        // packets until they are empty.
+                        while let Some(packet) = self.encoder.read() {
+                            adapter.send(
+                                Bytes::copy_from_slice(packet.buffer),
+                                StreamBufferInfo::Audio(packet.flags, 0),
+                            );
+                        }
                     }
                 }
             }

@@ -285,7 +285,7 @@ pub extern "C" fn mirror_set_input_device(device: *const Device) -> bool {
 #[no_mangle]
 pub extern "C" fn mirror_start_capture() -> c_int {
     log::info!("start capture devices.");
-    
+
     capture::start()
 }
 

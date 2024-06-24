@@ -176,7 +176,7 @@ pub fn init(options: MirrorOptions) -> Result<()> {
 pub fn quit() {
     transport::exit();
 
-    log::info!("close mirror");
+    log::info!("mirror quit");
 }
 
 /// Setting up an input device, repeated settings for the same type of device
