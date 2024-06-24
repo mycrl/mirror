@@ -149,7 +149,7 @@ public:
                         }
                     }
 
-                    Sleep(1000 / 30);
+                    SDL_Delay(1000 / 30);
                 }
 
                 SDL_Quit();
@@ -176,6 +176,11 @@ public:
 
     bool OnVideoFrame(struct VideoFrame* frame)
     {
+        if (!IsRender)
+        {
+            return true;
+        }
+
         if (_texture == nullptr)
         {
             _rect = frame->rect;
