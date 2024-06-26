@@ -42,6 +42,7 @@ struct DeviceDescription
 	enum DeviceType type;
 	const char* id;
 	const char* name;
+	size_t index;
 };
 
 struct DeviceList
