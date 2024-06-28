@@ -142,7 +142,7 @@ pub(crate) struct SenderObserver {
 
 impl AVFrameSink for SenderObserver {
     fn video(&self, frame: &VideoFrame) {
-        self.video.sink(frame);
+        // self.video.sink(frame);
 
         // Push the video frames to the external device, which can be used for rendering
         // to an external surface, etc.

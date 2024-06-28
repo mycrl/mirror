@@ -42,7 +42,7 @@ endif()
 
 add_library(capture STATIC 
             capture.cpp
-            capture.h)
+            capture.h  "video.h")
 
 include_directories("${THIRD_PARTY_DIR}/obs-studio"
                     "../../common/include")
