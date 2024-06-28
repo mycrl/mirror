@@ -181,11 +181,6 @@ public:
 
     bool OnVideoFrame(struct VideoFrame* frame)
     {
-        if (!IsRender)
-        {
-            return true;
-        }
-
         std::lock_guard<std::mutex> guard(_mutex);
         SDL_UpdateNVTexture(_texture,
                             nullptr,
@@ -292,7 +287,7 @@ public:
         }
 
         mirror::DeviceManagerService::Start();
-        auto devices = mirror::DeviceManagerService::GetDevices(DeviceKind::Screen);
+        auto devices = mirror::DeviceManagerService::GetDevices(DeviceKind::Video);
         if (devices.device_list.size() == 0)
         {
             return false;
