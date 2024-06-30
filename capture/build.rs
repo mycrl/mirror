@@ -75,6 +75,7 @@ fn main() -> anyhow::Result<()> {
         .warnings(false)
         .out_dir(&out_dir)
         .file("./lib/capture.cpp")
+        .file("./lib/camera.cpp")
         .include(&join(&out_dir, "./obs-studio")?)
         .include("../common/include");
 

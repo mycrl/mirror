@@ -6,7 +6,7 @@
 //
 
 #include "capture.h"
-#include "video.h"
+#include "camera.h"
 
 #include <format>
 #include <libobs/obs.h>
@@ -38,7 +38,7 @@ static struct
     struct VideoFrame video_frame;
     struct AudioFrame audio_frame;
 #ifdef WIN32
-    VideoCapture* video_capture = new VideoCapture();
+    CameraCapture* camera_capture = new CameraCapture();
 #endif
 } GLOBAL = {};
 
@@ -282,8 +282,7 @@ int capture_start()
     audio_convert_info.samples_per_sec = GLOBAL.audio_info.samples_per_sec;
     obs_add_raw_audio_callback(1, &audio_convert_info, raw_audio_callback, nullptr);
 
-    obs_set_output_source(0, obs_scene_get_source(GLOBAL.scene));
-    obs_set_output_source(1, GLOBAL.audio_source);
+    return 0;
 }
 
 void capture_stop()
@@ -319,9 +318,9 @@ void capture_stop()
         obs_scene_release(GLOBAL.scene);
     }
 
-    if (GLOBAL.video_capture != nullptr)
+    if (GLOBAL.camera_capture != nullptr)
     {
-        GLOBAL.video_capture->StopCapture();
+        GLOBAL.camera_capture->StopCapture();
     }
 
     obs_shutdown();
@@ -329,9 +328,20 @@ void capture_stop()
 
 int capture_set_video_input(struct DeviceDescription* description)
 {
+    if (description->type != DeviceType::kDeviceTypeVideo)
+    {
+        obs_set_output_source(0, obs_scene_get_source(GLOBAL.scene));
+        obs_set_output_source(1, GLOBAL.audio_source);
+    }
+    else
+    {
+        obs_remove_raw_video_callback(raw_video_callback, nullptr);
+        obs_remove_raw_audio_callback(1, raw_audio_callback, nullptr);
+    }
+
     if (description->type == DeviceType::kDeviceTypeVideo)
     {
-        return GLOBAL.video_capture->StartCapture(description->id,
+        return GLOBAL.camera_capture->StartCapture(description->id,
                                                   GLOBAL.video_info.base_width,
                                                   GLOBAL.video_info.base_height,
                                                   GLOBAL.video_info.fps_num,
@@ -369,7 +379,7 @@ struct GetDeviceListResult capture_get_device_list(enum DeviceType type)
     obs_source_t* source = nullptr;
     if (type == DeviceType::kDeviceTypeVideo)
     {
-        int status = VideoCapture::EnumDevices(list);
+        int status = CameraCapture::EnumDevices(list);
         return { status, list };
     }
     else if (type == DeviceType::kDeviceTypeScreen)

@@ -117,31 +117,21 @@ struct VideoEncoder* codec_create_video_encoder(struct VideoEncoderSettings* set
 	codec->frame->height = codec->context->height;
 	codec->frame->format = codec->context->pix_fmt;
 
-	int ret = av_frame_get_buffer(codec->frame, 32);
-	if (ret < 0)
-	{
-		codec_release_video_encoder(codec);
-		return nullptr;
-	}
-
 	return codec;
 }
 
 bool codec_video_encoder_copy_frame(struct VideoEncoder* codec, struct VideoFrame* frame)
 {
-	if (av_frame_make_writable(codec->frame) != 0)
-	{
-		return false;
-	}
-
 	codec->frame->pts = av_rescale_q(codec->context->frame_num,
 									 codec->context->pkt_timebase,
 									 codec->context->time_base);
 
-    codec->frame->data[0] = frame->data[0];
-    codec->frame->data[1] = frame->data[1];
-    codec->frame->linesize[0] = frame->linesize[0];
-    codec->frame->linesize[1] = frame->linesize[1];
+	for (int i = 0; i < 2; i ++)
+	{
+		codec->frame->linesize[i] = frame->linesize[i];
+		codec->frame->data[i] = frame->data[i];
+	}
+
 	return true;
 }
 

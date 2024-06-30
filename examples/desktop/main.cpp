@@ -138,7 +138,7 @@ public:
                                      SDL_TEXTUREACCESS_STREAMING,
                                      args.ArgsParams.width,
                                      args.ArgsParams.height);
-        std::thread(
+        /*std::thread(
             [&]()
             {
                 while (_runing)
@@ -158,7 +158,7 @@ public:
                 }
 
                 SDL_Quit();
-            }).detach();
+            }).detach();*/
     }
 
     ~Render()
@@ -186,13 +186,22 @@ public:
         //    return true;
         //}
 
-        std::lock_guard<std::mutex> guard(_mutex);
+        // std::lock_guard<std::mutex> guard(_mutex);
         SDL_UpdateNVTexture(_texture,
                             nullptr,
                             frame->data[0],
                             frame->linesize[0],
                             frame->data[1],
                             frame->linesize[1]);
+
+        if (SDL_RenderClear(_renderer) == 0)
+        {
+            if (SDL_RenderCopy(_renderer, _texture, nullptr, nullptr) == 0)
+            {
+                SDL_RenderPresent(_renderer);
+            }
+        }
+
         return true;
     }
 
