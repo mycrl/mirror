@@ -75,19 +75,30 @@ fn main() -> anyhow::Result<()> {
         .warnings(false)
         .out_dir(&out_dir)
         .file("./lib/capture.cpp")
+        .file("./lib/camera.cpp")
         .include(&join(&out_dir, "./obs-studio")?)
         .include("../common/include");
 
     #[cfg(target_os = "windows")]
-    compiler.define("WIN32", None);
+    {
+        compiler.define("WIN32", None);
+
+        println!("cargo:rustc-link-lib=mfreadwrite");
+        println!("cargo:rustc-link-lib=mfplat");
+        println!("cargo:rustc-link-lib=mfuuid");
+        println!("cargo:rustc-link-lib=mf");
+    }
 
     #[cfg(target_os = "linux")]
-    compiler.define("LINUX", None);
+    {
+        compiler.define("LINUX", None);
+    }
 
     compiler.compile("capture");
 
     println!("cargo:rustc-link-search=all={}", &out_dir);
     println!("cargo:rustc-link-lib=obs");
+
     Ok(())
 }
 

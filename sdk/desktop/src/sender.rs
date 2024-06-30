@@ -45,17 +45,14 @@ impl VideoSender {
                 // Waiting for external audio and video frame updates.
                 parker.park();
 
-                // Push the audio and video frames into the encoder.
-                if sender_.encoder.encode() {
-                    // Try to get the encoded data packets. The audio and video frames do not
-                    // correspond to the data packets one by one, so you need to try to get multiple
-                    // packets until they are empty.
-                    while let Some(packet) = sender_.encoder.read() {
-                        adapter.send(
-                            Bytes::copy_from_slice(packet.buffer),
-                            StreamBufferInfo::Video(packet.flags, packet.timestamp),
-                        );
-                    }
+                // Try to get the encoded data packets. The audio and video frames do not
+                // correspond to the data packets one by one, so you need to try to get multiple
+                // packets until they are empty.
+                while let Some(packet) = sender_.encoder.read() {
+                    adapter.send(
+                        Bytes::copy_from_slice(packet.buffer),
+                        StreamBufferInfo::Video(packet.flags, packet.timestamp),
+                    );
                 }
             }
         });
@@ -66,8 +63,11 @@ impl VideoSender {
     // Copy the audio and video frames to the encoder and notify the encoding
     // thread.
     fn sink(&self, frame: &VideoFrame) {
+        // Push the audio and video frames into the encoder.
         if self.encoder.send_frame(frame) {
-            self.unparker.unpark();
+            if self.encoder.encode() {
+                self.unparker.unpark();
+            }
         }
     }
 }
