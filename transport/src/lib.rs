@@ -1,5 +1,4 @@
 pub mod adapter;
-mod license;
 mod payload;
 
 use std::{
@@ -12,15 +11,16 @@ use std::{
         Arc, Mutex, RwLock, Weak,
     },
     thread,
+    time::Duration,
 };
 
 use bytes::BytesMut;
-use common::atomic::EasyAtomic;
+use common::{atomic::EasyAtomic, logger::FormatLogger};
 use service::{signal::Signal, SocketKind, StreamInfo};
 use smallvec::SmallVec;
 
 use crate::{
-    adapter::{StreamReceiverAdapter, StreamSenderAdapter},
+    adapter::{StreamReceiverAdapterExt, StreamSenderAdapter},
     payload::{Muxer, PacketInfo, Remuxer},
 };
 
@@ -49,8 +49,6 @@ pub struct Transport {
 
 impl Transport {
     pub fn new(options: TransportOptions) -> Result<Self, Error> {
-        license::checked_license();
-
         let channels: Arc<RwLock<HashMap<u32, Sender<Signal>>>> = Default::default();
         let publishs: Arc<RwLock<HashMap<u32, u16>>> = Default::default();
 
@@ -147,7 +145,8 @@ impl Transport {
 
         // Create an srt configuration and carry stream information
         let mut opt = srt::Options::default();
-        opt.latency = 30;
+        opt.fc = 32;
+        opt.latency = 40;
         opt.mtu = self.options.mtu as u32;
         opt.stream_id = Some(
             StreamInfo {
@@ -160,8 +159,28 @@ impl Transport {
 
         // Create an srt connection to the server
         let mut encoder = srt::FragmentEncoder::new(opt.max_pkt_size());
-        let sender = srt::Socket::connect(self.options.server, opt)?;
+        let sender = Arc::new(srt::Socket::connect(self.options.server, opt)?);
         log::info!("sender connect to server={}", self.options.server);
+
+        #[cfg(debug_assertions)]
+        {
+            let sender_ = Arc::downgrade(&sender);
+            thread::spawn(move || {
+                let mut logger = FormatLogger::new("mirror-sender.stats").unwrap();
+
+                while let Some(sender) = sender_.upgrade() {
+                    if let Ok(stats) = sender.get_stats() {
+                        if logger.log(&stats).is_err() {
+                            break;
+                        }
+                    } else {
+                        break;
+                    }
+
+                    thread::sleep(Duration::from_secs(5));
+                }
+            });
+        }
 
         let adapter_ = Arc::downgrade(adapter);
         thread::spawn(move || {
@@ -217,18 +236,17 @@ impl Transport {
         Ok(())
     }
 
-    pub fn create_receiver(
-        &self,
-        stream_id: u32,
-        adapter: &Arc<StreamReceiverAdapter>,
-    ) -> Result<(), Error> {
+    pub fn create_receiver<T>(&self, stream_id: u32, adapter: &Arc<T>) -> Result<(), Error>
+    where
+        T: StreamReceiverAdapterExt + 'static,
+    {
         let current_mcast_rceiver = Arc::new(Mutex::new(None));
 
         // Creating a multicast receiver
         let current_mcast_rceiver_ = current_mcast_rceiver.clone();
         let create_mcast_receiver = move |receiver: Weak<srt::Socket>,
                                           sequence: Arc<AtomicU64>,
-                                          adapter: Weak<StreamReceiverAdapter>,
+                                          adapter: Weak<T>,
                                           multicast,
                                           port| {
             let mcast_rceiver = if let Ok(socket) =
@@ -298,7 +316,8 @@ impl Transport {
 
         // Create an srt configuration and carry stream information
         let mut opt = srt::Options::default();
-        opt.latency = 30;
+        opt.fc = 32;
+        opt.latency = 40;
         opt.mtu = self.options.mtu as u32;
         opt.stream_id = Some(
             StreamInfo {
@@ -319,6 +338,26 @@ impl Transport {
         let mut decoder = srt::FragmentDecoder::new();
         let receiver = Arc::new(srt::Socket::connect(self.options.server, opt)?);
         log::info!("receiver connect to server={}", self.options.server);
+
+        #[cfg(debug_assertions)]
+        {
+            let receiver_ = Arc::downgrade(&receiver);
+            thread::spawn(move || {
+                let mut logger = FormatLogger::new("mirror-receiver.stats").unwrap();
+
+                while let Some(receiver) = receiver_.upgrade() {
+                    if let Ok(stats) = receiver.get_stats() {
+                        if logger.log(&stats).is_err() {
+                            break;
+                        }
+                    } else {
+                        break;
+                    }
+
+                    thread::sleep(Duration::from_secs(5));
+                }
+            });
+        }
 
         {
             let multicast = self.options.multicast;
@@ -359,37 +398,48 @@ impl Transport {
         thread::spawn(move || {
             let mut buf = [0u8; 2000];
 
-            while let Ok(size) = receiver.read(&mut buf) {
-                if size == 0 {
-                    break;
-                }
-
-                // All the fragments received from SRT are split and need to be reassembled here
-                if let Some((seq, bytes)) = decoder.decode(&buf[..size]) {
-                    if let Some(adapter) = adapter_.upgrade() {
-                        // Check whether the sequence number is continuous, in order to check
-                        // whether packet loss has occurred
-                        if seq == 0 || seq - 1 == sequence.get() {
-                            if let Some((offset, info)) = Remuxer::remux(&bytes) {
-                                if !adapter.send(
-                                    bytes.slice(offset..),
-                                    info.kind,
-                                    info.flags,
-                                    info.timestamp,
-                                ) {
-                                    log::error!("adapter on buf failed.");
-
-                                    break;
-                                }
-                            } else {
-                                adapter.loss_pkt();
-                            }
-                        } else {
-                            adapter.loss_pkt()
+            loop {
+                match receiver.read(&mut buf) {
+                    Ok(size) => {
+                        if size == 0 {
+                            break;
                         }
 
-                        sequence.update(seq);
-                    } else {
+                        // All the fragments received from SRT are split and need to be reassembled
+                        // here
+                        if let Some((seq, bytes)) = decoder.decode(&buf[..size]) {
+                            if let Some(adapter) = adapter_.upgrade() {
+                                // Check whether the sequence number is continuous, in order to
+                                // check whether packet loss has
+                                // occurred
+                                if seq == 0 || seq - 1 == sequence.get() {
+                                    if let Some((offset, info)) = Remuxer::remux(&bytes) {
+                                        if !adapter.send(
+                                            bytes.slice(offset..),
+                                            info.kind,
+                                            info.flags,
+                                            info.timestamp,
+                                        ) {
+                                            log::error!("adapter on buf failed.");
+
+                                            break;
+                                        }
+                                    } else {
+                                        adapter.loss_pkt();
+                                    }
+                                } else {
+                                    adapter.loss_pkt()
+                                }
+
+                                sequence.update(seq);
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        log::error!("{:?}", e);
+
                         break;
                     }
                 }

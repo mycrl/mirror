@@ -73,7 +73,7 @@ fn main() -> anyhow::Result<()> {
     )?) {
         if cfg!(target_os = "windows") {
             exec("Invoke-WebRequest \
-                -Uri https://github.com/mycrl/libyuv-rs/releases/download/v0.1.2/yuv-windows-x86_64.lib \
+                -Uri https://github.com/mycrl/distributions/releases/download/distributions/yuv-windows-x64.lib \
                 -OutFile yuv.lib", &settings.out_dir)?;
         } else {
             exec(
@@ -92,17 +92,11 @@ fn main() -> anyhow::Result<()> {
         )?;
     }
 
-    #[cfg(feature = "ffmpeg6")]
-    let version_define = "VERSION_6";
-
-    #[cfg(feature = "ffmpeg4")]
-    let version_define = "VERSION_4";
-
     cc::Build::new()
         .cpp(true)
         .std("c++20")
         .debug(settings.is_debug)
-        .static_crt(false)
+        .static_crt(true)
         .target(&settings.target)
         .warnings(false)
         .out_dir(&settings.out_dir)
@@ -122,7 +116,6 @@ fn main() -> anyhow::Result<()> {
             },
             None,
         )
-        .define(version_define, None)
         .compile("codec");
 
     println!("cargo:rustc-link-search=all={}", &settings.out_dir);
@@ -130,10 +123,10 @@ fn main() -> anyhow::Result<()> {
         println!("cargo:rustc-link-search=all={}", path);
     }
 
+    println!("cargo:rustc-link-lib=yuv");
     println!("cargo:rustc-link-lib=avcodec");
     println!("cargo:rustc-link-lib=avutil");
     println!("cargo:rustc-link-lib=codec");
-    println!("cargo:rustc-link-lib=yuv");
     Ok(())
 }
 
@@ -150,49 +143,36 @@ impl Settings {
     fn build() -> anyhow::Result<Self> {
         let _ = dotenv();
         let out_dir = env::var("OUT_DIR")?;
+        let is_debug = env::var("DEBUG")
+            .map(|label| label == "true")
+            .unwrap_or(true);
         let (ffmpeg_include_prefix, ffmpeg_lib_prefix) = if let (Some(include), Some(lib)) = (
             env::var("FFMPEG_INCLUDE_PREFIX").ok(),
             env::var("FFMPEG_LIB_PREFIX").ok(),
         ) {
             (vec![include], vec![lib])
         } else {
-            find_ffmpeg_prefix(&out_dir)?
+            find_ffmpeg_prefix(&out_dir, is_debug)?
         };
 
         Ok(Self {
             out_dir,
+            is_debug,
             ffmpeg_lib_prefix,
             ffmpeg_include_prefix,
             target: env::var("TARGET")?,
-            is_debug: env::var("DEBUG")
-                .map(|label| label == "true")
-                .unwrap_or(true),
         })
     }
 }
 
 #[cfg(target_os = "windows")]
-fn find_ffmpeg_prefix(out_dir: &str) -> anyhow::Result<(Vec<String>, Vec<String>)> {
-    #[cfg(feature = "ffmpeg6")]
-    let ffmpeg_prefix = join(out_dir, "ffmpeg-6.1").unwrap();
-
-    #[cfg(feature = "ffmpeg4")]
-    let ffmpeg_prefix = join(out_dir, "ffmpeg-4.4").unwrap();
-
+fn find_ffmpeg_prefix(out_dir: &str, is_debug: bool) -> anyhow::Result<(Vec<String>, Vec<String>)> {
+    let ffmpeg_prefix = join(out_dir, "ffmpeg").unwrap();
     if !is_exsit(&ffmpeg_prefix) {
-        #[cfg(feature = "ffmpeg6")]
         exec(
-            "Invoke-WebRequest \
-                -Uri https://github.com/mycrl/distributions/releases/download/distributions/ffmpeg-6.1.zip \
-                -OutFile ffmpeg.zip",
-            out_dir,
-        )?;
-
-        #[cfg(feature = "ffmpeg4")]
-        exec(
-            "Invoke-WebRequest \
-                -Uri https://github.com/mycrl/distributions/releases/download/distributions/ffmpeg-4.4.zip \
-                -OutFile ffmpeg.zip",
+            &format!("Invoke-WebRequest \
+                -Uri https://github.com/mycrl/distributions/releases/download/distributions/ffmpeg-windows-x64-{}.zip \
+                -OutFile ffmpeg.zip", if is_debug { "debug" } else { "release" }),
             out_dir,
         )?;
 
@@ -209,7 +189,7 @@ fn find_ffmpeg_prefix(out_dir: &str) -> anyhow::Result<(Vec<String>, Vec<String>
 }
 
 #[cfg(target_os = "linux")]
-fn find_ffmpeg_prefix(out_dir: &str) -> anyhow::Result<(Vec<String>, Vec<String>)> {
+fn find_ffmpeg_prefix(out_dir: &str, is_debug: bool) -> anyhow::Result<(Vec<String>, Vec<String>)> {
     let mut includes = Vec::new();
     let mut libs = Vec::new();
 

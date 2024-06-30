@@ -24,7 +24,7 @@ impl AndroidStreamReceiverAdapter {
     //      */
     //     abstract fun sink(kind: Int, buf: ByteArray)
     // }
-    pub(crate) fn sink(&self, buf: Bytes, kind: StreamKind, flags: u8, timestamp: u64) -> bool {
+    pub(crate) fn sink(&self, buf: Bytes, kind: StreamKind, flags: i32, timestamp: u64) -> bool {
         let mut env = get_current_env();
         catcher(&mut env, |env| {
             let buf = env.byte_array_from_slice(&buf)?.into();
@@ -34,7 +34,7 @@ impl AndroidStreamReceiverAdapter {
                 "(IIJ[B)Z",
                 &[
                     JValue::Int(kind as i32),
-                    JValue::Int(flags as i32),
+                    JValue::Int(flags),
                     JValue::Long(timestamp as i64),
                     JValue::Object(&buf),
                 ],

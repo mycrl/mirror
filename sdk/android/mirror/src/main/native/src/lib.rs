@@ -15,7 +15,7 @@ use jni::{
 use jni_macro::jni_exports;
 use logger::AndroidLogger;
 use transport::{
-    adapter::{StreamReceiverAdapter, StreamSenderAdapter},
+    adapter::{StreamReceiverAdapter, StreamReceiverAdapterExt, StreamSenderAdapter},
     Transport, TransportOptions,
 };
 

@@ -32,6 +32,26 @@ pub struct VideoFrame {
     pub linesize: [usize; 2],
 }
 
+#[repr(C)]
+#[allow(non_camel_case_types)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AudioFormat {
+    AUDIO_NONE = -1,
+    AUDIO_U8,   // unsigned 8 bits
+    AUDIO_S16,  // signed 16 bits
+    AUDIO_S32,  // signed 32 bits
+    AUDIO_FLT,  // float
+    AUDIO_DBL,  // double
+    AUDIO_U8P,  // unsigned 8 bits, planar
+    AUDIO_S16P, // signed 16 bits, planar
+    AUDIO_S32P, // signed 32 bits, planar
+    AUDIO_FLTP, // float, planar
+    AUDIO_DBLP, // double, planar
+    AUDIO_S64,  // signed 64 bits
+    AUDIO_S64P, // signed 64 bits, planar
+    AUDIO_NB,   // Number of sample formats.
+}
+
 /// Pulse-code modulation
 ///
 /// Pulse-code modulation (PCM) is a method used to digitally represent analog
@@ -55,6 +75,7 @@ pub struct VideoFrame {
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct AudioFrame {
+    pub format: AudioFormat,
     pub frames: u32,
-    pub data: [*const u8; 2],
+    pub data: *const u8,
 }

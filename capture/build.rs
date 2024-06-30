@@ -51,7 +51,7 @@ fn main() -> anyhow::Result<()> {
         if !is_exsit(&join(&out_dir, "obs.lib")?) {
             exec(
                 "Invoke-WebRequest \
-                    -Uri https://github.com/mycrl/distributions/releases/download/distributions/obs.lib \
+                    -Uri https://github.com/mycrl/distributions/releases/download/distributions/obs-windows-x64.lib \
                     -OutFile obs.lib",
                 &out_dir,
             )?;
@@ -70,24 +70,35 @@ fn main() -> anyhow::Result<()> {
         .cpp(true)
         .std("c++20")
         .debug(is_debug)
-        .static_crt(false)
+        .static_crt(true)
         .target(&target)
         .warnings(false)
         .out_dir(&out_dir)
         .file("./lib/capture.cpp")
+        .file("./lib/camera.cpp")
         .include(&join(&out_dir, "./obs-studio")?)
         .include("../common/include");
 
     #[cfg(target_os = "windows")]
-    compiler.define("WIN32", None);
+    {
+        compiler.define("WIN32", None);
+
+        println!("cargo:rustc-link-lib=mfreadwrite");
+        println!("cargo:rustc-link-lib=mfplat");
+        println!("cargo:rustc-link-lib=mfuuid");
+        println!("cargo:rustc-link-lib=mf");
+    }
 
     #[cfg(target_os = "linux")]
-    compiler.define("LINUX", None);
+    {
+        compiler.define("LINUX", None);
+    }
 
     compiler.compile("capture");
 
     println!("cargo:rustc-link-search=all={}", &out_dir);
     println!("cargo:rustc-link-lib=obs");
+
     Ok(())
 }
 

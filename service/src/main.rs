@@ -4,7 +4,13 @@ use std::{net::SocketAddr, process::exit, sync::Arc, thread};
 
 use anyhow::Result;
 use clap::Parser;
+use common::{jump_current_exe_dir, logger};
+use log::LevelFilter;
 use service::route::Route;
+use tokio::runtime::Runtime;
+
+// #[global_allocator]
+// static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 #[derive(Parser, Clone, Debug)]
 #[command(
@@ -19,16 +25,16 @@ pub struct Configure {
     pub mtu: usize,
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
+    // Initialize srt and logger
+    srt::startup();
+    jump_current_exe_dir()?;
+    logger::init("mirror-service.log", LevelFilter::Info)?;
+
     // Parse command line parameters. Note that if the command line parameters are
     // incorrect, panic will occur.
     let config = Configure::parse();
     let route = Arc::new(Route::default());
-
-    // Initialize srt and logger
-    srt::startup();
-    simple_logger::init_with_level(log::Level::Info)?;
 
     log::info!("configure: {:?}", config);
 
@@ -44,7 +50,7 @@ async fn main() -> Result<()> {
     // Start the signaling server. If the signaling server exits, the entire process
     // will exit. This is because if the signaling exits, it is meaningless to
     // continue running.
-    service::signal::start_server(config.bind, route).await?;
+    Runtime::new()?.block_on(service::signal::start_server(config.bind, route))?;
     srt::cleanup();
 
     Ok(())

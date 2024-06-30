@@ -14,14 +14,15 @@ common = { path = "../../common" }
 codec = { path = "../../codec", default-features = false}
 transport = { path = "../../transport" }
 log = "0.4.20"
-simple_logger = "4"
 anyhow = "1.0.82"
 once_cell = "1.19.0"
 crossbeam = "0.8"
+mimalloc = { version = "*", default-features = false }
 
-[dev-dependencies]
-clap = { version = "4", features = ["derive", "env"] }
-
-[features]
-default = ["codec/ffmpeg6"]
-ffmpeg4 = ["codec/ffmpeg4"]
+[target.'cfg(target_os = "windows")'.dependencies.windows]
+version = "0.57.0"
+features = [
+    "Win32",
+    "Win32_System",
+    "Win32_System_Threading",
+]

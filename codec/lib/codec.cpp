@@ -7,7 +7,7 @@
 
 #include "codec.h"
 
-static const char* DefaultVideoDecoder = "h264";
+static const char* DefaultVideoDecoder = "libopenh264";
 static struct CodecDesc VideoDecoders[] = {
 	{"h264_qsv", AV_HWDEVICE_TYPE_QSV},
 	{"h264_cuvid", AV_HWDEVICE_TYPE_CUDA},

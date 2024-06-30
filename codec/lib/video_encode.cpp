@@ -43,7 +43,7 @@ struct VideoEncoder* codec_create_video_encoder(struct VideoEncoderSettings* set
 	codec->context->skip_alpha = true;
 	codec->context->pix_fmt = AV_PIX_FMT_NV12;
     codec->context->flags2 = AV_CODEC_FLAG2_FAST;
-	codec->context->flags = AV_CODEC_FLAG_PASS2 | AV_CODEC_FLAG_LOW_DELAY;
+	codec->context->flags = AV_CODEC_FLAG_LOW_DELAY | AV_CODEC_FLAG_GLOBAL_HEADER;
 	codec->context->profile = FF_PROFILE_H264_BASELINE;
 
 	int bit_rate = settings->bit_rate;
@@ -52,11 +52,7 @@ struct VideoEncoder* codec_create_video_encoder(struct VideoEncoderSettings* set
 		bit_rate = bit_rate / 2;
 	}
 
-#ifdef VERSION_6
-	codec->context->bit_rate = bit_rate / 2;
-#else
-	codec->context->bit_rate = bit_rate;
-#endif // VERSION_6
+    codec->context->bit_rate = bit_rate;
     codec->context->rc_max_rate = bit_rate;
     codec->context->rc_buffer_size = bit_rate;
     codec->context->bit_rate_tolerance = bit_rate;
@@ -64,20 +60,15 @@ struct VideoEncoder* codec_create_video_encoder(struct VideoEncoderSettings* set
 	codec->context->framerate = av_make_q(settings->frame_rate, 1);
 	codec->context->time_base = av_make_q(1, settings->frame_rate);
 	codec->context->pkt_timebase = av_make_q(1, settings->frame_rate);
-	codec->context->gop_size = settings->key_frame_interval;
+	codec->context->gop_size = settings->key_frame_interval / 2;
 	codec->context->height = settings->height;
 	codec->context->width = settings->width;
 	
 	if (name == "h264_qsv")
 	{
         av_opt_set_int(codec->context->priv_data, "async_depth", 1, 0);
-        av_opt_set_int(codec->context->priv_data, "forced_idr", 1 /* true */, 0);
         av_opt_set_int(codec->context->priv_data, "low_power", 1 /* true */, 0);
-#ifdef VERSION_6
         av_opt_set_int(codec->context->priv_data, "vcm", 1 /* true */, 0);
-#else
-		av_opt_set_int(codec->context->priv_data, "cavlc", 1 /* true */, 0);
-#endif // VERSION_6
 	}
 	else if (name == "h264_nvenc")
 	{
@@ -126,41 +117,26 @@ struct VideoEncoder* codec_create_video_encoder(struct VideoEncoderSettings* set
 	codec->frame->height = codec->context->height;
 	codec->frame->format = codec->context->pix_fmt;
 
-	int ret = av_frame_get_buffer(codec->frame, 32);
-	if (ret < 0)
-	{
-		codec_release_video_encoder(codec);
-		return nullptr;
-	}
-
 	return codec;
 }
 
 bool codec_video_encoder_copy_frame(struct VideoEncoder* codec, struct VideoFrame* frame)
 {
-	if (av_frame_make_writable(codec->frame) != 0)
+	codec->frame->pts = av_rescale_q(codec->context->frame_num,
+									 codec->context->pkt_timebase,
+									 codec->context->time_base);
+
+	for (int i = 0; i < 2; i ++)
 	{
-		return false;
+		codec->frame->linesize[i] = frame->linesize[i];
+		codec->frame->data[i] = frame->data[i];
 	}
 
-    codec->frame->data[0] = frame->data[0];
-    codec->frame->data[1] = frame->data[1];
-    codec->frame->linesize[0] = frame->linesize[0];
-    codec->frame->linesize[1] = frame->linesize[1];
 	return true;
 }
 
 bool codec_video_encoder_send_frame(struct VideoEncoder* codec)
 {
-#ifdef VERSION_6
-	auto count = codec->context->frame_num;
-#else
-	auto count = codec->context->frame_number;
-#endif // VERSION_6
-
-	codec->frame->pts = av_rescale_q(count,
-									 codec->context->pkt_timebase,
-									 codec->context->time_base);
 	if (avcodec_send_frame(codec->context, codec->frame) != 0)
 	{
 		return false;
@@ -176,6 +152,17 @@ struct EncodePacket* codec_video_encoder_read_packet(struct VideoEncoder* codec)
 		return nullptr;
 	}
 
+	if (!codec->initialized)
+	{
+		codec->initialized = true;
+		codec->output_packet->buffer = codec->context->extradata;
+		codec->output_packet->flags = 2; // BufferFlag::Config
+		codec->output_packet->len = codec->context->extradata_size;
+		codec->output_packet->timestamp = codec->packet->pts;
+        
+		return codec->output_packet;
+	}
+
 	if (avcodec_receive_packet(codec->context, codec->packet) != 0)
 	{
 		return nullptr;
@@ -185,6 +172,7 @@ struct EncodePacket* codec_video_encoder_read_packet(struct VideoEncoder* codec)
 	codec->output_packet->flags = codec->packet->flags;
 	codec->output_packet->len = codec->packet->size;
     codec->output_packet->timestamp = codec->packet->pts;
+
 	return codec->output_packet;
 }
 

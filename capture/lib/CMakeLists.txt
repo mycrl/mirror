@@ -27,7 +27,7 @@ if (NOT EXISTS "${THIRD_PARTY_DIR}/obs.lib")
         execute_process(
             WORKING_DIRECTORY "${THIRD_PARTY_DIR}"
             COMMAND powershell.exe -Command "Invoke-WebRequest \
-                -Uri https://github.com/mycrl/distributions/releases/download/distributions/obs.lib \
+                -Uri https://github.com/mycrl/distributions/releases/download/distributions/obs-windows-x64.lib \
                 -OutFile obs.lib")
     endif()
 endif()
@@ -42,7 +42,9 @@ endif()
 
 add_library(capture STATIC 
             capture.cpp
-            capture.h)
+            capture.h
+            camera.h 
+            camera.cpp)
 
 include_directories("${THIRD_PARTY_DIR}/obs-studio"
                     "../../common/include")

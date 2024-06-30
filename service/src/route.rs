@@ -54,16 +54,7 @@ impl Route {
 
     /// Get the event update listener, which can listen to all subsequent events
     /// triggered from the current listener
-    pub fn get_changer(&self) -> Changer {
-        Changer(self.rx.resubscribe())
-    }
-}
-
-pub struct Changer(Receiver<Signal>);
-
-impl Changer {
-    /// Callback when the event is updated
-    pub async fn change(&mut self) -> Option<Signal> {
-        self.0.recv().await.ok()
+    pub fn get_changer(&self) -> Receiver<Signal> {
+        self.rx.resubscribe()
     }
 }

@@ -31,9 +31,8 @@ class Video {
 
         init {
             val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, configure.width, configure.height)
-            format.setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR)
+            format.setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR)
             format.setInteger(MediaFormat.KEY_PROFILE, MediaCodecInfo.CodecProfileLevel.AVCProfileBaseline)
-            format.setInteger(MediaFormat.KEY_LEVEL, MediaCodecInfo.CodecProfileLevel.AVCLevel1)
             format.setFloat(MediaFormat.KEY_MAX_FPS_TO_ENCODER, configure.frameRate.toFloat())
             format.setInteger(MediaFormat.KEY_LATENCY, configure.frameRate / 10)
             format.setInteger(MediaFormat.KEY_OPERATING_RATE, configure.frameRate)
@@ -43,8 +42,18 @@ class Video {
             format.setInteger(MediaFormat.KEY_BIT_RATE, configure.bitRate)
             format.setFloat(MediaFormat.KEY_I_FRAME_INTERVAL, 0.4F)
             format.setInteger(MediaFormat.KEY_MAX_B_FRAMES, 0)
-            format.setInteger(MediaFormat.KEY_COMPLEXITY, 0)
-            format.setInteger(MediaFormat.KEY_PRIORITY, 0)
+            format.setInteger(MediaFormat.KEY_LEVEL, if (configure.width <= 1280 && configure.height <= 720) {
+                MediaCodecInfo.CodecProfileLevel.AVCLevel31
+            } else if (configure.width <= 2048 && configure.height <= 1024) {
+                MediaCodecInfo.CodecProfileLevel.AVCLevel4
+            } else {
+                MediaCodecInfo.CodecProfileLevel.AVCLevel5
+            })
+
+            if (codec.name.indexOf(".rk.") >= 0) {
+                format.setInteger(MediaFormat.KEY_COMPLEXITY, 0)
+                format.setInteger(MediaFormat.KEY_PRIORITY, 0)
+            }
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 format.setInteger(MediaFormat.KEY_ALLOW_FRAME_DROP, 1)
@@ -152,7 +161,7 @@ class Video {
         init {
             val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, configure.width, configure.height)
             format.setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
-            format.setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR)
+            format.setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR)
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 if (codec.name.indexOf(".rk.") < 0 && codec.name.indexOf(".hisi.") < 0) {

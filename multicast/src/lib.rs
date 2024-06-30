@@ -4,10 +4,10 @@ mod fragments;
 use std::{
     io::Error,
     net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
-    sync::mpsc::{self, channel},
 };
 
 use bytes::Bytes;
+use crossbeam::channel::{bounded, Receiver};
 use fragments::FragmentEncoder;
 use once_cell::sync::Lazy;
 use tokio::{runtime::Runtime, sync::mpsc::unbounded_channel};
@@ -36,7 +36,7 @@ static RUNTIME: Lazy<Runtime> =
 /// This client is only used to receive multicast packets and does not send
 /// multicast packets.
 pub struct Socket {
-    rx: mpsc::Receiver<(u64, Bytes)>,
+    rx: Receiver<(u64, Bytes)>,
     close_signal: tokio::sync::mpsc::UnboundedSender<()>,
 }
 
@@ -73,7 +73,7 @@ impl Socket {
     async fn create(multicast: Ipv4Addr, bind: SocketAddr) -> Result<Self, Error> {
         let socket = socket2::Socket::from(UdpSocket::bind(bind)?);
         socket.set_recv_buffer_size(4 * 1024 * 1024)?;
-        socket.set_reuse_address(true)?;
+        socket.set_nonblocking(true)?;
 
         let socket = tokio::net::UdpSocket::from_std(socket.into())?;
         if let IpAddr::V4(bind) = bind.ip() {
@@ -82,7 +82,7 @@ impl Socket {
         }
 
         let (close_signal, mut closed) = unbounded_channel();
-        let (tx, rx) = channel();
+        let (tx, rx) = bounded(5);
 
         tokio::spawn(async move {
             let mut buf = vec![0u8; 2048];

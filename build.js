@@ -30,6 +30,7 @@ const Command = (cmd, options = {}) => new Promise((
 /* async block */ void (async () => {
 
 for (const path of [
+    './target',
     './build', 
     './build/bin', 
     './build/lib',
@@ -37,7 +38,7 @@ for (const path of [
     './build/include', 
     './build/examples', 
     './build/examples/receiver', 
-    './build/examples/sender'
+    './build/examples/sender',
 ]) {
     if (!fs.existsSync(path)) {
         fs.mkdirSync(path)
@@ -45,47 +46,27 @@ for (const path of [
 }
 
 if (!fs.existsSync('./build/bin/data')) {
-    if (!fs.existsSync('./build/distributions-windows.zip')) {
+    if (!fs.existsSync('./target/obs.zip')) {
         console.log('Start download distributions...')
         await Command('Invoke-WebRequest \
-            -Uri https://github.com/mycrl/distributions/releases/download/distributions/distributions-windows.zip \
-            -OutFile build\\distributions-windows.zip')
+            -Uri https://github.com/mycrl/distributions/releases/download/distributions/obs-windows-x64.zip \
+            -OutFile target\\obs.zip')
     }
 
-    await Command('Expand-Archive -Path build\\distributions-windows.zip -DestinationPath build\\bin -Force')
-    fs.unlinkSync('./build/distributions-windows.zip')
+    await Command('Expand-Archive -Path target\\obs.zip -DestinationPath build\\bin -Force')
 }
 
-fs.copyFileSync('./examples/desktop/common.h', './build/examples/common.h')
-fs.copyFileSync('./examples/desktop/CMakeLists.txt', './build/examples/CMakeLists.txt')
-fs.copyFileSync('./examples/desktop/sender/main.cpp', './build/examples/sender/main.cpp')
-fs.copyFileSync('./examples/desktop/receiver/main.cpp', './build/examples/receiver/main.cpp')
+if (!fs.existsSync('./target/ffmpeg')) {
+    console.log('Start download ffmpeg...')
+    await Command(`Invoke-WebRequest \
+        -Uri https://github.com/mycrl/distributions/releases/download/distributions/ffmpeg-windows-x64-${Args.release ? 'release' : 'debug'}.zip \
+        -OutFile target\\ffmpeg.zip`)
 
-fs.copyFileSync('./sdk/desktop/include/mirror.h', './build/include/mirror.h')
-fs.copyFileSync('./common/include/frame.h', './build/include/frame.h')
+    await Command('Expand-Archive -Path target\\ffmpeg.zip -DestinationPath target -Force')
+}
 
-await Command(`cargo build ${Args.release ? '--release' : ''} ${Args.ffmpeg4 ? '--features ffmpeg4' : ''} -p mirror`)
+await Command(`cargo build ${Args.release ? '--release' : ''} -p mirror`)
 await Command(`cargo build ${Args.release ? '--release' : ''} -p service`)
-
-fs.copyFileSync(`./target/${Profile.toLowerCase()}/mirror.dll`, './build/bin/mirror.dll')
-fs.copyFileSync(`./target/${Profile.toLowerCase()}/mirror.dll.lib`, './build/lib/mirror.dll.lib')
-fs.copyFileSync(`./target/${Profile.toLowerCase()}/service.exe`, './build/server/mirror-service.exe')
-
-if (!Args.release) {
-    fs.copyFileSync('./target/debug/mirror.pdb', './build/bin/mirror.pdb')
-}
-
-if (!Args.ffmpeg4) {
-    for (const item of [
-        './build/bin/swresample-3.dll',
-        './build/bin/avcodec-58.dll',
-        './build/bin/avutil-56.dll',
-    ]) {
-        if (fs.existsSync(item)) {
-            fs.unlinkSync(item)
-        }
-    }
-}
 
 if (!fs.existsSync('./examples/desktop/build')) {
     fs.mkdirSync('./examples/desktop/build')
@@ -94,23 +75,39 @@ if (!fs.existsSync('./examples/desktop/build')) {
 await Command(`cmake -DCMAKE_BUILD_TYPE=${Profile} ..`, { cwd: join(__dirname, './examples/desktop/build') })
 await Command(`cmake --build . --config=${Profile}`, { cwd: join(__dirname, './examples/desktop/build') })
 
-fs.copyFileSync(`./examples/desktop/build/receiver/${Profile}/receiver.exe`, './build/bin/receiver.exe')
-fs.copyFileSync(`./examples/desktop/build/sender/${Profile}/sender.exe`, './build/bin/sender.exe')
+for (const item of [
+    ['./examples/desktop/main.cpp', './build/examples/main.cpp'],
+    ['./examples/desktop/CMakeLists.txt', './build/examples/CMakeLists.txt'],
+    ['./examples/desktop/README.md', './build/examples/README.md'],
+    ['./sdk/desktop/include/mirror.h', './build/include/mirror.h'],
+    [`./examples/desktop/build/${Profile}/example.exe`, './build/bin/example.exe'],
+    ['./common/include/frame.h', './build/include/frame.h'],
+    [`./target/${Profile.toLowerCase()}/mirror.dll`, './build/bin/mirror.dll'],
+    [`./target/${Profile.toLowerCase()}/mirror.dll.lib`, './build/lib/mirror.dll.lib'],
+    [`./target/${Profile.toLowerCase()}/service.exe`, './build/server/mirror-service.exe'],
+    ['./target/ffmpeg/bin/avcodec-60.dll', './build/bin/avcodec-60.dll'],
+    ['./target/ffmpeg/bin/avdevice-60.dll', './build/bin/avdevice-60.dll'],
+    ['./target/ffmpeg/bin/avfilter-9.dll', './build/bin/avfilter-9.dll'],
+    ['./target/ffmpeg/bin/avformat-60.dll', './build/bin/avformat-60.dll'],
+    ['./target/ffmpeg/bin/avutil-58.dll', './build/bin/avutil-58.dll'],
+    ['./target/ffmpeg/bin/postproc-57.dll', './build/bin/postproc-57.dll'],
+    ['./target/ffmpeg/bin/swresample-4.dll', './build/bin/swresample-4.dll'],
+    ['./target/ffmpeg/bin/swscale-7.dll', './build/bin/swscale-7.dll'],
+]) {
+    fs.copyFileSync(...item)
+}
 
-fs.writeFileSync('./build/examples/sender/CMakeLists.txt', 
-    fs.readFileSync('./examples/desktop/sender/CMakeLists.txt')
-        .toString()
-        .replace('../../../sdk/desktop/include', '../../include')
-        .replace('../../../common/include', '../../include')
-        .replace('../../../target/debug', '../../lib')
-        .replace('../../../target/release', '../../lib'))
+if (!Args.release) {
+    fs.copyFileSync('./target/debug/mirror.pdb', './build/bin/mirror.pdb')
+    fs.copyFileSync('./target/debug/service.pdb', './build/server/service.pdb')
+}
 
-fs.writeFileSync('./build/examples/receiver/CMakeLists.txt', 
-    fs.readFileSync('./examples/desktop/receiver/CMakeLists.txt')
+fs.writeFileSync('./build/examples/CMakeLists.txt', 
+    fs.readFileSync('./examples/desktop/CMakeLists.txt')
         .toString()
-        .replace('../../../sdk/desktop/include', '../../include')
-        .replace('../../../common/include', '../../include')
-        .replace('../../../target/debug', '../../lib')
-        .replace('../../../target/release', '../../lib'))
+        .replace('../../sdk/desktop/include', '../include')
+        .replace('../../common/include', '../include')
+        .replace('../../target/debug', '../lib')
+        .replace('../../target/release', '../lib'))
 
 /* async block end */ })()

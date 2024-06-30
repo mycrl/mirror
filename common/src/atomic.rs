@@ -81,6 +81,12 @@ easy_atomic!(AtomicUsize, usize);
 /// Atomized Option type.
 pub struct AtomicOption<T>(AtomicPtr<T>);
 
+impl<T> Default for AtomicOption<T> {
+    fn default() -> Self {
+        Self::new(None)
+    }
+}
+
 impl<T> AtomicOption<T> {
     pub fn new(value: Option<T>) -> Self {
         Self(AtomicPtr::new(

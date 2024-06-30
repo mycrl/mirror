@@ -7,6 +7,11 @@
 
 #include "./codec.h"
 
+extern "C"
+{
+#include <libavutil/opt.h>
+}
+
 struct AudioEncoder* codec_create_audio_encoder(struct AudioEncoderSettings* settings)
 {
 	struct AudioEncoder* codec = new AudioEncoder{};
@@ -33,6 +38,10 @@ struct AudioEncoder* codec_create_audio_encoder(struct AudioEncoderSettings* set
 
 	codec->context->bit_rate = settings->bit_rate;
 	codec->context->sample_rate = settings->sample_rate;
+	codec->context->time_base = av_make_q(1, settings->sample_rate);
+
+    av_opt_set(codec->context->priv_data, "frame_duration", "100", 0);
+	av_opt_set_int(codec->context->priv_data, "application", 2051, 0);
 	
 	if (avcodec_open2(codec->context, codec->codec, nullptr) != 0)
 	{
@@ -60,45 +69,42 @@ struct AudioEncoder* codec_create_audio_encoder(struct AudioEncoderSettings* set
 		return nullptr;
 	}
 
-	codec->frame->format = codec->context->sample_fmt;
-	codec->frame->nb_samples = codec->context->frame_size;
-	codec->frame->channel_layout = codec->context->channel_layout;
-
-	if (av_frame_get_buffer(codec->frame, 0) < 0)
-	{
-		codec_release_audio_encoder(codec);
-		return nullptr;
-	}
-
 	return codec;
 }
 
 bool codec_audio_encoder_copy_frame(struct AudioEncoder* codec, struct AudioFrame* frame)
 {
-	if (av_frame_make_writable(codec->frame) < 0)
+	codec->frame->nb_samples = frame->frames;
+	codec->frame->format = codec->context->sample_fmt;
+	codec->frame->channel_layout = codec->context->channel_layout;
+
+	if (av_frame_get_buffer(codec->frame, 0) < 0)
 	{
 		return false;
 	}
 
-	codec->frame->data[0] = frame->data[0];
-	codec->frame->data[1] = frame->data[1];
+	av_samples_fill_arrays(codec->frame->data, 
+						   codec->frame->linesize, 
+						   frame->data, 
+						   1, 
+						   frame->frames, 
+						   AV_SAMPLE_FMT_S16, 
+						   0);
+
+	codec->frame->pts = codec->pts;
+	codec->pts += codec->context->frame_size;
+
 	return true;
 }
 
 bool codec_audio_encoder_send_frame(struct AudioEncoder* codec)
 {
-#ifdef VERSION_6
-	auto count = codec->context->frame_num;
-#else
-	auto count = codec->context->frame_number;
-#endif // VERSION_6
-
-	codec->frame->pts = count * codec->context->frame_size;
 	if (avcodec_send_frame(codec->context, codec->frame) != 0)
 	{
 		return false;
 	}
 
+	av_frame_unref(codec->frame);
 	return true;
 }
 
@@ -118,6 +124,7 @@ struct EncodePacket* codec_audio_encoder_read_packet(struct AudioEncoder* codec)
 	codec->output_packet->len = codec->packet->size;
 	codec->output_packet->flags = codec->packet->flags;
     codec->output_packet->timestamp = codec->packet->pts;
+    
 	return codec->output_packet;
 }
 

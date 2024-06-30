@@ -1,5 +1,3 @@
-#![cfg(target_os = "windows")]
-
 mod device;
 mod manager;
 
@@ -37,14 +35,15 @@ struct RawOutputCallback {
 }
 
 extern "C" {
-    /// Releases all data associated with OBS and terminates the OBS
-    /// context.
-    fn capture_quit();
     /// Initializes the OBS core context.
     fn capture_init(video_info: *const VideoInfo, audio_info: *const AudioInfo) -> c_int;
     /// Adds/removes a raw video callback. Allows the ability to obtain raw
     /// video frames without necessarily using an output.
     fn capture_set_output_callback(proc: RawOutputCallback) -> *const c_void;
+    /// Start capturing audio and video data.
+    fn capture_start() -> c_int;
+    /// Stop capturing audio and video data.
+    fn capture_stop();
 }
 
 #[derive(Debug, TryFromPrimitive)]
@@ -241,20 +240,13 @@ pub fn init(options: DeviceManagerOptions) -> Result<(), DeviceError> {
     }
 }
 
-/// Cleans up the OBS environment, a step that needs to be called when the
-/// application exits.
-pub fn quit() {
-    unsafe { capture_quit() }
+/// Start capturing audio and video data.
+pub fn start() -> c_int {
+    unsafe { capture_start() }
+}
 
-    let previous = unsafe {
-        capture_set_output_callback(RawOutputCallback {
-            video: None,
-            audio: None,
-            ctx: null(),
-        })
-    };
-
-    if !previous.is_null() {
-        drop(unsafe { Box::from_raw(previous as *mut Context) })
-    }
+/// Stop capturing audio and video data.
+pub fn stop() {
+    unsafe { capture_stop() }
+    set_frame_sink::<()>(None);
 }

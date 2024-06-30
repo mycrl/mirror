@@ -27,10 +27,8 @@ impl Options {
         set_sock_opt(fd, SRT_SOCKOPT::SRTO_SNDSYN, &0_i32)?;
         set_sock_opt(fd, SRT_SOCKOPT::SRTO_TSBPDMODE, &1_i32)?;
         set_sock_opt(fd, SRT_SOCKOPT::SRTO_TLPKTDROP, &1_i32)?;
-        set_sock_opt(fd, SRT_SOCKOPT::SRTO_REUSEADDR, &1_i32)?;
         set_sock_opt(fd, SRT_SOCKOPT::SRTO_FC, &self.fc)?;
         set_sock_opt(fd, SRT_SOCKOPT::SRTO_MSS, &self.mtu)?;
-        set_sock_opt(fd, SRT_SOCKOPT::SRTO_OHEADBW, &100_i32)?;
         set_sock_opt(fd, SRT_SOCKOPT::SRTO_RCVLATENCY, &self.latency)?;
         set_sock_opt(fd, SRT_SOCKOPT::SRTO_MAXBW, &self.max_bandwidth)?;
         set_sock_opt(fd, SRT_SOCKOPT::SRTO_PEERIDLETIMEO, &self.timeout)?;
@@ -51,12 +49,12 @@ impl Options {
 impl Default for Options {
     fn default() -> Self {
         Self {
-            fec: "fec,layout:even,rows:20,cols:10,arq:always".to_string(),
-            max_bandwidth: -1,
+            fec: "fec,layout:staircase,rows:5,cols:10,arq:onreq".to_string(),
+            max_bandwidth: 62914560,
             stream_id: None,
             timeout: 5000,
-            latency: 20,
-            mtu: 1400,
+            latency: 120,
+            mtu: 1500,
             fc: 25600,
         }
     }

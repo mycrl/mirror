@@ -1,5 +1,3 @@
-#![cfg(any(target_os = "windows", target_os = "linux"))]
-
 pub mod audio;
 pub mod video;
 

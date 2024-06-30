@@ -3,18 +3,25 @@ use std::{
     thread,
 };
 
+use crate::sender::SenderObserver;
+
 use anyhow::Result;
 use capture::{AudioInfo, Device, DeviceManager, DeviceManagerOptions, VideoInfo};
 use codec::{AudioDecoder, AudioEncoderSettings, VideoDecoder, VideoEncoderSettings};
+use common::{
+    frame::{AudioFrame, VideoFrame},
+    jump_current_exe_dir, logger,
+};
 
-use common::frame::{AudioFrame, VideoFrame};
+use log::LevelFilter;
 use once_cell::sync::Lazy;
 use transport::{
-    adapter::{StreamKind, StreamReceiverAdapter, StreamSenderAdapter},
+    adapter::{StreamKind, StreamMultiReceiverAdapter, StreamSenderAdapter},
     Transport, TransportOptions,
 };
 
-use crate::sender::SenderObserver;
+#[cfg(target_os = "windows")]
+use windows::Win32::System::Threading::{GetCurrentProcess, SetPriorityClass, HIGH_PRIORITY_CLASS};
 
 pub static OPTIONS: Lazy<RwLock<MirrorOptions>> = Lazy::new(Default::default);
 
@@ -34,8 +41,8 @@ pub struct AudioOptions {
 impl Default for AudioOptions {
     fn default() -> Self {
         Self {
-            encoder: "libopus".to_string(),
-            decoder: "libopus".to_string(),
+            encoder: "opus".to_string(),
+            decoder: "opus".to_string(),
             sample_rate: 48000,
             bit_rate: 64000,
         }
@@ -131,19 +138,22 @@ impl Default for MirrorOptions {
 
 /// Initialize the environment, which must be initialized before using the SDK.
 pub fn init(options: MirrorOptions) -> Result<()> {
-    // Because of the path issues with OBS looking for plugins as well as data, the
-    // working directory has to be adjusted to the directory where the current
-    // executable is located.
-    {
-        let mut path = std::env::current_exe()?;
-        path.pop();
-        std::env::set_current_dir(path)?;
-    }
+    jump_current_exe_dir()?;
 
-    // #[cfg(debug_assertions)]
-    // {
-    simple_logger::init_with_level(log::Level::Debug)?;
-    // }
+    #[cfg(debug_assertions)]
+    logger::init("mirror.log", LevelFilter::Info)?;
+
+    // In order to prevent other programs from affecting the delay performance of
+    // the current program, set the priority of the current process to high.
+    #[cfg(target_os = "windows")]
+    {
+        if unsafe { SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS) }.is_err() {
+            log::error!(
+                "failed to set current process priority, Maybe it's \
+                because you didn't run it with administrator privileges."
+            );
+        }
+    }
 
     *OPTIONS.write().unwrap() = options.clone();
     log::info!("mirror init: options={:?}", options);
@@ -165,9 +175,8 @@ pub fn init(options: MirrorOptions) -> Result<()> {
 /// called when the application exits.
 pub fn quit() {
     transport::exit();
-    capture::quit();
 
-    log::info!("close mirror");
+    log::info!("mirror quit");
 }
 
 /// Setting up an input device, repeated settings for the same type of device
@@ -206,7 +215,7 @@ pub struct FrameSink {
     /// allows BT.2020 primaries (since 2021). The same happens with
     /// JPEG: it has BT.601 matrix derived from System M primaries, yet the
     /// primaries of most images are BT.709.
-    pub video: Box<dyn Fn(&VideoFrame) -> bool + Send>,
+    pub video: Box<dyn Fn(&VideoFrame) -> bool + Send + Sync>,
     /// Callback is called when the audio frame is updated. The audio frame
     /// format is fixed to PCM. Be careful not to call blocking methods inside
     /// the callback, which will seriously slow down the encoding and decoding
@@ -233,11 +242,11 @@ pub struct FrameSink {
     /// the number of times per second that samples are taken; and the bit
     /// depth, which determines the number of possible digital values that
     /// can be used to represent each sample.
-    pub audio: Box<dyn Fn(&AudioFrame) -> bool + Send>,
+    pub audio: Box<dyn Fn(&AudioFrame) -> bool + Send + Sync>,
     /// Callback when the sender is closed. This may be because the external
     /// side actively calls the close, or the audio and video packets cannot be
     /// sent (the network is disconnected), etc.
-    pub close: Box<dyn Fn() + Send>,
+    pub close: Box<dyn Fn() + Send + Sync>,
 }
 
 pub struct Mirror(Transport);
@@ -267,47 +276,54 @@ impl Mirror {
 
     /// Create a receiver, specify a bound NIC address, you can pass callback to
     /// get the sender's screen or sound callback, callback can not be null.
-    pub fn create_receiver(&self, id: u32, sink: FrameSink) -> Result<Arc<StreamReceiverAdapter>> {
+    pub fn create_receiver(
+        &self,
+        id: u32,
+        sink: FrameSink,
+    ) -> Result<Arc<StreamMultiReceiverAdapter>> {
         log::info!("create receiver: id={}", id);
 
         let options = OPTIONS.read().unwrap();
-        let adapter = StreamReceiverAdapter::new();
+        let adapter = StreamMultiReceiverAdapter::new();
         self.0.create_receiver(id, &adapter)?;
 
+        let sink = Arc::new(sink);
         let video_decoder = VideoDecoder::new(&options.video.decoder)?;
         let audio_decoder = AudioDecoder::new(&options.audio.decoder)?;
 
+        let sink_ = sink.clone();
         let adapter_ = adapter.clone();
         thread::spawn(move || {
-            'a: while let Some((packet, kind, _, _)) = adapter_.next() {
-                if packet.is_empty() {
-                    continue;
-                }
-
-                if kind == StreamKind::Video {
-                    if video_decoder.decode(&packet) {
-                        while let Some(frame) = video_decoder.read() {
-                            if !(sink.video)(frame) {
-                                break 'a;
-                            }
+            'a: while let Some((packet, _, _)) = adapter_.next(StreamKind::Video) {
+                if video_decoder.decode(&packet) {
+                    while let Some(frame) = video_decoder.read() {
+                        if !(sink_.video)(frame) {
+                            break 'a;
                         }
-                    } else {
-                        break;
                     }
-                } else if kind == StreamKind::Audio {
-                    if audio_decoder.decode(&packet) {
-                        while let Some(frame) = audio_decoder.read() {
-                            if !(sink.audio)(frame) {
-                                break 'a;
-                            }
-                        }
-                    } else {
-                        break;
-                    }
+                } else {
+                    break;
                 }
             }
 
-            (sink.close)()
+            (sink_.close)()
+        });
+
+        let adapter_ = adapter.clone();
+        thread::spawn(move || {
+            'a: while let Some((packet, _, _)) = adapter_.next(StreamKind::Audio) {
+                if audio_decoder.decode(&packet) {
+                    while let Some(frame) = audio_decoder.read() {
+                        if !(sink.audio)(frame) {
+                            break 'a;
+                        }
+                    }
+                } else {
+                    break;
+                }
+            }
+
+            log::warn!("audio decoder thread is closed!");
         });
 
         Ok(adapter)

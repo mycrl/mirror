@@ -65,8 +65,6 @@ struct GetDeviceListResult
 
 extern "C"
 {
-    // Releases all data associated with OBS and terminates the OBS context.
-	EXPORT void capture_quit();
     // Initializes the OBS core context.
 	EXPORT int capture_init(VideoInfo* video_info, AudioInfo* audio_info);
     // Enumerates all input sources.
@@ -81,6 +79,10 @@ extern "C"
 	EXPORT void* capture_set_output_callback(struct OutputCallback proc);
     EXPORT void capture_release_device_description(struct DeviceDescription* description);
 	EXPORT void capture_release_device_list(struct DeviceList* list);
+	// Start capturing audio and video data.
+	EXPORT int capture_start();
+	// Stop capturing audio and video data
+	EXPORT void capture_stop();
 }
 
 #endif /* capture_h */

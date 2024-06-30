@@ -8,13 +8,6 @@ num_enum = "0.7.2"
 log = "0.4.20"
 common = { path = "../common" }
 
-[dev-dependencies]
-anyhow = "1.0.80"
-minifb = "0.25"
-
-[target.'cfg(target_os = "windows")'.dev-dependencies]
-libyuv = "0.1.2"
-
 [build-dependencies]
 cc = "1.0.88"
 anyhow = "1.0.80"

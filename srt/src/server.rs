@@ -5,8 +5,8 @@ use os_socketaddr::OsSocketAddr;
 use crate::{srt_getsockstate, SRT_SOCKSTATUS};
 
 use super::{
-    error, options::Options, socket::Socket, srt_accept, srt_bind, srt_close, srt_create_socket,
-    srt_getsockname, srt_listen, SRTSOCKET, SRT_INVALID_SOCK,
+    error, options::Options, socket::Socket, srt_accept, srt_bind, srt_bstats, srt_close,
+    srt_create_socket, srt_getsockname, srt_listen, TraceStats, SRTSOCKET, SRT_INVALID_SOCK,
 };
 
 pub struct Server {
@@ -17,6 +17,22 @@ unsafe impl Send for Server {}
 unsafe impl Sync for Server {}
 
 impl Server {
+    /// Reports the current statistics
+    ///
+    /// Arguments:
+    ///
+    /// u: Socket from which to get statistics
+    /// perf: Pointer to an object to be written with the statistics
+    /// clear: 1 if the statistics should be cleared after retrieval
+    pub fn get_stats(&self) -> Result<TraceStats, Error> {
+        let mut stats = TraceStats::default();
+        if unsafe { srt_bstats(self.fd, &mut stats, true as i32) } != 0 {
+            return Err(error());
+        }
+
+        Ok(stats)
+    }
+
     /// Binds a socket to a local address and port. Binding specifies the local
     /// network interface and the UDP port number to be used for the socket.
     /// When the local address is a wildcard (`INADDR_ANY` for IPv4 or
@@ -189,7 +205,7 @@ impl Server {
     /// SRT_EPOLL_UPDATE) event is raised on the `lsn` socket when
     /// a new background connection is attached to the group, although it's
     /// usually for internal use only.
-    pub fn accept(&mut self) -> Result<(Socket, SocketAddr), Error> {
+    pub fn accept(&self) -> Result<(Socket, SocketAddr), Error> {
         let status = unsafe { srt_getsockstate(self.fd) };
         if status != SRT_SOCKSTATUS::SRTS_LISTENING {
             return Err(Error::other(format!("{:?}", status)));

@@ -15,8 +15,8 @@
 #define EXPORT
 #endif
 
-#include <optional>
 #include <frame.h>
+#include <optional>
 
 extern "C"
 {
@@ -45,11 +45,8 @@ struct VideoEncoderSettings
 
 struct VideoEncoder
 {
-#ifdef VERSION_6
-	const AVCodec* codec;
-#else
-	AVCodec* codec;
-#endif // VERSION_6
+	bool initialized;
+    const AVCodec* codec;
 	AVCodecContext* context;
 	AVPacket* packet;
 	AVFrame* frame;
@@ -58,11 +55,7 @@ struct VideoEncoder
 
 struct VideoDecoder
 {
-#ifdef VERSION_6
-	const AVCodec* codec;
-#else
-	AVCodec* codec;
-#endif // VERSION_6
+    const AVCodec* codec;
 	AVCodecContext* context;
 	AVCodecParserContext* parser;
 	AVPacket* packet;
@@ -80,24 +73,17 @@ struct AudioEncoderSettings
 
 struct AudioEncoder
 {
-#ifdef VERSION_6
-	const AVCodec* codec;
-#else
-	AVCodec* codec;
-#endif // VERSION_6
+    const AVCodec* codec;
 	AVCodecContext* context;
 	AVPacket* packet;
 	AVFrame* frame;
 	struct EncodePacket* output_packet;
+	uint64_t pts;
 };
 
 struct AudioDecoder
 {
-#ifdef VERSION_6
-	const AVCodec* codec;
-#else
-	AVCodec* codec;
-#endif // VERSION_6
+    const AVCodec* codec;
 	AVCodecContext* context;
 	AVCodecParserContext* parser;
 	AVPacket* packet;

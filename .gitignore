@@ -1,6 +1,10 @@
 /target
 *.env
 .vscode
+.vs
 Cargo.lock
 .DS_Store
 /build
+/doc
+/out
+/third_party

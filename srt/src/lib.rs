@@ -54,13 +54,16 @@ pub use self::{
     options::Options,
     server::Server,
     socket::Socket,
+    SRT_TRACEBSTATS as TraceStats,
 };
 
 use std::{
     ffi::{c_char, c_int, c_void, CStr},
     io::Error,
+    ptr::null,
 };
 
+use common::strings::Strings;
 use libc::sockaddr;
 
 pub(crate) fn error() -> Error {
@@ -73,6 +76,36 @@ pub(crate) fn error() -> Error {
     )
 }
 
+extern "C" fn loghandler(
+    _ctx: *const c_void,
+    level: c_int,
+    _file: *const c_char,
+    _line: c_int,
+    area: *const c_char,
+    message: *const c_char,
+) {
+    if let (Ok(area), Ok(message)) = (
+        Strings::from(area).to_string(),
+        Strings::from(message).to_string(),
+    ) {
+        log::info!(
+            "SRT: level={:?}, area={}, message={}",
+            match level {
+                0 => SRT_LOG_LEVEL::LOG_EMERG,
+                1 => SRT_LOG_LEVEL::LOG_ALERT,
+                2 => SRT_LOG_LEVEL::LOG_CRIT,
+                3 => SRT_LOG_LEVEL::LOG_ERR,
+                4 => SRT_LOG_LEVEL::LOG_WARNING,
+                5 => SRT_LOG_LEVEL::LOG_NOTICE,
+                6 => SRT_LOG_LEVEL::LOG_INFO,
+                _ => SRT_LOG_LEVEL::LOG_DEBUG,
+            },
+            area,
+            message.replace('\r', "").replace('\n', ""),
+        )
+    }
+}
+
 /// This function shall be called at the start of an application that uses
 /// the SRT library. It provides all necessary platform-specific
 /// initializations, sets up global data, and starts the SRT GC thread.
@@ -80,6 +113,8 @@ pub(crate) fn error() -> Error {
 /// automatically when creating the first socket. However, relying on
 /// this behavior is strongly discouraged.
 pub fn startup() -> bool {
+    unsafe { srt_setloglevel(SRT_LOG_LEVEL::LOG_INFO as c_int) }
+    unsafe { srt_setloghandler(null(), loghandler) }
     unsafe { srt_startup() != -1 }
 }
 
@@ -205,8 +240,114 @@ pub(crate) enum SRT_LOG_LEVEL {
     LOG_DEBUG,
 }
 
+#[repr(C)]
+#[derive(Default, Debug, Clone, Copy)]
+#[allow(non_camel_case_types)]
+pub struct SRT_TRACEBSTATS {
+    pub ms_time_stamp: i64,
+    pub pkt_sent_total: i64,
+    pub pkt_recv_total: i64,
+    pub pkt_snd_loss_total: c_int,
+    pub pkt_rcv_loss_total: c_int,
+    pub pkt_retrans_total: c_int,
+    pub pkt_sent_ack_total: c_int,
+    pub pkt_recv_ack_total: c_int,
+    pub pkt_sent_nak_total: c_int,
+    pub pkt_recv_nak_total: c_int,
+    pub us_snd_duration_total: i64,
+    pub pkt_snd_drop_total: c_int,
+    pub pkt_rcv_drop_total: c_int,
+    pub pkt_rcv_undecrypt_total: c_int,
+    pub byte_sent_total: u64,
+    pub byte_recv_total: u64,
+    pub byte_rcv_loss_total: u64,
+    pub byte_retrans_total: u64,
+    pub byte_snd_drop_total: u64,
+    pub byte_rcv_drop_total: u64,
+    pub byte_rcv_undecrypt_total: u64,
+    pub pkt_sent: i64,
+    pub pkt_recv: i64,
+    pub pkt_snd_loss: c_int,
+    pub pkt_rcv_loss: c_int,
+    pub pkt_retrans: c_int,
+    pub pkt_rcv_retrans: c_int,
+    pub pkt_sent_ack: c_int,
+    pub pkt_recv_ack: c_int,
+    pub pkt_sent_nak: c_int,
+    pub pkt_recv_nak: c_int,
+    pub mbps_send_rate: f64,
+    pub mbps_recv_rate: f64,
+    pub us_snd_duration: i64,
+    pub pkt_reorder_distance: c_int,
+    pub pkt_rcv_avg_belated_time: f64,
+    pub pkt_rcv_belated: i64,
+    pub pkt_snd_drop: c_int,
+    pub pkt_rcv_drop: c_int,
+    pub pkt_rcv_undecrypt: c_int,
+    pub byte_sent: u64,
+    pub byte_recv: u64,
+    pub byte_rcv_loss: u64,
+    pub byte_retrans: u64,
+    pub byte_snd_drop: u64,
+    pub byte_rcv_drop: u64,
+    pub byte_rcv_undecrypt: u64,
+    pub us_pkt_snd_period: f64,
+    pub pkt_flow_window: c_int,
+    pub pkt_congestion_window: c_int,
+    pub pkt_flight_size: c_int,
+    pub ms_rtt: f64,
+    pub mbps_bandwidth: f64,
+    pub byte_avail_snd_buf: c_int,
+    pub byte_avail_rcv_buf: c_int,
+    pub mbps_max_bw: f64,
+    pub byte_mss: c_int,
+    pub pkt_snd_buf: c_int,
+    pub byte_snd_buf: c_int,
+    pub ms_snd_buf: c_int,
+    pub ms_snd_tsb_pd_delay: c_int,
+    pub pkt_rcv_buf: c_int,
+    pub byte_rcv_buf: c_int,
+    pub ms_rcv_buf: c_int,
+    pub ms_rcv_tsb_pd_delay: c_int,
+    pub pkt_snd_filter_extra_total: c_int,
+    pub pkt_rcv_filter_extra_total: c_int,
+    pub pkt_rcv_filter_supply_total: c_int,
+    pub pkt_rcv_filter_loss_total: c_int,
+    pub pkt_snd_filter_extra: c_int,
+    pub pkt_rcv_filter_extra: c_int,
+    pub pkt_rcv_filter_supply: c_int,
+    pub pkt_rcv_filter_loss: c_int,
+    pub pkt_reorder_tolerance: c_int,
+    pub pkt_sent_unique_total: i64,
+    pub pkt_recv_unique_total: i64,
+    pub byte_sent_unique_total: u64,
+    pub byte_recv_unique_total: u64,
+    pub pkt_sent_unique: i64,
+    pub pkt_recv_unique: i64,
+    pub byte_sent_unique: u64,
+    pub byte_recv_unique: u64,
+}
+
 extern "C" {
     pub(crate) fn srt_getlasterror_str() -> *const c_char;
+    /// By default logs are printed to standard error stream. This function
+    /// replaces the sending to a stream with a handler function that will
+    /// receive them.
+    pub(crate) fn srt_setloghandler(
+        ctx: *const c_void,
+        callback: extern "C" fn(
+            ctx: *const c_void,
+            level: c_int,
+            file: *const c_char,
+            line: c_int,
+            area: *const c_char,
+            message: *const c_char,
+        ),
+    );
+    /// Sets the minimum severity for logging. A particular log entry is
+    /// displayed only if it has a severity greater than or equal to the
+    /// minimum. Setting this value to LOG_DEBUG turns on all levels.
+    pub(crate) fn srt_setloglevel(level: c_int);
     /// This function shall be called at the start of an application that
     /// uses the SRT library. It provides all necessary
     /// platform-specific initializations, sets up global data, and
@@ -610,4 +751,12 @@ extern "C" {
         optval: *mut c_void,
         optlen: *mut c_int,
     ) -> c_int;
+    /// Reports the current statistics
+    ///
+    /// Arguments:
+    ///
+    /// u: Socket from which to get statistics
+    /// perf: Pointer to an object to be written with the statistics
+    /// clear: 1 if the statistics should be cleared after retrieval
+    pub fn srt_bstats(s: SRTSOCKET, perf: *mut SRT_TRACEBSTATS, clear: c_int) -> c_int;
 }
