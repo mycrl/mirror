@@ -18,7 +18,7 @@ extern "C" {
     /// end enumeration.
     fn capture_get_device_list(kind: DeviceKind) -> RawGetDeviceListResult;
     /// Sets the primary output source for a channel.
-    fn capture_set_video_input(description: *const RawDeviceDescription) -> c_int;
+    fn capture_set_input(description: *const RawDeviceDescription) -> c_int;
 }
 
 pub struct DeviceManager;
@@ -34,7 +34,7 @@ impl DeviceManager {
 
         let result = unsafe { capture_get_device_list(kind) };
         if result.status != 0 {
-            Err(DeviceError::try_from(result.status).unwrap())
+            Err(DeviceError(result.status))
         } else {
             Ok(DeviceList(result.list))
         }
@@ -54,9 +54,9 @@ impl DeviceManager {
     pub fn set_input(device: &Device) -> Result<(), DeviceError> {
         log::info!("DeviceManager set input device");
 
-        let status = unsafe { capture_set_video_input(device.as_ptr()) };
+        let status = unsafe { capture_set_input(device.as_ptr()) };
         if status != 0 {
-            Err(DeviceError::try_from(status).unwrap())
+            Err(DeviceError(status))
         } else {
             Ok(())
         }

@@ -2,16 +2,18 @@ mod device;
 mod manager;
 
 use std::{
-    ffi::{c_int, c_void},
+    ffi::{c_char, c_int, c_void},
     ptr::null,
     sync::Arc,
 };
 
-use common::frame::{AudioFrame, VideoFrame};
+use common::{
+    frame::{AudioFrame, VideoFrame},
+    strings::Strings,
+};
 
 pub use device::{Device, DeviceKind, DeviceList};
 pub use manager::DeviceManager;
-use num_enum::TryFromPrimitive;
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
@@ -34,9 +36,40 @@ struct RawOutputCallback {
     ctx: *const c_void,
 }
 
+#[repr(C)]
+#[derive(Debug)]
+#[allow(dead_code)]
+enum LoggerLevel {
+    Error = 100,
+    Warn = 200,
+    Info = 300,
+    Debug = 400,
+}
+
+extern "C" fn logger_proc(
+    level: LoggerLevel,
+    message: *const c_char,
+    _: *const c_char,
+    _: *const c_void,
+) {
+    if let Ok(msg) = Strings::from(message).to_string() {
+        log::info!("OBS: level={:?}, msg={}", level, msg);
+    }
+}
+
 extern "C" {
+    fn capture_set_logger(
+        logger: extern "C" fn(
+            level: LoggerLevel,
+            msg: *const c_char,
+            args: *const c_char,
+            ctx: *const c_void,
+        ),
+        ctx: *const c_void,
+    );
+    fn capture_remove_logger() -> *const c_void;
     /// Initializes the OBS core context.
-    fn capture_init(video_info: *const VideoInfo, audio_info: *const AudioInfo) -> c_int;
+    fn capture_init(video_info: *const VideoInfo, audio_info: *const AudioInfo);
     /// Adds/removes a raw video callback. Allows the ability to obtain raw
     /// video frames without necessarily using an output.
     fn capture_set_output_callback(proc: RawOutputCallback) -> *const c_void;
@@ -46,48 +79,15 @@ extern "C" {
     fn capture_stop();
 }
 
-#[derive(Debug, TryFromPrimitive)]
-#[repr(i32)]
-pub enum DeviceError {
-    InitializeFailed = -1,
-    StartupFailed = -2,
-    ResetVideoFailed = -3,
-    ResetAudioFailed = -4,
-    CreateSceneFailed = -5,
-    CreateWindowDeviceFailed = -6,
-    CreateWindowItemFailed = -7,
-    CreateMonitorDeviceFailed = -8,
-    CreateMonitorItemFailed = -9,
-    CreateVideoDeviceFailed = -10,
-    CreateVideoItemFailed = -11,
-    CreateDefaultAudioDeviceFailed = -12,
-    CreateAudioDeviceFailed = -13,
-}
+#[derive(Debug)]
+pub struct DeviceError(i32);
 
 impl std::error::Error for DeviceError {}
 
 impl std::fmt::Display for DeviceError {
     #[rustfmt::skip]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                Self::InitializeFailed => "InitializeFailed",
-                Self::StartupFailed => "StartupFailed",
-                Self::ResetVideoFailed => "ResetVideoFailed",
-                Self::ResetAudioFailed => "ResetAudioFailed",
-                Self::CreateSceneFailed => "CreateSceneFailed",
-                Self::CreateWindowDeviceFailed => "CreateWindowDeviceFailed",
-                Self::CreateWindowItemFailed => "CreateWindowItemFailed",
-                Self::CreateMonitorDeviceFailed => "CreateMonitorDeviceFailed",
-                Self::CreateMonitorItemFailed => "CreateMonitorItemFailed",
-                Self::CreateVideoDeviceFailed => "CreateVideoDeviceFailed",
-                Self::CreateVideoItemFailed => "CreateVideoItemFailed",
-                Self::CreateDefaultAudioDeviceFailed => "CreateDefaultAudioDeviceFailed",
-                Self::CreateAudioDeviceFailed => "CreateAudioDeviceFailed",
-            }
-        )
+        write!(f, "Capture Error: code={}", self.0)
     }
 }
 
@@ -231,22 +231,19 @@ pub struct DeviceManagerOptions {
 ///     },
 /// })?;
 /// ```
-pub fn init(options: DeviceManagerOptions) -> Result<(), DeviceError> {
-    let result = unsafe { capture_init(&options.video, &options.audio) };
-    if result != 0 {
-        Err(DeviceError::try_from(result).unwrap())
-    } else {
-        Ok(())
-    }
+pub fn init(options: DeviceManagerOptions) {
+    unsafe { capture_init(&options.video, &options.audio) };
 }
 
 /// Start capturing audio and video data.
 pub fn start() -> c_int {
+    unsafe { capture_set_logger(logger_proc, null()) }
     unsafe { capture_start() }
 }
 
 /// Stop capturing audio and video data.
 pub fn stop() {
+    unsafe { capture_remove_logger() };
     unsafe { capture_stop() }
     set_frame_sink::<()>(None);
 }

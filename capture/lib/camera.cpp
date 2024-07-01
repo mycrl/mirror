@@ -42,7 +42,7 @@ int CameraCapture::EnumDevices(struct DeviceList* list)
     if (FAILED(ret) || count == 0)
     {
         attributes->Release();
-        return -4;
+        return -3;
     }
 
     for (UINT32 i = 0; i < count; i++)
@@ -104,13 +104,13 @@ int CameraCapture::StartCapture(const char* id,
     if (FAILED(ret))
     {
         attributes->Release();
-        return -2;
+        return -3;
     }
 
     ret = attributes->SetUINT32(MF_READWRITE_ENABLE_HARDWARE_TRANSFORMS, true);
     if (FAILED(ret))
     {
-        return -2;
+        return -4;
     }
 
     WCHAR name[1024];
@@ -118,21 +118,21 @@ int CameraCapture::StartCapture(const char* id,
     ret = attributes->SetString(MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_SYMBOLIC_LINK, name);
     if (FAILED(ret))
     {
-        return -3;
+        return -5;
     }
 
     IMFMediaSource* device;
     ret = MFCreateDeviceSource(attributes, &device);
     if (FAILED(ret))
     {
-        return -4;
+        return -6;
     }
 
     IMFSourceReader* reader = NULL;
     ret = MFCreateSourceReaderFromMediaSource(device, attributes, &reader);
     if (FAILED(ret))
     {
-        return -5;
+        return -7;
     }
 
     device->Release();
@@ -142,37 +142,37 @@ int CameraCapture::StartCapture(const char* id,
     ret = MFCreateMediaType(&type);
     if (FAILED(ret))
     {
-        return -6;
+        return -8;
     }
 
     ret = type->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video);
     if (FAILED(ret))
     {
-        return -7;
+        return -9;
     }
 
     ret = type->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_NV12);
     if (FAILED(ret))
     {
-        return -8;
+        return -10;
     }
 
     ret = type->SetUINT32(MF_MT_DEFAULT_STRIDE, width);
     if (FAILED(ret))
     {
-        return -8;
+        return -11;
     }
 
     ret = MFSetAttributeSize(type, MF_MT_FRAME_SIZE, width, height);
     if (FAILED(ret))
     {
-        return -9;
+        return -12;
     }
 
     ret = MFSetAttributeRatio(type, MF_MT_FRAME_RATE, fps, 1);
     if (FAILED(ret))
     {
-        return -10;
+        return -13;
     }
 
     reader->AddRef();
@@ -181,7 +181,7 @@ int CameraCapture::StartCapture(const char* id,
                                       type);
     if (FAILED(ret))
     {
-        return -15;
+        return -14;
     }
 
     _is_runing = true;

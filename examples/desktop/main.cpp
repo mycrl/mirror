@@ -32,7 +32,7 @@ public:
         std::string server = "127.0.0.1:8080";
         int width = 1280;
         int height = 720;
-        int fps = 24;
+        int fps = 30;
         int id = 0;
     };
 
@@ -250,7 +250,7 @@ public:
         options.video.width = args.ArgsParams.width;
         options.video.height = args.ArgsParams.height;
         options.video.frame_rate = args.ArgsParams.fps;
-        options.video.key_frame_interval = args.ArgsParams.fps;
+        options.video.key_frame_interval = 21;
         options.video.bit_rate = 500 * 1024 * 8;
         options.audio.sample_rate = 48000;
         options.audio.bit_rate = 64000;
@@ -288,11 +288,13 @@ public:
         }
 
         mirror::DeviceManagerService::Start();
-        auto devices = mirror::DeviceManagerService::GetDevices(DeviceKind::Video);
+        auto devices = mirror::DeviceManagerService::GetDevices(_is_screen ? DeviceKind::Screen : DeviceKind::Video);
         if (devices.device_list.size() == 0)
         {
             return false;
         }
+
+        _is_screen = !_is_screen;
 
         mirror::DeviceManagerService::SetInputDevice(devices.device_list[0]);
         _sender = _mirror->CreateSender(_args.ArgsParams.id, _render);
@@ -345,6 +347,7 @@ public:
         _render->Clear();
     }
 private:
+    bool _is_screen = true;
     Args& _args;
     Render* _render = nullptr;
     mirror::MirrorService* _mirror = nullptr;

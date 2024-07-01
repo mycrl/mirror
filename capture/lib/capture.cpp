@@ -40,7 +40,21 @@ static struct
 #ifdef WIN32
     CameraCapture* camera_capture = new CameraCapture();
 #endif
+    Logger logger = nullptr;
+    void* logger_ctx = nullptr;
 } GLOBAL = {};
+
+void logger_proc(int level, const char* message, va_list args, void* _)
+{
+    if (GLOBAL.logger == nullptr)
+    {
+        return;
+    }
+
+    char str[8192];
+    vsnprintf(str, sizeof(str), message, args);
+    GLOBAL.logger(level, str, GLOBAL.logger_ctx);
+}
 
 // update settings
 
@@ -159,8 +173,10 @@ void* capture_set_output_callback(struct OutputCallback proc)
     return previous_ctx;
 }
 
-int capture_init(VideoInfo* video_info, AudioInfo* audio_info)
+void capture_init(VideoInfo* video_info, AudioInfo* audio_info)
 {
+    base_set_log_handler(logger_proc, nullptr);
+
 #ifdef WIN32
     GLOBAL.video_info.graphics_module = "libobs-d3d11";
 #endif
@@ -181,8 +197,6 @@ int capture_init(VideoInfo* video_info, AudioInfo* audio_info)
     GLOBAL.video_frame.rect.height = video_info->height;
     GLOBAL.audio_info.samples_per_sec = audio_info->samples_per_sec;
     GLOBAL.audio_info.speakers = SPEAKERS_STEREO;
-
-    return 0;
 }
 
 int capture_start()
@@ -267,7 +281,7 @@ int capture_start()
                                             nullptr);
     if (GLOBAL.audio_source == nullptr)
     {
-        return -12;
+        return -10;
     }
 
     struct video_scale_info video_scale_info;
@@ -326,7 +340,7 @@ void capture_stop()
     obs_shutdown();
 }
 
-int capture_set_video_input(struct DeviceDescription* description)
+int capture_set_input(struct DeviceDescription* description)
 {
     if (description->type != DeviceType::kDeviceTypeVideo)
     {
@@ -439,4 +453,18 @@ void capture_release_device_list(struct DeviceList* list)
 {
     delete list->devices;
     delete list;
+}
+
+void capture_set_logger(Logger logger, void* ctx)
+{
+    GLOBAL.logger = logger;
+    GLOBAL.logger_ctx = ctx;
+}
+
+void* capture_remove_logger()
+{
+    auto ctx = GLOBAL.logger_ctx;
+    GLOBAL.logger = nullptr;
+    GLOBAL.logger_ctx = nullptr;
+    return ctx;
 }

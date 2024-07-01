@@ -63,17 +63,21 @@ struct GetDeviceListResult
 	struct DeviceList* list;
 };
 
+typedef void (*Logger)(int level, const char* message, void* ctx);
+
 extern "C"
 {
+	EXPORT void* capture_remove_logger();
+	EXPORT void capture_set_logger(Logger logger, void* ctx);
     // Initializes the OBS core context.
-	EXPORT int capture_init(VideoInfo* video_info, AudioInfo* audio_info);
+	EXPORT void capture_init(VideoInfo* video_info, AudioInfo* audio_info);
     // Enumerates all input sources.
     //
     // Callback function returns true to continue enumeration, or false to end 
     // enumeration.
 	EXPORT struct GetDeviceListResult capture_get_device_list(enum DeviceType type);
     // Sets the primary output source for a channel.
-	EXPORT int capture_set_video_input(struct DeviceDescription* description);
+	EXPORT int capture_set_input(struct DeviceDescription* description);
     // Adds/removes a raw video/audio callback. Allows the ability to obtain raw video/audio
     // frames without necessarily using an output.
 	EXPORT void* capture_set_output_callback(struct OutputCallback proc);

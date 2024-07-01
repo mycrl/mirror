@@ -103,8 +103,12 @@ enum CodecKind
 	Decoder,
 };
 
+typedef void (*Logger)(int level, char* message);
+
 extern "C"
 {
+	EXPORT void codec_set_logger(Logger logger);
+	EXPORT void codec_remove_logger();
 	EXPORT const char* codec_find_video_encoder();
 	EXPORT const char* codec_find_video_decoder();
 	EXPORT struct VideoEncoder* codec_create_video_encoder(struct VideoEncoderSettings* settings);

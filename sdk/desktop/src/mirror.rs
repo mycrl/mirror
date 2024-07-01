@@ -85,7 +85,7 @@ impl Default for VideoOptions {
     fn default() -> Self {
         Self {
             encoder: "libx264".to_string(),
-            decoder: "h264".to_string(),
+            decoder: "libopenh264".to_string(),
             frame_rate: 30,
             width: 1280,
             height: 720,
@@ -158,8 +158,9 @@ pub fn init(options: MirrorOptions) -> Result<()> {
     *OPTIONS.write().unwrap() = options.clone();
     log::info!("mirror init: options={:?}", options);
 
+    codec::init();
     transport::init();
-    Ok(capture::init(DeviceManagerOptions {
+    capture::init(DeviceManagerOptions {
         video: VideoInfo {
             width: options.video.width,
             height: options.video.height,
@@ -168,12 +169,15 @@ pub fn init(options: MirrorOptions) -> Result<()> {
         audio: AudioInfo {
             samples_per_sec: options.audio.sample_rate as u32,
         },
-    })?)
+    });
+
+    Ok(())
 }
 
 /// Cleans up the environment when the SDK exits, and is recommended to be
 /// called when the application exits.
 pub fn quit() {
+    codec::quit();
     transport::exit();
 
     log::info!("mirror quit");

@@ -13,6 +13,7 @@ pub fn init(name: &str, level: LevelFilter) -> anyhow::Result<()> {
     let config = ConfigBuilder::new()
         .set_time_offset_to_local()
         .unwrap()
+        .set_location_level(level)
         .build();
 
     CombinedLogger::init(vec![
@@ -29,6 +30,7 @@ pub fn init(name: &str, level: LevelFilter) -> anyhow::Result<()> {
                 .create(true)
                 .write(true)
                 .append(false)
+                .truncate(true)
                 .open(name)?,
         ),
     ])?;
@@ -45,6 +47,7 @@ impl FormatLogger {
                 .create(true)
                 .write(true)
                 .append(false)
+                .truncate(true)
                 .open(name)?,
         ))
     }

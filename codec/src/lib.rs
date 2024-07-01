@@ -1,7 +1,9 @@
 pub mod audio;
 pub mod video;
 
-use std::ffi::c_int;
+use std::ffi::{c_char, c_int};
+
+use common::strings::Strings;
 
 pub use audio::{AudioDecoder, AudioEncodePacket, AudioEncoder, AudioEncoderSettings};
 pub use video::{VideoDecoder, VideoEncodePacket, VideoEncoder, VideoEncoderSettings};
@@ -37,4 +39,41 @@ pub struct RawEncodePacket {
     pub len: usize,
     pub flags: c_int,
     pub timestamp: u64,
+}
+
+#[repr(C)]
+#[derive(Debug)]
+#[allow(dead_code)]
+enum LoggerLevel {
+    Panic = 0,
+    Fatal = 8,
+    Error = 16,
+    Warn = 24,
+    Info = 32,
+    Verbose = 40,
+    Debug = 48,
+    Trace = 56,
+}
+
+extern "C" {
+    fn codec_remove_logger();
+    fn codec_set_logger(logger: extern "C" fn(level: LoggerLevel, message: *const c_char));
+}
+
+extern "C" fn logger_proc(level: LoggerLevel, message: *const c_char) {
+    if let Ok(message) = Strings::from(message).to_string() {
+        log::info!(
+            "CODEC: level={:?}, msg={}",
+            level,
+            message.as_str().strip_suffix("\n").unwrap_or(&message)
+        )
+    }
+}
+
+pub fn init() {
+    unsafe { codec_set_logger(logger_proc) }
+}
+
+pub fn quit() {
+    unsafe { codec_remove_logger() }
 }
