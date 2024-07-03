@@ -134,12 +134,29 @@ bool codec_video_encoder_copy_frame(struct VideoEncoder* codec, struct VideoFram
 		return false;
 	}
 
-	for (int i = 0; i < 2; i ++)
+	const uint8_t* buffer[4] = 
 	{
-		codec->frame->linesize[i] = frame->linesize[i];
-		codec->frame->data[i] = frame->data[i];
-	}
+		frame->data[0],
+		frame->data[1],
+		nullptr,
+		nullptr,
+	};
 
+	const int linesize[4] =
+	{
+		frame->linesize[0],
+		frame->linesize[1],
+		0,
+		0,
+	};
+
+	av_image_copy(codec->frame->data,
+				  codec->frame->linesize,
+				  buffer,
+				  linesize,
+				  codec->context->pix_fmt,
+				  codec->frame->width,
+				  codec->frame->height);
 	return true;
 }
 
