@@ -6,7 +6,7 @@ use std::{
 use crate::sender::SenderObserver;
 
 use anyhow::Result;
-use capture::{AudioInfo, Device, DeviceManager, DeviceManagerOptions, VideoInfo};
+use capture::{AudioInfo, CaptureSettings, Device, DeviceManager, DeviceManagerOptions, VideoInfo};
 use codec::{AudioDecoder, AudioEncoderSettings, VideoDecoder, VideoEncoderSettings};
 use common::{
     frame::{AudioFrame, VideoFrame},
@@ -185,8 +185,8 @@ pub fn quit() {
 
 /// Setting up an input device, repeated settings for the same type of device
 /// will overwrite the previous device.
-pub fn set_input_device(device: &Device) -> Result<()> {
-    DeviceManager::set_input(device)?;
+pub fn set_input_device(device: &Device, settings: Option<&CaptureSettings>) -> Result<()> {
+    DeviceManager::set_input(device, settings)?;
 
     log::info!("set input to device manager: device={:?}", device.name());
     Ok(())
