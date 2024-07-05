@@ -8,7 +8,7 @@ use std::{
     sync::Arc,
 };
 
-use capture::{Device, DeviceKind, DeviceManager};
+use capture::{CaptureSettings, Device, DeviceKind, DeviceManager};
 use common::{
     frame::{AudioFrame, VideoFrame},
     strings::Strings,
@@ -268,13 +268,25 @@ pub extern "C" fn mirror_drop_devices(devices: *const RawDevices) {
 /// will overwrite the previous device.
 ///
 /// ```c
-/// EXPORT void mirror_set_input_device(const struct Device* device);
+/// EXPORT void mirror_set_input_device(const struct Device* device, 
+///     struct CaptureSettings* settings);
 /// ```
 #[no_mangle]
-pub extern "C" fn mirror_set_input_device(device: *const Device) -> bool {
+pub extern "C" fn mirror_set_input_device(
+    device: *const Device,
+    settings: *const CaptureSettings,
+) -> bool {
     assert!(!device.is_null());
 
-    checker(mirror::set_input_device(unsafe { &*device })).is_ok()
+    checker(mirror::set_input_device(
+        unsafe { &*device },
+        if !settings.is_null() {
+            Some(unsafe { &*settings })
+        } else {
+            None
+        },
+    ))
+    .is_ok()
 }
 
 /// Start capturing audio and video data.

@@ -17,6 +17,19 @@ pub use manager::DeviceManager;
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
+pub enum CaptureMethod {
+    DXGI,
+    WGC,
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct CaptureSettings {
+    pub method: CaptureMethod,
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
 pub struct VideoInfo {
     pub fps: u8,
     pub width: u32,

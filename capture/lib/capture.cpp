@@ -26,17 +26,17 @@
 
 static struct
 {
-    struct obs_audio_info audio_info;
-    struct obs_video_info video_info;
+    obs_audio_info audio_info;
+    obs_video_info video_info;
     obs_scene_t* scene;
     obs_source_t* monitor_source;
     obs_sceneitem_t* monitor_scene_item;
     obs_source_t* window_source;
     obs_sceneitem_t* window_scene_item;
     obs_source_t* audio_source;
-    struct OutputCallback output_callback;
-    struct VideoFrame video_frame;
-    struct AudioFrame audio_frame;
+    OutputCallback output_callback;
+    VideoFrame video_frame;
+    AudioFrame audio_frame;
 #ifdef WIN32
     CameraCapture* camera_capture = new CameraCapture();
 #endif
@@ -79,16 +79,25 @@ void set_video_item_scale(obs_sceneitem_t* item)
     obs_sceneitem_set_info2(item, &info);
 }
 
-void update_monitor_settings(struct DeviceDescription* description)
+void update_monitor_settings(DeviceDescription* description,
+                             CaptureSettings* cs)
 {
     obs_data_t* settings = obs_data_create();
     obs_data_apply(settings, obs_source_get_settings(GLOBAL.monitor_source));
 
 #ifdef WIN32
+    SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+
+    int method = 2; // WGC
+    if (cs != nullptr)
+    {
+        method = cs->method + 1;
+    }
+
+    obs_data_set_int(settings, "method", method);
     obs_data_set_bool(settings, "force_sdr", true);
     obs_data_set_bool(settings, "compatibility", true);
     obs_data_set_bool(settings, "capture_cursor", false);
-    obs_data_set_int(settings, "method", 2 /* METHOD_WGC */); // windows 10+ only
     obs_data_set_string(settings, "monitor_id", description->id);
 #endif
 
@@ -99,7 +108,7 @@ void update_monitor_settings(struct DeviceDescription* description)
     obs_data_release(settings);
 }
 
-void update_window_settings(struct DeviceDescription* description)
+void update_window_settings(DeviceDescription* description)
 {
     obs_data_t* settings = obs_data_create();
     obs_data_apply(settings, obs_source_get_settings(GLOBAL.window_source));
@@ -119,7 +128,7 @@ void update_window_settings(struct DeviceDescription* description)
     obs_data_release(settings);
 }
 
-void update_audio_settings(struct DeviceDescription* description)
+void update_audio_settings(DeviceDescription* description)
 {
     obs_data_t* settings = obs_data_create();
     obs_data_apply(settings, obs_source_get_settings(GLOBAL.audio_source));
@@ -134,7 +143,7 @@ void update_audio_settings(struct DeviceDescription* description)
 
 // raw frame callback
 
-void raw_video_callback(void* _, struct video_data* frame)
+void raw_video_callback(void* _, video_data* frame)
 {
     if (GLOBAL.output_callback.video == nullptr ||
         GLOBAL.output_callback.ctx == nullptr ||
@@ -150,7 +159,7 @@ void raw_video_callback(void* _, struct video_data* frame)
     GLOBAL.output_callback.video(GLOBAL.output_callback.ctx, &GLOBAL.video_frame);
 }
 
-void raw_audio_callback(void* _, size_t mix_idx, struct audio_data* data)
+void raw_audio_callback(void* _, size_t mix_idx, audio_data* data)
 {
     if (GLOBAL.output_callback.audio == nullptr ||
         GLOBAL.output_callback.ctx == nullptr ||
@@ -166,7 +175,7 @@ void raw_audio_callback(void* _, size_t mix_idx, struct audio_data* data)
 
 // export api
 
-void* capture_set_output_callback(struct OutputCallback proc)
+void* capture_set_output_callback(OutputCallback proc)
 {
     void* previous_ctx = GLOBAL.output_callback.ctx;
     GLOBAL.output_callback = proc;
@@ -284,13 +293,13 @@ int capture_start()
         return -10;
     }
 
-    struct video_scale_info video_scale_info;
+    video_scale_info video_scale_info;
     video_scale_info.format = VIDEO_FORMAT_NV12;
     video_scale_info.width = GLOBAL.video_info.base_width;
     video_scale_info.height = GLOBAL.video_info.base_height;
     obs_add_raw_video_callback(&video_scale_info, raw_video_callback, nullptr);
 
-    struct audio_convert_info audio_convert_info;
+    audio_convert_info audio_convert_info;
     audio_convert_info.speakers = SPEAKERS_MONO;
     audio_convert_info.format = AUDIO_FORMAT_16BIT;
     audio_convert_info.samples_per_sec = GLOBAL.audio_info.samples_per_sec;
@@ -340,7 +349,7 @@ void capture_stop()
     obs_shutdown();
 }
 
-int capture_set_input(struct DeviceDescription* description)
+int capture_set_input(DeviceDescription* description, CaptureSettings* settings)
 {
     if (description->type != DeviceType::kDeviceTypeVideo)
     {
@@ -356,20 +365,20 @@ int capture_set_input(struct DeviceDescription* description)
     if (description->type == DeviceType::kDeviceTypeVideo)
     {
         return GLOBAL.camera_capture->StartCapture(description->id,
-                                                  GLOBAL.video_info.base_width,
-                                                  GLOBAL.video_info.base_height,
-                                                  GLOBAL.video_info.fps_num,
-                                                  [](VideoFrame* frame)
-                                                  {
-                                                      if (GLOBAL.output_callback.video != nullptr)
-                                                      {
-                                                          GLOBAL.output_callback.video(GLOBAL.output_callback.ctx, frame);
-                                                      }
-                                                  });
+                                                   GLOBAL.video_info.base_width,
+                                                   GLOBAL.video_info.base_height,
+                                                   GLOBAL.video_info.fps_num,
+                                                   [](VideoFrame* frame)
+                                                   {
+                                                       if (GLOBAL.output_callback.video != nullptr)
+                                                       {
+                                                           GLOBAL.output_callback.video(GLOBAL.output_callback.ctx, frame);
+                                                       }
+                                                   });
     }
     else if (description->type == DeviceType::kDeviceTypeScreen)
     {
-        update_monitor_settings(description);
+        update_monitor_settings(description, settings);
     }
     else if (description->type == DeviceType::kDeviceTypeAudio)
     {
@@ -383,7 +392,7 @@ int capture_set_input(struct DeviceDescription* description)
     return 0;
 }
 
-struct GetDeviceListResult capture_get_device_list(enum DeviceType type)
+GetDeviceListResult capture_get_device_list(DeviceType type)
 {
     DeviceList* list = new DeviceList{};
     list->devices = new DeviceDescription * [100];
@@ -428,7 +437,7 @@ struct GetDeviceListResult capture_get_device_list(enum DeviceType type)
                     continue;
                 }
 
-                struct DeviceDescription* device = new DeviceDescription{};
+                DeviceDescription* device = new DeviceDescription{};
                 device->name = obs_property_list_item_name(property, i);
                 device->type = type;
                 device->id = id;
@@ -444,12 +453,12 @@ struct GetDeviceListResult capture_get_device_list(enum DeviceType type)
     return { 0, list };
 }
 
-void capture_release_device_description(struct DeviceDescription* description)
+void capture_release_device_description(DeviceDescription* description)
 {
     delete description;
 }
 
-void capture_release_device_list(struct DeviceList* list)
+void capture_release_device_list(DeviceList* list)
 {
     delete list->devices;
     delete list;
@@ -464,7 +473,7 @@ void capture_set_logger(Logger logger, void* ctx)
 void* capture_remove_logger()
 {
     auto ctx = GLOBAL.logger_ctx;
-    GLOBAL.logger = nullptr;
     GLOBAL.logger_ctx = nullptr;
+    GLOBAL.logger = nullptr;
     return ctx;
 }

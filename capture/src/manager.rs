@@ -1,8 +1,8 @@
-use std::ffi::c_int;
+use std::{ffi::c_int, ptr::null};
 
 use crate::{
     device::{Device, DeviceKind, DeviceList, RawDeviceDescription, RawDeviceList},
-    DeviceError,
+    CaptureSettings, DeviceError,
 };
 
 #[repr(C)]
@@ -18,7 +18,10 @@ extern "C" {
     /// end enumeration.
     fn capture_get_device_list(kind: DeviceKind) -> RawGetDeviceListResult;
     /// Sets the primary output source for a channel.
-    fn capture_set_input(description: *const RawDeviceDescription) -> c_int;
+    fn capture_set_input(
+        description: *const RawDeviceDescription,
+        settings: *const CaptureSettings,
+    ) -> c_int;
 }
 
 pub struct DeviceManager;
@@ -51,10 +54,19 @@ impl DeviceManager {
     ///
     /// set_input(&devices[0]);
     /// ```
-    pub fn set_input(device: &Device) -> Result<(), DeviceError> {
+    pub fn set_input(
+        device: &Device,
+        settings: Option<&CaptureSettings>,
+    ) -> Result<(), DeviceError> {
         log::info!("DeviceManager set input device");
 
-        let status = unsafe { capture_set_input(device.as_ptr()) };
+        let status = unsafe {
+            capture_set_input(
+                device.as_ptr(),
+                if let Some(s) = settings { s } else { null() },
+            )
+        };
+
         if status != 0 {
             Err(DeviceError(status))
         } else {

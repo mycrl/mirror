@@ -288,15 +288,16 @@ public:
         }
 
         mirror::DeviceManagerService::Start();
-        auto devices = mirror::DeviceManagerService::GetDevices(_is_screen ? DeviceKind::Screen : DeviceKind::Video);
+        auto devices = mirror::DeviceManagerService::GetDevices(DeviceKind::Screen);
         if (devices.device_list.size() == 0)
         {
             return false;
         }
 
-        _is_screen = !_is_screen;
+        CaptureSettings settings;
+        settings.method = CaptureMethod::WGC;
 
-        mirror::DeviceManagerService::SetInputDevice(devices.device_list[0]);
+        mirror::DeviceManagerService::SetInputDevice(devices.device_list[0], &settings);
         _sender = _mirror->CreateSender(_args.ArgsParams.id, _render);
         if (!_sender.has_value())
         {
@@ -347,7 +348,6 @@ public:
         _render->Clear();
     }
 private:
-    bool _is_screen = true;
     Args& _args;
     Render* _render = nullptr;
     mirror::MirrorService* _mirror = nullptr;

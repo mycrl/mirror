@@ -48,11 +48,13 @@ impl VideoSender {
                 // Try to get the encoded data packets. The audio and video frames do not
                 // correspond to the data packets one by one, so you need to try to get multiple
                 // packets until they are empty.
-                while let Some(packet) = sender_.encoder.read() {
-                    adapter.send(
-                        Bytes::copy_from_slice(packet.buffer),
-                        StreamBufferInfo::Video(packet.flags, packet.timestamp),
-                    );
+                if sender_.encoder.encode() {
+                    while let Some(packet) = sender_.encoder.read() {
+                        adapter.send(
+                            Bytes::copy_from_slice(packet.buffer),
+                            StreamBufferInfo::Video(packet.flags, packet.timestamp),
+                        );
+                    }
                 }
             }
         });
@@ -65,17 +67,15 @@ impl VideoSender {
     fn sink(&self, frame: &VideoFrame) {
         // Push the audio and video frames into the encoder.
         if self.encoder.send_frame(frame) {
-            if self.encoder.encode() {
-                self.unparker.unpark();
-            }
+            self.unparker.unpark();
         }
     }
 }
 
 struct AudioSender {
-    encoder: AudioEncoder,
     adapter: Weak<StreamSenderAdapter>,
     buffer: Mutex<BytesMut>,
+    encoder: AudioEncoder,
     frames: usize,
 }
 
