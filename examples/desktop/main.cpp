@@ -111,14 +111,13 @@ public:
         _audio_spec.freq = 48000;
         _audio_spec.channels = 1;
         _audio_spec.silence = 0;
-        _audio_spec.samples = 960;
-        _audio_spec.size = 960 * 4;
+        _audio_spec.samples = 48000 / 1000 * 100;
         _audio_spec.format = AUDIO_S16;
         _audio_spec.callback = nullptr;
 
         SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER);
 
-        _audio = SDL_OpenAudioDevice(SDL_GetAudioDeviceName(3, 0), 
+        _audio = SDL_OpenAudioDevice(nullptr, 
                                      0, 
                                      &_audio_spec, 
                                      nullptr, 
@@ -194,12 +193,12 @@ public:
 
     bool OnAudioFrame(struct AudioFrame* frame)
     {
-        if (!IsRender)
+        /*if (!IsRender)
         {
             return true;
         }
 
-        return SDL_QueueAudio(_audio, frame->data, frame->frames * 2) == 0;
+        return SDL_QueueAudio(_audio, frame->data, frame->frames * 2) == 0;*/
     }
 
     void OnClose()

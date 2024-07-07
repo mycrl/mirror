@@ -15,12 +15,12 @@ extern "C"
 #include <libavutil/opt.h>
 }
 
-struct VideoEncoder* codec_create_video_encoder(struct VideoEncoderSettings* settings)
+VideoEncoder* codec_create_video_encoder(VideoEncoderSettings* settings)
 {
     auto name = std::string(settings->codec_name);
 
-	struct VideoEncoder* codec = new VideoEncoder{};
-	codec->output_packet = new EncodePacket{};
+	VideoEncoder* codec = new VideoEncoder{};
+	codec->output_packet = new Packet{};
 
 	codec->codec = avcodec_find_encoder_by_name(settings->codec_name);
 	if (codec->codec == nullptr)
@@ -42,8 +42,8 @@ struct VideoEncoder* codec_create_video_encoder(struct VideoEncoderSettings* set
 	codec->context->max_b_frames = 0;
 	codec->context->skip_alpha = true;
 	codec->context->pix_fmt = AV_PIX_FMT_NV12;
-    codec->context->flags2 = AV_CODEC_FLAG2_FAST;
-	codec->context->flags = AV_CODEC_FLAG_LOW_DELAY | AV_CODEC_FLAG_GLOBAL_HEADER;
+    codec->context->flags2 |= AV_CODEC_FLAG2_FAST;
+	codec->context->flags |= AV_CODEC_FLAG_LOW_DELAY | AV_CODEC_FLAG_GLOBAL_HEADER;
 	codec->context->profile = FF_PROFILE_H264_BASELINE;
 
 	int bit_rate = settings->bit_rate;
@@ -127,7 +127,7 @@ struct VideoEncoder* codec_create_video_encoder(struct VideoEncoderSettings* set
 	return codec;
 }
 
-bool codec_video_encoder_copy_frame(struct VideoEncoder* codec, struct VideoFrame* frame)
+bool codec_video_encoder_copy_frame(VideoEncoder* codec, VideoFrame* frame)
 {
 	if (av_frame_make_writable(codec->frame) != 0)
 	{
@@ -160,7 +160,7 @@ bool codec_video_encoder_copy_frame(struct VideoEncoder* codec, struct VideoFram
 	return true;
 }
 
-bool codec_video_encoder_send_frame(struct VideoEncoder* codec)
+bool codec_video_encoder_send_frame(VideoEncoder* codec)
 {
 	codec->frame->pts = av_rescale_q(codec->context->frame_num,
 									 codec->context->pkt_timebase,
@@ -173,7 +173,7 @@ bool codec_video_encoder_send_frame(struct VideoEncoder* codec)
 	return true;
 }
 
-struct EncodePacket* codec_video_encoder_read_packet(struct VideoEncoder* codec)
+Packet* codec_video_encoder_read_packet(VideoEncoder* codec)
 {
 	if (codec->output_packet == nullptr)
 	{
@@ -204,12 +204,12 @@ struct EncodePacket* codec_video_encoder_read_packet(struct VideoEncoder* codec)
 	return codec->output_packet;
 }
 
-void codec_unref_video_encoder_packet(struct VideoEncoder* codec)
+void codec_unref_video_encoder_packet(VideoEncoder* codec)
 {
 	av_packet_unref(codec->packet);
 }
 
-void codec_release_video_encoder(struct VideoEncoder* codec)
+void codec_release_video_encoder(VideoEncoder* codec)
 {
 	if (codec->context != nullptr)
 	{

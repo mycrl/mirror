@@ -2,13 +2,13 @@ use std::ffi::{c_char, c_void, CString};
 
 use common::frame::AudioFrame;
 
-use crate::{Error, RawEncodePacket};
+use crate::{Error, RawPacket};
 
 extern "C" {
     fn codec_create_audio_encoder(settings: *const RawAudioEncoderSettings) -> *const c_void;
     fn codec_audio_encoder_copy_frame(codec: *const c_void, frame: *const AudioFrame) -> bool;
     fn codec_audio_encoder_send_frame(codec: *const c_void) -> bool;
-    fn codec_audio_encoder_read_packet(codec: *const c_void) -> *const RawEncodePacket;
+    fn codec_audio_encoder_read_packet(codec: *const c_void) -> *const RawPacket;
     fn codec_unref_audio_encoder_packet(codec: *const c_void);
     fn codec_release_audio_encoder(codec: *const c_void);
 }
@@ -58,7 +58,7 @@ impl Drop for AudioEncodePacket<'_> {
 }
 
 impl<'a> AudioEncodePacket<'a> {
-    fn from_raw(codec: *const c_void, ptr: *const RawEncodePacket) -> Self {
+    fn from_raw(codec: *const c_void, ptr: *const RawPacket) -> Self {
         let raw = unsafe { &*ptr };
         Self {
             buffer: unsafe { std::slice::from_raw_parts(raw.buffer, raw.len) },

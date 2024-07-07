@@ -13,6 +13,7 @@ use common::{
     jump_current_exe_dir, logger,
 };
 
+use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use log::LevelFilter;
 use once_cell::sync::Lazy;
 use transport::{
@@ -298,8 +299,8 @@ impl Mirror {
         let sink_ = sink.clone();
         let adapter_ = adapter.clone();
         thread::spawn(move || {
-            'a: while let Some((packet, _, _)) = adapter_.next(StreamKind::Video) {
-                if video_decoder.decode(&packet) {
+            'a: while let Some((packet, flags, timestamp)) = adapter_.next(StreamKind::Video) {
+                if video_decoder.decode(&packet, flags, timestamp) {
                     while let Some(frame) = video_decoder.read() {
                         if !(sink_.video)(frame) {
                             break 'a;
@@ -315,8 +316,8 @@ impl Mirror {
 
         let adapter_ = adapter.clone();
         thread::spawn(move || {
-            'a: while let Some((packet, _, _)) = adapter_.next(StreamKind::Audio) {
-                if audio_decoder.decode(&packet) {
+            'a: while let Some((packet, flags, timestamp)) = adapter_.next(StreamKind::Audio) {
+                if audio_decoder.decode(&packet, flags, timestamp) {
                     while let Some(frame) = audio_decoder.read() {
                         if !(sink.audio)(frame) {
                             break 'a;
@@ -329,6 +330,23 @@ impl Mirror {
 
             log::warn!("audio decoder thread is closed!");
         });
+
+        {
+            let host = cpal::default_host();
+            let device = host.default_output_device().unwrap();
+            let config = device.default_output_config()?;
+
+            device
+                .build_output_stream(
+                    &config.into(),
+                    move |data: &mut [u8], info| {
+                        
+                    },
+                    |err| eprintln!("an error occurred on stream: {}", err),
+                    None,
+                )?
+                .play()?;
+        }
 
         Ok(adapter)
     }

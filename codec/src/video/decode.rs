@@ -2,11 +2,11 @@ use std::{ffi::c_char, os::raw::c_void};
 
 use common::{frame::VideoFrame, strings::Strings};
 
-use crate::Error;
+use crate::{Error, RawPacket};
 
 extern "C" {
     fn codec_create_video_decoder(codec_name: *const c_char) -> *const c_void;
-    fn codec_video_decoder_send_packet(codec: *const c_void, buf: *const u8, size: usize) -> bool;
+    fn codec_video_decoder_send_packet(codec: *const c_void, packet: *const RawPacket) -> bool;
     fn codec_video_decoder_read_frame(codec: *const c_void) -> *const VideoFrame;
     fn codec_release_video_decoder(codec: *const c_void);
 }
@@ -30,8 +30,18 @@ impl VideoDecoder {
     }
 
     /// Supply raw packet data as input to a decoder.
-    pub fn decode(&self, pkt: &[u8]) -> bool {
-        unsafe { codec_video_decoder_send_packet(self.0, pkt.as_ptr(), pkt.len()) }
+    pub fn decode(&self, data: &[u8], flags: i32, timestamp: u64) -> bool {
+        unsafe {
+            codec_video_decoder_send_packet(
+                self.0,
+                &RawPacket {
+                    buffer: data.as_ptr(),
+                    len: data.len(),
+                    timestamp,
+                    flags,
+                },
+            )
+        }
     }
 
     /// Return decoded output data from a decoder or encoder (when the
