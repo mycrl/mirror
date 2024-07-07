@@ -35,7 +35,7 @@ fn exec(command: &str, work_dir: &str) -> anyhow::Result<String> {
     }
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(any(target_os = "windows", target_os = "linux"))]
 fn main() -> anyhow::Result<()> {
     println!("cargo:rerun-if-changed=./lib");
     println!("cargo:rerun-if-changed=./build.rs");

@@ -268,7 +268,7 @@ pub extern "C" fn mirror_drop_devices(devices: *const RawDevices) {
 /// will overwrite the previous device.
 ///
 /// ```c
-/// EXPORT void mirror_set_input_device(const struct Device* device, 
+/// EXPORT void mirror_set_input_device(const struct Device* device,
 ///     struct CaptureSettings* settings);
 /// ```
 #[no_mangle]

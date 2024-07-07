@@ -144,8 +144,8 @@ bool codec_video_encoder_copy_frame(struct VideoEncoder* codec, struct VideoFram
 
 	const int linesize[4] =
 	{
-		frame->linesize[0],
-		frame->linesize[1],
+		(int)frame->linesize[0],
+		(int)frame->linesize[1],
 		0,
 		0,
 	};

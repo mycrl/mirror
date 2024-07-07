@@ -1,15 +1,10 @@
-#![allow(unused)]
-
 use std::{env, fs, path::Path, process::Command};
-
-use anyhow::anyhow;
-use dotenv::dotenv;
 
 fn join(root: &str, next: &str) -> anyhow::Result<String> {
     Ok(Path::new(root)
         .join(next)
         .to_str()
-        .ok_or_else(|| anyhow!("Failed to path into string."))?
+        .ok_or_else(|| anyhow::anyhow!("Failed to path into string."))?
         .to_string())
 }
 
@@ -29,32 +24,12 @@ fn exec(command: &str, work_dir: &str) -> anyhow::Result<String> {
         .current_dir(work_dir)
         .output()?;
     if !output.status.success() {
-        Err(anyhow!("{}", unsafe {
+        Err(anyhow::anyhow!("{}", unsafe {
             String::from_utf8_unchecked(output.stderr)
         }))
     } else {
         Ok(unsafe { String::from_utf8_unchecked(output.stdout) })
     }
-}
-
-#[cfg(target_os = "linux")]
-fn find_library(name: &str) -> (Vec<String>, Vec<String>) {
-    let probe = pkg_config::probe_library(name).expect(&format!(
-        "You don't have pck-config or {}-dev installed.",
-        name
-    ));
-    (
-        probe
-            .include_paths
-            .iter()
-            .map(|path| path.to_str().unwrap().to_string())
-            .collect::<Vec<String>>(),
-        probe
-            .link_paths
-            .iter()
-            .map(|path| path.to_str().unwrap().to_string())
-            .collect::<Vec<String>>(),
-    )
 }
 
 #[cfg(any(target_os = "windows", target_os = "linux"))]
@@ -141,7 +116,6 @@ struct Settings {
 impl Settings {
     #[cfg(any(target_os = "windows", target_os = "linux"))]
     fn build() -> anyhow::Result<Self> {
-        let _ = dotenv();
         let out_dir = env::var("OUT_DIR")?;
         let is_debug = env::var("DEBUG")
             .map(|label| label == "true")
@@ -165,41 +139,38 @@ impl Settings {
     }
 }
 
-#[cfg(target_os = "windows")]
+#[allow(unused_variables)]
 fn find_ffmpeg_prefix(out_dir: &str, is_debug: bool) -> anyhow::Result<(Vec<String>, Vec<String>)> {
     let ffmpeg_prefix = join(out_dir, "ffmpeg").unwrap();
     if !is_exsit(&ffmpeg_prefix) {
-        exec(
-            &format!("Invoke-WebRequest \
-                -Uri https://github.com/mycrl/distributions/releases/download/distributions/ffmpeg-windows-x64-{}.zip \
-                -OutFile ffmpeg.zip", if is_debug { "debug" } else { "release" }),
-            out_dir,
-        )?;
+        #[cfg(target_os = "windows")]
+        {
+            exec(
+                &format!("Invoke-WebRequest \
+                    -Uri https://github.com/mycrl/distributions/releases/download/distributions/ffmpeg-windows-x64-{}.zip \
+                    -OutFile ffmpeg.zip", if is_debug { "debug" } else { "release" }),
+                out_dir,
+            )?;
 
-        exec(
-            "Expand-Archive -Path ffmpeg.zip -DestinationPath ./",
-            out_dir,
-        )?;
+            exec(
+                "Expand-Archive -Path ffmpeg.zip -DestinationPath ./",
+                out_dir,
+            )?;
+        }
+
+        #[cfg(target_os = "linux")]
+        {
+            exec("wget \
+                https://github.com/mycrl/distributions/releases/download/distributions/ffmpeg-linux-x64-debug.tar.xz \
+                -O ffmpeg.tar.xz", out_dir)?;
+            exec("tar xvf ./ffmpeg.tar.xz", out_dir)?;
+        }
     }
 
     Ok((
         vec![join(&ffmpeg_prefix, "./include")?],
         vec![join(&ffmpeg_prefix, "./lib")?],
     ))
-}
-
-#[cfg(target_os = "linux")]
-fn find_ffmpeg_prefix(out_dir: &str, is_debug: bool) -> anyhow::Result<(Vec<String>, Vec<String>)> {
-    let mut includes = Vec::new();
-    let mut libs = Vec::new();
-
-    for lib in ["libavcodec", "libavutil"] {
-        let mut prefix = find_library(lib);
-        includes.append(&mut prefix.0);
-        libs.append(&mut prefix.1);
-    }
-
-    Ok((includes, libs))
 }
 
 #[cfg(target_os = "macos")]

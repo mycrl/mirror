@@ -9,6 +9,10 @@
 #define FRAME_H
 #pragma once
 
+#ifdef __cplusplus
+#include <cstddef>
+#endif
+
 #include <stdint.h>
 
 struct VideoFrameRect

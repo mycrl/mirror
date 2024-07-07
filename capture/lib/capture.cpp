@@ -8,24 +8,31 @@
 #include "capture.h"
 #include "camera.h"
 
-#include <format>
+#include <string>
 #include <libobs/obs.h>
 
 #ifdef WIN32
-#define OUTPUT_WINDOW_SOURCE	"window_capture"
 #define OUTPUT_AUDIO_SOURCE		"wasapi_output_capture"
+#define OUTPUT_WINDOW_SOURCE	"window_capture"
 #define OUTPUT_MONITOR_SOURCE	"monitor_capture"
 #define MONITOR_SOURCE_PROPERTY "monitor_id"
-#define AUDIO_SOURCE_PROPERTY   "device_id"
 #define WINDOW_SOURCE_PROPERTY  "window"
-#elif LINUX
+#define AUDIO_SOURCE_PROPERTY   "device_id"
+#else
 #define OUTPUT_AUDIO_SOURCE		"pulse_output_capture"
+#define OUTPUT_WINDOW_SOURCE    "xcomposite_input"
+#define OUTPUT_MONITOR_SOURCE   "xshm_input"
+#define MONITOR_SOURCE_PROPERTY "screen"
+#define WINDOW_SOURCE_PROPERTY  "capture_window"
+#define AUDIO_SOURCE_PROPERTY   "device_id"
 #endif
 
 // global variable
 
 static struct
 {
+    Logger logger = nullptr;
+    void* logger_ctx = nullptr;
     obs_audio_info audio_info;
     obs_video_info video_info;
     obs_scene_t* scene;
@@ -40,8 +47,6 @@ static struct
 #ifdef WIN32
     CameraCapture* camera_capture = new CameraCapture();
 #endif
-    Logger logger = nullptr;
-    void* logger_ctx = nullptr;
 } GLOBAL = {};
 
 void logger_proc(int level, const char* message, va_list args, void* _)
@@ -341,10 +346,12 @@ void capture_stop()
         obs_scene_release(GLOBAL.scene);
     }
 
+#ifdef WIN32
     if (GLOBAL.camera_capture != nullptr)
     {
         GLOBAL.camera_capture->StopCapture();
     }
+#endif
 
     obs_shutdown();
 }
@@ -364,6 +371,7 @@ int capture_set_input(DeviceDescription* description, CaptureSettings* settings)
 
     if (description->type == DeviceType::kDeviceTypeVideo)
     {
+#ifdef WIN32
         return GLOBAL.camera_capture->StartCapture(description->id,
                                                    GLOBAL.video_info.base_width,
                                                    GLOBAL.video_info.base_height,
@@ -375,6 +383,7 @@ int capture_set_input(DeviceDescription* description, CaptureSettings* settings)
                                                            GLOBAL.output_callback.video(GLOBAL.output_callback.ctx, frame);
                                                        }
                                                    });
+#endif
     }
     else if (description->type == DeviceType::kDeviceTypeScreen)
     {
@@ -402,8 +411,10 @@ GetDeviceListResult capture_get_device_list(DeviceType type)
     obs_source_t* source = nullptr;
     if (type == DeviceType::kDeviceTypeVideo)
     {
+#ifdef WIN32
         int status = CameraCapture::EnumDevices(list);
         return { status, list };
+#endif
     }
     else if (type == DeviceType::kDeviceTypeScreen)
     {

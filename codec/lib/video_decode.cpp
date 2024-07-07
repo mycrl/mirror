@@ -173,9 +173,10 @@ struct VideoFrame* codec_video_decoder_read_frame(struct VideoDecoder* codec)
 
     if (codec->frame->format != AV_PIX_FMT_NV12 && !codec->format_format.has_value())
     {
+        double size = (double)codec->frame->width * (double)codec->frame->height * 1.5;
         for (int i = 0; i < 2; i++)
         {
-            codec->output_frame->data[i] = new uint8_t[codec->frame->width * codec->frame->height * 1.5];
+            codec->output_frame->data[i] = new uint8_t[(size_t)size];
             codec->output_frame->linesize[i] = codec->frame->width;
         }
     }
