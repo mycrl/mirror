@@ -11,11 +11,6 @@
 
 #define SDL_MAIN_HANDLED
 #include <mirror.h>
-#include <SDL.h>
-#include <SDL_video.h>
-#include <SDL_render.h>
-#include <SDL_rect.h>
-#include <windows.h>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -99,69 +94,32 @@ private:
     }
 };
 
-class Render : public mirror::MirrorService::AVFrameSink
+class SimpleRender : public mirror::MirrorService::AVFrameSink
 {
 public:
-    Render(Args& args,
-           std::function<void()> closed_callback)
+    SimpleRender(Args& args,
+                 HWND hwnd,
+                 HINSTANCE hinstance,
+                 std::function<void()> closed_callback)
         : _callback(closed_callback)
         , _args(args)
     {
+        Size size;
+        size.width = args.ArgsParams.width;
+        size.height = args.ArgsParams.height;
 
-        _audio_spec.freq = 48000;
-        _audio_spec.channels = 1;
-        _audio_spec.silence = 0;
-        _audio_spec.samples = 48000 / 1000 * 100;
-        _audio_spec.format = AUDIO_S16;
-        _audio_spec.callback = nullptr;
-
-        SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER);
-
-        _audio = SDL_OpenAudioDevice(nullptr, 
-                                     0, 
-                                     &_audio_spec, 
-                                     nullptr, 
-                                     SDL_AUDIO_ALLOW_FREQUENCY_CHANGE);
-        SDL_PauseAudioDevice(_audio, 0);
-
-        _window = SDL_CreateWindow("example - s/create sender, r/create receiver, k/stop",
-                                   SDL_WINDOWPOS_UNDEFINED,
-                                   SDL_WINDOWPOS_UNDEFINED,
-                                   args.ArgsParams.width,
-                                   args.ArgsParams.height,
-                                   SDL_WINDOW_RESIZABLE);
-
-        _renderer = SDL_CreateRenderer(_window, -1, SDL_RENDERER_ACCELERATED);
-        _texture = SDL_CreateTexture(_renderer,
-                                     SDL_PIXELFORMAT_NV12,
-                                     SDL_TEXTUREACCESS_STREAMING,
-                                     args.ArgsParams.width,
-                                     args.ArgsParams.height);
-        std::thread(
-            [&]()
-            {
-                while (_runing)
-                {
-                    {
-                        std::lock_guard<std::mutex> guard(_mutex);
-                        if (SDL_RenderClear(_renderer) == 0)
-                        {
-                            if (SDL_RenderCopy(_renderer, _texture, nullptr, nullptr) == 0)
-                            {
-                                SDL_RenderPresent(_renderer);
-                            }
-                        }
-                    }
-
-                    SDL_Delay(1000 / 30);
-                }
-
-                SDL_Quit();
-            }).detach();
+        _window_handle = mirror_create_window_handle(hwnd, hinstance);
+        _render = mirror_create_render(size, size, _window_handle);
+        if (_render == nullptr)
+        {
+            MessageBox(nullptr, TEXT("failed to create render!"), TEXT("Error"), 0);
+        }
     }
 
-    ~Render()
+    ~SimpleRender()
     {
+        mirror_render_destroy(_render);
+        mirror_window_handle_destroy(_window_handle);
         _runing = false;
     }
 
@@ -174,31 +132,16 @@ public:
             base += title;
             base += "]";
         }
-
-        SDL_SetWindowTitle(_window, base.c_str());
     }
 
     bool OnVideoFrame(struct VideoFrame* frame)
     {
-        std::lock_guard<std::mutex> guard(_mutex);
-        SDL_UpdateNVTexture(_texture,
-                            nullptr,
-                            frame->data[0],
-                            frame->linesize[0],
-                            frame->data[1],
-                            frame->linesize[1]);
-
-        return true;
+        return mirror_render_on_video(_render, frame);
     }
 
     bool OnAudioFrame(struct AudioFrame* frame)
     {
-        /*if (!IsRender)
-        {
-            return true;
-        }
-
-        return SDL_QueueAudio(_audio, frame->data, frame->frames * 2) == 0;*/
+        return true;
     }
 
     void OnClose()
@@ -210,30 +153,15 @@ public:
 
     void Clear()
     {
-        std::lock_guard<std::mutex> guard(_mutex);
 
-        size_t size = _args.ArgsParams.width * _args.ArgsParams.height;
-        uint8_t* buf = new uint8_t[size];
-
-        SDL_UpdateNVTexture(_texture,
-                            nullptr,
-                            buf,
-                            _args.ArgsParams.width,
-                            buf,
-                            _args.ArgsParams.width);
-
-        delete buf;
     }
 
     bool IsRender = true;
 private:
     Args& _args;
     bool _runing = true;
-    SDL_AudioDeviceID _audio;
-    SDL_AudioSpec _audio_spec = { 0 };
-    SDL_Window* _window = nullptr;
-    SDL_Texture* _texture = nullptr;
-    SDL_Renderer* _renderer = nullptr;
+    Render _render = nullptr;
+    WindowHandle _window_handle = nullptr;
     std::function<void()> _callback;
     std::mutex _mutex;
 };
@@ -241,7 +169,9 @@ private:
 class MirrorImplementation
 {
 public:
-    MirrorImplementation(Args& args) : _args(args)
+    MirrorImplementation(Args& args,
+                         HWND hwnd,
+                         HINSTANCE hinstance) : _args(args)
     {
         MirrorOptions options;
         options.video.encoder = const_cast<char*>(args.ArgsParams.encoder.c_str());
@@ -259,13 +189,15 @@ public:
         mirror::Init(options);
 
         _mirror = new mirror::MirrorService();
-        _render = new Render(args,
-                             [&]
-                             {
-                                 _sender = std::nullopt;
-                                 _receiver = std::nullopt;
-                                 MessageBox(nullptr, TEXT("sender/receiver is closed!"), TEXT("Info"), 0);
-                             });
+        _render = new SimpleRender(args,
+                                   hwnd,
+                                   hinstance,
+                                   [&]
+                                   {
+                                       _sender = std::nullopt;
+                                       _receiver = std::nullopt;
+                                       MessageBox(nullptr, TEXT("sender/receiver is closed!"), TEXT("Info"), 0);
+                                   });
     }
 
     ~MirrorImplementation()
@@ -348,63 +280,106 @@ public:
     }
 private:
     Args& _args;
-    Render* _render = nullptr;
+    SimpleRender* _render = nullptr;
     mirror::MirrorService* _mirror = nullptr;
     std::optional<mirror::MirrorService::MirrorSender> _sender = std::nullopt;
     std::optional<mirror::MirrorService::MirrorReceiver> _receiver = std::nullopt;
 };
 
+static MirrorImplementation* mirror_impl = nullptr;
+
 #ifdef WIN32
-int WinMain(HINSTANCE _instance,
+LRESULT CALLBACK window_handle_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam)
+{
+    switch (message)
+    {
+        case WM_CLOSE:
+            PostQuitMessage(0);
+            return 0;
+        case WM_KEYDOWN:
+            switch (wparam)
+            {
+                case 'S':
+                    if (!mirror_impl->CreateMirrorSender())
+                    {
+                        MessageBox(nullptr, TEXT("Failed to create sender"), TEXT("Error"), 0);
+                    }
+
+                    break;
+                case 'R':
+                    if (!mirror_impl->CreateMirrorReceiver())
+                    {
+                        MessageBox(nullptr, TEXT("Failed to create receiver"), TEXT("Error"), 0);
+                    }
+
+                    break;
+                case 'K':
+                    mirror_impl->Close();
+                    break;
+                default:
+                    break;
+            }
+
+            return 0;
+        default:
+            return DefWindowProc(hwnd, message, wparam, lparam);
+    }
+}
+#endif // WIN32
+
+#ifdef WIN32
+int WinMain(HINSTANCE hinstance,
             HINSTANCE _prev_instance,
             LPSTR cmd_line,
             int _show_cmd)
 #else
 int main()
-#endif
+#endif // WIN32
 {
 
 #ifdef WIN32
     AttachConsole(ATTACH_PARENT_PROCESS);
     freopen("CONIN$", "r+t", stdin);
     freopen("CONOUT$", "w+t", stdout);
-#endif
+
+    WNDCLASS wc;
+    wc.style = CS_OWNDC;
+    wc.lpfnWndProc = window_handle_proc;
+    wc.cbClsExtra = 0;
+    wc.cbWndExtra = 0;
+    wc.hInstance = hinstance;
+    wc.hIcon = LoadIcon(nullptr, IDI_APPLICATION);
+    wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
+    wc.hbrBackground = (HBRUSH)GetStockObject(BLACK_BRUSH);
+    wc.lpszMenuName = nullptr;
+    wc.lpszClassName = "GLSample";
+
+    RegisterClass(&wc);
 
     Args args = Args(std::string(cmd_line));
-    MirrorImplementation mirror(args);
+    HWND hwnd = CreateWindow("GLSample",
+                             "OpenGL Window",
+                             WS_CAPTION | WS_POPUPWINDOW | WS_VISIBLE,
+                             0,
+                             0,
+                             args.ArgsParams.width,
+                             args.ArgsParams.height,
+                             nullptr,
+                             nullptr,
+                             hinstance,
+                             nullptr);
+    mirror_impl = new MirrorImplementation(args, hwnd, hinstance);
 
-    SDL_Event event;
-    while (SDL_WaitEvent(&event))
+    MSG message;
+    while (GetMessage(&message, nullptr, 0, 0))
     {
-        if (event.type == SDL_QUIT)
-        {
-            break;
-        }
-        else if (event.type == SDL_KEYDOWN)
-        {
-            switch (event.key.keysym.sym)
-            {
-                case SDLK_r:
-                    if (!mirror.CreateMirrorReceiver())
-                    {
-                        MessageBox(nullptr, TEXT("Failed to create receiver"), TEXT("Error"), 0);
-                    }
-
-                    break;
-                case SDLK_s:
-                    if (!mirror.CreateMirrorSender())
-                    {
-                        MessageBox(nullptr, TEXT("Failed to create sender"), TEXT("Error"), 0);
-                    }
-
-                    break;
-                case SDLK_k:
-                    mirror.Close();
-
-                    break;
-            }
-        }
+        TranslateMessage(&message);
+        DispatchMessage(&message);
     }
 
+    DestroyWindow(hwnd);
+#endif // WIN32
+
+    delete mirror_impl;
     return 0;
 }

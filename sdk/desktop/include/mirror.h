@@ -15,6 +15,10 @@
 #define EXPORT
 #endif
 
+#ifdef WIN32
+#include <windows.h>
+#endif // WIN32
+
 #include <frame.h>
 
 #ifdef __cplusplus
@@ -27,7 +31,13 @@
 #include <memory>
 #include <tuple>
 
-#endif
+#endif // __cplusplus
+
+struct Size
+{
+	int width;
+	int height;
+};
 
 enum DeviceKind
 {
@@ -145,6 +155,8 @@ struct Devices
 typedef const void* Mirror;
 typedef const void* Sender;
 typedef const void* Receiver;
+typedef const void* WindowHandle;
+typedef const void* Render;
 
 struct FrameSink
 {
@@ -217,6 +229,34 @@ struct FrameSink
 
 extern "C"
 {
+    /**
+     * Create the window handle used by the SDK through the original window handle.
+     */
+#ifdef WIN32
+    EXPORT WindowHandle mirror_create_window_handle(HWND hwnd, HINSTANCE hinstance);
+#endif // WIN32
+    /**
+     * Destroy the window handle without affecting external window handles.
+     */
+    EXPORT void mirror_window_handle_destroy(WindowHandle handle);
+    /**
+     * Creating a window renderer.
+     */
+    EXPORT Render mirror_create_render(Size window_size, Size texture_size, WindowHandle window);
+    /**
+     * Push the video frame into the renderer, which will update the window texture.
+     */
+    EXPORT bool mirror_render_on_video(Render render, VideoFrame* frame);
+    /**
+     * Adjust the size of the renderer. When the window size changes, the internal 
+     * size of the renderer needs to be updated, otherwise this will cause 
+     * abnormal rendering.
+     */
+    EXPORT bool mirror_render_resise(Render render, Size size);
+    /**
+     * Destroy the window renderer.
+     */
+    EXPORT void mirror_render_destroy(Render render);
     /**
      * Automatically search for encoders, limited hardware, fallback to software
      * implementation if hardware acceleration unit is not found.

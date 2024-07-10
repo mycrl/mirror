@@ -1,10 +1,11 @@
-mod mirror;
-mod sender;
+pub mod mirror;
+pub mod render;
+pub mod sender;
 
 use std::{
-    ffi::{c_char, c_int},
+    ffi::{c_char, c_int, c_void},
     fmt::Debug,
-    ptr::null_mut,
+    ptr::{null, null_mut},
     sync::Arc,
 };
 
@@ -15,6 +16,8 @@ use common::{
 };
 
 use mirror::{AudioOptions, Mirror, MirrorOptions, VideoOptions};
+use pixels::raw_window_handle::Win32WindowHandle;
+use render::{Render, Size, WindowHandle};
 use transport::adapter::{
     StreamMultiReceiverAdapter, StreamReceiverAdapterExt, StreamSenderAdapter,
 };
@@ -144,6 +147,85 @@ impl TryInto<MirrorOptions> for RawMirrorOptions {
             mtu: self.mtu,
         })
     }
+}
+
+#[repr(C)]
+pub struct RawSize {
+    pub width: c_int,
+    pub height: c_int,
+}
+
+impl Into<Size> for RawSize {
+    fn into(self) -> Size {
+        Size {
+            width: self.width as u32,
+            height: self.height as u32,
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn mirror_create_window_handle(
+    hwnd: *mut c_void,
+    hinstance: *mut c_void,
+) -> *const WindowHandle {
+    let mut handle = Win32WindowHandle::empty();
+    handle.hinstance = hinstance;
+    handle.hwnd = hwnd;
+
+    Box::into_raw(Box::new(WindowHandle::Win32(handle)))
+}
+
+#[no_mangle]
+pub extern "C" fn mirror_window_handle_destroy(window: *const WindowHandle) {
+    assert!(!window.is_null());
+
+    let _ = unsafe { Box::from_raw(window as *mut WindowHandle) };
+}
+
+#[repr(C)]
+pub struct RawRender(Render);
+
+#[no_mangle]
+pub extern "C" fn mirror_create_render(
+    window_size: RawSize,
+    texture_size: RawSize,
+    window: *const WindowHandle,
+) -> *const RawRender {
+    assert!(!window.is_null());
+
+    match Render::new(window_size.into(), texture_size.into(), unsafe { &*window }) {
+        Ok(render) => Box::into_raw(Box::new(render)) as *const _,
+        Err(e) => {
+            log::error!("{}", e);
+
+            null()
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn mirror_render_on_video(
+    render: *const RawRender,
+    frame: *const VideoFrame,
+) -> bool {
+    assert!(!render.is_null() && !frame.is_null());
+
+    unsafe { &*render }.0.on_video(unsafe { &*frame }).is_ok()
+}
+
+#[no_mangle]
+pub extern "C" fn mirror_render_resise(render: *const RawRender, size: RawSize) -> bool {
+    assert!(!render.is_null());
+
+    unsafe { &*render }.0.resize(size.into()).is_ok()
+}
+
+#[no_mangle]
+pub extern "C" fn mirror_render_destroy(render: *const RawRender) {
+    assert!(!render.is_null());
+
+    let _ = unsafe { Box::from_raw(render as *mut RawRender) };
 }
 
 /// Automatically search for encoders, limited hardware, fallback to software
@@ -357,17 +439,8 @@ pub extern "C" fn mirror_drop(mirror: *const RawMirror) {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct RawFrameSink {
-    /// ```c
-    /// bool (*video)(void* ctx, struct VideoFrame* frame);
-    /// ```
     pub video: Option<extern "C" fn(ctx: usize, frame: *const VideoFrame) -> bool>,
-    /// ```c
-    /// bool (*audio)(void* ctx, struct AudioFrame* frame);
-    /// ```
     pub audio: Option<extern "C" fn(ctx: usize, frame: *const AudioFrame) -> bool>,
-    /// ```c
-    /// void (*close)(void* ctx);
-    /// ```
     pub close: Option<extern "C" fn(ctx: usize)>,
     pub ctx: usize,
 }

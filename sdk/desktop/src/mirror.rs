@@ -13,7 +13,6 @@ use common::{
     jump_current_exe_dir, logger,
 };
 
-use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use log::LevelFilter;
 use once_cell::sync::Lazy;
 use transport::{
@@ -330,23 +329,6 @@ impl Mirror {
 
             log::warn!("audio decoder thread is closed!");
         });
-
-        {
-            let host = cpal::default_host();
-            let device = host.default_output_device().unwrap();
-            let config = device.default_output_config()?;
-
-            device
-                .build_output_stream(
-                    &config.into(),
-                    move |data: &mut [u8], info| {
-                        
-                    },
-                    |err| eprintln!("an error occurred on stream: {}", err),
-                    None,
-                )?
-                .play()?;
-        }
 
         Ok(adapter)
     }

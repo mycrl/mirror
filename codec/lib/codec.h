@@ -129,7 +129,7 @@ extern "C"
 	EXPORT void codec_release_audio_encoder(AudioEncoder* codec);
 	EXPORT AudioDecoder* codec_create_audio_decoder(const char* codec_name);
 	EXPORT void codec_release_audio_decoder(AudioDecoder* codec);
-	EXPORT bool codec_audio_decoder_send_packet(AudioDecoder* codec, uint8_t* buf, size_t size);
+	EXPORT bool codec_audio_decoder_send_packet(AudioDecoder* codec, Packet* packet);
 	EXPORT AudioFrame* codec_audio_decoder_read_frame(AudioDecoder* codec);
 }
 
