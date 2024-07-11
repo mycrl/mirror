@@ -9,45 +9,29 @@ if (NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE "Debug")
 endif()
 
-# Used to download or initialize third-party dependent libraries.
-set(THIRD_PARTY_DIR "${CMAKE_SOURCE_DIR}/third_party")
-
-# Check whether the third-party dependent library directory is created.
-if (NOT EXISTS "${THIRD_PARTY_DIR}")
-    if (WIN32)
-        execute_process(COMMAND powershell.exe -Command "mkdir ${THIRD_PARTY_DIR}")
-    else()
-        execute_process(COMMAND mkdir "${THIRD_PARTY_DIR}")
-    endif()
-endif()
-
-if (NOT EXISTS "${THIRD_PARTY_DIR}/sdl")
-    if (WIN32)
-        execute_process(
-            WORKING_DIRECTORY "${THIRD_PARTY_DIR}"
-            COMMAND powershell.exe -Command "git clone --branch SDL2 https://github.com/libsdl-org/SDL.git sdl")
-    endif()
-endif()
-
-if (NOT EXISTS "${THIRD_PARTY_DIR}/SDL2.lib")
-    if (WIN32)
-        execute_process(
-            WORKING_DIRECTORY "${THIRD_PARTY_DIR}"
-            COMMAND powershell.exe -Command "Invoke-WebRequest \
-                                            -Uri https://github.com/mycrl/distributions/releases/download/distributions/SDL2-windows-x64.lib \
-                                            -OutFile ./SDL2.lib")
-    endif()
-endif()
-
 if(MSVC)
-    add_executable(example WIN32 main.cpp)
+    add_executable(example WIN32 src/main.cpp 
+                    src/args.h 
+                    src/args.cpp 
+                    src/render.h 
+                    src/render.cpp 
+                    src/service.h 
+                    src/service.cpp 
+                    src/wrapper.h 
+                    src/wrapper.cpp)
 else()
-    add_executable(example main.cpp)
+    add_executable(example src/main.cpp 
+                    src/args.h 
+                    src/args.cpp 
+                    src/render.h 
+                    src/render.cpp 
+                    src/service.h 
+                    src/service.cpp
+                    src/wrapper.h 
+                    src/wrapper.cpp)
 endif()
 
-target_link_directories(example PRIVATE "${THIRD_PARTY_DIR}")
 include_directories("../../sdk/desktop/include"
-                    "${THIRD_PARTY_DIR}/sdl/include"
                     "../../common/include")
 
 # If it is WIN32, you need to set the runtime library.
@@ -83,6 +67,5 @@ if(WIN32)
                           userenv
                           ntdll
                           bcrypt
-                          SDL2
                           mirror.dll.lib)
 endif()

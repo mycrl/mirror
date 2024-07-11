@@ -15,6 +15,7 @@ use common::{
 
 use log::LevelFilter;
 use once_cell::sync::Lazy;
+use renderer::audio::AudioPlayer;
 use transport::{
     adapter::{StreamKind, StreamMultiReceiverAdapter, StreamSenderAdapter},
     Transport, TransportOptions,
@@ -43,7 +44,7 @@ impl Default for AudioOptions {
         Self {
             encoder: "opus".to_string(),
             decoder: "opus".to_string(),
-            sample_rate: 48000,
+            sample_rate: 44100,
             bit_rate: 64000,
         }
     }
@@ -315,9 +316,12 @@ impl Mirror {
 
         let adapter_ = adapter.clone();
         thread::spawn(move || {
+            let player = AudioPlayer::new().unwrap();
+
             'a: while let Some((packet, flags, timestamp)) = adapter_.next(StreamKind::Audio) {
                 if audio_decoder.decode(&packet, flags, timestamp) {
                     while let Some(frame) = audio_decoder.read() {
+                        player.send(44100, 1, frame);
                         if !(sink.audio)(frame) {
                             break 'a;
                         }

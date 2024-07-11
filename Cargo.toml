@@ -15,6 +15,7 @@ members = [
     "capture",
     "transport",
     "sdk/desktop",
+    "sdk/renderer",
     "sdk/android/mirror/src/main/native",
     "sdk/android/mirror/src/main/macro",
     "multicast",

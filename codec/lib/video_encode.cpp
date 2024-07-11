@@ -40,7 +40,6 @@ VideoEncoder* codec_create_video_encoder(VideoEncoderSettings* settings)
 	codec->context->max_samples = 1;
 	codec->context->has_b_frames = 0;
 	codec->context->max_b_frames = 0;
-	codec->context->skip_alpha = true;
 	codec->context->pix_fmt = AV_PIX_FMT_NV12;
     codec->context->flags2 |= AV_CODEC_FLAG2_FAST;
 	codec->context->flags |= AV_CODEC_FLAG_LOW_DELAY | AV_CODEC_FLAG_GLOBAL_HEADER;

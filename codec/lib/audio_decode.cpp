@@ -26,7 +26,8 @@ AudioDecoder* codec_create_audio_decoder(const char* codec_name)
 		return nullptr;
 	}
 
-	codec->context->sample_fmt = AV_SAMPLE_FMT_S16;
+	codec->context->thread_count = 1;
+	codec->context->request_sample_fmt = AV_SAMPLE_FMT_S16;
 	codec->context->ch_layout = AV_CHANNEL_LAYOUT_MONO;
 	codec->context->flags |= AV_CODEC_FLAG_LOW_DELAY;
 	codec->context->flags2 |= AV_CODEC_FLAG2_FAST;
@@ -112,8 +113,8 @@ bool codec_audio_decoder_send_packet(AudioDecoder* codec,
 								   &codec->packet->size,
 								   buf,
 								   size,
-								   packet->timestamp,
 								   AV_NOPTS_VALUE,
+								   packet->timestamp,
 								   0);
 		if (ret < 0)
 		{

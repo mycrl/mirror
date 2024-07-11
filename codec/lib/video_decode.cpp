@@ -43,6 +43,7 @@ VideoDecoder* codec_create_video_decoder(const char* codec_name)
     codec->context->pix_fmt = AV_PIX_FMT_NV12;
     codec->context->flags2 |= AV_CODEC_FLAG2_FAST;
     codec->context->flags |= AV_CODEC_FLAG_LOW_DELAY | AV_CODEC_FLAG2_CHUNKS;
+    codec->context->hwaccel_flags |= AV_HWACCEL_FLAG_IGNORE_LEVEL | AV_HWACCEL_FLAG_UNSAFE_OUTPUT;
 
     if (decoder == "h264_qsv")
     {
