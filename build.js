@@ -66,6 +66,7 @@ if (!fs.existsSync('./target/ffmpeg')) {
 
 await Command(`cargo build ${Args.release ? '--release' : ''} -p mirror`)
 await Command(`cargo build ${Args.release ? '--release' : ''} -p service`)
+await Command(`cargo build ${Args.release ? '--release' : ''} -p renderer`)
 
 if (!fs.existsSync('./examples/desktop/build')) {
     fs.mkdirSync('./examples/desktop/build')
@@ -83,20 +84,27 @@ for (const item of [
     ['./examples/desktop/src/render.h', './build/examples/src/render.h'],
     ['./examples/desktop/src/service.cpp', './build/examples/src/service.cpp'],
     ['./examples/desktop/src/service.h', './build/examples/src/service.h'],
+    ['./examples/desktop/src/wrapper.cpp', './build/examples/src/wrapper.cpp'],
+    ['./examples/desktop/src/wrapper.h', './build/examples/src/wrapper.h'],
     ['./examples/desktop/CMakeLists.txt', './build/examples/CMakeLists.txt'],
     ['./examples/desktop/README.md', './build/examples/README.md'],
     
     /* inculde */
+    ['./sdk/renderer/include/renderer.h', './build/include/renderer.h'],
     ['./sdk/desktop/include/mirror.h', './build/include/mirror.h'],
     ['./common/include/frame.h', './build/include/frame.h'],
     
     /* service */
     [`./target/${Profile.toLowerCase()}/service.exe`, './build/server/mirror-service.exe'],
     
+    /* lib */
+    [`./target/${Profile.toLowerCase()}/mirror.dll.lib`, './build/lib/mirror.dll.lib'],
+    [`./target/${Profile.toLowerCase()}/renderer.dll.lib`, './build/lib/renderer.dll.lib'],
+    
     /* bin */
     [`./examples/desktop/build/${Profile}/example.exe`, './build/bin/example.exe'],
+    [`./target/${Profile.toLowerCase()}/renderer.dll`, './build/bin/renderer.dll'],
     [`./target/${Profile.toLowerCase()}/mirror.dll`, './build/bin/mirror.dll'],
-    [`./target/${Profile.toLowerCase()}/mirror.dll.lib`, './build/lib/mirror.dll.lib'],
     ['./target/ffmpeg/bin/avcodec-60.dll', './build/bin/avcodec-60.dll'],
     ['./target/ffmpeg/bin/avdevice-60.dll', './build/bin/avdevice-60.dll'],
     ['./target/ffmpeg/bin/avfilter-9.dll', './build/bin/avfilter-9.dll'],
@@ -110,13 +118,19 @@ for (const item of [
 }
 
 if (!Args.release) {
-    fs.copyFileSync('./target/debug/mirror.pdb', './build/bin/mirror.pdb')
-    fs.copyFileSync('./target/debug/service.pdb', './build/server/service.pdb')
+    for (const item of [
+        ['./target/debug/mirror.pdb', './build/bin/mirror.pdb'],
+        ['./target/debug/renderer.pdb', './build/bin/renderer.pdb'],
+        ['./target/debug/service.pdb', './build/server/service.pdb']
+    ]) {
+        fs.copyFileSync(...item)
+    }
 }
 
 fs.writeFileSync('./build/examples/CMakeLists.txt', 
     fs.readFileSync('./examples/desktop/CMakeLists.txt')
         .toString()
+        .replace('../../sdk/renderer/include', '../include')
         .replace('../../sdk/desktop/include', '../include')
         .replace('../../common/include', '../include')
         .replace('../../target/debug', '../lib')

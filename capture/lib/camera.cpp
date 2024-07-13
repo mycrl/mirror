@@ -7,7 +7,7 @@
 
 #ifdef WIN32
 
-#include "camera.h"
+#include "./camera.h"
 
 CameraCapture::CameraCapture()
 {
@@ -19,7 +19,7 @@ CameraCapture::~CameraCapture()
     MFShutdown();
 }
 
-int CameraCapture::EnumDevices(struct DeviceList* list)
+int CameraCapture::EnumDevices(DeviceList* list)
 {
     IMFAttributes* attributes;
     auto ret = MFCreateAttributes(&attributes, 1);

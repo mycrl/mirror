@@ -18,6 +18,7 @@ pub use manager::DeviceManager;
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub enum CaptureMethod {
+    GDI,
     DXGI,
     WGC,
 }

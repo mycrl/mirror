@@ -32,6 +32,7 @@ else()
 endif()
 
 include_directories("../../sdk/desktop/include"
+                    "../../sdk/renderer/include"
                     "../../common/include")
 
 # If it is WIN32, you need to set the runtime library.
@@ -67,5 +68,6 @@ if(WIN32)
                           userenv
                           ntdll
                           bcrypt
-                          mirror.dll.lib)
+                          mirror.dll.lib
+                          renderer.dll.lib)
 endif()

@@ -1,6 +1,6 @@
 #include "./wrapper.h"
 
-DeviceService::DeviceService(struct Device device) : _device(device)
+DeviceService::DeviceService(Device device) : _device(device)
 {
 }
 
@@ -10,17 +10,17 @@ std::optional<std::string> DeviceService::GetName()
     return name ? std::optional(std::string(name)) : std::nullopt;
 }
 
-enum DeviceKind DeviceService::GetKind()
+DeviceKind DeviceService::GetKind()
 {
     return mirror_get_device_kind(&_device);
 }
 
-struct Device* DeviceService::AsRaw()
+Device* DeviceService::AsRaw()
 {
     return &_device;
 }
 
-DeviceList::DeviceList(struct Devices devices) : _devices(devices)
+DeviceList::DeviceList(Devices devices) : _devices(devices)
 {
     for (size_t i = 0; i < devices.size; i++)
     {
@@ -30,12 +30,12 @@ DeviceList::DeviceList(struct Devices devices) : _devices(devices)
 
 DeviceList::~DeviceList()
 {
-    mirror_drop_devices(&_devices);
+    mirror_devices_destroy(&_devices);
 }
 
-DeviceList DeviceManagerService::GetDevices(enum DeviceKind kind)
+DeviceList DeviceManagerService::GetDevices(DeviceKind kind, CaptureSettings* settings)
 {
-    return DeviceList(mirror_get_devices(kind));
+    return DeviceList(mirror_get_devices(kind, settings));
 }
 
 bool DeviceManagerService::SetInputDevice(DeviceService& device, CaptureSettings* settings)
@@ -53,7 +53,7 @@ void DeviceManagerService::Stop()
     mirror_stop_capture();
 }
 
-bool Init(struct MirrorOptions options)
+bool Init(MirrorOptions options)
 {
     return mirror_init(options);
 }
@@ -80,11 +80,13 @@ bool MirrorSender::GetMulticast()
 
 void MirrorSender::Close()
 {
-    if (_sender != nullptr)
+    if (_sender == nullptr)
     {
-        mirror_close_sender(_sender);
-        _sender = nullptr;
+        return;
     }
+
+    mirror_sender_destroy(_sender);
+    _sender = nullptr;
 }
 
 MirrorReceiver::MirrorReceiver(Receiver receiver)
@@ -94,11 +96,13 @@ MirrorReceiver::MirrorReceiver(Receiver receiver)
 
 void MirrorReceiver::Close()
 {
-    if (_receiver != nullptr)
+    if (_receiver == nullptr)
     {
-        mirror_close_receiver(_receiver);
-        _receiver = nullptr;
+        return;
     }
+
+    mirror_receiver_destroy(_receiver);
+    _receiver = nullptr;
 }
 
 MirrorService::MirrorService()
@@ -114,9 +118,11 @@ MirrorService::~MirrorService()
 {
     if (_mirror != nullptr)
     {
-        mirror_drop(_mirror);
-        _mirror = nullptr;
+        return;
     }
+
+    mirror_destroy(_mirror);
+    _mirror = nullptr;
 }
 
 std::optional<MirrorSender> MirrorService::CreateSender(int id, AVFrameSink* sink)
@@ -141,12 +147,12 @@ std::optional<MirrorReceiver> MirrorService::CreateReceiver(int id, AVFrameSink*
     return receiver != nullptr ? std::optional(MirrorReceiver(receiver)) : std::nullopt;
 }
 
-bool MirrorService::_video_proc(void* ctx, struct VideoFrame* frame)
+bool MirrorService::_video_proc(void* ctx, VideoFrame* frame)
 {
     return ((AVFrameSink*)ctx)->OnVideoFrame(frame);
 }
 
-bool MirrorService::_audio_proc(void* ctx, struct AudioFrame* frame)
+bool MirrorService::_audio_proc(void* ctx, AudioFrame* frame)
 {
     return ((AVFrameSink*)ctx)->OnAudioFrame(frame);
 }

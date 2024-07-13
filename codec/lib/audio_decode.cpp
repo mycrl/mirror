@@ -145,6 +145,7 @@ AudioFrame* codec_audio_decoder_read_frame(AudioDecoder* codec)
 		return nullptr;
 	}
 
+	codec->output_frame->sample_rate = codec->frame->sample_rate;
     codec->output_frame->format = (AudioFormat)codec->frame->format;
 	codec->output_frame->frames = codec->frame->nb_samples;
     codec->output_frame->data = codec->frame->data[0];

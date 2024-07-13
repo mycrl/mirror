@@ -88,7 +88,7 @@ int WinMain(HINSTANCE hinstance,
                              nullptr,
                              hinstance,
                              nullptr);
-    mirror_service = new MirrorServiceExt(args, hwnd);
+    mirror_service = new MirrorServiceExt(args, hwnd, hinstance);
 
     MSG message;
     while (GetMessage(&message, nullptr, 0, 0))

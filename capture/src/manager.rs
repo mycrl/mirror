@@ -16,7 +16,10 @@ extern "C" {
     ///
     /// Callback function returns true to continue enumeration, or false to
     /// end enumeration.
-    fn capture_get_device_list(kind: DeviceKind) -> RawGetDeviceListResult;
+    fn capture_get_device_list(
+        kind: DeviceKind,
+        settings: *const CaptureSettings,
+    ) -> RawGetDeviceListResult;
     /// Sets the primary output source for a channel.
     fn capture_set_input(
         description: *const RawDeviceDescription,
@@ -32,10 +35,16 @@ impl DeviceManager {
     /// ```
     /// let devices = get_devices(DeviceKind::Video).to_vec();
     /// ```
-    pub fn get_devices(kind: DeviceKind) -> Result<DeviceList, DeviceError> {
+    pub fn get_devices(
+        kind: DeviceKind,
+        settings: Option<&CaptureSettings>,
+    ) -> Result<DeviceList, DeviceError> {
         log::info!("DeviceManager get devices");
 
-        let result = unsafe { capture_get_device_list(kind) };
+        let result = unsafe {
+            capture_get_device_list(kind, if let Some(s) = settings { s } else { null() })
+        };
+
         if result.status != 0 {
             Err(DeviceError(result.status))
         } else {

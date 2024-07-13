@@ -10,7 +10,7 @@ class MirrorServiceExt
 {
 public:
 #ifdef WIN32
-    MirrorServiceExt(Args& args, HWND hwnd);
+    MirrorServiceExt(Args& args, HWND hwnd, HINSTANCE hinstance);
 #endif
 
     ~MirrorServiceExt();
@@ -20,6 +20,7 @@ public:
     void Close();
 private:
     Args& _args;
+    CaptureSettings _settings;
     SimpleRender* _render = nullptr;
     MirrorService* _mirror = nullptr;
     std::optional<MirrorSender> _sender = std::nullopt;

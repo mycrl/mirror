@@ -113,6 +113,7 @@ impl AudioSender {
                     format: AudioFormat::AUDIO_S16,
                     frames: self.frames as u32,
                     data: payload.as_ptr(),
+                    sample_rate: 0,
                 };
 
                 if self.encoder.send_frame(&frame) {

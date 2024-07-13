@@ -16,27 +16,29 @@
 #endif
 
 #include <frame.h>
+#include <stdint.h>
 
-enum DeviceKind
+typedef enum 
 {
     Video,
     Audio,
     Screen,
     Window,
-};
+} DeviceKind;
 
-enum CaptureMethod
+typedef enum
 {
+    GDI,
     DXGI,
     WGC,
-};
+} CaptureMethod;
 
-struct CaptureSettings
+typedef struct
 {
     CaptureMethod method;
-};
+} CaptureSettings;
 
-struct VideoOptions
+typedef struct
 {
     /**
      * Video encoder settings, possible values are `h264_qsv`, `h264_nvenc`,
@@ -69,9 +71,9 @@ struct VideoOptions
      * keyframe.
      */
     uint32_t key_frame_interval;
-};
+} VideoOptions;
 
-struct AudioOptions
+typedef struct
 {
     /**
      * The sample rate of the audio, in seconds.
@@ -81,9 +83,9 @@ struct AudioOptions
      * The bit rate of the video encoding.
      */
     uint64_t bit_rate;
-};
+} AudioOptions;
 
-struct MirrorOptions
+typedef struct
 {
     /**
      * Video Codec Configuration.
@@ -107,19 +109,19 @@ struct MirrorOptions
      * the recommended value is 1400.
      */
     size_t mtu;
-};
+} MirrorOptions;
 
-struct Device
+typedef struct
 {
     const void* description;
-};
+} Device;
 
-struct Devices
+typedef struct
 {
     /**
      * device list.
      */
-    const struct Device* devices;
+    const Device* devices;
     /**
      * device vector capacity.
      */
@@ -128,13 +130,13 @@ struct Devices
      * device vector size.
      */
     size_t size;
-};
+} Devices;
 
 typedef const void* Mirror;
 typedef const void* Sender;
 typedef const void* Receiver;
 
-struct FrameSink
+typedef struct
 {
     /**
      * Callback occurs when the video frame is updated. The video frame format
@@ -164,7 +166,7 @@ struct FrameSink
      * JPEG: it has BT.601 matrix derived from System M primaries, yet the
      * primaries of most images are BT.709.
      */
-    bool (*video)(void* ctx, struct VideoFrame* frame);
+    bool (*video)(void* ctx, VideoFrame* frame);
     /**
      * Callback is called when the audio frame is updated. The audio frame
      * format is fixed to PCM. Be careful not to call blocking methods inside
@@ -193,7 +195,7 @@ struct FrameSink
      * depth, which determines the number of possible digital values that
      * can be used to represent each sample.
      */
-    bool (*audio)(void* ctx, struct AudioFrame* frame);
+    bool (*audio)(void* ctx, AudioFrame* frame);
     /**
      * Callback when the sender is closed. This may be because the external
      * side actively calls the close, or the audio and video packets cannot be
@@ -201,94 +203,90 @@ struct FrameSink
      */
     void (*close)(void* ctx);
     void* ctx;
-};
+} FrameSink;
 
-extern "C"
-{
-    /**
-     * Automatically search for encoders, limited hardware, fallback to software
-     * implementation if hardware acceleration unit is not found.
-     */
-    EXPORT const char* mirror_find_video_encoder();
-    /**
-     * Automatically search for decoders, limited hardware, fallback to software
-     * implementation if hardware acceleration unit is not found.
-     */
-    EXPORT const char* mirror_find_video_decoder();
-    /**
-     * Cleans up the environment when the SDK exits, and is recommended to be
-     * called when the application exits.
-     */
-    EXPORT void mirror_quit();
-    /**
-     * Initialize the environment, which must be initialized before using the SDK.
-     */
-    EXPORT bool mirror_init(struct MirrorOptions options);
-    /**
-     * Get device name.
-     */
-    EXPORT const char* mirror_get_device_name(const struct Device* device);
-    /**
-     * Get device kind.
-     */
-    EXPORT enum DeviceKind mirror_get_device_kind(const struct Device* device);
-    /**
-     * Get devices from device manager.
-     */
-    EXPORT struct Devices mirror_get_devices(enum DeviceKind kind);
-    /**
-     * Release devices.
-     */
-    EXPORT void mirror_drop_devices(struct Devices* devices);
-    /**
-     * Setting up an input device, repeated settings for the same type of device
-     * will overwrite the previous device.
-     */
-    EXPORT bool mirror_set_input_device(const struct Device* device,
-                                        struct CaptureSettings* settings);
-    /**
-     * Start capturing audio and video data.
-     */
-    EXPORT int mirror_start_capture();
-    /**
-     * Stop capturing audio and video data.
-     */
-    EXPORT void mirror_stop_capture();
-    /**
-     * Create mirror.
-     */
-    EXPORT Mirror mirror_create();
-    /**
-     * Release mirror.
-     */
-    EXPORT void mirror_drop(Mirror mirror);
-    /**
-     * Create a sender, specify a bound NIC address, you can pass callback to
-     * get the device screen or sound callback, callback can be null, if it is
-     * null then it means no callback data is needed.
-     */
-    EXPORT Sender mirror_create_sender(Mirror mirror, int id, struct FrameSink sink);
-    /**
-     * Get whether the sender uses multicast transmission.
-     */
-    EXPORT bool mirror_sender_get_multicast(Sender sender);
-    /**
-     * Set whether the sender uses multicast transmission.
-     */
-    EXPORT void mirror_sender_set_multicast(Sender sender, bool is_multicast);
-    /**
-     * Close sender.
-     */
-    EXPORT void mirror_close_sender(Sender sender);
-    /**
-     * Create a receiver, specify a bound NIC address, you can pass callback to
-     * get the sender's screen or sound callback, callback can not be null.
-     */
-    EXPORT Receiver mirror_create_receiver(Mirror mirror, int id, struct FrameSink sink);
-    /**
-     * Close receiver.
-     */
-    EXPORT void mirror_close_receiver(Receiver receiver);
-}
+/**
+    * Automatically search for encoders, limited hardware, fallback to software
+    * implementation if hardware acceleration unit is not found.
+    */
+EXPORT const char* mirror_find_video_encoder();
+/**
+    * Automatically search for decoders, limited hardware, fallback to software
+    * implementation if hardware acceleration unit is not found.
+    */
+EXPORT const char* mirror_find_video_decoder();
+/**
+    * Cleans up the environment when the SDK exits, and is recommended to be
+    * called when the application exits.
+    */
+EXPORT void mirror_quit();
+/**
+    * Initialize the environment, which must be initialized before using the SDK.
+    */
+EXPORT bool mirror_init(MirrorOptions options);
+/**
+    * Get device name.
+    */
+EXPORT const char* mirror_get_device_name(const Device* device);
+/**
+    * Get device kind.
+    */
+EXPORT DeviceKind mirror_get_device_kind(const Device* device);
+/**
+    * Get devices from device manager.
+    */
+EXPORT Devices mirror_get_devices(DeviceKind kind, CaptureSettings* settings);
+/**
+    * Release devices.
+    */
+EXPORT void mirror_devices_destroy(Devices* devices);
+/**
+    * Setting up an input device, repeated settings for the same type of device
+    * will overwrite the previous device.
+    */
+EXPORT bool mirror_set_input_device(const Device* device, CaptureSettings* settings);
+/**
+    * Start capturing audio and video data.
+    */
+EXPORT int mirror_start_capture();
+/**
+    * Stop capturing audio and video data.
+    */
+EXPORT void mirror_stop_capture();
+/**
+    * Create mirror.
+    */
+EXPORT Mirror mirror_create();
+/**
+    * Release mirror.
+    */
+EXPORT void mirror_destroy(Mirror mirror);
+/**
+    * Create a sender, specify a bound NIC address, you can pass callback to
+    * get the device screen or sound callback, callback can be null, if it is
+    * null then it means no callback data is needed.
+    */
+EXPORT Sender mirror_create_sender(Mirror mirror, int id, FrameSink sink);
+/**
+    * Get whether the sender uses multicast transmission.
+    */
+EXPORT bool mirror_sender_get_multicast(Sender sender);
+/**
+    * Set whether the sender uses multicast transmission.
+    */
+EXPORT void mirror_sender_set_multicast(Sender sender, bool is_multicast);
+/**
+    * Close sender.
+    */
+EXPORT void mirror_sender_destroy(Sender sender);
+/**
+    * Create a receiver, specify a bound NIC address, you can pass callback to
+    * get the sender's screen or sound callback, callback can not be null.
+    */
+EXPORT Receiver mirror_create_receiver(Mirror mirror, int id, FrameSink sink);
+/**
+    * Close receiver.
+    */
+EXPORT void mirror_receiver_destroy(Receiver receiver);
 
 #endif // MIRROR_H

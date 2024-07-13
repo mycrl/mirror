@@ -56,6 +56,15 @@ fn main() -> anyhow::Result<()> {
                 &out_dir,
             )?;
         }
+
+        if !is_exsit(&join(&out_dir, "yuv.lib")?) {
+            exec(
+                "Invoke-WebRequest \
+                    -Uri https://github.com/mycrl/distributions/releases/download/distributions/yuv-windows-x64.lib \
+                    -OutFile yuv.lib",
+                &out_dir,
+            )?;
+        }
     }
 
     if !is_exsit(&join(&out_dir, "./obs-studio")?) {
@@ -63,6 +72,10 @@ fn main() -> anyhow::Result<()> {
             "git clone --branch release/30.1 https://github.com/obsproject/obs-studio",
             &out_dir,
         )?;
+    }
+
+    if !is_exsit(&join(&out_dir, "./libyuv")?) {
+        exec("git clone https://github.com/lemenkov/libyuv", &out_dir)?;
     }
 
     let mut compiler = cc::Build::new();
@@ -76,7 +89,9 @@ fn main() -> anyhow::Result<()> {
         .out_dir(&out_dir)
         .file("./lib/capture.cpp")
         .file("./lib/camera.cpp")
+        .file("./lib/desktop.cpp")
         .include(&join(&out_dir, "./obs-studio")?)
+        .include(&join(&out_dir, "./libyuv/include")?)
         .include("../common/include");
 
     #[cfg(target_os = "windows")]
@@ -87,6 +102,7 @@ fn main() -> anyhow::Result<()> {
         println!("cargo:rustc-link-lib=mfplat");
         println!("cargo:rustc-link-lib=mfuuid");
         println!("cargo:rustc-link-lib=mf");
+        println!("cargo:rustc-link-lib=yuv");
     }
 
     #[cfg(target_os = "linux")]

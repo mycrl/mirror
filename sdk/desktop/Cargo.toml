@@ -18,7 +18,6 @@ anyhow = "1.0.82"
 once_cell = "1.19.0"
 crossbeam = "0.8"
 mimalloc = { version = "*", default-features = false }
-renderer ={ path = "../renderer" }
 
 [target.'cfg(target_os = "windows")'.dependencies.windows]
 version = "0.57.0"

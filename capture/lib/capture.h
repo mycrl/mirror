@@ -15,10 +15,14 @@
 #define EXPORT
 #endif
 
+extern "C"
+{
 #include <frame.h>
+}
 
 enum CaptureMethod
 {
+    GDI,
     DXGI,
     WGC,
 };
@@ -58,8 +62,8 @@ struct DeviceList
 
 struct OutputCallback
 {
-    void (*video)(void* ctx, struct VideoFrame* frame);
-    void (*audio)(void* ctx, struct AudioFrame* frame);
+    void (*video)(void* ctx, VideoFrame* frame);
+    void (*audio)(void* ctx, AudioFrame* frame);
     void* ctx;
 };
 
@@ -86,7 +90,7 @@ extern "C"
     //
     // Callback function returns true to continue enumeration, or false to end 
     // enumeration.
-    EXPORT GetDeviceListResult capture_get_device_list(DeviceType type);
+    EXPORT GetDeviceListResult capture_get_device_list(DeviceType type, CaptureSettings* settings);
     // Sets the primary output source for a channel.
     EXPORT int capture_set_input(DeviceDescription* description, CaptureSettings* settings);
     // Adds/removes a raw video/audio callback. Allows the ability to obtain raw video/audio

@@ -34,18 +34,18 @@ impl AudioPlayer {
     }
 
     /// Push an audio clip to the queue.
-    pub fn send(&self, sample_rate: u32, channels: u16, frame: &AudioFrame) {
+    pub fn send(&self, channels: u16, frame: &AudioFrame) {
         log::trace!(
             "append audio chunk to audio player, sample_rate={}, channels={}, frames={}",
-            sample_rate,
+            frame.sample_rate,
             channels,
             frame.frames
         );
 
         self.sink.append(AudioBuffer {
-            sample_rate,
             channels,
             index: 0,
+            sample_rate: frame.sample_rate,
             frames: frame.frames as usize,
             buffer: unsafe {
                 std::slice::from_raw_parts(frame.data as *const i16, frame.frames as usize).to_vec()

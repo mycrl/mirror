@@ -182,8 +182,8 @@ Packet* codec_video_encoder_read_packet(VideoEncoder* codec)
 	if (!codec->initialized)
 	{
 		codec->initialized = true;
-		codec->output_packet->buffer = codec->context->extradata;
 		codec->output_packet->flags = 2; // BufferFlag::Config
+		codec->output_packet->buffer = codec->context->extradata;
 		codec->output_packet->len = codec->context->extradata_size;
 		codec->output_packet->timestamp = codec->packet->pts;
         

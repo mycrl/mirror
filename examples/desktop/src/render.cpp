@@ -3,12 +3,18 @@
 #ifdef WIN32
 SimpleRender::SimpleRender(Args& args,
                            HWND hwnd,
+                           HINSTANCE hinstance,
                            std::function<void()> closed_callback)
     : _callback(closed_callback)
     , _args(args)
     , _hwnd(hwnd)
 {
-    
+    Size size;
+    size.width = args.ArgsParams.width;
+    size.height = args.ArgsParams.height;
+
+    _window_handle = renderer_create_window_handle(hwnd, hinstance);
+    _renderer = renderer_create(size, _window_handle);
 }
 #endif
 
@@ -30,14 +36,14 @@ void SimpleRender::SetTitle(std::string title)
     SetWindowText(_hwnd, base.c_str());
 }
 
-bool SimpleRender::OnVideoFrame(struct VideoFrame* frame)
+bool SimpleRender::OnVideoFrame(VideoFrame* frame)
 {
-    return true;
+    return renderer_on_video(_renderer, frame);
 }
 
-bool SimpleRender::OnAudioFrame(struct AudioFrame* frame)
+bool SimpleRender::OnAudioFrame(AudioFrame* frame)
 {
-    return true;
+    return renderer_on_audio(_renderer, frame);
 }
 
 void SimpleRender::OnClose()

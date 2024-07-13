@@ -1,7 +1,8 @@
 #include "./service.h"
 
 #ifdef WIN32
-MirrorServiceExt::MirrorServiceExt(Args& args, HWND hwnd) : _args(args)
+MirrorServiceExt::MirrorServiceExt(Args& args, HWND hwnd, HINSTANCE hinstance) 
+    : _args(args)
 #endif
 {
     MirrorOptions options;
@@ -12,7 +13,7 @@ MirrorServiceExt::MirrorServiceExt(Args& args, HWND hwnd) : _args(args)
     options.video.frame_rate = args.ArgsParams.fps;
     options.video.key_frame_interval = 21;
     options.video.bit_rate = 500 * 1024 * 8;
-    options.audio.sample_rate = 44100;
+    options.audio.sample_rate = 48000;
     options.audio.bit_rate = 64000;
     options.server = const_cast<char*>(args.ArgsParams.server.c_str());
     options.multicast = const_cast<char*>("239.0.0.1");
@@ -23,6 +24,7 @@ MirrorServiceExt::MirrorServiceExt(Args& args, HWND hwnd) : _args(args)
 #ifdef WIN32
     _render = new SimpleRender(args,
                                hwnd,
+                               hinstance,
                                [&]
                                {
                                    _sender = std::nullopt;
@@ -50,17 +52,27 @@ bool MirrorServiceExt::CreateMirrorSender()
         _render->IsRender = false;
     }
 
+    if (_settings.method == CaptureMethod::GDI)
+    {
+        _settings.method = CaptureMethod::DXGI;
+    }
+    else if (_settings.method == CaptureMethod::DXGI)
+    {
+        _settings.method = CaptureMethod::WGC;
+    }
+    else
+    {
+        _settings.method = CaptureMethod::GDI;
+    }
+
     DeviceManagerService::Start();
-    auto devices = DeviceManagerService::GetDevices(DeviceKind::Screen);
+    auto devices = DeviceManagerService::GetDevices(DeviceKind::Screen, &_settings);
     if (devices.device_list.size() == 0)
     {
         return false;
     }
 
-    CaptureSettings settings;
-    settings.method = CaptureMethod::WGC;
-
-    DeviceManagerService::SetInputDevice(devices.device_list[0], &settings);
+    DeviceManagerService::SetInputDevice(devices.device_list[0], &_settings);
     _sender = _mirror->CreateSender(_args.ArgsParams.id, _render);
     if (!_sender.has_value())
     {

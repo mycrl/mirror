@@ -15,11 +15,11 @@
 #define EXPORT
 #endif
 
-#include <frame.h>
 #include <optional>
 
 extern "C"
 {
+#include <frame.h>
 #include <libavutil/hwcontext.h>
 #include <libavcodec/avcodec.h>
 #include <libavutil/frame.h>

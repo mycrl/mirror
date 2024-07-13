@@ -40,17 +40,38 @@ if (NOT EXISTS "${THIRD_PARTY_DIR}/obs-studio")
     endif()
 endif()
 
+if (NOT EXISTS "${THIRD_PARTY_DIR}/yuv.lib")
+    if (WIN32)
+        execute_process(
+            WORKING_DIRECTORY "${THIRD_PARTY_DIR}"
+            COMMAND powershell.exe -Command "Invoke-WebRequest \
+                -Uri https://github.com/mycrl/distributions/releases/download/distributions/yuv-windows-x64.lib \
+                -OutFile yuv.lib")
+    endif()
+endif()
+
+if (NOT EXISTS "${THIRD_PARTY_DIR}/libyuv")
+    if (WIN32)
+        execute_process(
+            WORKING_DIRECTORY "${THIRD_PARTY_DIR}"
+            COMMAND powershell.exe -Command "git clone https://github.com/lemenkov/libyuv")
+    endif()
+endif()
+
 add_library(capture STATIC 
             capture.cpp
             capture.h
             camera.h 
-            camera.cpp)
+            camera.cpp 
+            desktop.h
+            desktop.cpp)
 
 include_directories("${THIRD_PARTY_DIR}/obs-studio"
+                    "${THIRD_PARTY_DIR}/libyuv/include"
                     "../../common/include")
 
 target_link_directories(capture PRIVATE "${THIRD_PARTY_DIR}")
-target_link_libraries(capture obs)
+target_link_libraries(capture obs yuv)
 
 # If it is WIN32, you need to set the runtime library.
 if(MSVC)

@@ -9,26 +9,22 @@
 #define FRAME_H
 #pragma once
 
-#ifdef __cplusplus
-#include <cstddef>
-#endif
-
 #include <stdint.h>
 
-struct VideoFrameRect
+typedef struct
 {
     size_t width;
     size_t height;
-};
+} VideoFrameRect;
 
-struct VideoFrame
+typedef struct
 {
-    struct VideoFrameRect rect;
+    VideoFrameRect rect;
     uint8_t* data[2];
     size_t linesize[2];
-};
+} VideoFrame;
 
-enum AudioFormat
+typedef enum
 {
     AUDIO_NONE = -1,
     AUDIO_U8,          ///< unsigned 8 bits
@@ -44,13 +40,14 @@ enum AudioFormat
     AUDIO_S64,         ///< signed 64 bits
     AUDIO_S64P,        ///< signed 64 bits, planar
     AUDIO_NB           ///< Number of sample formats. DO NOT USE if linking dynamically
-};
+} AudioFormat;
 
-struct AudioFrame
+typedef struct
 {
-    enum AudioFormat format;
+    int sample_rate;
+    AudioFormat format;
     uint32_t frames;
     uint8_t* data;
-};
+} AudioFrame;
 
 #endif /* FRAME_H */
