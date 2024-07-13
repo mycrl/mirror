@@ -1,10 +1,17 @@
-use std::time::Duration;
+use std::{
+    mem::transmute,
+    slice::from_raw_parts,
+    sync::{atomic::AtomicBool, Arc},
+    time::Duration,
+};
 
 use anyhow::Result;
-use common::frame::AudioFrame;
+use common::{atomic::EasyAtomic, frame::AudioFrame};
 use rodio::{OutputStream, OutputStreamHandle, Sink, Source};
 
 pub struct AudioPlayer {
+    initialization: AtomicBool,
+    buffer: Arc<LockedBuffer>,
     /// Handle to a device that outputs sounds.
     ///
     /// Dropping the `Sink` stops all sounds. You can use `detach` if you want
@@ -27,7 +34,9 @@ impl AudioPlayer {
 
         let (stream, stream_handle) = OutputStream::try_default()?;
         Ok(Self {
+            buffer: Arc::new(LockedBuffer::default()),
             sink: Sink::try_new(&stream_handle)?,
+            initialization: AtomicBool::new(false),
             stream_handle,
             stream,
         })
@@ -42,27 +51,64 @@ impl AudioPlayer {
             frame.frames
         );
 
-        self.sink.append(AudioBuffer {
-            channels,
-            index: 0,
-            sample_rate: frame.sample_rate,
-            frames: frame.frames as usize,
-            buffer: unsafe {
-                std::slice::from_raw_parts(frame.data as *const i16, frame.frames as usize).to_vec()
-            },
-        })
+        {
+            if !self.initialization.get() {
+                self.initialization.update(true);
+                self.sink.append(AudioSource {
+                    sample_rate: frame.sample_rate,
+                    buffer: self.buffer.clone(),
+                    channels,
+                });
+            }
+        }
+
+        self.buffer
+            .swap(unsafe { from_raw_parts(frame.data as *const i16, frame.frames as usize) });
     }
 }
 
-pub struct AudioBuffer {
-    buffer: Vec<i16>,
-    index: usize,
-    channels: u16,
+struct AudioSource {
+    buffer: Arc<LockedBuffer>,
+    /// A sound is a vibration that propagates through air and reaches your
+    /// ears. This vibration can be represented as an analog signal.
+    ///
+    /// In order to store this signal in the computer’s memory or on the disk,
+    /// we perform what is called sampling. The consists in choosing an interval
+    /// of time (for example 20µs) and reading the amplitude of the signal at
+    /// each interval (for example, if the interval is 20µs we read the
+    /// amplitude every 20µs). By doing so we obtain a list of numerical values,
+    /// each value being called a sample.
+    ///
+    /// Therefore a sound can be represented in memory by a frequency and a list
+    /// of samples. The frequency is expressed in hertz and corresponds to the
+    /// number of samples that have been read per second. For example if we read
+    /// one sample every 20µs, the frequency would be 50000 Hz. In reality,
+    /// common values for the frequency are 44100, 48000 and 96000.
     sample_rate: u32,
-    frames: usize,
+    /// But a frequency and a list of values only represent one signal. When you
+    /// listen to a sound, your left and right ears don’t receive exactly the
+    /// same signal. In order to handle this, we usually record not one but two
+    /// different signals: one for the left ear and one for the right ear. We
+    /// say that such a sound has two channels.
+    ///
+    /// Sometimes sounds even have five or six channels, each corresponding to a
+    /// location around the head of the listener.
+    ///
+    /// The standard in audio manipulation is to interleave the multiple
+    /// channels. In other words, in a sound with two channels the list of
+    /// samples contains the first sample of the first channel, then the first
+    /// sample of the second channel, then the second sample of the first
+    /// channel, then the second sample of the second channel, and so on. The
+    /// same applies if you have more than two channels. The rodio library only
+    /// supports this schema.
+    ///
+    /// Therefore in order to represent a sound in memory in fact we need three
+    /// characteristics: the frequency, the number of channels, and the list of
+    /// samples.
+    channels: u16,
 }
 
-impl Source for AudioBuffer {
+impl Source for AudioSource {
     /// Returns the number of samples before the current frame ends. `None`
     /// means "infinite" or "until the sound ends".
     /// Should never return 0 unless there's no more data.
@@ -71,7 +117,7 @@ impl Source for AudioBuffer {
     /// it will check whether the value of `channels()` and/or
     /// `sample_rate()` have changed.
     fn current_frame_len(&self) -> Option<usize> {
-        Some(self.frames)
+        None
     }
 
     /// Returns the number of channels. Channels are always interleaved.
@@ -89,13 +135,11 @@ impl Source for AudioBuffer {
     ///
     /// `None` indicates at the same time "infinite" or "unknown".
     fn total_duration(&self) -> Option<Duration> {
-        Some(Duration::from_millis(
-            (self.frames as f64 / (self.sample_rate as f64 / 1000.0)) as u64,
-        ))
+        None
     }
 }
 
-impl Iterator for AudioBuffer {
+impl Iterator for AudioSource {
     type Item = i16;
 
     /// Read a value of a single sample.
@@ -115,7 +159,51 @@ impl Iterator for AudioBuffer {
     ///
     /// You can implement this trait on your own type as well if you wish so.
     fn next(&mut self) -> Option<Self::Item> {
-        self.index += 1;
-        self.buffer.get(self.index - 1).map(|it| *it)
+        Some(self.buffer.next().unwrap_or(0))
+    }
+}
+
+struct LockedBuffer {
+    locked: AtomicBool,
+    bytes: Vec<i16>,
+    offset: usize,
+}
+
+impl Default for LockedBuffer {
+    fn default() -> Self {
+        Self {
+            locked: AtomicBool::new(false),
+            bytes: Vec::with_capacity(48000),
+            offset: 0,
+        }
+    }
+}
+
+impl LockedBuffer {
+    #[allow(mutable_transmutes)]
+    fn next(&self) -> Option<i16> {
+        if !self.locked.get() {
+            {
+                unsafe { transmute::<&Self, &mut Self>(&self) }.offset += 1;
+            }
+
+            self.bytes.get(self.offset - 1).copied()
+        } else {
+            None
+        }
+    }
+
+    #[allow(mutable_transmutes)]
+    fn swap(&self, bytes: &[i16]) {
+        self.locked.update(true);
+
+        {
+            let this = unsafe { transmute::<&Self, &mut Self>(&self) };
+            this.offset = 0;
+            this.bytes.clear();
+            this.bytes.extend_from_slice(bytes);
+        }
+
+        self.locked.update(false);
     }
 }
