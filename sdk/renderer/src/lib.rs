@@ -3,13 +3,14 @@ mod video;
 
 use std::{
     ffi::{c_int, c_void},
+    num::NonZeroIsize,
     ptr::null_mut,
 };
 
 use audio::AudioPlayer;
 use common::frame::{AudioFrame, VideoFrame};
-use pixels::raw_window_handle::Win32WindowHandle;
 use video::{Size, VideoRender, WindowHandle};
+use wgpu::rwh::Win32WindowHandle;
 
 #[repr(C)]
 struct RawSize {
@@ -31,10 +32,11 @@ extern "C" fn renderer_create_window_handle(
     hwnd: *mut c_void,
     hinstance: *mut c_void,
 ) -> *const WindowHandle {
-    let mut handle = Win32WindowHandle::empty();
-    handle.hinstance = hinstance;
-    handle.hwnd = hwnd;
+    assert!(!hwnd.is_null());
+    assert!(!hinstance.is_null());
 
+    let mut handle = Win32WindowHandle::new(NonZeroIsize::new(hwnd as isize).unwrap());
+    handle.hinstance = Some(NonZeroIsize::new(hinstance as isize).unwrap());
     Box::into_raw(Box::new(WindowHandle::Win32(handle)))
 }
 
@@ -47,7 +49,7 @@ extern "C" fn renderer_window_handle_destroy(handle: *const WindowHandle) {
 
 struct RawRenderer {
     audio: AudioPlayer,
-    video: VideoRender,
+    // video: VideoRender<'static>,
 }
 
 #[no_mangle]
@@ -56,7 +58,7 @@ extern "C" fn renderer_create(size: RawSize, handle: *const WindowHandle) -> *co
 
     let func = || {
         Ok::<RawRenderer, anyhow::Error>(RawRenderer {
-            video: VideoRender::new(size.into(), unsafe { &*handle })?,
+            // video: VideoRender::new(size.into(), unsafe { &*handle })?,
             audio: AudioPlayer::new()?,
         })
     };
@@ -70,7 +72,8 @@ extern "C" fn renderer_create(size: RawSize, handle: *const WindowHandle) -> *co
 extern "C" fn renderer_on_video(render: *const RawRenderer, frame: *const VideoFrame) -> bool {
     assert!(!render.is_null() && !frame.is_null());
 
-    unsafe { &*render }.video.send(unsafe { &*frame }).is_ok()
+    // unsafe { &*render }.video.send(unsafe { &*frame }).is_ok()
+    true
 }
 
 #[no_mangle]
@@ -85,7 +88,8 @@ extern "C" fn renderer_on_audio(render: *const RawRenderer, frame: *const AudioF
 extern "C" fn renderer_resise(render: *const RawRenderer, size: RawSize) -> bool {
     assert!(!render.is_null());
 
-    unsafe { &*render }.video.resize(size.into()).is_ok()
+    // unsafe { &*render }.video.resize(size.into()).is_ok()
+    true
 }
 
 #[no_mangle]
