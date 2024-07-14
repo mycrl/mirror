@@ -10,6 +10,8 @@ use std::{
 use audio::AudioPlayer;
 use common::frame::{AudioFrame, VideoFrame};
 use video::{Size, VideoRender, WindowHandle};
+
+#[cfg(target_os = "windows")]
 use wgpu::rwh::Win32WindowHandle;
 
 #[repr(C)]
@@ -28,6 +30,7 @@ impl Into<Size> for RawSize {
 }
 
 #[no_mangle]
+#[cfg(target_os = "windows")]
 extern "C" fn renderer_create_window_handle(
     hwnd: *mut c_void,
     hinstance: *mut c_void,

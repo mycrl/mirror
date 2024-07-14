@@ -4,7 +4,10 @@ use wgpu::{
     rwh::{
         DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, RawWindowHandle,
         Win32WindowHandle, WindowHandle as RWindowHandle,
-    }, Adapter, CommandEncoderDescriptor, CompositeAlphaMode, Device, DeviceDescriptor, Features, Instance, Limits, PresentMode, Queue, RequestAdapterOptions, Surface, SurfaceConfiguration, TextureFormat, TextureUsages
+    },
+    Adapter, CommandEncoderDescriptor, CompositeAlphaMode, Device, DeviceDescriptor, Features,
+    Instance, Limits, PresentMode, Queue, RequestAdapterOptions, Surface, SurfaceConfiguration,
+    TextureFormat, TextureUsages,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -63,16 +66,19 @@ impl<'a> VideoRender<'a> {
             None,
         ))?;
 
-        surface.configure(&device, &SurfaceConfiguration {
-            usage: TextureUsages::all(),
-            format: TextureFormat::Bgra8UnormSrgb,
-            width: size.width,
-            height: size.height,
-            present_mode: PresentMode::AutoVsync,
-            desired_maximum_frame_latency: 2,
-            alpha_mode: CompositeAlphaMode::Opaque,
-            view_formats: vec![],
-        });
+        surface.configure(
+            &device,
+            &SurfaceConfiguration {
+                usage: TextureUsages::all(),
+                format: TextureFormat::Bgra8UnormSrgb,
+                width: size.width,
+                height: size.height,
+                present_mode: PresentMode::AutoVsync,
+                desired_maximum_frame_latency: 2,
+                alpha_mode: CompositeAlphaMode::Opaque,
+                view_formats: vec![],
+            },
+        );
 
         Ok(Self {
             instance,
@@ -85,18 +91,14 @@ impl<'a> VideoRender<'a> {
 
     pub fn send(&self, frame: &VideoFrame) -> Result<()> {
         let output = self.surface.get_current_texture()?;
-        let mut encoder = self.device.create_command_encoder(&CommandEncoderDescriptor {
-            label: None,
-        });
+        let mut encoder = self
+            .device
+            .create_command_encoder(&CommandEncoderDescriptor { label: None });
 
-        {
+        {}
 
-        }
+        self.queue.submit([encoder.finish()]);
 
-        self.queue.submit([
-            encoder.finish(),
-        ]);
-        
         output.present();
         todo!()
     }

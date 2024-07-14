@@ -8,7 +8,6 @@ fn join(root: &str, next: &str) -> anyhow::Result<String> {
         .to_string())
 }
 
-#[allow(unused)]
 fn is_exsit(dir: &str) -> bool {
     fs::metadata(dir).is_ok()
 }
@@ -32,8 +31,11 @@ fn exec(command: &str, work_dir: &str) -> anyhow::Result<String> {
     }
 }
 
-#[cfg(any(target_os = "windows", target_os = "linux"))]
 fn main() -> anyhow::Result<()> {
+    if cfg!(macos) {
+        return Ok(());
+    }
+
     println!("cargo:rerun-if-changed=./lib");
     println!("cargo:rerun-if-changed=./build.rs");
 
@@ -114,7 +116,6 @@ struct Settings {
 }
 
 impl Settings {
-    #[cfg(any(target_os = "windows", target_os = "linux"))]
     fn build() -> anyhow::Result<Self> {
         let out_dir = env::var("OUT_DIR")?;
         let is_debug = env::var("DEBUG")
@@ -172,6 +173,3 @@ fn find_ffmpeg_prefix(out_dir: &str, is_debug: bool) -> anyhow::Result<(Vec<Stri
         vec![join(&ffmpeg_prefix, "./lib")?],
     ))
 }
-
-#[cfg(target_os = "macos")]
-fn main() {}

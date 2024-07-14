@@ -1,5 +1,3 @@
-#![allow(unused)]
-
 use std::{env, fs, path::Path, process::Command};
 
 use anyhow::anyhow;
@@ -35,8 +33,11 @@ fn exec(command: &str, work_dir: &str) -> anyhow::Result<String> {
     }
 }
 
-#[cfg(any(target_os = "windows", target_os = "linux"))]
 fn main() -> anyhow::Result<()> {
+    if cfg!(macos) {
+        return Ok(());
+    }
+
     println!("cargo:rerun-if-changed=./lib");
     println!("cargo:rerun-if-changed=./build.rs");
 
@@ -117,6 +118,3 @@ fn main() -> anyhow::Result<()> {
 
     Ok(())
 }
-
-#[cfg(target_os = "macos")]
-fn main() {}

@@ -1,8 +1,6 @@
-#![allow(unused)]
-
 use std::{env, fs, path::Path, process::Command};
 
-use anyhow::{anyhow, Result};
+use anyhow::anyhow;
 
 fn is_exsit(dir: &str) -> bool {
     fs::metadata(dir).is_ok()
@@ -34,9 +32,6 @@ fn exec(command: &str, work_dir: &str) -> anyhow::Result<String> {
 fn main() -> anyhow::Result<()> {
     let target = env::var("TARGET")?;
     let out_dir = env::var("OUT_DIR")?;
-    let is_debug = env::var("DEBUG")
-        .map(|label| label == "true")
-        .unwrap_or(true);
 
     if target.find("android").is_some() {
         if !is_exsit(&join(&out_dir, "libsrt.a")) {
