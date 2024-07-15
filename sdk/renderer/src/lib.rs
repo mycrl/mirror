@@ -3,16 +3,12 @@ mod video;
 
 use std::{
     ffi::{c_int, c_void},
-    num::NonZeroIsize,
     ptr::null_mut,
 };
 
 use audio::AudioPlayer;
 use common::frame::{AudioFrame, VideoFrame};
 use video::{Size, VideoRender, WindowHandle};
-
-#[cfg(target_os = "windows")]
-use wgpu::rwh::Win32WindowHandle;
 
 #[repr(C)]
 struct RawSize {
@@ -35,11 +31,15 @@ extern "C" fn renderer_create_window_handle(
     hwnd: *mut c_void,
     hinstance: *mut c_void,
 ) -> *const WindowHandle {
+    use pixels::raw_window_handle::Win32WindowHandle;
+
     assert!(!hwnd.is_null());
     assert!(!hinstance.is_null());
 
-    let mut handle = Win32WindowHandle::new(NonZeroIsize::new(hwnd as isize).unwrap());
-    handle.hinstance = Some(NonZeroIsize::new(hinstance as isize).unwrap());
+    let mut handle = Win32WindowHandle::empty();
+    handle.hinstance = hinstance;
+    handle.hwnd = hwnd;
+
     Box::into_raw(Box::new(WindowHandle::Win32(handle)))
 }
 
@@ -56,7 +56,7 @@ struct RawRenderer {
 }
 
 #[no_mangle]
-extern "C" fn renderer_create(size: RawSize, handle: *const WindowHandle) -> *const RawRenderer {
+extern "C" fn renderer_create(size: RawSize, handle: *const WindowHandle) -> *mut RawRenderer {
     assert!(!handle.is_null());
 
     let func = || {
@@ -72,30 +72,33 @@ extern "C" fn renderer_create(size: RawSize, handle: *const WindowHandle) -> *co
 }
 
 #[no_mangle]
-extern "C" fn renderer_on_video(render: *const RawRenderer, frame: *const VideoFrame) -> bool {
+extern "C" fn renderer_on_video(render: *mut RawRenderer, frame: *const VideoFrame) -> bool {
     assert!(!render.is_null() && !frame.is_null());
 
-    unsafe { &*render }.video.send(unsafe { &*frame }).is_ok()
+    unsafe { &mut *render }
+        .video
+        .send(unsafe { &*frame })
+        .is_ok()
 }
 
 #[no_mangle]
-extern "C" fn renderer_on_audio(render: *const RawRenderer, frame: *const AudioFrame) -> bool {
+extern "C" fn renderer_on_audio(render: *mut RawRenderer, frame: *const AudioFrame) -> bool {
     assert!(!render.is_null() && !frame.is_null());
 
-    unsafe { &*render }.audio.send(1, unsafe { &*frame });
+    unsafe { &mut *render }.audio.send(1, unsafe { &*frame });
     true
 }
 
 #[no_mangle]
-extern "C" fn renderer_resise(render: *const RawRenderer, size: RawSize) -> bool {
+extern "C" fn renderer_resise(render: *mut RawRenderer, size: RawSize) -> bool {
     assert!(!render.is_null());
 
-    unsafe { &*render }.video.resize(size.into()).is_ok()
+    unsafe { &mut *render }.video.resize(size.into()).is_ok()
 }
 
 #[no_mangle]
-extern "C" fn renderer_destroy(render: *const RawRenderer) {
+extern "C" fn renderer_destroy(render: *mut RawRenderer) {
     assert!(!render.is_null());
 
-    let _ = unsafe { Box::from_raw(render as *mut RawRenderer) };
+    let _ = unsafe { Box::from_raw(render) };
 }

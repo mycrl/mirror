@@ -1,7 +1,7 @@
-use std::{ffi::c_int, sync::{atomic::AtomicU32, Mutex}};
+use std::ffi::c_int;
 
 use anyhow::Result;
-use common::{atomic::EasyAtomic, frame::VideoFrame};
+use common::frame::VideoFrame;
 use pixels::{
     raw_window_handle::{
         HasRawDisplayHandle, HasRawWindowHandle, RawDisplayHandle, RawWindowHandle,
@@ -15,20 +15,6 @@ use pixels::{
 pub struct Size {
     pub width: u32,
     pub height: u32,
-}
-
-struct AtomicSize {
-    width: AtomicU32,
-    height: AtomicU32,
-}
-
-impl Into<AtomicSize> for Size {
-    fn into(self) -> AtomicSize {
-        AtomicSize {
-            width: AtomicU32::new(self.width),
-            height: AtomicU32::new(self.height),
-        }
-    }
 }
 
 pub enum WindowHandle {
@@ -50,61 +36,69 @@ unsafe impl HasRawDisplayHandle for WindowHandle {
 }
 
 pub struct VideoRender {
-    pixels: Mutex<Pixels>,
-    size: AtomicSize,
+    buffer: Vec<u8>,
+    pixels: Pixels,
+    size: Size,
 }
 
 impl VideoRender {
     pub fn new(size: Size, window: &WindowHandle) -> Result<Self> {
         Ok(Self {
-            size: size.into(),
-            pixels: Mutex::new(
-                PixelsBuilder::new(
-                    size.width,
-                    size.height,
-                    SurfaceTexture::new(size.width, size.height, window),
-                )
-                .surface_texture_format(TextureFormat::Rgba8UnormSrgb)
-                .wgpu_backend(Backends::DX12)
-                .build()?,
-            ),
+            size,
+            buffer: vec![0u8; size.width as usize * size.height as usize * 4],
+            pixels: PixelsBuilder::new(
+                size.width,
+                size.height,
+                SurfaceTexture::new(size.width, size.height, window),
+            )
+            .surface_texture_format(TextureFormat::Rgba8UnormSrgb)
+            .wgpu_backend(Backends::DX12)
+            .build()?,
         })
     }
 
-    pub fn send(&self, frame: &VideoFrame) -> Result<()> {
-        let mut pixels = self.pixels.lock().unwrap();
-
+    pub fn send(&mut self, frame: &VideoFrame) -> Result<()> {
         {
-            if self.size.width.get() != frame.rect.width as u32 || self.size.height.get() != frame.rect.height as u32 {
-                pixels.resize_buffer(frame.rect.width as u32, frame.rect.height as u32)?;
-                self.size.height.update(frame.rect.height as u32);
-                self.size.width.update(frame.rect.width as u32);
+            if self.size.width != frame.rect.width as u32
+                || self.size.height != frame.rect.height as u32
+            {
+                self.pixels
+                    .resize_buffer(frame.rect.width as u32, frame.rect.height as u32)?;
+                self.size.height = frame.rect.height as u32;
+                self.size.width = frame.rect.width as u32;
             }
         }
 
-        let texture = pixels.frame_mut();
-        // unsafe {
-        //     libyuv::nv12_to_argb(
-        //         frame.data[0],
-        //         frame.linesize[0] as c_int,
-        //         frame.data[1],
-        //         frame.linesize[1] as c_int,
-        //         texture.as_mut_ptr(),
-        //         frame.rect.width as c_int * 4,
-        //         frame.rect.width as c_int,
-        //         frame.rect.height as c_int,
-        //     );
-        // }
+        unsafe {
+            libyuv::nv12_to_argb(
+                frame.data[0],
+                frame.linesize[0] as c_int,
+                frame.data[1],
+                frame.linesize[1] as c_int,
+                self.buffer.as_mut_ptr(),
+                frame.rect.width as c_int * 4,
+                frame.rect.width as c_int,
+                frame.rect.height as c_int,
+            );
+        }
 
-        pixels.render()?;
+        unsafe {
+            libyuv::argb_to_rgba(
+                self.buffer.as_mut_ptr(),
+                frame.rect.width as c_int * 4,
+                self.pixels.frame_mut().as_mut_ptr(),
+                frame.rect.width as c_int * 4,
+                frame.rect.width as c_int,
+                frame.rect.height as c_int,
+            );
+        }
+
+        self.pixels.render()?;
         Ok(())
     }
 
-    pub fn resize(&self, size: Size) -> Result<()> {
-        self.pixels
-            .lock()
-            .unwrap()
-            .resize_surface(size.width, size.height)?;
+    pub fn resize(&mut self, size: Size) -> Result<()> {
+        self.pixels.resize_surface(size.width, size.height)?;
         Ok(())
     }
 }

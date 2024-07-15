@@ -10,7 +10,7 @@ use common::{atomic::EasyAtomic, frame::AudioFrame};
 use rodio::{OutputStream, OutputStreamHandle, Sink, Source};
 
 pub struct AudioPlayer {
-    initialization: AtomicBool,
+    initialization: bool,
     buffer: Arc<LockedBuffer>,
     /// Handle to a device that outputs sounds.
     ///
@@ -36,14 +36,14 @@ impl AudioPlayer {
         Ok(Self {
             buffer: Arc::new(LockedBuffer::default()),
             sink: Sink::try_new(&stream_handle)?,
-            initialization: AtomicBool::new(false),
+            initialization: false,
             stream_handle,
             stream,
         })
     }
 
     /// Push an audio clip to the queue.
-    pub fn send(&self, channels: u16, frame: &AudioFrame) {
+    pub fn send(&mut self, channels: u16, frame: &AudioFrame) {
         log::trace!(
             "append audio chunk to audio player, sample_rate={}, channels={}, frames={}",
             frame.sample_rate,
@@ -52,8 +52,8 @@ impl AudioPlayer {
         );
 
         {
-            if !self.initialization.get() {
-                self.initialization.update(true);
+            if !self.initialization {
+                self.initialization = true;
                 self.sink.append(AudioSource {
                     sample_rate: frame.sample_rate,
                     buffer: self.buffer.clone(),
