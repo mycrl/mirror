@@ -15,15 +15,23 @@ fn is_exsit(dir: &str) -> bool {
 }
 
 fn exec(command: &str, work_dir: &str) -> anyhow::Result<String> {
-    let output = Command::new(if cfg!(windows) { "powershell" } else { "bash" })
-        .arg(if cfg!(windows) { "-command" } else { "-c" })
-        .arg(if cfg!(windows) {
-            format!("$ProgressPreference = 'SilentlyContinue';{}", command)
-        } else {
-            command.to_string()
-        })
-        .current_dir(work_dir)
-        .output()?;
+    let output = Command::new(if cfg!(target_os = "windows") {
+        "powershell"
+    } else {
+        "bash"
+    })
+    .arg(if cfg!(target_os = "windows") {
+        "-command"
+    } else {
+        "-c"
+    })
+    .arg(if cfg!(target_os = "windows") {
+        format!("$ProgressPreference = 'SilentlyContinue';{}", command)
+    } else {
+        command.to_string()
+    })
+    .current_dir(work_dir)
+    .output()?;
     if !output.status.success() {
         Err(anyhow!("{}", unsafe {
             String::from_utf8_unchecked(output.stderr)
@@ -34,7 +42,7 @@ fn exec(command: &str, work_dir: &str) -> anyhow::Result<String> {
 }
 
 fn main() -> anyhow::Result<()> {
-    if cfg!(macos) {
+    if cfg!(target_os = "macos") {
         return Ok(());
     }
 
