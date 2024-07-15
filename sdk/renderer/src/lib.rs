@@ -52,7 +52,7 @@ extern "C" fn renderer_window_handle_destroy(handle: *const WindowHandle) {
 
 struct RawRenderer {
     audio: AudioPlayer,
-    // video: VideoRender<'static>,
+    video: VideoRender,
 }
 
 #[no_mangle]
@@ -61,7 +61,7 @@ extern "C" fn renderer_create(size: RawSize, handle: *const WindowHandle) -> *co
 
     let func = || {
         Ok::<RawRenderer, anyhow::Error>(RawRenderer {
-            // video: VideoRender::new(size.into(), unsafe { &*handle })?,
+            video: VideoRender::new(size.into(), unsafe { &*handle })?,
             audio: AudioPlayer::new()?,
         })
     };
@@ -75,8 +75,7 @@ extern "C" fn renderer_create(size: RawSize, handle: *const WindowHandle) -> *co
 extern "C" fn renderer_on_video(render: *const RawRenderer, frame: *const VideoFrame) -> bool {
     assert!(!render.is_null() && !frame.is_null());
 
-    // unsafe { &*render }.video.send(unsafe { &*frame }).is_ok()
-    true
+    unsafe { &*render }.video.send(unsafe { &*frame }).is_ok()
 }
 
 #[no_mangle]
@@ -91,8 +90,7 @@ extern "C" fn renderer_on_audio(render: *const RawRenderer, frame: *const AudioF
 extern "C" fn renderer_resise(render: *const RawRenderer, size: RawSize) -> bool {
     assert!(!render.is_null());
 
-    // unsafe { &*render }.video.resize(size.into()).is_ok()
-    true
+    unsafe { &*render }.video.resize(size.into()).is_ok()
 }
 
 #[no_mangle]

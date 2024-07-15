@@ -1,13 +1,14 @@
-use anyhow::{anyhow, Result};
-use common::frame::VideoFrame;
-use wgpu::{
-    rwh::{
-        DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, RawWindowHandle,
-        Win32WindowHandle, WindowHandle as RWindowHandle,
+use std::{ffi::c_int, sync::{atomic::AtomicU32, Mutex}};
+
+use anyhow::Result;
+use common::{atomic::EasyAtomic, frame::VideoFrame};
+use pixels::{
+    raw_window_handle::{
+        HasRawDisplayHandle, HasRawWindowHandle, RawDisplayHandle, RawWindowHandle,
+        Win32WindowHandle, WindowsDisplayHandle,
     },
-    Adapter, CommandEncoderDescriptor, CompositeAlphaMode, Device, DeviceDescriptor, Features,
-    Instance, Limits, PresentMode, Queue, RequestAdapterOptions, Surface, SurfaceConfiguration,
-    TextureFormat, TextureUsages,
+    wgpu::{Backends, TextureFormat},
+    Pixels, PixelsBuilder, SurfaceTexture,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -16,94 +17,94 @@ pub struct Size {
     pub height: u32,
 }
 
+struct AtomicSize {
+    width: AtomicU32,
+    height: AtomicU32,
+}
+
+impl Into<AtomicSize> for Size {
+    fn into(self) -> AtomicSize {
+        AtomicSize {
+            width: AtomicU32::new(self.width),
+            height: AtomicU32::new(self.height),
+        }
+    }
+}
+
 pub enum WindowHandle {
     Win32(Win32WindowHandle),
 }
 
-impl HasWindowHandle for WindowHandle {
-    fn window_handle(&self) -> Result<RWindowHandle, HandleError> {
-        Ok(unsafe {
-            RWindowHandle::borrow_raw(match self {
-                Self::Win32(handle) => RawWindowHandle::Win32(handle.clone()),
-            })
-        })
+unsafe impl HasRawWindowHandle for WindowHandle {
+    fn raw_window_handle(&self) -> RawWindowHandle {
+        match self {
+            Self::Win32(handle) => RawWindowHandle::Win32(handle.clone()),
+        }
     }
 }
 
-impl HasDisplayHandle for WindowHandle {
-    fn display_handle(&self) -> Result<DisplayHandle, HandleError> {
-        Ok(match self {
-            Self::Win32(_) => DisplayHandle::windows(),
-        })
+unsafe impl HasRawDisplayHandle for WindowHandle {
+    fn raw_display_handle(&self) -> RawDisplayHandle {
+        RawDisplayHandle::Windows(WindowsDisplayHandle::empty())
     }
 }
 
-pub struct VideoRender<'a> {
-    instance: Instance,
-    surface: Surface<'a>,
-    adapter: Adapter,
-    device: Device,
-    queue: Queue,
+pub struct VideoRender {
+    pixels: Mutex<Pixels>,
+    size: AtomicSize,
 }
 
-impl<'a> VideoRender<'a> {
-    pub fn new(size: Size, handle: &'a WindowHandle) -> Result<Self> {
-        let instance = Instance::default();
-        let surface = instance.create_surface(handle)?;
-
-        let adapter = pollster::block_on(instance.request_adapter(&RequestAdapterOptions {
-            compatible_surface: Some(&surface),
-            ..Default::default()
-        }))
-        .ok_or_else(|| anyhow!("not found a gpu adapter"))?;
-
-        let (device, queue) = pollster::block_on(adapter.request_device(
-            &DeviceDescriptor {
-                label: None,
-                required_features: Features::empty(),
-                required_limits: Limits::downlevel_defaults(),
-            },
-            None,
-        ))?;
-
-        surface.configure(
-            &device,
-            &SurfaceConfiguration {
-                usage: TextureUsages::all(),
-                format: TextureFormat::Bgra8UnormSrgb,
-                width: size.width,
-                height: size.height,
-                present_mode: PresentMode::AutoVsync,
-                desired_maximum_frame_latency: 2,
-                alpha_mode: CompositeAlphaMode::Opaque,
-                view_formats: vec![],
-            },
-        );
-
+impl VideoRender {
+    pub fn new(size: Size, window: &WindowHandle) -> Result<Self> {
         Ok(Self {
-            instance,
-            surface,
-            adapter,
-            device,
-            queue,
+            size: size.into(),
+            pixels: Mutex::new(
+                PixelsBuilder::new(
+                    size.width,
+                    size.height,
+                    SurfaceTexture::new(size.width, size.height, window),
+                )
+                .surface_texture_format(TextureFormat::Rgba8UnormSrgb)
+                .wgpu_backend(Backends::DX12)
+                .build()?,
+            ),
         })
     }
 
     pub fn send(&self, frame: &VideoFrame) -> Result<()> {
-        let output = self.surface.get_current_texture()?;
-        let mut encoder = self
-            .device
-            .create_command_encoder(&CommandEncoderDescriptor { label: None });
+        let mut pixels = self.pixels.lock().unwrap();
 
-        {}
+        {
+            if self.size.width.get() != frame.rect.width as u32 || self.size.height.get() != frame.rect.height as u32 {
+                pixels.resize_buffer(frame.rect.width as u32, frame.rect.height as u32)?;
+                self.size.height.update(frame.rect.height as u32);
+                self.size.width.update(frame.rect.width as u32);
+            }
+        }
 
-        self.queue.submit([encoder.finish()]);
+        let texture = pixels.frame_mut();
+        // unsafe {
+        //     libyuv::nv12_to_argb(
+        //         frame.data[0],
+        //         frame.linesize[0] as c_int,
+        //         frame.data[1],
+        //         frame.linesize[1] as c_int,
+        //         texture.as_mut_ptr(),
+        //         frame.rect.width as c_int * 4,
+        //         frame.rect.width as c_int,
+        //         frame.rect.height as c_int,
+        //     );
+        // }
 
-        output.present();
-        todo!()
+        pixels.render()?;
+        Ok(())
     }
 
     pub fn resize(&self, size: Size) -> Result<()> {
-        todo!()
+        self.pixels
+            .lock()
+            .unwrap()
+            .resize_surface(size.width, size.height)?;
+        Ok(())
     }
 }

@@ -10,15 +10,7 @@ name = "renderer"
 [dependencies]
 anyhow = "1.0.86"
 common = { path = "../../common" }
+# libyuv = "0.1.2"
 log = "0.4.22"
+pixels = "0.13.0"
 rodio = "0.19.0"
-pollster = "0.3.0"
-
-[dependencies.wgpu]
-version = "0.20"
-default-features = false
-features = [
-    "dx12",
-    "wgsl",
-    "api_log_info",
-]
