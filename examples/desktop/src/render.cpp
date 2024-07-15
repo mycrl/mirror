@@ -38,11 +38,21 @@ void SimpleRender::SetTitle(std::string title)
 
 bool SimpleRender::OnVideoFrame(VideoFrame* frame)
 {
+    if (!IsRender)
+    {
+        return;
+    }
+    
     return renderer_on_video(_renderer, frame);
 }
 
 bool SimpleRender::OnAudioFrame(AudioFrame* frame)
 {
+    if (!IsRender)
+    {
+        return;
+    }
+
     return renderer_on_audio(_renderer, frame);
 }
 
