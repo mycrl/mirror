@@ -69,6 +69,7 @@ impl VideoRender {
             }
         }
 
+        #[cfg(target_os = "windows")]
         unsafe {
             libyuv::nv12_to_argb(
                 frame.data[0],
@@ -82,6 +83,7 @@ impl VideoRender {
             );
         }
 
+        #[cfg(target_os = "windows")]
         unsafe {
             libyuv::argb_to_rgba(
                 self.buffer.as_mut_ptr(),
