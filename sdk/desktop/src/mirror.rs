@@ -10,10 +10,9 @@ use capture::{AudioInfo, CaptureSettings, Device, DeviceManager, DeviceManagerOp
 use codec::{AudioDecoder, AudioEncoderSettings, VideoDecoder, VideoEncoderSettings};
 use common::{
     frame::{AudioFrame, VideoFrame},
-    jump_current_exe_dir, logger,
+    jump_current_exe_dir,
 };
 
-use log::LevelFilter;
 use once_cell::sync::Lazy;
 use transport::{
     adapter::{StreamKind, StreamMultiReceiverAdapter, StreamSenderAdapter},
@@ -120,7 +119,7 @@ pub fn init(options: MirrorOptions) -> Result<()> {
     jump_current_exe_dir()?;
 
     #[cfg(debug_assertions)]
-    logger::init("mirror.log", LevelFilter::Info)?;
+    common::logger::init("mirror.log", log::LevelFilter::Info)?;
 
     // In order to prevent other programs from affecting the delay performance of
     // the current program, set the priority of the current process to high.

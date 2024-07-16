@@ -11,11 +11,10 @@ use std::{
         Arc, Mutex, RwLock, Weak,
     },
     thread,
-    time::Duration,
 };
 
 use bytes::BytesMut;
-use common::{atomic::EasyAtomic, logger::FormatLogger};
+use common::atomic::EasyAtomic;
 use service::{signal::Signal, SocketKind, StreamInfo};
 use smallvec::SmallVec;
 
@@ -161,26 +160,6 @@ impl Transport {
         let mut encoder = srt::FragmentEncoder::new(opt.max_pkt_size());
         let sender = Arc::new(srt::Socket::connect(self.options.server, opt)?);
         log::info!("sender connect to server={}", self.options.server);
-
-        #[cfg(debug_assertions)]
-        {
-            let sender_ = Arc::downgrade(&sender);
-            thread::spawn(move || {
-                let mut logger = FormatLogger::new("mirror-sender.stats").unwrap();
-
-                while let Some(sender) = sender_.upgrade() {
-                    if let Ok(stats) = sender.get_stats() {
-                        if logger.log(&stats).is_err() {
-                            break;
-                        }
-                    } else {
-                        break;
-                    }
-
-                    thread::sleep(Duration::from_secs(5));
-                }
-            });
-        }
 
         let adapter_ = Arc::downgrade(adapter);
         thread::spawn(move || {
@@ -338,26 +317,6 @@ impl Transport {
         let mut decoder = srt::FragmentDecoder::new();
         let receiver = Arc::new(srt::Socket::connect(self.options.server, opt)?);
         log::info!("receiver connect to server={}", self.options.server);
-
-        #[cfg(debug_assertions)]
-        {
-            let receiver_ = Arc::downgrade(&receiver);
-            thread::spawn(move || {
-                let mut logger = FormatLogger::new("mirror-receiver.stats").unwrap();
-
-                while let Some(receiver) = receiver_.upgrade() {
-                    if let Ok(stats) = receiver.get_stats() {
-                        if logger.log(&stats).is_err() {
-                            break;
-                        }
-                    } else {
-                        break;
-                    }
-
-                    thread::sleep(Duration::from_secs(5));
-                }
-            });
-        }
 
         {
             let multicast = self.options.multicast;
