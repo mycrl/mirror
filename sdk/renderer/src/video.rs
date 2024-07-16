@@ -1,5 +1,3 @@
-use std::ffi::c_int;
-
 use anyhow::Result;
 use common::frame::VideoFrame;
 use pixels::{
@@ -58,44 +56,6 @@ impl VideoRender {
     }
 
     pub fn send(&mut self, frame: &VideoFrame) -> Result<()> {
-        {
-            if self.size.width != frame.rect.width as u32
-                || self.size.height != frame.rect.height as u32
-            {
-                self.pixels
-                    .resize_buffer(frame.rect.width as u32, frame.rect.height as u32)?;
-                self.size.height = frame.rect.height as u32;
-                self.size.width = frame.rect.width as u32;
-            }
-        }
-
-        #[cfg(target_os = "windows")]
-        unsafe {
-            libyuv::nv12_to_argb(
-                frame.data[0],
-                frame.linesize[0] as c_int,
-                frame.data[1],
-                frame.linesize[1] as c_int,
-                self.buffer.as_mut_ptr(),
-                frame.rect.width as c_int * 4,
-                frame.rect.width as c_int,
-                frame.rect.height as c_int,
-            );
-        }
-
-        #[cfg(target_os = "windows")]
-        unsafe {
-            libyuv::argb_to_rgba(
-                self.buffer.as_mut_ptr(),
-                frame.rect.width as c_int * 4,
-                self.pixels.frame_mut().as_mut_ptr(),
-                frame.rect.width as c_int * 4,
-                frame.rect.width as c_int,
-                frame.rect.height as c_int,
-            );
-        }
-
-        self.pixels.render()?;
         Ok(())
     }
 

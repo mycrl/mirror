@@ -1,17 +1,10 @@
-use std::{
-    mem::transmute,
-    slice::from_raw_parts,
-    sync::{atomic::AtomicBool, Arc},
-    time::Duration,
-};
+use std::time::Duration;
 
 use anyhow::Result;
-use common::{atomic::EasyAtomic, frame::AudioFrame};
+use common::frame::AudioFrame;
 use rodio::{OutputStream, OutputStreamHandle, Sink, Source};
 
 pub struct AudioPlayer {
-    initialization: bool,
-    buffer: Arc<LockedBuffer>,
     /// Handle to a device that outputs sounds.
     ///
     /// Dropping the `Sink` stops all sounds. You can use `detach` if you want
@@ -34,9 +27,7 @@ impl AudioPlayer {
 
         let (stream, stream_handle) = OutputStream::try_default()?;
         Ok(Self {
-            buffer: Arc::new(LockedBuffer::default()),
             sink: Sink::try_new(&stream_handle)?,
-            initialization: false,
             stream_handle,
             stream,
         })
@@ -51,24 +42,22 @@ impl AudioPlayer {
             frame.frames
         );
 
-        {
-            if !self.initialization {
-                self.initialization = true;
-                self.sink.append(AudioSource {
-                    sample_rate: frame.sample_rate,
-                    buffer: self.buffer.clone(),
-                    channels,
-                });
-            }
-        }
-
-        self.buffer
-            .swap(unsafe { from_raw_parts(frame.data as *const i16, frame.frames as usize) });
+        self.sink.append(AudioSource {
+            sample_rate: frame.sample_rate,
+            frames: frame.frames as usize,
+            channels,
+            offset: 0,
+            buffer: unsafe {
+                std::slice::from_raw_parts(frame.data as *const i16, frame.frames as usize).to_vec()
+            },
+        })
     }
 }
 
 struct AudioSource {
-    buffer: Arc<LockedBuffer>,
+    buffer: Vec<i16>,
+    offset: usize,
+    frames: usize,
     /// A sound is a vibration that propagates through air and reaches your
     /// ears. This vibration can be represented as an analog signal.
     ///
@@ -117,7 +106,7 @@ impl Source for AudioSource {
     /// it will check whether the value of `channels()` and/or
     /// `sample_rate()` have changed.
     fn current_frame_len(&self) -> Option<usize> {
-        None
+        Some(self.frames)
     }
 
     /// Returns the number of channels. Channels are always interleaved.
@@ -135,7 +124,9 @@ impl Source for AudioSource {
     ///
     /// `None` indicates at the same time "infinite" or "unknown".
     fn total_duration(&self) -> Option<Duration> {
-        None
+        Some(Duration::from_millis(
+            (self.frames as f64 / (self.sample_rate as f64 / 1000.0)) as u64,
+        ))
     }
 }
 
@@ -159,51 +150,7 @@ impl Iterator for AudioSource {
     ///
     /// You can implement this trait on your own type as well if you wish so.
     fn next(&mut self) -> Option<Self::Item> {
-        Some(self.buffer.next().unwrap_or(0))
-    }
-}
-
-struct LockedBuffer {
-    locked: AtomicBool,
-    bytes: Vec<i16>,
-    offset: usize,
-}
-
-impl Default for LockedBuffer {
-    fn default() -> Self {
-        Self {
-            locked: AtomicBool::new(false),
-            bytes: Vec::with_capacity(48000),
-            offset: 0,
-        }
-    }
-}
-
-impl LockedBuffer {
-    #[allow(mutable_transmutes)]
-    fn next(&self) -> Option<i16> {
-        if !self.locked.get() {
-            {
-                unsafe { transmute::<&Self, &mut Self>(&self) }.offset += 1;
-            }
-
-            self.bytes.get(self.offset - 1).copied()
-        } else {
-            None
-        }
-    }
-
-    #[allow(mutable_transmutes)]
-    fn swap(&self, bytes: &[i16]) {
-        self.locked.update(true);
-
-        {
-            let this = unsafe { transmute::<&Self, &mut Self>(&self) };
-            this.offset = 0;
-            this.bytes.clear();
-            this.bytes.extend_from_slice(bytes);
-        }
-
-        self.locked.update(false);
+        self.offset += 1;
+        self.buffer.get(self.offset - 1).copied()
     }
 }
