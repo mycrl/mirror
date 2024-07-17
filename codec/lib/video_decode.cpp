@@ -10,6 +10,10 @@
 
 #include "./codec.h"
 
+#ifdef WIN32
+#include <windows.h>
+#endif // WIN32
+
 extern "C"
 {
 #include <libavutil/opt.h>
@@ -137,9 +141,25 @@ bool codec_video_decoder_send_packet(VideoDecoder* codec,
         return true;
     }
 
+    int len;
     while (size)
     {
-        int len = av_parser_parse2(codec->parser,
+        /*
+        TODO:
+        
+        After running for a long time, an illegal memory access exception 
+        may occur inside this function. This occurs when searching for 
+        the h264 nalu start code. 
+        There is currently no good way to deal with it, and the cause of 
+        the error cannot be found. Therefore, the only way to deal with 
+        this illegal memory access exception is to intercept it on 
+        Windows and discard the packet.
+        */
+#ifdef WIN32
+        __try {
+#endif
+
+            len = av_parser_parse2(codec->parser,
                                    codec->context,
                                    &codec->packet->data,
                                    &codec->packet->size,
@@ -148,6 +168,14 @@ bool codec_video_decoder_send_packet(VideoDecoder* codec,
                                    packet->timestamp,
                                    AV_NOPTS_VALUE,
                                    0);
+#ifdef WIN32
+        }
+        __except (EXCEPTION_EXECUTE_HANDLER)
+        {
+            return true;
+        }
+#endif
+
         buf += len;
         size -= len;
 
