@@ -11,8 +11,5 @@ os_socketaddr = "0.2.5"
 common = { path = "../common" }
 xxhash-rust = { version = "0.8.11", features = ["xxh3", "xxh64"]}
 
-[dev-dependencies]
-rand = "0.8.5"
-
 [build-dependencies]
 anyhow = "1.0.79"

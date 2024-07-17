@@ -3,6 +3,21 @@ use crate::adapter::StreamKind;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use xxhash_rust::xxh3::xxh3_64;
 
+// ```text
+//  0                   1                   2                   3
+// 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+// |                        Check Digit                            |
+// |                                                               |
+// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+// |                           Lenght                              |
+// |                                                               |
+// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+// |     type      |     flags     |           timestamp...
+//          ...timestamp           |                               |
+// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+// ```
+
 #[derive(Debug)]
 pub struct PacketInfo {
     pub kind: StreamKind,
@@ -10,6 +25,9 @@ pub struct PacketInfo {
     pub timestamp: u64,
 }
 
+/// Creates a BytesMut and copies from src to a buffer. The created buffer
+/// contains the initial message header required for message encoding, which is
+/// an optimization to reduce data copying in the process.
 pub fn copy_from_slice(src: &[u8]) -> BytesMut {
     let mut bytes = BytesMut::with_capacity(src.len() + Package::HEAD_SIZE);
     bytes.put_bytes(0, Package::HEAD_SIZE);
@@ -17,6 +35,9 @@ pub fn copy_from_slice(src: &[u8]) -> BytesMut {
     bytes
 }
 
+/// Create a BytesMut and initialize it according to the capacity. The created
+/// buffer contains the initialization message header required for message
+/// encoding, which is an optimization to reduce data copying in the process.
 pub fn with_capacity(size: usize) -> BytesMut {
     BytesMut::zeroed(size + Package::HEAD_SIZE)
 }
