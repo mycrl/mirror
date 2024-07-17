@@ -10,10 +10,9 @@ use capture::{AudioInfo, CaptureSettings, Device, DeviceManager, DeviceManagerOp
 use codec::{AudioDecoder, AudioEncoderSettings, VideoDecoder, VideoEncoderSettings};
 use common::{
     frame::{AudioFrame, VideoFrame},
-    jump_current_exe_dir, logger,
+    jump_current_exe_dir,
 };
 
-use log::LevelFilter;
 use once_cell::sync::Lazy;
 use transport::{
     adapter::{StreamKind, StreamMultiReceiverAdapter, StreamSenderAdapter},
@@ -28,13 +27,9 @@ pub static OPTIONS: Lazy<RwLock<MirrorOptions>> = Lazy::new(Default::default);
 /// Audio Codec Configuration.
 #[derive(Debug, Clone)]
 pub struct AudioOptions {
-    /// Video encoder settings, possible values are `libopus`and so on.
     pub encoder: String,
-    /// Video decoder settings, possible values are `libopus`and so on.
     pub decoder: String,
-    /// The sample rate of the audio, in seconds.
     pub sample_rate: u64,
-    /// The bit rate of the video encoding.
     pub bit_rate: u64,
 }
 
@@ -43,7 +38,7 @@ impl Default for AudioOptions {
         Self {
             encoder: "opus".to_string(),
             decoder: "opus".to_string(),
-            sample_rate: 48000,
+            sample_rate: 44100,
             bit_rate: 64000,
         }
     }
@@ -62,22 +57,12 @@ impl From<AudioOptions> for AudioEncoderSettings {
 /// Video Codec Configuration.
 #[derive(Debug, Clone)]
 pub struct VideoOptions {
-    /// Video encoder settings, possible values are `h264_qsv`, `h264_nvenc`,
-    /// `libx264` and so on.
     pub encoder: String,
-    /// Video decoder settings, possible values are `h264_qsv`, `h264_cuvid`,
-    /// `h264`, etc.
     pub decoder: String,
-    /// Frame rate setting in seconds.
     pub frame_rate: u8,
-    /// The width of the video.
     pub width: u32,
-    /// The height of the video.
     pub height: u32,
-    /// The bit rate of the video encoding.
     pub bit_rate: u64,
-    /// Keyframe Interval, used to specify how many frames apart to output a
-    /// keyframe.
     pub key_frame_interval: u32,
 }
 
@@ -110,17 +95,10 @@ impl From<VideoOptions> for VideoEncoderSettings {
 
 #[derive(Debug, Clone)]
 pub struct MirrorOptions {
-    /// Video Codec Configuration.
     pub video: VideoOptions,
-    /// Audio Codec Configuration.
     pub audio: AudioOptions,
-    /// mirror server address.
     pub server: String,
-    /// Multicast address, e.g. `239.0.0.1`.
     pub multicast: String,
-    /// The size of the maximum transmission unit of the network, which is
-    /// related to the settings of network devices such as routers or switches,
-    /// the recommended value is 1400.
     pub mtu: usize,
 }
 
@@ -141,7 +119,7 @@ pub fn init(options: MirrorOptions) -> Result<()> {
     jump_current_exe_dir()?;
 
     #[cfg(debug_assertions)]
-    logger::init("mirror.log", LevelFilter::Info)?;
+    common::logger::init("mirror.log", log::LevelFilter::Info)?;
 
     // In order to prevent other programs from affecting the delay performance of
     // the current program, set the priority of the current process to high.
@@ -298,8 +276,8 @@ impl Mirror {
         let sink_ = sink.clone();
         let adapter_ = adapter.clone();
         thread::spawn(move || {
-            'a: while let Some((packet, _, _)) = adapter_.next(StreamKind::Video) {
-                if video_decoder.decode(&packet) {
+            'a: while let Some((packet, flags, timestamp)) = adapter_.next(StreamKind::Video) {
+                if video_decoder.decode(&packet, flags, timestamp) {
                     while let Some(frame) = video_decoder.read() {
                         if !(sink_.video)(frame) {
                             break 'a;
@@ -315,8 +293,8 @@ impl Mirror {
 
         let adapter_ = adapter.clone();
         thread::spawn(move || {
-            'a: while let Some((packet, _, _)) = adapter_.next(StreamKind::Audio) {
-                if audio_decoder.decode(&packet) {
+            'a: while let Some((packet, flags, timestamp)) = adapter_.next(StreamKind::Audio) {
+                if audio_decoder.decode(&packet, flags, timestamp) {
                     while let Some(frame) = audio_decoder.read() {
                         if !(sink.audio)(frame) {
                             break 'a;

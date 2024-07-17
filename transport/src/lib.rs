@@ -1,5 +1,5 @@
 pub mod adapter;
-mod payload;
+pub mod package;
 
 use std::{
     collections::HashMap,
@@ -11,17 +11,16 @@ use std::{
         Arc, Mutex, RwLock, Weak,
     },
     thread,
-    time::Duration,
 };
 
 use bytes::BytesMut;
-use common::{atomic::EasyAtomic, logger::FormatLogger};
+use common::atomic::EasyAtomic;
 use service::{signal::Signal, SocketKind, StreamInfo};
 use smallvec::SmallVec;
 
 use crate::{
     adapter::{StreamReceiverAdapterExt, StreamSenderAdapter},
-    payload::{Muxer, PacketInfo, Remuxer},
+    package::{Package, PacketInfo, UnPackage},
 };
 
 pub fn init() -> bool {
@@ -162,26 +161,6 @@ impl Transport {
         let sender = Arc::new(srt::Socket::connect(self.options.server, opt)?);
         log::info!("sender connect to server={}", self.options.server);
 
-        #[cfg(debug_assertions)]
-        {
-            let sender_ = Arc::downgrade(&sender);
-            thread::spawn(move || {
-                let mut logger = FormatLogger::new("mirror-sender.stats").unwrap();
-
-                while let Some(sender) = sender_.upgrade() {
-                    if let Ok(stats) = sender.get_stats() {
-                        if logger.log(&stats).is_err() {
-                            break;
-                        }
-                    } else {
-                        break;
-                    }
-
-                    thread::sleep(Duration::from_secs(5));
-                }
-            });
-        }
-
         let adapter_ = Arc::downgrade(adapter);
         thread::spawn(move || {
             // If the adapter has been released, close the current thread
@@ -192,13 +171,13 @@ impl Transport {
                     }
 
                     // Packaging audio and video information
-                    let payload = Muxer::mux(
+                    let payload = Package::pack(
                         PacketInfo {
                             kind,
                             flags,
                             timestamp,
                         },
-                        buf.as_ref(),
+                        buf,
                     );
 
                     // Here we check whether the audio and video data are being multicasted, so as
@@ -282,13 +261,8 @@ impl Transport {
                         // Check whether the sequence number is continuous, in
                         // order to check whether packet loss has occurred
                         if seq == 0 || seq - 1 == sequence.get() {
-                            if let Some((offset, info)) = Remuxer::remux(&bytes) {
-                                if !adapter.send(
-                                    bytes.slice(offset..),
-                                    info.kind,
-                                    info.flags,
-                                    info.timestamp,
-                                ) {
+                            if let Some((info, package)) = UnPackage::unpack(bytes) {
+                                if !adapter.send(package, info.kind, info.flags, info.timestamp) {
                                     log::error!("adapter on buf failed.");
 
                                     break;
@@ -338,26 +312,6 @@ impl Transport {
         let mut decoder = srt::FragmentDecoder::new();
         let receiver = Arc::new(srt::Socket::connect(self.options.server, opt)?);
         log::info!("receiver connect to server={}", self.options.server);
-
-        #[cfg(debug_assertions)]
-        {
-            let receiver_ = Arc::downgrade(&receiver);
-            thread::spawn(move || {
-                let mut logger = FormatLogger::new("mirror-receiver.stats").unwrap();
-
-                while let Some(receiver) = receiver_.upgrade() {
-                    if let Ok(stats) = receiver.get_stats() {
-                        if logger.log(&stats).is_err() {
-                            break;
-                        }
-                    } else {
-                        break;
-                    }
-
-                    thread::sleep(Duration::from_secs(5));
-                }
-            });
-        }
 
         {
             let multicast = self.options.multicast;
@@ -413,9 +367,9 @@ impl Transport {
                                 // check whether packet loss has
                                 // occurred
                                 if seq == 0 || seq - 1 == sequence.get() {
-                                    if let Some((offset, info)) = Remuxer::remux(&bytes) {
+                                    if let Some((info, package)) = UnPackage::unpack(bytes) {
                                         if !adapter.send(
-                                            bytes.slice(offset..),
+                                            package,
                                             info.kind,
                                             info.flags,
                                             info.timestamp,

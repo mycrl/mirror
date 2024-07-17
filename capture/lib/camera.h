@@ -18,7 +18,7 @@
 #include <thread>
 #include <functional>
 
-#include "capture.h"
+#include "./capture.h"
 
 class CameraCapture
 {
@@ -26,7 +26,7 @@ public:
     CameraCapture();
     ~CameraCapture();
 
-    static int EnumDevices(struct DeviceList* list);
+    static int EnumDevices(DeviceList* list);
     int StartCapture(const char* id,
                      int width,
                      int height,

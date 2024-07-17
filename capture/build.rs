@@ -1,5 +1,3 @@
-#![allow(unused)]
-
 use std::{env, fs, path::Path, process::Command};
 
 use anyhow::anyhow;
@@ -17,15 +15,23 @@ fn is_exsit(dir: &str) -> bool {
 }
 
 fn exec(command: &str, work_dir: &str) -> anyhow::Result<String> {
-    let output = Command::new(if cfg!(windows) { "powershell" } else { "bash" })
-        .arg(if cfg!(windows) { "-command" } else { "-c" })
-        .arg(if cfg!(windows) {
-            format!("$ProgressPreference = 'SilentlyContinue';{}", command)
-        } else {
-            command.to_string()
-        })
-        .current_dir(work_dir)
-        .output()?;
+    let output = Command::new(if cfg!(target_os = "windows") {
+        "powershell"
+    } else {
+        "bash"
+    })
+    .arg(if cfg!(target_os = "windows") {
+        "-command"
+    } else {
+        "-c"
+    })
+    .arg(if cfg!(target_os = "windows") {
+        format!("$ProgressPreference = 'SilentlyContinue';{}", command)
+    } else {
+        command.to_string()
+    })
+    .current_dir(work_dir)
+    .output()?;
     if !output.status.success() {
         Err(anyhow!("{}", unsafe {
             String::from_utf8_unchecked(output.stderr)
@@ -35,8 +41,11 @@ fn exec(command: &str, work_dir: &str) -> anyhow::Result<String> {
     }
 }
 
-#[cfg(any(target_os = "windows", target_os = "linux"))]
 fn main() -> anyhow::Result<()> {
+    if cfg!(target_os = "macos") {
+        return Ok(());
+    }
+
     println!("cargo:rerun-if-changed=./lib");
     println!("cargo:rerun-if-changed=./build.rs");
 
@@ -56,6 +65,15 @@ fn main() -> anyhow::Result<()> {
                 &out_dir,
             )?;
         }
+
+        if !is_exsit(&join(&out_dir, "yuv.lib")?) {
+            exec(
+                "Invoke-WebRequest \
+                    -Uri https://github.com/mycrl/distributions/releases/download/distributions/yuv-windows-x64.lib \
+                    -OutFile yuv.lib",
+                &out_dir,
+            )?;
+        }
     }
 
     if !is_exsit(&join(&out_dir, "./obs-studio")?) {
@@ -63,6 +81,10 @@ fn main() -> anyhow::Result<()> {
             "git clone --branch release/30.1 https://github.com/obsproject/obs-studio",
             &out_dir,
         )?;
+    }
+
+    if !is_exsit(&join(&out_dir, "./libyuv")?) {
+        exec("git clone https://github.com/lemenkov/libyuv", &out_dir)?;
     }
 
     let mut compiler = cc::Build::new();
@@ -76,7 +98,9 @@ fn main() -> anyhow::Result<()> {
         .out_dir(&out_dir)
         .file("./lib/capture.cpp")
         .file("./lib/camera.cpp")
+        .file("./lib/desktop.cpp")
         .include(&join(&out_dir, "./obs-studio")?)
+        .include(&join(&out_dir, "./libyuv/include")?)
         .include("../common/include");
 
     #[cfg(target_os = "windows")]
@@ -87,6 +111,7 @@ fn main() -> anyhow::Result<()> {
         println!("cargo:rustc-link-lib=mfplat");
         println!("cargo:rustc-link-lib=mfuuid");
         println!("cargo:rustc-link-lib=mf");
+        println!("cargo:rustc-link-lib=yuv");
     }
 
     #[cfg(target_os = "linux")]
@@ -101,6 +126,3 @@ fn main() -> anyhow::Result<()> {
 
     Ok(())
 }
-
-#[cfg(target_os = "macos")]
-fn main() {}

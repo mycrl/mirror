@@ -10,5 +10,5 @@ srt = { path = "../srt" }
 multicast = { path = "../multicast" }
 common = { path = "../common" }
 service = { path = "../service" }
-xxhash-rust = { version = "0.8.5", features = ["xxh3"]}
+xxhash-rust = { version = "0.8.11", features = ["xxh3", "xxh64"]}
 smallvec = "1.13.2"

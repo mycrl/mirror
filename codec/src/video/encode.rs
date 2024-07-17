@@ -2,13 +2,13 @@ use std::ffi::{c_char, c_void, CString};
 
 use common::frame::VideoFrame;
 
-use crate::{Error, RawEncodePacket};
+use crate::{Error, RawPacket};
 
 extern "C" {
     fn codec_create_video_encoder(settings: *const RawVideoEncoderSettings) -> *const c_void;
     fn codec_video_encoder_copy_frame(codec: *const c_void, frame: *const VideoFrame) -> bool;
     fn codec_video_encoder_send_frame(codec: *const c_void) -> bool;
-    fn codec_video_encoder_read_packet(codec: *const c_void) -> *const RawEncodePacket;
+    fn codec_video_encoder_read_packet(codec: *const c_void) -> *const RawPacket;
     fn codec_unref_video_encoder_packet(codec: *const c_void);
     fn codec_release_video_encoder(codec: *const c_void);
 }
@@ -76,7 +76,7 @@ impl Drop for VideoEncodePacket<'_> {
 }
 
 impl<'a> VideoEncodePacket<'a> {
-    fn from_raw(codec: *const c_void, ptr: *const RawEncodePacket) -> Self {
+    fn from_raw(codec: *const c_void, ptr: *const RawPacket) -> Self {
         let raw = unsafe { &*ptr };
         Self {
             buffer: unsafe { std::slice::from_raw_parts(raw.buffer, raw.len) },

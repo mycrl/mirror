@@ -34,7 +34,7 @@ impl std::fmt::Display for Error {
 }
 
 #[repr(C)]
-pub struct RawEncodePacket {
+pub struct RawPacket {
     pub buffer: *const u8,
     pub len: usize,
     pub flags: c_int,

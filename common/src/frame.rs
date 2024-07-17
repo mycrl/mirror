@@ -75,6 +75,7 @@ pub enum AudioFormat {
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct AudioFrame {
+    pub sample_rate: u32,
     pub format: AudioFormat,
     pub frames: u32,
     pub data: *const u8,

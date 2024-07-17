@@ -135,7 +135,7 @@ class SimpleMirrorService : Service() {
         private val AudioConfigure = object : Audio.AudioEncoder.AudioEncoderConfigure {
             override val channalConfig = AudioFormat.CHANNEL_IN_MONO
             override val sampleBits = AudioFormat.ENCODING_PCM_16BIT
-            override val sampleRate = 48000
+            override val sampleRate = 44100
             override val bitRate = 64000
             override val channels = 1
         }

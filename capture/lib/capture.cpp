@@ -5,8 +5,9 @@
 //  Created by Mr.Panda on 2024/2/14.
 //
 
-#include "capture.h"
-#include "camera.h"
+#include "./capture.h"
+#include "./camera.h"
+#include "./desktop.h"
 
 #include <string>
 #include <libobs/obs.h>
@@ -31,6 +32,7 @@
 
 static struct
 {
+    bool allow_obs = true;
     Logger logger = nullptr;
     void* logger_ctx = nullptr;
     obs_audio_info audio_info;
@@ -46,6 +48,7 @@ static struct
     AudioFrame audio_frame;
 #ifdef WIN32
     CameraCapture* camera_capture = new CameraCapture();
+    GDICapture* gdi_capture = new GDICapture();
 #endif
 } GLOBAL = {};
 
@@ -85,7 +88,7 @@ void set_video_item_scale(obs_sceneitem_t* item)
 }
 
 void update_monitor_settings(DeviceDescription* description,
-                             CaptureSettings* cs)
+                             CaptureSettings* config)
 {
     obs_data_t* settings = obs_data_create();
     obs_data_apply(settings, obs_source_get_settings(GLOBAL.monitor_source));
@@ -93,17 +96,11 @@ void update_monitor_settings(DeviceDescription* description,
 #ifdef WIN32
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
 
-    int method = 2; // WGC
-    if (cs != nullptr)
-    {
-        method = cs->method + 1;
-    }
-
-    obs_data_set_int(settings, "method", method);
     obs_data_set_bool(settings, "force_sdr", true);
     obs_data_set_bool(settings, "compatibility", true);
     obs_data_set_bool(settings, "capture_cursor", false);
     obs_data_set_string(settings, "monitor_id", description->id);
+    obs_data_set_int(settings, "method", config ? config->method : CaptureMethod::WGC);
 #endif
 
     obs_source_update(GLOBAL.monitor_source, settings);
@@ -150,6 +147,11 @@ void update_audio_settings(DeviceDescription* description)
 
 void raw_video_callback(void* _, video_data* frame)
 {
+    if (!GLOBAL.allow_obs)
+    {
+        return;
+    }
+
     if (GLOBAL.output_callback.video == nullptr ||
         GLOBAL.output_callback.ctx == nullptr ||
         frame == nullptr)
@@ -166,6 +168,11 @@ void raw_video_callback(void* _, video_data* frame)
 
 void raw_audio_callback(void* _, size_t mix_idx, audio_data* data)
 {
+    if (!GLOBAL.allow_obs)
+    {
+        return;
+    }
+
     if (GLOBAL.output_callback.audio == nullptr ||
         GLOBAL.output_callback.ctx == nullptr ||
         data == nullptr)
@@ -347,10 +354,8 @@ void capture_stop()
     }
 
 #ifdef WIN32
-    if (GLOBAL.camera_capture != nullptr)
-    {
-        GLOBAL.camera_capture->StopCapture();
-    }
+    GLOBAL.camera_capture->StopCapture();
+    GLOBAL.gdi_capture->StopCapture();
 #endif
 
     obs_shutdown();
@@ -358,15 +363,19 @@ void capture_stop()
 
 int capture_set_input(DeviceDescription* description, CaptureSettings* settings)
 {
-    if (description->type != DeviceType::kDeviceTypeVideo)
+    if (
+        description->type == DeviceType::kDeviceTypeVideo ||
+        (description->type == DeviceType::kDeviceTypeScreen && settings->method == CaptureMethod::GDI))
     {
-        obs_set_output_source(0, obs_scene_get_source(GLOBAL.scene));
-        obs_set_output_source(1, GLOBAL.audio_source);
+        GLOBAL.allow_obs = false;
+        obs_set_output_source(0, nullptr);
+        obs_set_output_source(1, nullptr);
     }
     else
     {
-        obs_remove_raw_video_callback(raw_video_callback, nullptr);
-        obs_remove_raw_audio_callback(1, raw_audio_callback, nullptr);
+        GLOBAL.allow_obs = true;
+        obs_set_output_source(0, obs_scene_get_source(GLOBAL.scene));
+        obs_set_output_source(1, GLOBAL.audio_source);
     }
 
     if (description->type == DeviceType::kDeviceTypeVideo)
@@ -387,7 +396,26 @@ int capture_set_input(DeviceDescription* description, CaptureSettings* settings)
     }
     else if (description->type == DeviceType::kDeviceTypeScreen)
     {
-        update_monitor_settings(description, settings);
+        if (settings->method == CaptureMethod::GDI)
+        {
+#ifdef WIN32
+            return GLOBAL.gdi_capture->StartCapture(description->id,
+                                                    GLOBAL.video_info.base_width,
+                                                    GLOBAL.video_info.base_height,
+                                                    GLOBAL.video_info.fps_num,
+                                                    [](VideoFrame* frame)
+                                                    {
+                                                        if (GLOBAL.output_callback.video != nullptr)
+                                                        {
+                                                            GLOBAL.output_callback.video(GLOBAL.output_callback.ctx, frame);
+                                                        }
+                                                    });
+#endif
+        }
+        else
+        {
+            update_monitor_settings(description, settings);
+        }
     }
     else if (description->type == DeviceType::kDeviceTypeAudio)
     {
@@ -401,7 +429,8 @@ int capture_set_input(DeviceDescription* description, CaptureSettings* settings)
     return 0;
 }
 
-GetDeviceListResult capture_get_device_list(DeviceType type)
+GetDeviceListResult capture_get_device_list(DeviceType type,
+                                            CaptureSettings* settings)
 {
     DeviceList* list = new DeviceList{};
     list->devices = new DeviceDescription * [100];
@@ -418,8 +447,18 @@ GetDeviceListResult capture_get_device_list(DeviceType type)
     }
     else if (type == DeviceType::kDeviceTypeScreen)
     {
-        source = GLOBAL.monitor_source;
-        key = MONITOR_SOURCE_PROPERTY;
+        if (settings->method == CaptureMethod::GDI)
+        {
+#ifdef WIN32
+            int status = GLOBAL.gdi_capture->EnumDevices(list);
+            return { status, list };
+#endif
+        }
+        else
+        {
+            source = GLOBAL.monitor_source;
+            key = MONITOR_SOURCE_PROPERTY;
+        }
     }
     else if (type == DeviceType::kDeviceTypeAudio)
     {

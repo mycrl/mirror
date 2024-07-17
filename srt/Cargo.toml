@@ -9,10 +9,7 @@ libc = "0.2"
 log = "0.4.20"
 os_socketaddr = "0.2.5"
 common = { path = "../common" }
-xxhash-rust = { version = "0.8.5", features = ["xxh3"]}
-
-[dev-dependencies]
-rand = "0.8.5"
+xxhash-rust = { version = "0.8.11", features = ["xxh3", "xxh64"]}
 
 [build-dependencies]
 anyhow = "1.0.79"

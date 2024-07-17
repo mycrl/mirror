@@ -12,10 +12,10 @@ extern "C"
 #include <libavutil/opt.h>
 }
 
-struct AudioEncoder* codec_create_audio_encoder(struct AudioEncoderSettings* settings)
+AudioEncoder* codec_create_audio_encoder(AudioEncoderSettings* settings)
 {
-	struct AudioEncoder* codec = new AudioEncoder{};
-	codec->output_packet = new EncodePacket{};
+	AudioEncoder* codec = new AudioEncoder{};
+	codec->output_packet = new Packet{};
 
 	codec->codec = avcodec_find_encoder_by_name(settings->codec_name);
 	if (codec->codec == nullptr)
@@ -33,7 +33,8 @@ struct AudioEncoder* codec_create_audio_encoder(struct AudioEncoderSettings* set
 
     codec->context->sample_fmt = AV_SAMPLE_FMT_S16;
     codec->context->ch_layout = AV_CHANNEL_LAYOUT_MONO;
-    codec->context->flags = AV_CODEC_FLAG_LOW_DELAY;
+    codec->context->flags |= AV_CODEC_FLAG_LOW_DELAY;
+	codec->context->flags2 |= AV_CODEC_FLAG2_FAST;
 
 	codec->context->bit_rate = settings->bit_rate;
 	codec->context->sample_rate = settings->sample_rate;
@@ -71,7 +72,7 @@ struct AudioEncoder* codec_create_audio_encoder(struct AudioEncoderSettings* set
 	return codec;
 }
 
-bool codec_audio_encoder_copy_frame(struct AudioEncoder* codec, struct AudioFrame* frame)
+bool codec_audio_encoder_copy_frame(AudioEncoder* codec, AudioFrame* frame)
 {
 	codec->frame->nb_samples = frame->frames;
 	codec->frame->format = codec->context->sample_fmt;
@@ -96,7 +97,7 @@ bool codec_audio_encoder_copy_frame(struct AudioEncoder* codec, struct AudioFram
 	return true;
 }
 
-bool codec_audio_encoder_send_frame(struct AudioEncoder* codec)
+bool codec_audio_encoder_send_frame(AudioEncoder* codec)
 {
 	if (avcodec_send_frame(codec->context, codec->frame) != 0)
 	{
@@ -107,7 +108,7 @@ bool codec_audio_encoder_send_frame(struct AudioEncoder* codec)
 	return true;
 }
 
-struct EncodePacket* codec_audio_encoder_read_packet(struct AudioEncoder* codec)
+Packet* codec_audio_encoder_read_packet(AudioEncoder* codec)
 {
 	if (codec->output_packet == nullptr)
 	{
@@ -127,12 +128,12 @@ struct EncodePacket* codec_audio_encoder_read_packet(struct AudioEncoder* codec)
 	return codec->output_packet;
 }
 
-void codec_unref_audio_encoder_packet(struct AudioEncoder* codec)
+void codec_unref_audio_encoder_packet(AudioEncoder* codec)
 {
 	av_packet_unref(codec->packet);
 }
 
-void codec_release_audio_encoder(struct AudioEncoder* codec)
+void codec_release_audio_encoder(AudioEncoder* codec)
 {
 	if (codec->context != nullptr)
 	{

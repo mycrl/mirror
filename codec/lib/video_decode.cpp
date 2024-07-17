@@ -15,10 +15,10 @@ extern "C"
 #include <libavutil/opt.h>
 }
 
-struct VideoDecoder* codec_create_video_decoder(const char* codec_name)
+VideoDecoder* codec_create_video_decoder(const char* codec_name)
 {
     std::string decoder = std::string(codec_name);
-    struct VideoDecoder* codec = new VideoDecoder{};
+    VideoDecoder* codec = new VideoDecoder{};
     codec->output_frame = new VideoFrame{};
 
     codec->codec = avcodec_find_decoder_by_name(codec_name);
@@ -41,7 +41,9 @@ struct VideoDecoder* codec_create_video_decoder(const char* codec_name)
     codec->context->thread_count = 1;
     codec->context->skip_alpha = true;
     codec->context->pix_fmt = AV_PIX_FMT_NV12;
-    codec->context->flags = AV_CODEC_FLAG_LOW_DELAY;
+    codec->context->flags2 |= AV_CODEC_FLAG2_FAST;
+    codec->context->flags |= AV_CODEC_FLAG_LOW_DELAY | AV_CODEC_FLAG2_CHUNKS;
+    codec->context->hwaccel_flags |= AV_HWACCEL_FLAG_IGNORE_LEVEL | AV_HWACCEL_FLAG_UNSAFE_OUTPUT;
 
     if (decoder == "h264_qsv")
     {
@@ -84,7 +86,7 @@ struct VideoDecoder* codec_create_video_decoder(const char* codec_name)
     return codec;
 }
 
-void codec_release_video_decoder(struct VideoDecoder* codec)
+void codec_release_video_decoder(VideoDecoder* codec)
 {
     if (codec->format_format.has_value())
     {
@@ -124,10 +126,12 @@ void codec_release_video_decoder(struct VideoDecoder* codec)
     delete codec;
 }
 
-bool codec_video_decoder_send_packet(struct VideoDecoder* codec,
-                                     uint8_t* buf,
-                                     size_t size)
+bool codec_video_decoder_send_packet(VideoDecoder* codec,
+                                     Packet* packet)
 {
+    uint8_t* buf = packet->buffer;
+    size_t size = packet->len;
+
     if (buf == nullptr)
     {
         return true;
@@ -141,7 +145,7 @@ bool codec_video_decoder_send_packet(struct VideoDecoder* codec,
                                    &codec->packet->size,
                                    buf,
                                    size,
-                                   AV_NOPTS_VALUE,
+                                   packet->timestamp,
                                    AV_NOPTS_VALUE,
                                    0);
         buf += len;
@@ -159,7 +163,7 @@ bool codec_video_decoder_send_packet(struct VideoDecoder* codec,
     return true;
 }
 
-struct VideoFrame* codec_video_decoder_read_frame(struct VideoDecoder* codec)
+VideoFrame* codec_video_decoder_read_frame(VideoDecoder* codec)
 {
     av_frame_unref(codec->frame);
 
