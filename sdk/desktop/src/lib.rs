@@ -21,9 +21,6 @@ use transport::adapter::{
 
 use self::mirror::FrameSink;
 
-#[global_allocator]
-static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
-
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct RawVideoOptions {

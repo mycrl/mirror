@@ -1,7 +1,8 @@
 use std::{cell::RefCell, sync::Mutex};
 
-use bytes::{Bytes, BytesMut};
+use bytes::BytesMut;
 use jni::{objects::JByteArray, JNIEnv, JavaVM};
+use transport::package;
 
 // Each function is accessible at a fixed offset through the JNIEnv argument.
 // The JNIEnv type is a pointer to a structure storing all JNI function
@@ -57,11 +58,14 @@ where
     }
 }
 
-pub fn copy_from_byte_array(env: &JNIEnv, array: &JByteArray) -> anyhow::Result<Bytes> {
+pub fn copy_from_byte_array(env: &JNIEnv, array: &JByteArray) -> anyhow::Result<BytesMut> {
     let size = env.get_array_length(array)? as usize;
-    let mut bytes = BytesMut::zeroed(size);
+    let mut bytes = package::with_capacity(size);
+    let start = bytes.len() - size;
+
     env.get_byte_array_region(array, 0, unsafe {
-        std::mem::transmute::<&mut [u8], &mut [i8]>(&mut bytes[..])
+        std::mem::transmute::<&mut [u8], &mut [i8]>(&mut bytes[start..])
     })?;
-    Ok(bytes.freeze())
+
+    Ok(bytes)
 }

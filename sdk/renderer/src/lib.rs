@@ -29,18 +29,11 @@ impl Into<Size> for RawSize {
 #[cfg(target_os = "windows")]
 extern "C" fn renderer_create_window_handle(
     hwnd: *mut c_void,
-    hinstance: *mut c_void,
+    _hinstance: *mut c_void,
 ) -> *const WindowHandle {
-    use pixels::raw_window_handle::Win32WindowHandle;
-
     assert!(!hwnd.is_null());
-    assert!(!hinstance.is_null());
 
-    let mut handle = Win32WindowHandle::empty();
-    handle.hinstance = hinstance;
-    handle.hwnd = hwnd;
-
-    Box::into_raw(Box::new(WindowHandle::Win32(handle)))
+    Box::into_raw(Box::new(WindowHandle::Win32(hwnd)))
 }
 
 #[no_mangle]
@@ -90,10 +83,11 @@ extern "C" fn renderer_on_audio(render: *mut RawRenderer, frame: *const AudioFra
 }
 
 #[no_mangle]
-extern "C" fn renderer_resise(render: *mut RawRenderer, size: RawSize) -> bool {
+extern "C" fn renderer_resise(render: *mut RawRenderer, _size: RawSize) -> bool {
     assert!(!render.is_null());
 
-    unsafe { &mut *render }.video.resize(size.into()).is_ok()
+    // unsafe { &mut *render }.video.resize(size.into()).is_ok()
+    true
 }
 
 #[no_mangle]

@@ -1,5 +1,5 @@
 pub mod adapter;
-mod payload;
+pub mod package;
 
 use std::{
     collections::HashMap,
@@ -20,7 +20,7 @@ use smallvec::SmallVec;
 
 use crate::{
     adapter::{StreamReceiverAdapterExt, StreamSenderAdapter},
-    payload::{Muxer, PacketInfo, Remuxer},
+    package::{Package, PacketInfo, UnPackage},
 };
 
 pub fn init() -> bool {
@@ -171,13 +171,13 @@ impl Transport {
                     }
 
                     // Packaging audio and video information
-                    let payload = Muxer::mux(
+                    let payload = Package::pack(
                         PacketInfo {
                             kind,
                             flags,
                             timestamp,
                         },
-                        buf.as_ref(),
+                        buf,
                     );
 
                     // Here we check whether the audio and video data are being multicasted, so as
@@ -261,13 +261,8 @@ impl Transport {
                         // Check whether the sequence number is continuous, in
                         // order to check whether packet loss has occurred
                         if seq == 0 || seq - 1 == sequence.get() {
-                            if let Some((offset, info)) = Remuxer::remux(&bytes) {
-                                if !adapter.send(
-                                    bytes.slice(offset..),
-                                    info.kind,
-                                    info.flags,
-                                    info.timestamp,
-                                ) {
+                            if let Some((info, package)) = UnPackage::unpack(bytes) {
+                                if !adapter.send(package, info.kind, info.flags, info.timestamp) {
                                     log::error!("adapter on buf failed.");
 
                                     break;
@@ -372,9 +367,9 @@ impl Transport {
                                 // check whether packet loss has
                                 // occurred
                                 if seq == 0 || seq - 1 == sequence.get() {
-                                    if let Some((offset, info)) = Remuxer::remux(&bytes) {
+                                    if let Some((info, package)) = UnPackage::unpack(bytes) {
                                         if !adapter.send(
-                                            bytes.slice(offset..),
+                                            package,
                                             info.kind,
                                             info.flags,
                                             info.timestamp,

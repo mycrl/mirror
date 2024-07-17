@@ -23,7 +23,7 @@ pub struct AudioPlayer {
 
 impl AudioPlayer {
     pub fn new() -> Result<Self> {
-        log::info!("create audio player");
+        println!("renderer: create audio player");
 
         let (stream, stream_handle) = OutputStream::try_default()?;
         Ok(Self {
@@ -35,13 +35,6 @@ impl AudioPlayer {
 
     /// Push an audio clip to the queue.
     pub fn send(&mut self, channels: u16, frame: &AudioFrame) {
-        log::trace!(
-            "append audio chunk to audio player, sample_rate={}, channels={}, frames={}",
-            frame.sample_rate,
-            channels,
-            frame.frames
-        );
-
         self.sink.append(AudioSource {
             sample_rate: frame.sample_rate,
             frames: frame.frames as usize,

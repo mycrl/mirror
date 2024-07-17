@@ -201,8 +201,9 @@ pub use encode::{AudioEncodePacket, AudioEncoder, AudioEncoderSettings};
 ///
 ///        This table defines the mapping from encoded streams to output
 ///        channels.  Its contents are specified in Section 5.1.1.
+#[inline]
 #[rustfmt::skip]
-pub fn create_opus_identification_header(channel: u8, sample_rate: u32) -> Vec<u8> {
+pub fn create_opus_identification_header(channel: u8, sample_rate: u32) -> [u8; 83] {
     let sample_rate = sample_rate.to_le_bytes();
 
     [
@@ -240,5 +241,4 @@ pub fn create_opus_identification_header(channel: u8, sample_rate: u32) -> Vec<u
         0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
         0x00, 0xb4, 0xc4, 0x04, 0x00, 0x00, 0x00, 0x00,
     ]
-    .to_vec()
 }

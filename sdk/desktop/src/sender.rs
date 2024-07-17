@@ -3,7 +3,7 @@ use std::{
     thread,
 };
 
-use bytes::{Bytes, BytesMut};
+use bytes::BytesMut;
 use capture::AVFrameSink;
 use codec::{
     audio::create_opus_identification_header, AudioEncoder, AudioEncoderSettings, VideoEncoder,
@@ -12,7 +12,10 @@ use codec::{
 
 use common::frame::{AudioFormat, AudioFrame, VideoFrame};
 use crossbeam::sync::{Parker, Unparker};
-use transport::adapter::{BufferFlag, StreamBufferInfo, StreamSenderAdapter};
+use transport::{
+    adapter::{BufferFlag, StreamBufferInfo, StreamSenderAdapter},
+    package,
+};
 
 use crate::mirror::{FrameSink, OPTIONS};
 
@@ -51,7 +54,7 @@ impl VideoSender {
                 if sender_.encoder.encode() {
                     while let Some(packet) = sender_.encoder.read() {
                         adapter.send(
-                            Bytes::copy_from_slice(packet.buffer),
+                            package::copy_from_slice(packet.buffer),
                             StreamBufferInfo::Video(packet.flags, packet.timestamp),
                         );
                     }
@@ -124,7 +127,7 @@ impl AudioSender {
                         // multiple packets until they are empty.
                         while let Some(packet) = self.encoder.read() {
                             adapter.send(
-                                Bytes::copy_from_slice(packet.buffer),
+                                package::copy_from_slice(packet.buffer),
                                 StreamBufferInfo::Audio(packet.flags, packet.timestamp),
                             );
                         }
@@ -167,7 +170,10 @@ impl SenderObserver {
         // information. Here, actively add an opus header information to the queue, and
         // the transport layer will automatically cache it.
         adapter.send(
-            create_opus_identification_header(1, options.audio.sample_rate as u32).try_into()?,
+            package::copy_from_slice(&create_opus_identification_header(
+                1,
+                options.audio.sample_rate as u32,
+            )),
             StreamBufferInfo::Audio(BufferFlag::Config as i32, 0),
         );
 

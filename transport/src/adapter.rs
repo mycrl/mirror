@@ -7,7 +7,7 @@ use std::{
     },
 };
 
-use bytes::Bytes;
+use bytes::{Bytes, BytesMut};
 use common::atomic::{AtomicOption, EasyAtomic};
 
 #[repr(i32)]
@@ -64,9 +64,9 @@ pub enum StreamBufferInfo {
 pub struct StreamSenderAdapter {
     is_multicast: AtomicBool,
     audio_interval: AtomicU8,
-    video_config: AtomicOption<Bytes>,
-    audio_config: AtomicOption<Bytes>,
-    channel: Channel<(Bytes, StreamKind, i32, u64)>,
+    video_config: AtomicOption<BytesMut>,
+    audio_config: AtomicOption<BytesMut>,
+    channel: Channel<(BytesMut, StreamKind, i32, u64)>,
 }
 
 impl StreamSenderAdapter {
@@ -92,7 +92,7 @@ impl StreamSenderAdapter {
     // frames, so the configuration frames are saved here, although it
     // should be noted that the configuration frames will only be
     // generated once.
-    pub fn send(&self, buf: Bytes, info: StreamBufferInfo) -> bool {
+    pub fn send(&self, buf: BytesMut, info: StreamBufferInfo) -> bool {
         if buf.is_empty() {
             return true;
         }
@@ -150,7 +150,7 @@ impl StreamSenderAdapter {
         }
     }
 
-    pub fn next(&self) -> Option<(Bytes, StreamKind, i32, u64)> {
+    pub fn next(&self) -> Option<(BytesMut, StreamKind, i32, u64)> {
         self.channel.recv()
     }
 }

@@ -10,9 +10,5 @@ name = "renderer"
 [dependencies]
 anyhow = "1.0.86"
 common = { path = "../../common" }
-log = "0.4.22"
-pixels = "0.13.0"
 rodio = "0.19.0"
-
-[target.'cfg(target_os = "windows")'.dependencies]
-libyuv = "0.1.2"
+sdl2 = { version = "0.37.0", features = ["bundled", "static-link", "raw-window-handle"] }
