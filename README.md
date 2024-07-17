@@ -48,4 +48,4 @@ For the required header files: [frame.h](./common/include/frame.h) | [mirror.h](
 
 
 ## License
-[MIT](./LICENSE) Copyright (c) 2022 Mr.Panda.
+[GPL](./LICENSE) Copyright (c) 2022 Mr.Panda.
