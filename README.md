@@ -10,7 +10,7 @@ Pure software screen projection is different from Miracast, AirPlay, etc., which
 
 ## Features
 
-* Audio is transmitted using opus raw streaming.
+* Audio is transmitted using OPUS raw streaming.
 * Video encoding uses H264, supports QSV, NVENC hardware accelerated encoding and decoding.
 * Supports UDP multicast and [SRT](https://github.com/Haivision/srt), and can dynamically switch the transport layer.
 * Work in an unstable network environment (such as high-QOS WIFI).
