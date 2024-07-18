@@ -18,9 +18,9 @@ public:
         std::string encoder = mirror_find_video_encoder();
         std::string decoder = mirror_find_video_decoder();
         std::string server = "127.0.0.1:8080";
-        int width = 1280;
-        int height = 720;
-        int fps = 30;
+        int width = 1920;
+        int height = 1080;
+        int fps = 24;
         int id = 0;
     };
 

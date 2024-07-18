@@ -37,16 +37,14 @@ pub fn start_server(config: Configure, route: Arc<Route>) -> Result<()> {
                 // Get the stream information carried in the srt link. If the stream information
                 // does not exist or is invalid, the current connection is rejected. Skipping
                 // this step directly will trigger the release of the link and close it.
-                let stream_info = if let Some(info) = stream_id
-                    .as_ref()
-                    .and_then(|it| StreamInfo::decode(it))
-                {
-                    info
-                } else {
-                    log::error!("invalid stream id, addr={:?}", addr);
+                let stream_info =
+                    if let Some(info) = stream_id.as_ref().and_then(|it| StreamInfo::decode(it)) {
+                        info
+                    } else {
+                        log::error!("invalid stream id, addr={:?}", addr);
 
-                    continue;
-                };
+                        continue;
+                    };
 
                 log::info!(
                     "accept a srt socket, addr={:?}, info={:?}",
