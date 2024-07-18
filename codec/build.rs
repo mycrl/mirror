@@ -58,7 +58,7 @@ fn main() -> anyhow::Result<()> {
     )?) {
         if cfg!(target_os = "windows") {
             exec("Invoke-WebRequest \
-                -Uri https://github.com/mycrl/distributions/releases/download/distributions/yuv-windows-x64.lib \
+                -Uri https://github.com/mycrl/mirror/releases/download/distributions/yuv-windows-x64.lib \
                 -OutFile yuv.lib", &settings.out_dir)?;
         } else {
             exec(
@@ -156,7 +156,7 @@ fn find_ffmpeg_prefix(out_dir: &str, is_debug: bool) -> anyhow::Result<(Vec<Stri
         {
             exec(
                 &format!("Invoke-WebRequest \
-                    -Uri https://github.com/mycrl/distributions/releases/download/distributions/ffmpeg-windows-x64-{}.zip \
+                    -Uri https://github.com/mycrl/mirror/releases/download/distributions/ffmpeg-windows-x64-{}.zip \
                     -OutFile ffmpeg.zip", if is_debug { "debug" } else { "release" }),
                 out_dir,
             )?;
@@ -170,7 +170,7 @@ fn find_ffmpeg_prefix(out_dir: &str, is_debug: bool) -> anyhow::Result<(Vec<Stri
         #[cfg(target_os = "linux")]
         {
             exec("wget \
-                https://github.com/mycrl/distributions/releases/download/distributions/ffmpeg-linux-x64-debug.tar.xz \
+                https://github.com/mycrl/mirror/releases/download/distributions/ffmpeg-linux-x64-debug.tar.xz \
                 -O ffmpeg.tar.xz", out_dir)?;
             exec("tar xvf ./ffmpeg.tar.xz", out_dir)?;
         }

@@ -27,7 +27,7 @@ if (NOT EXISTS "${THIRD_PARTY_DIR}/obs.lib")
         execute_process(
             WORKING_DIRECTORY "${THIRD_PARTY_DIR}"
             COMMAND powershell.exe -Command "Invoke-WebRequest \
-                -Uri https://github.com/mycrl/distributions/releases/download/distributions/obs-windows-x64.lib \
+                -Uri https://github.com/mycrl/mirror/releases/download/distributions/obs-windows-x64.lib \
                 -OutFile obs.lib")
     endif()
 endif()
@@ -45,7 +45,7 @@ if (NOT EXISTS "${THIRD_PARTY_DIR}/yuv.lib")
         execute_process(
             WORKING_DIRECTORY "${THIRD_PARTY_DIR}"
             COMMAND powershell.exe -Command "Invoke-WebRequest \
-                -Uri https://github.com/mycrl/distributions/releases/download/distributions/yuv-windows-x64.lib \
+                -Uri https://github.com/mycrl/mirror/releases/download/distributions/yuv-windows-x64.lib \
                 -OutFile yuv.lib")
     endif()
 endif()

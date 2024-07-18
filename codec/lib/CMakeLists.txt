@@ -33,7 +33,7 @@ if (NOT EXISTS "${FFMPEG_PREFIX}")
         execute_process(
             WORKING_DIRECTORY "${THIRD_PARTY_DIR}"
             COMMAND powershell.exe -Command "Invoke-WebRequest \
-                    -Uri https://github.com/mycrl/distributions/releases/download/distributions/ffmpeg-windows-x64-debug.zip \
+                    -Uri https://github.com/mycrl/mirror/releases/download/distributions/ffmpeg-windows-x64-debug.zip \
                     -OutFile ffmpeg.zip")
 
         execute_process(
