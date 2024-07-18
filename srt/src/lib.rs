@@ -101,7 +101,7 @@ extern "C" fn loghandler(
                 _ => SRT_LOG_LEVEL::LOG_DEBUG,
             },
             area,
-            message.replace('\r', "").replace('\n', ""),
+            message.replace(['\r', '\n'], ""),
         )
     }
 }
@@ -129,6 +129,7 @@ pub fn cleanup() {
     }
 }
 
+#[allow(clippy::upper_case_acronyms)]
 pub(crate) type SRTSOCKET = i32;
 pub(crate) const SRT_INVALID_SOCK: i32 = -1;
 

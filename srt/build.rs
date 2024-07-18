@@ -33,12 +33,12 @@ fn main() -> anyhow::Result<()> {
     let target = env::var("TARGET")?;
     let out_dir = env::var("OUT_DIR")?;
 
-    if target.find("android").is_some() {
+    if target.contains("android") {
         if !is_exsit(&join(&out_dir, "libsrt.a")) {
             exec(
                 "wget \
                 -O libsrt.a \
-                https://github.com/mycrl/distributions/releases/download/distributions/libsrt-arm64-v8a.a",
+                https://github.com/mycrl/mirror/releases/download/distributions/libsrt-arm64-v8a.a",
                 &out_dir,
             )?;
         }
@@ -47,7 +47,7 @@ fn main() -> anyhow::Result<()> {
             exec(
                 "wget \
                 -O libssl.a \
-                https://github.com/mycrl/distributions/releases/download/distributions/libssl-arm64-v8a.a",
+                https://github.com/mycrl/mirror/releases/download/distributions/libssl-arm64-v8a.a",
                 &out_dir,
             )?;
         }
@@ -56,7 +56,7 @@ fn main() -> anyhow::Result<()> {
             exec(
                 "wget \
                 -O libcrypto.a \
-                https://github.com/mycrl/distributions/releases/download/distributions/libcrypto-arm64-v8a.a",
+                https://github.com/mycrl/mirror/releases/download/distributions/libcrypto-arm64-v8a.a",
                 &out_dir,
             )?;
         }
@@ -92,7 +92,7 @@ fn main() -> anyhow::Result<()> {
             #[cfg(target_os = "windows")]
             {
                 exec("Invoke-WebRequest \
-                    -Uri https://github.com/mycrl/distributions/releases/download/distributions/srt-windows-x64.lib \
+                    -Uri https://github.com/mycrl/mirror/releases/download/distributions/srt-windows-x64.lib \
                     -OutFile srt.lib", &srt_dir)?;
             }
         }

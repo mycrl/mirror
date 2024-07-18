@@ -94,8 +94,6 @@ impl Socket {
                     Ok(size) = socket.recv(&mut buf[..]) => {
                         if size == 0 {
                             break;
-                        } else {
-
                         }
 
                         if let Ok(packet) = Fragment::try_from(&buf[..size]) {

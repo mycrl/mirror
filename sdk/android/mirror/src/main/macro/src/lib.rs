@@ -71,7 +71,7 @@ fn get_package_name(attr: &TokenStream) -> Option<String> {
         if let Some(TokenTree::Punct(punct)) = iter.next() {
             if let Some(TokenTree::Literal(literal)) = iter.next() {
                 if ident.to_string().as_str() == "package" && punct.to_string().as_str() == "=" {
-                    return Some(literal.to_string().replace("\"", ""));
+                    return Some(literal.to_string().replace('"', ""));
                 }
             }
         }

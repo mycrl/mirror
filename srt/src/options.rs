@@ -35,7 +35,7 @@ impl Options {
         set_sock_opt_str(fd, SRT_SOCKOPT::SRTO_PACKETFILTER, &self.fec)?;
 
         if let Some(stream_id) = &self.stream_id {
-            set_sock_opt_str(fd, SRT_SOCKOPT::SRTO_STREAMID, &stream_id)?;
+            set_sock_opt_str(fd, SRT_SOCKOPT::SRTO_STREAMID, stream_id)?;
         }
 
         Ok(())

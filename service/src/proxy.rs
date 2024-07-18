@@ -39,8 +39,7 @@ pub fn start_server(config: Configure, route: Arc<Route>) -> Result<()> {
                 // this step directly will trigger the release of the link and close it.
                 let stream_info = if let Some(info) = stream_id
                     .as_ref()
-                    .map(|it| StreamInfo::decode(it))
-                    .flatten()
+                    .and_then(|it| StreamInfo::decode(it))
                 {
                     info
                 } else {

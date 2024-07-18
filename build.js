@@ -48,7 +48,7 @@ if (!fs.existsSync('./build/bin/data')) {
     if (!fs.existsSync('./target/obs.zip')) {
         console.log('Start download distributions...')
         await Command('Invoke-WebRequest \
-            -Uri https://github.com/mycrl/distributions/releases/download/distributions/obs-windows-x64.zip \
+            -Uri https://github.com/mycrl/mirror/releases/download/distributions/obs-windows-x64.zip \
             -OutFile target\\obs.zip')
     }
 
@@ -58,7 +58,7 @@ if (!fs.existsSync('./build/bin/data')) {
 if (!fs.existsSync('./target/ffmpeg')) {
     console.log('Start download ffmpeg...')
     await Command(`Invoke-WebRequest \
-        -Uri https://github.com/mycrl/distributions/releases/download/distributions/ffmpeg-windows-x64-${Args.release ? 'release' : 'debug'}.zip \
+        -Uri https://github.com/mycrl/mirror/releases/download/distributions/ffmpeg-windows-x64-${Args.release ? 'release' : 'debug'}.zip \
         -OutFile target\\ffmpeg.zip`)
 
     await Command('Expand-Archive -Path target\\ffmpeg.zip -DestinationPath target -Force')
