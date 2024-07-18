@@ -119,7 +119,7 @@ extern "C"
 	EXPORT void codec_release_video_encoder(VideoEncoder* codec);
 	EXPORT VideoDecoder* codec_create_video_decoder(const char* codec_name);
 	EXPORT void codec_release_video_decoder(VideoDecoder* codec);
-	EXPORT bool codec_video_decoder_send_packet(VideoDecoder* codec, Packet* packet);
+	EXPORT bool codec_video_decoder_send_packet(VideoDecoder* codec, Packet packet);
 	EXPORT VideoFrame* codec_video_decoder_read_frame(VideoDecoder* codec);
 	EXPORT AudioEncoder* codec_create_audio_encoder(AudioEncoderSettings* settings);
     EXPORT bool codec_audio_encoder_copy_frame(AudioEncoder* codec, AudioFrame* frame);

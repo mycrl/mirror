@@ -48,7 +48,7 @@ int GDICapture::StartCapture(const char* id,
     _frame.rect.height = height;
     _frame.linesize[0] = width;
     _frame.linesize[1] = width;
-    _frame.data[0] = new uint8_t[width * height * 4];
+    _frame.data[0] = new uint8_t[width * height * 1.5];
     _frame.data[1] = _frame.data[0] + (width * height);
 
     _is_runing = true;

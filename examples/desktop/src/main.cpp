@@ -77,13 +77,16 @@ int WinMain(HINSTANCE hinstance,
     RegisterClass(&wc);
 
     Args args = Args(std::string(cmd_line));
+    int height = (GetSystemMetrics(SM_CYFRAME) + 
+                  GetSystemMetrics(SM_CYCAPTION) +
+                  GetSystemMetrics(SM_CXPADDEDBORDER));
     HWND hwnd = CreateWindow("example",
                              "example",
                              WS_CAPTION | WS_POPUPWINDOW | WS_VISIBLE,
                              0,
                              0,
                              args.ArgsParams.width,
-                             args.ArgsParams.height,
+                             args.ArgsParams.height + height,
                              nullptr,
                              nullptr,
                              hinstance,
