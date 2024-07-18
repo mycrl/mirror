@@ -20,8 +20,8 @@ impl StreamInfo {
     pub fn decode(value: &str) -> Option<Self> {
         if value.starts_with("#!::") {
             let mut info = Self::default();
-            for item in value.split_at(4).1.split(",") {
-                if let Some((k, v)) = item.split_once("=") {
+            for item in value.split_at(4).1.split(',') {
+                if let Some((k, v)) = item.split_once('=') {
                     match k {
                         "i" => {
                             if let Ok(id) = v.parse::<u32>() {

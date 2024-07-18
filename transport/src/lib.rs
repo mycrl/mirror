@@ -327,20 +327,17 @@ impl Transport {
 
                 thread::spawn(move || {
                     while let Ok(signal) = rx.recv() {
-                        match signal {
-                            Signal::Start { id, port } => {
-                                // Only process messages from the current receiving end
-                                if id == stream_id {
-                                    create_mcast_receiver(
-                                        receiver.clone(),
-                                        sequence.clone(),
-                                        adapter.clone(),
-                                        multicast,
-                                        port,
-                                    );
-                                }
+                        if let Signal::Start { id, port }  = signal {
+                            // Only process messages from the current receiving end
+                            if id == stream_id {
+                                create_mcast_receiver(
+                                    receiver.clone(),
+                                    sequence.clone(),
+                                    adapter.clone(),
+                                    multicast,
+                                    port,
+                                );
                             }
-                            _ => (),
                         }
                     }
                 });

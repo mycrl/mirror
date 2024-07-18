@@ -16,11 +16,11 @@ struct RawSize {
     height: c_int,
 }
 
-impl Into<Size> for RawSize {
-    fn into(self) -> Size {
-        Size {
-            width: self.width as u32,
-            height: self.height as u32,
+impl From<RawSize> for Size {
+    fn from(val: RawSize) -> Self {
+        Self {
+            width: val.width as u32,
+            height: val.height as u32,
         }
     }
 }

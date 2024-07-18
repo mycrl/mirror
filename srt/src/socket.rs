@@ -219,7 +219,7 @@ impl Socket {
     /// message** and **live mode** the successful return is always equal to
     /// `len`.
     pub fn send(&self, buf: &[u8]) -> Result<(), Error> {
-        if buf.len() == 0 {
+        if buf.is_empty() {
             return Ok(());
         }
 

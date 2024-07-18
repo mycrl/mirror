@@ -79,6 +79,7 @@ bool MirrorServiceExt::CreateMirrorSender()
         return false;
     }
 
+    _sender.value().SetMulticast(true);
     _render->SetTitle("sender");
     return true;
 }

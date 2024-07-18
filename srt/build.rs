@@ -33,7 +33,7 @@ fn main() -> anyhow::Result<()> {
     let target = env::var("TARGET")?;
     let out_dir = env::var("OUT_DIR")?;
 
-    if target.find("android").is_some() {
+    if target.contains("android") {
         if !is_exsit(&join(&out_dir, "libsrt.a")) {
             exec(
                 "wget \

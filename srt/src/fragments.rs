@@ -56,6 +56,12 @@ pub struct FragmentDecoder {
     size: usize,
 }
 
+impl Default for FragmentDecoder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl FragmentDecoder {
     pub fn new() -> Self {
         Self {
