@@ -1,10 +1,7 @@
 mod audio;
 mod video;
 
-use std::{
-    ffi::{c_int, c_void},
-    ptr::null_mut,
-};
+use std::{ffi::c_int, ptr::null_mut};
 
 use audio::AudioPlayer;
 use common::frame::{AudioFrame, VideoFrame};
@@ -28,8 +25,8 @@ impl From<RawSize> for Size {
 #[no_mangle]
 #[cfg(target_os = "windows")]
 extern "C" fn renderer_create_window_handle(
-    hwnd: *mut c_void,
-    _hinstance: *mut c_void,
+    hwnd: *mut std::ffi::c_void,
+    _hinstance: *mut std::ffi::c_void,
 ) -> *const WindowHandle {
     assert!(!hwnd.is_null());
 
