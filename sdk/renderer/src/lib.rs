@@ -4,7 +4,7 @@ mod video;
 use std::{ffi::c_int, ptr::null_mut};
 
 use audio::AudioPlayer;
-use common::frame::{AudioFrame, VideoFrame};
+use common::{frame::{AudioFrame, VideoFrame}, jump_current_exe_dir};
 use video::{Size, VideoRender, WindowHandle};
 
 #[repr(C)]
@@ -49,6 +49,11 @@ struct RawRenderer {
 extern "C" fn renderer_create(size: RawSize, handle: *const WindowHandle) -> *mut RawRenderer {
     assert!(!handle.is_null());
 
+    #[cfg(debug_assertions)]
+    if jump_current_exe_dir().is_ok() {
+        common::logger::init("renderer.log", log::LevelFilter::Info).unwrap();
+    }
+
     let func = || {
         Ok::<RawRenderer, anyhow::Error>(RawRenderer {
             video: VideoRender::new(size.into(), unsafe { &*handle })?,
@@ -83,7 +88,6 @@ extern "C" fn renderer_on_audio(render: *mut RawRenderer, frame: *const AudioFra
 extern "C" fn renderer_resise(render: *mut RawRenderer, _size: RawSize) -> bool {
     assert!(!render.is_null());
 
-    // unsafe { &mut *render }.video.resize(size.into()).is_ok()
     true
 }
 

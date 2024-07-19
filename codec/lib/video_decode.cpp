@@ -172,6 +172,7 @@ bool codec_video_decoder_send_packet(VideoDecoder* codec,
         }
         __except (EXCEPTION_EXECUTE_HANDLER)
         {
+            av_log(nullptr, AV_LOG_ERROR, "av_parser_parse2 EXCEPTION_EXECUTE_HANDLER");
             return true;
         }
 #endif

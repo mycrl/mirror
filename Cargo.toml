@@ -4,6 +4,7 @@ overflow-checks = false
 strip = "debuginfo"
 panic = "abort"
 debug = false
+opt-level = 3
 lto = true
 
 [workspace]

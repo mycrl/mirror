@@ -12,3 +12,4 @@ anyhow = "1.0.86"
 common = { path = "../../common" }
 rodio = "0.19.0"
 sdl2 = { version = "0.37.0", features = ["bundled", "static-link", "raw-window-handle"] }
+log = "0.4.20"
