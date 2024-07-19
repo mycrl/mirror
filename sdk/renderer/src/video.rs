@@ -19,6 +19,7 @@ pub struct Size {
     pub height: u32,
 }
 
+#[allow(unused)]
 pub enum WindowHandle {
     Win32(*mut c_void),
 }
