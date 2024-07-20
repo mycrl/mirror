@@ -9,10 +9,12 @@
 #define capture_h
 #pragma once
 
+#ifndef EXPORT
 #ifdef WINDOWS
 #define EXPORT __declspec(dllexport)
 #else
 #define EXPORT
+#endif
 #endif
 
 extern "C"
@@ -49,14 +51,14 @@ enum DeviceType
 
 struct DeviceDescription
 {
-    enum DeviceType type;
+    DeviceType type;
     const char* id;
     const char* name;
 };
 
 struct DeviceList
 {
-    struct DeviceDescription** devices;
+    DeviceDescription** devices;
     size_t size;
 };
 
@@ -70,7 +72,7 @@ struct OutputCallback
 struct GetDeviceListResult
 {
     int status;
-    struct DeviceList* list;
+    DeviceList* list;
 };
 
 typedef void (*Logger)(int level, const char* message, void* ctx);
