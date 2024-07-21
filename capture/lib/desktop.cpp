@@ -1,3 +1,13 @@
+//
+//  desktop.cpp
+//  capture
+//
+//  Created by Panda on 2024/6/30.
+//
+
+
+#ifdef WIN32
+
 #include "./desktop.h"
 
 #include <libyuv.h>
@@ -48,7 +58,7 @@ int GDICapture::StartCapture(const char* id,
     _frame.rect.height = height;
     _frame.linesize[0] = width;
     _frame.linesize[1] = width;
-    _frame.data[0] = new uint8_t[width * height * 4];
+    _frame.data[0] = new uint8_t[width * height * 1.5];
     _frame.data[1] = _frame.data[0] + (width * height);
 
     _is_runing = true;
@@ -191,3 +201,5 @@ HBITMAP GDICapture::_get_screen_bmp(HDC screen)
     DeleteDC(host);
     return hbitmap;
 }
+
+#endif // WIN32

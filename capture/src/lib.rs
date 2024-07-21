@@ -12,6 +12,8 @@ use common::{
     strings::Strings,
 };
 
+use log::{log, Level};
+
 pub use device::{Device, DeviceKind, DeviceList};
 pub use manager::DeviceManager;
 
@@ -60,6 +62,17 @@ enum LoggerLevel {
     Debug = 400,
 }
 
+impl Into<Level> for LoggerLevel {
+    fn into(self) -> Level {
+        match self {
+            Self::Error => Level::Error,
+            Self::Warn => Level::Warn,
+            Self::Info => Level::Info,
+            Self::Debug => Level::Debug,
+        }
+    }
+}
+
 extern "C" fn logger_proc(
     level: LoggerLevel,
     message: *const c_char,
@@ -67,7 +80,7 @@ extern "C" fn logger_proc(
     _: *const c_void,
 ) {
     if let Ok(msg) = Strings::from(message).to_string() {
-        log::info!("OBS: level={:?}, msg={}", level, msg);
+        log!(target: "obs", level.into(), "{}", msg);
     }
 }
 

@@ -9,10 +9,12 @@
 #define RENDERER_H
 #pragma once
 
+#ifndef EXPORT
 #ifdef WIN32
 #define EXPORT __declspec(dllexport)
 #else
 #define EXPORT
+#endif
 #endif
 
 #ifdef WIN32

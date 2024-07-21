@@ -327,7 +327,7 @@ impl Transport {
 
                 thread::spawn(move || {
                     while let Ok(signal) = rx.recv() {
-                        if let Signal::Start { id, port }  = signal {
+                        if let Signal::Start { id, port } = signal {
                             // Only process messages from the current receiving end
                             if id == stream_id {
                                 create_mcast_receiver(

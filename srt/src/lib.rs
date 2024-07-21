@@ -65,6 +65,7 @@ use std::{
 
 use common::strings::Strings;
 use libc::sockaddr;
+use log::{log, Level};
 
 pub(crate) fn error() -> Error {
     Error::other(
@@ -78,7 +79,7 @@ pub(crate) fn error() -> Error {
 
 extern "C" fn loghandler(
     _ctx: *const c_void,
-    level: c_int,
+    level: SRT_LOG_LEVEL,
     _file: *const c_char,
     _line: c_int,
     area: *const c_char,
@@ -88,21 +89,13 @@ extern "C" fn loghandler(
         Strings::from(area).to_string(),
         Strings::from(message).to_string(),
     ) {
-        log::info!(
-            "SRT: level={:?}, area={}, message={}",
-            match level {
-                0 => SRT_LOG_LEVEL::LOG_EMERG,
-                1 => SRT_LOG_LEVEL::LOG_ALERT,
-                2 => SRT_LOG_LEVEL::LOG_CRIT,
-                3 => SRT_LOG_LEVEL::LOG_ERR,
-                4 => SRT_LOG_LEVEL::LOG_WARNING,
-                5 => SRT_LOG_LEVEL::LOG_NOTICE,
-                6 => SRT_LOG_LEVEL::LOG_INFO,
-                _ => SRT_LOG_LEVEL::LOG_DEBUG,
-            },
+        log!(
+            target: "srt",
+            level.into(),
+            "area={}, message={}",
             area,
-            message.replace(['\r', '\n'], ""),
-        )
+            message.replace(['\r', '\n'], "")
+        );
     }
 }
 
@@ -241,6 +234,17 @@ pub(crate) enum SRT_LOG_LEVEL {
     LOG_DEBUG,
 }
 
+impl Into<Level> for SRT_LOG_LEVEL {
+    fn into(self) -> Level {
+        match self {
+            Self::LOG_EMERG | Self::LOG_CRIT | Self::LOG_ERR => Level::Error,
+            Self::LOG_ALERT | Self::LOG_WARNING => Level::Warn,
+            Self::LOG_NOTICE | Self::LOG_INFO => Level::Info,
+            Self::LOG_DEBUG => Level::Debug,
+        }
+    }
+}
+
 #[repr(C)]
 #[derive(Default, Debug, Clone, Copy)]
 #[allow(non_camel_case_types)]
@@ -338,7 +342,7 @@ extern "C" {
         ctx: *const c_void,
         callback: extern "C" fn(
             ctx: *const c_void,
-            level: c_int,
+            level: SRT_LOG_LEVEL,
             file: *const c_char,
             line: c_int,
             area: *const c_char,

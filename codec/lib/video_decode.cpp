@@ -45,8 +45,8 @@ VideoDecoder* codec_create_video_decoder(const char* codec_name)
     codec->context->thread_count = 1;
     codec->context->skip_alpha = true;
     codec->context->pix_fmt = AV_PIX_FMT_NV12;
-    codec->context->flags2 |= AV_CODEC_FLAG2_FAST;
-    codec->context->flags |= AV_CODEC_FLAG_LOW_DELAY | AV_CODEC_FLAG2_CHUNKS;
+    codec->context->flags |= AV_CODEC_FLAG_LOW_DELAY;
+    codec->context->flags2 |= AV_CODEC_FLAG2_FAST | AV_CODEC_FLAG2_CHUNKS;
     codec->context->hwaccel_flags |= AV_HWACCEL_FLAG_IGNORE_LEVEL | AV_HWACCEL_FLAG_UNSAFE_OUTPUT;
 
     if (decoder == "h264_qsv")
@@ -100,7 +100,7 @@ void codec_release_video_decoder(VideoDecoder* codec)
             {
                 if (buf != nullptr)
                 {
-                    delete buf;
+                    delete[] buf;
                 }
             }
         }
@@ -131,10 +131,10 @@ void codec_release_video_decoder(VideoDecoder* codec)
 }
 
 bool codec_video_decoder_send_packet(VideoDecoder* codec,
-                                     Packet* packet)
+                                     Packet packet)
 {
-    uint8_t* buf = packet->buffer;
-    size_t size = packet->len;
+    uint8_t* buf = packet.buffer;
+    size_t size = packet.len;
 
     if (buf == nullptr)
     {
@@ -165,13 +165,14 @@ bool codec_video_decoder_send_packet(VideoDecoder* codec,
                                    &codec->packet->size,
                                    buf,
                                    size,
-                                   packet->timestamp,
+                                   packet.timestamp,
                                    AV_NOPTS_VALUE,
                                    0);
 #ifdef WIN32
         }
         __except (EXCEPTION_EXECUTE_HANDLER)
         {
+            av_log(nullptr, AV_LOG_ERROR, "av_parser_parse2 EXCEPTION_EXECUTE_HANDLER");
             return true;
         }
 #endif

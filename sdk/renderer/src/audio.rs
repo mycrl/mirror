@@ -23,7 +23,7 @@ pub struct AudioPlayer {
 
 impl AudioPlayer {
     pub fn new() -> Result<Self> {
-        println!("renderer: create audio player");
+        log::info!("renderer: create audio player");
 
         let (stream, stream_handle) = OutputStream::try_default()?;
         Ok(Self {

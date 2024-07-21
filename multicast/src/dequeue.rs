@@ -33,7 +33,9 @@ impl Dequeue {
         }
 
         // To avoid duplicate insertion, check here first.
-        self.queue.entry(packet.chunk_sequence).or_insert_with(|| (packet, Instant::now()));
+        self.queue
+            .entry(packet.chunk_sequence)
+            .or_insert_with(|| (packet, Instant::now()));
     }
 
     /// According to the set delay, the data packets are taken out from the

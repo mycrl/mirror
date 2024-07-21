@@ -4,6 +4,7 @@ pub mod video;
 use std::ffi::{c_char, c_int};
 
 use common::strings::Strings;
+use log::{log, Level};
 
 pub use audio::{AudioDecoder, AudioEncodePacket, AudioEncoder, AudioEncoderSettings};
 pub use video::{VideoDecoder, VideoEncodePacket, VideoEncoder, VideoEncoderSettings};
@@ -55,6 +56,18 @@ enum LoggerLevel {
     Trace = 56,
 }
 
+impl Into<Level> for LoggerLevel {
+    fn into(self) -> Level {
+        match self {
+            Self::Panic | Self::Fatal | Self::Error => Level::Error,
+            Self::Info | Self::Verbose => Level::Info,
+            Self::Warn => Level::Warn,
+            Self::Debug => Level::Debug,
+            Self::Trace => Level::Trace,
+        }
+    }
+}
+
 extern "C" {
     fn codec_remove_logger();
     fn codec_set_logger(logger: extern "C" fn(level: LoggerLevel, message: *const c_char));
@@ -62,11 +75,12 @@ extern "C" {
 
 extern "C" fn logger_proc(level: LoggerLevel, message: *const c_char) {
     if let Ok(message) = Strings::from(message).to_string() {
-        log::info!(
-            "CODEC: level={:?}, msg={}",
-            level,
+        log!(
+            target: "ffmpeg",
+            level.into(),
+            "{}",
             message.as_str().strip_suffix("\n").unwrap_or(&message)
-        )
+        );
     }
 }
 
