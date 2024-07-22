@@ -4,7 +4,10 @@ mod video;
 use std::{ffi::c_int, ptr::null_mut};
 
 use audio::AudioPlayer;
-use common::{frame::{AudioFrame, VideoFrame}, jump_current_exe_dir};
+use common::{
+    frame::{AudioFrame, VideoFrame},
+    jump_current_exe_dir,
+};
 use video::{Size, VideoRender, WindowHandle};
 
 #[repr(C)]
