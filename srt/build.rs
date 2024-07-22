@@ -103,9 +103,10 @@ fn use_library(srt_dir: String) -> Result<()> {
 
         // use MultiThreaded
         for vcxproj in ["srt_static.vcxproj", "srt_virtual.vcxproj"].map(|it| join(&srt_dir, it)) {
-            let replaced_vcxproj = fs::read_to_string(&vcxproj)?
-                .replace("MultiThreadedDLL", "MultiThreaded");
-            fs::write(&vcxproj, replaced_vcxproj)?;
+            fs::write(
+                &vcxproj,
+                fs::read_to_string(&vcxproj)?.replace("MultiThreadedDLL", "MultiThreaded"),
+            )?;
         }
 
         exec("cmake --build . --config Release", &srt_dir)?;
