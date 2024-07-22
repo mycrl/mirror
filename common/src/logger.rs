@@ -15,8 +15,6 @@ pub fn init(name: &str, level: LevelFilter) -> anyhow::Result<()> {
         .set_time_format_custom(format_description!(
             "[month]-[day] [hour]:[minute]:[second]"
         ))
-        .set_time_offset_to_local()
-        .unwrap()
         .set_thread_level(LevelFilter::Error)
         .set_location_level(LevelFilter::Error)
         .build();
