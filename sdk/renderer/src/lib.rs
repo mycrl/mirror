@@ -4,10 +4,7 @@ mod video;
 use std::{ffi::c_int, ptr::null_mut};
 
 use audio::AudioPlayer;
-use common::{
-    frame::{AudioFrame, VideoFrame},
-    jump_current_exe_dir,
-};
+use common::frame::{AudioFrame, VideoFrame};
 use video::{Size, VideoRender, WindowHandle};
 
 #[repr(C)]
@@ -53,7 +50,7 @@ extern "C" fn renderer_create(size: RawSize, handle: *const WindowHandle) -> *mu
     assert!(!handle.is_null());
 
     #[cfg(debug_assertions)]
-    if jump_current_exe_dir().is_ok() {
+    if common::jump_current_exe_dir().is_ok() {
         common::logger::init("renderer.log", log::LevelFilter::Info).unwrap();
     }
 
@@ -83,7 +80,7 @@ extern "C" fn renderer_on_video(render: *mut RawRenderer, frame: *const VideoFra
 extern "C" fn renderer_on_audio(render: *mut RawRenderer, frame: *const AudioFrame) -> bool {
     assert!(!render.is_null() && !frame.is_null());
 
-    unsafe { &mut *render }.audio.send(1, unsafe { &*frame });
+    unsafe { &mut *render }.audio.send(unsafe { &*frame });
     true
 }
 
