@@ -80,48 +80,47 @@ fn main() -> anyhow::Result<()> {
                 "libsrt.a"
             },
         )) {
+            exec(
+                "cmake \
+                -DENABLE_DEBUG=OFF \
+                -DCMAKE_BUILD_TYPE=Release \
+                -DENABLE_APPS=OFF \
+                -DENABLE_BONDING=ON \
+                -DENABLE_CODE_COVERAGE=OFF \
+                -DENABLE_SHARED=OFF \
+                -DENABLE_ENCRYPTION=OFF \
+                -DENABLE_UNITTESTS=OFF \
+                -DENABLE_STDCXX_SYNC=ON \
+                .",
+                &srt_dir,
+            )?;
+
+            // use MultiThreaded
             #[cfg(target_os = "windows")]
             {
-                exec(
-                    "cmake \
-                    -DENABLE_DEBUG=OFF \
-                    -DCMAKE_BUILD_TYPE=Release \
-                    -DENABLE_APPS=OFF \
-                    -DENABLE_BONDING=ON \
-                    -DENABLE_CODE_COVERAGE=OFF \
-                    -DENABLE_SHARED=OFF \
-                    -DENABLE_ENCRYPTION=OFF \
-                    -DENABLE_UNITTESTS=OFF \
-                    -DENABLE_STDCXX_SYNC=ON \
-                    .",
-                    &srt_dir,
-                )?;
-
-                // use MultiThreaded
+                for vcxproj in
+                    ["srt_static.vcxproj", "srt_virtual.vcxproj"].map(|it| join(&srt_dir, it))
                 {
-                    for vcxproj in ["srt_static.vcxproj", "srt_virtual.vcxproj"]
-                        .map(|it| join(&srt_dir, it))
-                    {
-                        fs::write(
-                            &vcxproj,
-                            fs::read_to_string(&vcxproj)?
-                                .replace("MultiThreadedDLL", "MultiThreaded"),
-                        )?;
-                    }
+                    fs::write(
+                        &vcxproj,
+                        fs::read_to_string(&vcxproj)?.replace("MultiThreadedDLL", "MultiThreaded"),
+                    )?;
                 }
-
-                exec("cmake --build . --config Release", &srt_dir)?;
             }
+
+            exec("cmake --build . --config Release", &srt_dir)?;
         }
 
-        #[cfg(target_os = "windows")]
-        {
+        if cfg!(target_os = "windows") {
             println!(
                 "cargo:rustc-link-search=all={}",
                 join(&srt_dir, "./Release")
             );
 
             println!("cargo:rustc-link-lib=srt_static");
+        } else {
+            println!("cargo:rustc-link-search=all={}", srt_dir);
+            println!("cargo:rustc-link-lib=srt");
         }
     }
 
