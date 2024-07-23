@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{slice::from_raw_parts, time::Duration};
 
 use anyhow::Result;
 use common::frame::AudioFrame;
@@ -34,23 +34,17 @@ impl AudioPlayer {
     }
 
     /// Push an audio clip to the queue.
-    pub fn send(&mut self, channels: u16, frame: &AudioFrame) {
+    pub fn send(&mut self, frame: &AudioFrame) {
+        let buffer = unsafe { from_raw_parts(frame.data as *const i16, frame.frames as usize) };
         self.sink.append(AudioSource {
             sample_rate: frame.sample_rate,
-            frames: frame.frames as usize,
-            channels,
-            offset: 0,
-            buffer: unsafe {
-                std::slice::from_raw_parts(frame.data as *const i16, frame.frames as usize).to_vec()
-            },
+            buffer: buffer.to_vec(),
         })
     }
 }
 
 struct AudioSource {
     buffer: Vec<i16>,
-    offset: usize,
-    frames: usize,
     /// A sound is a vibration that propagates through air and reaches your
     /// ears. This vibration can be represented as an analog signal.
     ///
@@ -67,27 +61,6 @@ struct AudioSource {
     /// one sample every 20µs, the frequency would be 50000 Hz. In reality,
     /// common values for the frequency are 44100, 48000 and 96000.
     sample_rate: u32,
-    /// But a frequency and a list of values only represent one signal. When you
-    /// listen to a sound, your left and right ears don’t receive exactly the
-    /// same signal. In order to handle this, we usually record not one but two
-    /// different signals: one for the left ear and one for the right ear. We
-    /// say that such a sound has two channels.
-    ///
-    /// Sometimes sounds even have five or six channels, each corresponding to a
-    /// location around the head of the listener.
-    ///
-    /// The standard in audio manipulation is to interleave the multiple
-    /// channels. In other words, in a sound with two channels the list of
-    /// samples contains the first sample of the first channel, then the first
-    /// sample of the second channel, then the second sample of the first
-    /// channel, then the second sample of the second channel, and so on. The
-    /// same applies if you have more than two channels. The rodio library only
-    /// supports this schema.
-    ///
-    /// Therefore in order to represent a sound in memory in fact we need three
-    /// characteristics: the frequency, the number of channels, and the list of
-    /// samples.
-    channels: u16,
 }
 
 impl Source for AudioSource {
@@ -99,12 +72,12 @@ impl Source for AudioSource {
     /// it will check whether the value of `channels()` and/or
     /// `sample_rate()` have changed.
     fn current_frame_len(&self) -> Option<usize> {
-        Some(self.frames)
+        None
     }
 
     /// Returns the number of channels. Channels are always interleaved.
     fn channels(&self) -> u16 {
-        self.channels
+        1
     }
 
     /// Returns the rate at which the source should be played. In number of
@@ -117,9 +90,7 @@ impl Source for AudioSource {
     ///
     /// `None` indicates at the same time "infinite" or "unknown".
     fn total_duration(&self) -> Option<Duration> {
-        Some(Duration::from_millis(
-            (self.frames as f64 / (self.sample_rate as f64 / 1000.0)) as u64,
-        ))
+        None
     }
 }
 
@@ -143,7 +114,6 @@ impl Iterator for AudioSource {
     ///
     /// You can implement this trait on your own type as well if you wish so.
     fn next(&mut self) -> Option<Self::Item> {
-        self.offset += 1;
-        self.buffer.get(self.offset - 1).copied()
+        self.buffer.pop()
     }
 }

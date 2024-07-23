@@ -113,8 +113,8 @@ bool codec_audio_decoder_send_packet(AudioDecoder* codec,
 								   &codec->packet->size,
 								   buf,
 								   size,
+                                   packet->timestamp,
 								   AV_NOPTS_VALUE,
-								   packet->timestamp,
 								   0);
 		if (ret < 0)
 		{

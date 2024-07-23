@@ -176,6 +176,11 @@ bool codec_video_decoder_send_packet(VideoDecoder* codec,
             return true;
         }
 #endif
+        
+        if (len < 0)
+		{
+			return false;
+		}
 
         buf += len;
         size -= len;
