@@ -70,14 +70,6 @@ struct RawRenderer {
 extern "C" fn renderer_create(size: RawSize, handle: *const WindowHandle) -> *mut RawRenderer {
     assert!(!handle.is_null());
 
-<<<<<<< Updated upstream
-    #[cfg(debug_assertions)]
-    if jump_current_exe_dir().is_ok() {
-        common::logger::init("renderer.log", log::LevelFilter::Info).unwrap();
-    }
-
-=======
->>>>>>> Stashed changes
     let func = || {
         Ok::<RawRenderer, anyhow::Error>(RawRenderer {
             video: VideoRender::new(size.into(), unsafe { &*handle })?,
