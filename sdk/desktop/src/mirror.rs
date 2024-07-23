@@ -8,19 +8,12 @@ use crate::sender::SenderObserver;
 use anyhow::Result;
 use capture::{AudioInfo, CaptureSettings, Device, DeviceManager, DeviceManagerOptions, VideoInfo};
 use codec::{AudioDecoder, AudioEncoderSettings, VideoDecoder, VideoEncoderSettings};
-use common::{
-    frame::{AudioFrame, VideoFrame},
-    jump_current_exe_dir,
-};
-
+use common::frame::{AudioFrame, VideoFrame};
 use once_cell::sync::Lazy;
 use transport::{
     adapter::{StreamKind, StreamMultiReceiverAdapter, StreamSenderAdapter},
     Transport, TransportOptions,
 };
-
-#[cfg(target_os = "windows")]
-use windows::Win32::System::Threading::{GetCurrentProcess, SetPriorityClass, HIGH_PRIORITY_CLASS};
 
 pub static OPTIONS: Lazy<RwLock<MirrorOptions>> = Lazy::new(Default::default);
 
@@ -116,23 +109,6 @@ impl Default for MirrorOptions {
 
 /// Initialize the environment, which must be initialized before using the SDK.
 pub fn init(options: MirrorOptions) -> Result<()> {
-    jump_current_exe_dir()?;
-
-    #[cfg(debug_assertions)]
-    common::logger::init("mirror.log", log::LevelFilter::Info)?;
-
-    // In order to prevent other programs from affecting the delay performance of
-    // the current program, set the priority of the current process to high.
-    #[cfg(target_os = "windows")]
-    {
-        if unsafe { SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS) }.is_err() {
-            log::error!(
-                "failed to set current process priority, Maybe it's \
-                because you didn't run it with administrator privileges."
-            );
-        }
-    }
-
     *OPTIONS.write().unwrap() = options.clone();
     log::info!("mirror init: options={:?}", options);
 

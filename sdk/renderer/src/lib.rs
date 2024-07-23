@@ -1,7 +1,10 @@
 mod audio;
 mod video;
 
-use std::{ffi::c_int, ptr::null_mut};
+use std::{
+    ffi::{c_int, c_void},
+    ptr::null_mut,
+};
 
 use audio::AudioPlayer;
 use common::frame::{AudioFrame, VideoFrame};
@@ -20,6 +23,24 @@ impl From<RawSize> for Size {
             height: val.height as u32,
         }
     }
+}
+
+#[no_mangle]
+extern "system" fn DllMain(
+    _dll_module: u32,
+    _call_reason: usize,
+    _reserved: *const c_void,
+) -> bool {
+    #[cfg(debug_assertions)]
+    {
+        if common::jump_current_exe_dir().is_ok() {
+            if common::logger::init("renderer.log", log::LevelFilter::Info).is_err() {
+                return false;
+            }
+        }
+    }
+
+    true
 }
 
 #[no_mangle]
@@ -48,11 +69,6 @@ struct RawRenderer {
 #[no_mangle]
 extern "C" fn renderer_create(size: RawSize, handle: *const WindowHandle) -> *mut RawRenderer {
     assert!(!handle.is_null());
-
-    #[cfg(debug_assertions)]
-    if common::jump_current_exe_dir().is_ok() {
-        common::logger::init("renderer.log", log::LevelFilter::Info).unwrap();
-    }
 
     let func = || {
         Ok::<RawRenderer, anyhow::Error>(RawRenderer {

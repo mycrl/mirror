@@ -27,6 +27,17 @@ Pure software screen projection is different from Miracast, AirPlay, etc., which
 * Node.js 16 or above as a auto build script.
 * Python3 is optional and required for Android Studio projects.
 
+##### Linux (Ubuntu/Debian)
+> For Linux, you need to install additional dependencies to build SRT.
+
+```sh
+sudo apt-get update
+sudo apt-get upgrade
+sudo apt-get install tclsh pkg-config cmake libssl-dev build-essential
+```
+
+---
+
 #### Build
 
 Examples and SDK library files can be automatically packaged by running an automatic compilation script.
