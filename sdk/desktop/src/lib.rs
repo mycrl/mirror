@@ -2,7 +2,7 @@ pub mod mirror;
 pub mod sender;
 
 use std::{
-    ffi::{c_char, c_int},
+    ffi::{c_char, c_int, c_void},
     fmt::Debug,
     ptr::null_mut,
     sync::Arc,
@@ -11,15 +11,17 @@ use std::{
 use capture::{CaptureSettings, Device, DeviceKind, DeviceManager};
 use common::{
     frame::{AudioFrame, VideoFrame},
+    jump_current_exe_dir,
     strings::Strings,
 };
 
-use mirror::{AudioOptions, Mirror, MirrorOptions, VideoOptions};
+use mirror::{AudioOptions, FrameSink, Mirror, MirrorOptions, VideoOptions};
 use transport::adapter::{
     StreamMultiReceiverAdapter, StreamReceiverAdapterExt, StreamSenderAdapter,
 };
 
-use self::mirror::FrameSink;
+#[cfg(target_os = "windows")]
+use windows::Win32::System::Threading::{GetCurrentProcess, SetPriorityClass, HIGH_PRIORITY_CLASS};
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
@@ -118,6 +120,41 @@ impl TryInto<MirrorOptions> for RawMirrorOptions {
             mtu: self.mtu,
         })
     }
+}
+
+#[no_mangle]
+extern "system" fn DllMain(
+    _dll_module: u32,
+    _call_reason: usize,
+    _reserved: *const c_void,
+) -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        if jump_current_exe_dir().is_err() {
+            return false;
+        }
+    }
+
+    #[cfg(debug_assertions)]
+    {
+        if common::logger::init("mirror.log", log::LevelFilter::Info).is_err() {
+            return false;
+        }
+    }
+
+    // In order to prevent other programs from affecting the delay performance of
+    // the current program, set the priority of the current process to high.
+    #[cfg(target_os = "windows")]
+    {
+        if unsafe { SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS) }.is_err() {
+            log::error!(
+                "failed to set current process priority, Maybe it's \
+                because you didn't run it with administrator privileges."
+            );
+        }
+    }
+
+    true
 }
 
 /// Automatically search for encoders, limited hardware, fallback to software
