@@ -1,24 +1,23 @@
 {
     "name": "mirror",
-    "version": "1.0.0",
-    "description": "",
-    "main": "build.js",
+    "version": "0.0.1",
+    "description": "Cross-platform screen projection",
+    "main": "launch.js",
     "scripts": {
-        "build:debug": "node ./build.js",
-        "build:release": "node ./build.js -- --release",
-        "fmt": "cargo +nightly fmt"
+        "dev": "electron ."
     },
     "repository": {
         "type": "git",
         "url": "git+https://github.com/mycrl/mirror.git"
     },
     "author": "Mr.Panda",
-    "license": "MIT",
+    "license": "GPL-3.0-or-later",
     "bugs": {
         "url": "https://github.com/mycrl/mirror/issues"
     },
     "homepage": "https://github.com/mycrl/mirror#readme",
-    "workspaces": [
-        "./app"
-    ]
+    "dependencies": {
+        "mirror": "file:./napi",
+        "electron": "31.2.1"
+    }
 }

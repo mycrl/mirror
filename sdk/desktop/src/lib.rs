@@ -140,8 +140,11 @@ extern "system" fn DllMain(
         if common::logger::init("mirror.log", log::LevelFilter::Info).is_err() {
             return false;
         }
-    }
 
+        std::panic::set_hook(Box::new(|info| {
+            log::error!("{:?}", info);
+        }));
+    }
     // In order to prevent other programs from affecting the delay performance of
     // the current program, set the priority of the current process to high.
     #[cfg(target_os = "windows")]
@@ -174,6 +177,8 @@ pub extern "C" fn mirror_find_video_decoder() -> *const c_char {
 /// Initialize the environment, which must be initialized before using the SDK.
 #[no_mangle]
 pub extern "C" fn mirror_init(options: RawMirrorOptions) -> bool {
+    log::info!("extern api: mirror init");
+
     checker((|| mirror::init(options.try_into()?))()).is_ok()
 }
 
@@ -181,6 +186,8 @@ pub extern "C" fn mirror_init(options: RawMirrorOptions) -> bool {
 /// called when the application exits.
 #[no_mangle]
 pub extern "C" fn mirror_quit() {
+    log::info!("extern api: mirror quit");
+
     mirror::quit()
 }
 
@@ -189,6 +196,8 @@ pub extern "C" fn mirror_quit() {
 pub extern "C" fn mirror_get_device_name(device: *const Device) -> *const c_char {
     assert!(!device.is_null());
 
+    log::info!("extern api: mirror get device name");
+
     unsafe { &*device }.c_name()
 }
 
@@ -196,6 +205,8 @@ pub extern "C" fn mirror_get_device_name(device: *const Device) -> *const c_char
 #[no_mangle]
 pub extern "C" fn mirror_get_device_kind(device: *const Device) -> DeviceKind {
     assert!(!device.is_null());
+
+    log::info!("extern api: mirror get device kind");
 
     unsafe { &*device }.kind()
 }
@@ -213,7 +224,7 @@ pub extern "C" fn mirror_get_devices(
     kind: DeviceKind,
     settings: *const CaptureSettings,
 ) -> RawDevices {
-    log::info!("get devices: kind={:?}", kind);
+    log::info!("extern api: mirror get devices: kind={:?}", kind);
 
     let devices = match checker(DeviceManager::get_devices(
         kind,
@@ -249,6 +260,8 @@ pub extern "C" fn mirror_get_devices(
 pub extern "C" fn mirror_devices_destroy(devices: *const RawDevices) {
     assert!(!devices.is_null());
 
+    log::info!("extern api: mirror devices destroy");
+
     let devices = unsafe { &*devices };
     drop(unsafe { Vec::from_raw_parts(devices.list as *mut Device, devices.size, devices.size) })
 }
@@ -261,6 +274,8 @@ pub extern "C" fn mirror_set_input_device(
     settings: *const CaptureSettings,
 ) -> bool {
     assert!(!device.is_null());
+
+    log::info!("extern api: mirror set input device");
 
     checker(mirror::set_input_device(
         unsafe { &*device },
@@ -276,7 +291,7 @@ pub extern "C" fn mirror_set_input_device(
 /// Start capturing audio and video data.
 #[no_mangle]
 pub extern "C" fn mirror_start_capture() -> c_int {
-    log::info!("start capture devices.");
+    log::info!("extern api: mirror start capture devices");
 
     capture::start()
 }
@@ -284,9 +299,9 @@ pub extern "C" fn mirror_start_capture() -> c_int {
 /// Stop capturing audio and video data.
 #[no_mangle]
 pub extern "C" fn mirror_stop_capture() {
-    capture::stop();
+    log::info!("extern api: mirror stop capture devices");
 
-    log::info!("stop capture devices.")
+    capture::stop();
 }
 
 #[repr(C)]
@@ -297,6 +312,8 @@ pub struct RawMirror {
 /// Create mirror.
 #[no_mangle]
 pub extern "C" fn mirror_create() -> *const RawMirror {
+    log::info!("extern api: mirror create");
+
     checker(Mirror::new())
         .map(|mirror| Box::into_raw(Box::new(RawMirror { mirror })))
         .unwrap_or_else(|_| null_mut()) as *const _
@@ -307,10 +324,10 @@ pub extern "C" fn mirror_create() -> *const RawMirror {
 pub extern "C" fn mirror_destroy(mirror: *const RawMirror) {
     assert!(!mirror.is_null());
 
+    log::info!("extern api: mirror destroy");
+
     capture::set_frame_sink::<()>(None);
     drop(unsafe { Box::from_raw(mirror as *mut RawMirror) });
-
-    log::info!("close mirror");
 }
 
 #[repr(C)]
@@ -395,8 +412,12 @@ impl Into<FrameSink> for RawFrameSink {
                 }
             }),
             close: Box::new(move || {
+                log::info!("extern api: call close callback");
+
                 if let Some(callback) = &self.close {
-                    callback(self.ctx)
+                    callback(self.ctx);
+
+                    log::info!("extern api: call close callback done");
                 }
             }),
         }
@@ -419,6 +440,8 @@ pub extern "C" fn mirror_create_sender(
 ) -> *const RawSender {
     assert!(!mirror.is_null());
 
+    log::info!("extern api: mirror create sender");
+
     checker((|| {
         unsafe { &*mirror }
             .mirror
@@ -433,15 +456,17 @@ pub extern "C" fn mirror_create_sender(
 pub extern "C" fn mirror_sender_set_multicast(sender: *const RawSender, is_multicast: bool) {
     assert!(!sender.is_null());
 
-    unsafe { &*sender }.adapter.set_multicast(is_multicast);
+    log::info!("extern api: mirror set sender multicast={}", is_multicast);
 
-    log::info!("set sender transport use multicast={}", is_multicast);
+    unsafe { &*sender }.adapter.set_multicast(is_multicast);
 }
 
 /// Get whether the sender uses multicast transmission.
 #[no_mangle]
 pub extern "C" fn mirror_sender_get_multicast(sender: *const RawSender) -> bool {
     assert!(!sender.is_null());
+
+    log::info!("extern api: mirror get sender multicast");
 
     unsafe { &*sender }.adapter.get_multicast()
 }
@@ -451,12 +476,12 @@ pub extern "C" fn mirror_sender_get_multicast(sender: *const RawSender) -> bool 
 pub extern "C" fn mirror_sender_destroy(sender: *const RawSender) {
     assert!(!sender.is_null());
 
+    log::info!("extern api: mirror close sender");
+
     capture::set_frame_sink::<()>(None);
     unsafe { Box::from_raw(sender as *mut RawSender) }
         .adapter
         .close();
-
-    log::info!("close sender");
 }
 
 #[repr(C)]
@@ -474,6 +499,8 @@ pub extern "C" fn mirror_create_receiver(
 ) -> *const RawReceiver {
     assert!(!mirror.is_null());
 
+    log::info!("extern api: mirror create receiver");
+
     checker((|| {
         unsafe { &*mirror }
             .mirror
@@ -488,11 +515,11 @@ pub extern "C" fn mirror_create_receiver(
 pub extern "C" fn mirror_receiver_destroy(receiver: *const RawReceiver) {
     assert!(!receiver.is_null());
 
+    log::info!("extern api: mirror close receiver");
+
     unsafe { Box::from_raw(receiver as *mut RawReceiver) }
         .adapter
         .close();
-
-    log::info!("close receiver");
 }
 
 #[inline]

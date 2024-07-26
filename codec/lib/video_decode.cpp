@@ -133,6 +133,11 @@ void codec_release_video_decoder(VideoDecoder* codec)
 bool codec_video_decoder_send_packet(VideoDecoder* codec,
                                      Packet packet)
 {
+    if (codec->context == nullptr)
+    {
+        return false;
+    }
+
     uint8_t* buf = packet.buffer;
     size_t size = packet.len;
 
@@ -199,6 +204,11 @@ bool codec_video_decoder_send_packet(VideoDecoder* codec,
 
 VideoFrame* codec_video_decoder_read_frame(VideoDecoder* codec)
 {
+    if (codec->context == nullptr)
+    {
+        return nullptr;
+    }
+
     av_frame_unref(codec->frame);
 
     if (avcodec_receive_frame(codec->context, codec->frame) != 0)

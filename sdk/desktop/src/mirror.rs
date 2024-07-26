@@ -5,7 +5,7 @@ use std::{
 
 use crate::sender::SenderObserver;
 
-use anyhow::Result;
+use anyhow::{ensure, Result};
 use capture::{AudioInfo, CaptureSettings, Device, DeviceManager, DeviceManagerOptions, VideoInfo};
 use codec::{AudioDecoder, AudioEncoderSettings, VideoDecoder, VideoEncoderSettings};
 use common::frame::{AudioFrame, VideoFrame};
@@ -63,7 +63,7 @@ impl Default for VideoOptions {
     fn default() -> Self {
         Self {
             encoder: "libx264".to_string(),
-            decoder: "libopenh264".to_string(),
+            decoder: "h264".to_string(),
             frame_rate: 30,
             width: 1280,
             height: 720,
@@ -99,7 +99,7 @@ impl Default for MirrorOptions {
     fn default() -> Self {
         Self {
             multicast: "239.0.0.1".to_string(),
-            server: "127.0.0.1".to_string(),
+            server: "127.0.0.1:8080".to_string(),
             video: Default::default(),
             audio: Default::default(),
             mtu: 1500,
@@ -108,7 +108,16 @@ impl Default for MirrorOptions {
 }
 
 /// Initialize the environment, which must be initialized before using the SDK.
+#[rustfmt::skip]
 pub fn init(options: MirrorOptions) -> Result<()> {
+    {
+        ensure!(options.video.encoder == "libx264" || options.video.encoder == "h264_qsv", "invalid video encoder");
+        ensure!(options.video.decoder == "h264" || options.video.decoder == "h264_qsv", "invalid video decoder");
+        ensure!(options.video.width % 4 == 0 && options.video.width <= 4096, "invalid video width");
+        ensure!(options.video.height % 4 == 0 && options.video.height <= 2560, "invalid video height");
+        ensure!(options.video.frame_rate <= 60, "invalid video frame rate");
+    }
+
     *OPTIONS.write().unwrap() = options.clone();
     log::info!("mirror init: options={:?}", options);
 

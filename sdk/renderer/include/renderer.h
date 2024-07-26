@@ -33,36 +33,42 @@ typedef const void* WindowHandle;
 typedef const void* Render;
 
 /**
-    * Create the window handle used by the SDK through the original window handle.
-    */
+ * Create the window handle used by the SDK through the original window handle.
+ */
 #ifdef WIN32
 EXPORT WindowHandle renderer_create_window_handle(HWND hwnd, HINSTANCE hinstance);
 #endif // WIN32
+
 /**
-    * Destroy the window handle without affecting external window handles.
-    */
+ * Destroy the window handle without affecting external window handles.
+ */
 EXPORT void renderer_window_handle_destroy(WindowHandle handle);
+
 /**
-    * Creating a window renderer.
-    */
+ * Creating a window renderer.
+ */
 EXPORT Render renderer_create(Size size, WindowHandle window);
+
 /**
-    * Push the video frame into the renderer, which will update the window texture.
-    */
+ * Push the video frame into the renderer, which will update the window texture.
+ */
 EXPORT bool renderer_on_video(Render render, VideoFrame* frame);
+
 /**
-    * Push the audio frame into the renderer, which will append to audio queue.
-    */
+ * Push the audio frame into the renderer, which will append to audio queue.
+ */
 EXPORT bool renderer_on_audio(Render render, AudioFrame* frame);
+
 /**
-    * Adjust the size of the renderer. When the window size changes, the internal 
-    * size of the renderer needs to be updated, otherwise this will cause 
-    * abnormal rendering.
-    */
+ * Adjust the size of the renderer. When the window size changes, the internal 
+ * size of the renderer needs to be updated, otherwise this will cause 
+ * abnormal rendering.
+ */
 EXPORT bool renderer_resise(Render render, Size size);
+
 /**
-    * Destroy the window renderer.
-    */
+ * Destroy the window renderer.
+ */
 EXPORT void renderer_destroy(Render render);
 
 #endif // RENDERER

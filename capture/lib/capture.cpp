@@ -32,6 +32,7 @@
 
 static struct
 {
+    bool initialized = false;
     bool allow_obs = true;
     Logger logger = nullptr;
     void* logger_ctx = nullptr;
@@ -317,12 +318,13 @@ int capture_start()
     audio_convert_info.samples_per_sec = GLOBAL.audio_info.samples_per_sec;
     obs_add_raw_audio_callback(1, &audio_convert_info, raw_audio_callback, nullptr);
 
+    GLOBAL.initialized = true;
     return 0;
 }
 
 void capture_stop()
 {
-    if (!obs_initialized())
+    if (!GLOBAL.initialized)
     {
         return;
     }
@@ -359,6 +361,7 @@ void capture_stop()
 #endif
 
     obs_shutdown();
+    GLOBAL.initialized = false;
 }
 
 int capture_set_input(DeviceDescription* description, CaptureSettings* settings)

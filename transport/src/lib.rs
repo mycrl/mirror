@@ -62,6 +62,8 @@ impl Transport {
             let mut bytes = BytesMut::with_capacity(2000);
 
             while let Ok(size) = socket.read(&mut buf) {
+                log::info!("signal socket read buf, size={}", size);
+
                 if size == 0 {
                     break;
                 }

@@ -20,6 +20,7 @@ public:
     void Close();
 private:
     Args& _args;
+    MirrorOptions _options;
     CaptureSettings _settings;
     SimpleRender* _render = nullptr;
     MirrorService* _mirror = nullptr;

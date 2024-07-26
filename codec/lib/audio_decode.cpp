@@ -97,6 +97,11 @@ void codec_release_audio_decoder(AudioDecoder* codec)
 bool codec_audio_decoder_send_packet(AudioDecoder* codec,
 									 Packet* packet)
 {
+	if (codec->context == nullptr)
+	{
+		return false;
+	}
+
 	uint8_t* buf = packet->buffer;
 	size_t size = packet->len;
 
@@ -140,6 +145,11 @@ bool codec_audio_decoder_send_packet(AudioDecoder* codec,
 
 AudioFrame* codec_audio_decoder_read_frame(AudioDecoder* codec)
 {
+	if (codec->context == nullptr)
+	{
+		return nullptr;
+	}
+
 	if (avcodec_receive_frame(codec->context, codec->frame) != 0)
 	{
 		return nullptr;

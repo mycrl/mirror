@@ -116,7 +116,7 @@ MirrorService::MirrorService()
 
 MirrorService::~MirrorService()
 {
-    if (_mirror != nullptr)
+    if (_mirror == nullptr)
     {
         return;
     }
