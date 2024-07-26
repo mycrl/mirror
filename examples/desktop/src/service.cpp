@@ -56,16 +56,17 @@ bool MirrorServiceExt::CreateMirrorSender()
     }
 
 
-    _settings.method = CaptureMethod::WGC;
+    CaptureSettings settings;
+    settings.method = CaptureMethod::WGC;
     
     DeviceManagerService::Start();
-    auto devices = DeviceManagerService::GetDevices(DeviceKind::Screen, &_settings);
+    auto devices = DeviceManagerService::GetDevices(DeviceKind::Screen, &settings);
     if (devices.device_list.size() == 0)
     {
         return false;
     }
 
-    DeviceManagerService::SetInputDevice(devices.device_list[0], &_settings);
+    DeviceManagerService::SetInputDevice(devices.device_list[0], &settings);
     _sender = _mirror->CreateSender(_args.ArgsParams.id, _render);
     if (!_sender.has_value())
     {

@@ -9,6 +9,7 @@
 #include "./camera.h"
 #include "./desktop.h"
 
+#include <mutex>
 #include <string>
 #include <libobs/obs.h>
 
@@ -30,7 +31,7 @@
 
 // global variable
 
-static struct
+struct
 {
     bool initialized = false;
     bool allow_obs = true;
@@ -52,6 +53,7 @@ static struct
     GDICapture* gdi_capture = new GDICapture();
 #endif
 } GLOBAL = {};
+std::mutex GLOBAL_MUTEX;
 
 void logger_proc(int level, const char* message, va_list args, void* _)
 {
@@ -148,7 +150,9 @@ void update_audio_settings(DeviceDescription* description)
 
 void raw_video_callback(void* _, video_data* frame)
 {
-    if (!GLOBAL.allow_obs)
+    std::lock_guard<std::mutex> lock_guard(GLOBAL_MUTEX);
+
+    if (!GLOBAL.allow_obs || !GLOBAL.initialized)
     {
         return;
     }
@@ -169,7 +173,9 @@ void raw_video_callback(void* _, video_data* frame)
 
 void raw_audio_callback(void* _, size_t mix_idx, audio_data* data)
 {
-    if (!GLOBAL.allow_obs)
+    std::lock_guard<std::mutex> lock_guard(GLOBAL_MUTEX);
+
+    if (!GLOBAL.allow_obs || !GLOBAL.initialized)
     {
         return;
     }
@@ -190,6 +196,8 @@ void raw_audio_callback(void* _, size_t mix_idx, audio_data* data)
 
 void* capture_set_output_callback(OutputCallback proc)
 {
+    std::lock_guard<std::mutex> lock_guard(GLOBAL_MUTEX);
+
     void* previous_ctx = GLOBAL.output_callback.ctx;
     GLOBAL.output_callback = proc;
     return previous_ctx;
@@ -197,6 +205,8 @@ void* capture_set_output_callback(OutputCallback proc)
 
 void capture_init(VideoInfo* video_info, AudioInfo* audio_info)
 {
+    std::lock_guard<std::mutex> lock_guard(GLOBAL_MUTEX);
+
     base_set_log_handler(logger_proc, nullptr);
 
 #ifdef WIN32
@@ -223,6 +233,8 @@ void capture_init(VideoInfo* video_info, AudioInfo* audio_info)
 
 int capture_start()
 {
+    std::lock_guard<std::mutex> lock_guard(GLOBAL_MUTEX);
+
     if (obs_initialized())
     {
         return -1;
@@ -324,6 +336,8 @@ int capture_start()
 
 void capture_stop()
 {
+    std::lock_guard<std::mutex> lock_guard(GLOBAL_MUTEX);
+
     if (!GLOBAL.initialized)
     {
         return;
@@ -366,6 +380,8 @@ void capture_stop()
 
 int capture_set_input(DeviceDescription* description, CaptureSettings* settings)
 {
+    std::lock_guard<std::mutex> lock_guard(GLOBAL_MUTEX);
+
     if (
         description->type == DeviceType::kDeviceTypeVideo ||
         (description->type == DeviceType::kDeviceTypeScreen && settings->method == CaptureMethod::GDI))
@@ -390,9 +406,14 @@ int capture_set_input(DeviceDescription* description, CaptureSettings* settings)
                                                    GLOBAL.video_info.fps_num,
                                                    [](VideoFrame* frame)
                                                    {
-                                                       if (GLOBAL.output_callback.video != nullptr)
+                                                       if (GLOBAL_MUTEX.try_lock())
                                                        {
-                                                           GLOBAL.output_callback.video(GLOBAL.output_callback.ctx, frame);
+                                                           if (GLOBAL.output_callback.video != nullptr)
+                                                           {
+                                                               GLOBAL.output_callback.video(GLOBAL.output_callback.ctx, frame);
+                                                           }
+
+                                                           GLOBAL_MUTEX.unlock();
                                                        }
                                                    });
 #endif
@@ -408,9 +429,14 @@ int capture_set_input(DeviceDescription* description, CaptureSettings* settings)
                                                     GLOBAL.video_info.fps_num,
                                                     [](VideoFrame* frame)
                                                     {
-                                                        if (GLOBAL.output_callback.video != nullptr)
+                                                        if (GLOBAL_MUTEX.try_lock())
                                                         {
-                                                            GLOBAL.output_callback.video(GLOBAL.output_callback.ctx, frame);
+                                                            if (GLOBAL.output_callback.video != nullptr)
+                                                            {
+                                                                GLOBAL.output_callback.video(GLOBAL.output_callback.ctx, frame);
+                                                            }
+
+                                                            GLOBAL_MUTEX.unlock();
                                                         }
                                                     });
 #endif
@@ -435,6 +461,8 @@ int capture_set_input(DeviceDescription* description, CaptureSettings* settings)
 GetDeviceListResult capture_get_device_list(DeviceType type,
                                             CaptureSettings* settings)
 {
+    std::lock_guard<std::mutex> lock_guard(GLOBAL_MUTEX);
+
     DeviceList* list = new DeviceList{};
     list->devices = new DeviceDescription * [100];
     list->size = 0;
@@ -519,12 +547,16 @@ void capture_release_device_list(DeviceList* list)
 
 void capture_set_logger(Logger logger, void* ctx)
 {
+    std::lock_guard<std::mutex> lock_guard(GLOBAL_MUTEX);
+
     GLOBAL.logger = logger;
     GLOBAL.logger_ctx = ctx;
 }
 
 void* capture_remove_logger()
 {
+    std::lock_guard<std::mutex> lock_guard(GLOBAL_MUTEX);
+
     auto ctx = GLOBAL.logger_ctx;
     GLOBAL.logger_ctx = nullptr;
     GLOBAL.logger = nullptr;
