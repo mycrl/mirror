@@ -48,8 +48,8 @@ void CaptureService::Create(Napi::Env env, Napi::Object exports)
 {
     auto props =
     {
-        InstanceMethod<&CaptureService::StartCapture>("start_capture"),
-        InstanceMethod<&CaptureService::StopCapture>("stop_capture"),
+        InstanceMethod<&CaptureService::StartCapture>("start"),
+        InstanceMethod<&CaptureService::StopCapture>("stop"),
         InstanceMethod<&CaptureService::GetDevices>("get_devices"),
         InstanceMethod<&CaptureService::SetInputDevice>("set_input_device"),
     };
@@ -61,15 +61,6 @@ CaptureService::CaptureService(const Napi::CallbackInfo& info) : Napi::ObjectWra
 {
 }
 
-CaptureService::~CaptureService()
-{
-    if (_devices.has_value())
-    {
-        mirror_devices_destroy(&_devices.value());
-        _devices = std::nullopt;
-    }
-}
-
 Napi::Value CaptureService::StartCapture(const Napi::CallbackInfo& info)
 {
     auto env = info.Env();
@@ -78,6 +69,12 @@ Napi::Value CaptureService::StartCapture(const Napi::CallbackInfo& info)
 
 Napi::Value CaptureService::StopCapture(const Napi::CallbackInfo& info)
 {
+    if (_devices.has_value())
+    {
+        mirror_devices_destroy(&_devices.value());
+        _devices = std::nullopt;
+    }
+
     auto env = info.Env();
     mirror_stop_capture();
     return env.Null();
@@ -166,11 +163,5 @@ Napi::Value CaptureService::SetInputDevice(const Napi::CallbackInfo& info)
 
 void CaptureService::_devices_finalizer(Napi::Env env, CaptureService* self)
 {
-    if (!self->_devices.has_value())
-    {
-        return;
-    }
 
-    mirror_devices_destroy(&self->_devices.value());
-    self->_devices = std::nullopt;
 }

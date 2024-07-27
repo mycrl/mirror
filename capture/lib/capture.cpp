@@ -9,6 +9,7 @@
 #include "./camera.h"
 #include "./desktop.h"
 
+#include <thread>
 #include <mutex>
 #include <string>
 #include <libobs/obs.h>
@@ -49,8 +50,8 @@ struct
     VideoFrame video_frame;
     AudioFrame audio_frame;
 #ifdef WIN32
-    CameraCapture* camera_capture = new CameraCapture();
-    GDICapture* gdi_capture = new GDICapture();
+    CameraCapture* camera_capture = nullptr;
+    GDICapture* gdi_capture = nullptr;
 #endif
 } GLOBAL = {};
 std::mutex GLOBAL_MUTEX;
@@ -235,10 +236,15 @@ int capture_start()
 {
     std::lock_guard<std::mutex> lock_guard(GLOBAL_MUTEX);
 
-    if (obs_initialized())
+    if (GLOBAL.initialized)
     {
         return -1;
     }
+
+#ifdef WIN32
+    GLOBAL.camera_capture = new CameraCapture();
+    GLOBAL.gdi_capture = new GDICapture();
+#endif // WIN32
 
     if (!obs_startup("en-US", nullptr, nullptr))
     {
@@ -372,6 +378,12 @@ void capture_stop()
 #ifdef WIN32
     GLOBAL.camera_capture->StopCapture();
     GLOBAL.gdi_capture->StopCapture();
+
+    delete GLOBAL.camera_capture;
+    delete GLOBAL.gdi_capture;
+
+    GLOBAL.camera_capture = nullptr;
+    GLOBAL.gdi_capture = nullptr;
 #endif
 
     obs_shutdown();

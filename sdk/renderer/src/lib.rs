@@ -81,6 +81,7 @@ extern "C" fn renderer_create(size: RawSize, handle: *const WindowHandle) -> *mu
     };
 
     func()
+        .map_err(|e| log::error!("{:?}", e))
         .map(|ret| Box::into_raw(Box::new(ret)))
         .unwrap_or_else(|_| null_mut())
 }
@@ -94,6 +95,7 @@ extern "C" fn renderer_on_video(render: *mut RawRenderer, frame: *const VideoFra
     unsafe { &mut *render }
         .video
         .send(unsafe { &*frame })
+        .map_err(|e| log::error!("{:?}", e))
         .is_ok()
 }
 
@@ -102,8 +104,11 @@ extern "C" fn renderer_on_video(render: *mut RawRenderer, frame: *const VideoFra
 extern "C" fn renderer_on_audio(render: *mut RawRenderer, frame: *const AudioFrame) -> bool {
     assert!(!render.is_null() && !frame.is_null());
 
-    unsafe { &mut *render }.audio.send(unsafe { &*frame });
-    true
+    unsafe { &mut *render }
+        .audio
+        .send(unsafe { &*frame })
+        .map_err(|e| log::error!("{:?}", e))
+        .is_ok()
 }
 
 /// Adjust the size of the renderer. When the window size changes, the internal

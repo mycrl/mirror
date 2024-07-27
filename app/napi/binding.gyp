@@ -17,7 +17,9 @@
                 "./src/sender.cpp",
                 "./src/sender.h",
                 "./src/receiver.cpp",
-                "./src/receiver.h"
+                "./src/receiver.h",
+                "./src/window.cpp",
+                "./src/window.h"
             ],
             "include_dirs": [
                 "<!@(node -p \"require('node-addon-api').include\")",

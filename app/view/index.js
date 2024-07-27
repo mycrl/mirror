@@ -82,10 +82,22 @@ window.onload = () => new Vue({
                 rate += 1
             }, 10)
         },
-        switch_sender()
+        async switch_sender()
         {
             this.ring_animation()
             this.working = !this.working
+            if (this.working)
+            {
+                if (this.devices.values[this.devices.index])
+                {
+                    await electronAPI.create_sender(this.devices.values[this.devices.index])
+                }
+            }
+            else
+            {
+                await electronAPI.close_sender()
+                await this.kind_select(this.devices.kind)
+            }
         },
         async kind_select(kind)
         {
@@ -110,6 +122,10 @@ window.onload = () => new Vue({
                 height: Number(this.settings.value.size.height),
                 server: '192.168.2.129:8088',
             })
+        },
+        close()
+        {
+            electronAPI.close()
         }
     },
     async mounted()

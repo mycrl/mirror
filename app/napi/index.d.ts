@@ -32,6 +32,12 @@ interface Device
     index: number;
 }
 
+interface Size
+{
+    width: number;
+    height: number;
+}
+
 export declare class CaptureService
 {
     start_capture(): boolean;
@@ -46,5 +52,5 @@ export declare class MirrorService
     init(options: MirrorOptions): boolean;
     create_capture_service(): CaptureService;
     create_sender(id: number, callback: () => void): SenderService;
-    create_receiver(id: number, callback: () => void): ReceiverService;
+    create_receiver(id: number, size: Size, callback: () => void): ReceiverService;
 }

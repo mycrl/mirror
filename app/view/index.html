@@ -8,26 +8,41 @@
 </head>
 <body>
     <div id="app">
+        <div id="arrow"
+             :class="working ? 'settings-hide' : (settings.status ? 'settings-max': 'settings-min')">
+            <div id="arrow-item"></div>
+        </div>
+
         <div id="view"
              :class="working ? 'settings-hide' : (settings.status ? 'settings-max': 'settings-min')">
 
             <!--
-            start/stop sender button
-            -->
+        close
+        -->
+            <img id="clsoe"
+                 src="./icon/close.svg" 
+                 @click="close"/>
+
+            <!--
+        start/stop sender button
+        -->
             <div id="switch">
                 <div id="box">
                     <div id="ring"
                          :style="ring.style">
                     </div>
                     <button @click="switch_sender">
-                        <img src="./icon/cast.svg" />
+                        <img src="./icon/cast.svg"
+                             v-show="!working" />
+                        <img src="./icon/power-off.svg"
+                             v-show="working" />
                     </button>
                 </div>
             </div>
 
             <!--
-            devices
-            -->
+        devices
+        -->
             <div id="devices">
                 <div id="kinds">
                     <div class="kind"
@@ -58,41 +73,43 @@
                     <select v-model="devices.index"
                             :title="devices.values[devices.index]?.id">
                         <option v-for="(item, index) of devices.values"
-                                :value="index">{{ item.id }}</option>
+                                :value="index">
+                            {{ item.id }}
+                        </option>
                     </select>
                 </div>
             </div>
 
             <!--
-            channel number
-            -->
+        channel number
+        -->
             <div id="id">
                 <p>channel:</p>
                 <span>#{{ settings.value.id }}</span>
             </div>
 
             <!--
-            settings
-            -->
+        settings
+        -->
             <div id="settings">
                 <div id="card">
 
                     <!--
-                    settings switch button
-                    -->
+                settings switch button
+                -->
                     <div id="settings-switch">
                         <img :src="settings.status ? './icon/down.svg' : './icon/settings.svg'"
                              @click="settings_switch" />
                     </div>
 
                     <!--
-                    settings values
-                    -->
+                settings values
+                -->
                     <div id="items">
 
                         <!--
-                        channel number
-                        -->
+                    channel number
+                    -->
                         <div class="item">
                             <div class="key">
                                 <span>Channel:</span>
@@ -104,8 +121,8 @@
                         </div>
 
                         <!--
-                        video encoder
-                        -->
+                    video encoder
+                    -->
                         <div class="item">
                             <div class="key">
                                 <span>Encoder:</span>
@@ -120,8 +137,8 @@
                         </div>
 
                         <!--
-                        video decoder
-                        -->
+                    video decoder
+                    -->
                         <div class="item">
                             <div class="key">
                                 <span>Decoder:</span>
@@ -136,8 +153,8 @@
                         </div>
 
                         <!--
-                        video size
-                        -->
+                    video size
+                    -->
                         <div class="item">
                             <div class="key">
                                 <span>Size:</span>
@@ -151,8 +168,8 @@
                         </div>
 
                         <!--
-                        video fps
-                        -->
+                    video fps
+                    -->
                         <div class="item">
                             <div class="key">
                                 <span>FPS:</span>
@@ -164,8 +181,8 @@
                         </div>
 
                         <!--
-                        video bit rate
-                        -->
+                    video bit rate
+                    -->
                         <div class="item">
                             <div class="key">
                                 <span>BitRate:</span>
@@ -177,8 +194,8 @@
                         </div>
 
                         <!--
-                        udp multicast ip
-                        -->
+                    udp multicast ip
+                    -->
                         <div class="item">
                             <div class="key">
                                 <span>Multicast:</span>
@@ -190,8 +207,8 @@
                         </div>
 
                         <!--
-                        network MTU
-                        -->
+                    network MTU
+                    -->
                         <div class="item">
                             <div class="key">
                                 <span>MTU:</span>

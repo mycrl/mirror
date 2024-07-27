@@ -60,7 +60,7 @@ bool MirrorServiceExt::CreateMirrorSender()
     settings.method = CaptureMethod::WGC;
     
     DeviceManagerService::Start();
-    auto devices = DeviceManagerService::GetDevices(DeviceKind::Screen, &settings);
+    auto devices = DeviceManagerService::GetDevices(DeviceKind::Video, &settings);
     if (devices.device_list.size() == 0)
     {
         return false;

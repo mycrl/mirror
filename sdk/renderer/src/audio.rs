@@ -1,119 +1,140 @@
-use std::{slice::from_raw_parts, time::Duration};
+use std::{
+    collections::LinkedList,
+    slice::from_raw_parts,
+    sync::{Arc, Mutex},
+};
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use common::frame::AudioFrame;
-use rodio::{OutputStream, OutputStreamHandle, Sink, Source};
+use cpal::{
+    traits::{DeviceTrait, HostTrait, StreamTrait},
+    Data, Device, Host, SampleFormat, Stream, StreamConfig,
+};
+use rubato::{FftFixedIn, Resampler};
 
 pub struct AudioPlayer {
-    /// Handle to a device that outputs sounds.
-    ///
-    /// Dropping the `Sink` stops all sounds. You can use `detach` if you want
-    /// the sounds to continue playing.
-    sink: Sink,
-    /// `cpal::Stream` container. Also see the more useful `OutputStreamHandle`.
-    ///
-    /// If this is dropped playback will end & attached `OutputStreamHandle`s
-    /// will no longer work.
-    #[allow(unused)]
-    stream: OutputStream,
-    /// More flexible handle to a `OutputStream` that provides playback.
-    #[allow(unused)]
-    stream_handle: OutputStreamHandle,
+    host: Host,
+    device: Device,
+    stream: Stream,
+    config: StreamConfig,
+    queue: Arc<AudioQueue>,
+    sampler: Option<FftFixedIn<f32>>,
+    buffer: Vec<f32>,
 }
 
 impl AudioPlayer {
     pub fn new() -> Result<Self> {
-        log::info!("renderer: create audio player");
+        let host = cpal::default_host();
+        let device = host
+            .default_output_device()
+            .ok_or_else(|| anyhow!("no output device available"))?;
+        let config: StreamConfig = device.default_output_config()?.into();
+        let queue = Arc::new(AudioQueue::default());
 
-        let (stream, stream_handle) = OutputStream::try_default()?;
+        let queue_ = Arc::downgrade(&queue);
+        let stream = device.build_output_stream_raw(
+            &config,
+            SampleFormat::F32,
+            move |data: &mut Data, _: &cpal::OutputCallbackInfo| {
+                println!("==================== {:#?}", data.sample_format());
+                if let Some(queue) = queue_.upgrade() {
+                    let chunk_size = data.len() / config.channels as usize;
+                    queue.read(&mut data.as_slice_mut().unwrap()[..chunk_size]);
+                }
+            },
+            |err| {},
+            None,
+        )?;
+
+        stream.play()?;
         Ok(Self {
-            sink: Sink::try_new(&stream_handle)?,
-            stream_handle,
+            host,
+            device,
             stream,
+            queue,
+            config,
+            sampler: None,
+            buffer: Vec::with_capacity(48000),
         })
     }
 
     /// Push an audio clip to the queue.
-    pub fn send(&mut self, frame: &AudioFrame) {
-        let buffer = unsafe { from_raw_parts(frame.data as *const i16, frame.frames as usize) };
-        self.sink.append(AudioSource {
-            sample_rate: frame.sample_rate,
-            buffer: buffer.to_vec(),
-        })
+    pub fn send(&mut self, frame: &AudioFrame) -> Result<()> {
+        if self.sampler.is_none() {
+            self.sampler.replace(FftFixedIn::<f32>::new(
+                frame.sample_rate as usize,
+                self.config.sample_rate.0 as usize,
+                frame.frames as usize,
+                2,
+                1,
+            )?);
+        }
+
+        self.buffer.clear();
+
+        for item in unsafe { from_raw_parts(frame.data as *const i16, frame.frames as usize) } {
+            self.buffer.push(*item as f32);
+        }
+
+        if let Some(sampler) = self.sampler.as_mut() {
+            let mut chunk = AudioChunk {
+                bytes: vec![0.0; 48000 / 2],
+                offset: 0,
+            };
+
+            let (_, size) =
+                sampler.process_into_buffer(&[&self.buffer], &mut [&mut chunk.bytes], None)?;
+            unsafe { chunk.bytes.set_len(size) }
+            self.queue.push_chunk(chunk);
+        }
+
+        Ok(())
     }
 }
 
-struct AudioSource {
-    buffer: Vec<i16>,
-    /// A sound is a vibration that propagates through air and reaches your
-    /// ears. This vibration can be represented as an analog signal.
-    ///
-    /// In order to store this signal in the computer’s memory or on the disk,
-    /// we perform what is called sampling. The consists in choosing an interval
-    /// of time (for example 20µs) and reading the amplitude of the signal at
-    /// each interval (for example, if the interval is 20µs we read the
-    /// amplitude every 20µs). By doing so we obtain a list of numerical values,
-    /// each value being called a sample.
-    ///
-    /// Therefore a sound can be represented in memory by a frequency and a list
-    /// of samples. The frequency is expressed in hertz and corresponds to the
-    /// number of samples that have been read per second. For example if we read
-    /// one sample every 20µs, the frequency would be 50000 Hz. In reality,
-    /// common values for the frequency are 44100, 48000 and 96000.
-    sample_rate: u32,
+struct AudioChunk {
+    bytes: Vec<f32>,
+    offset: usize,
 }
 
-impl Source for AudioSource {
-    /// Returns the number of samples before the current frame ends. `None`
-    /// means "infinite" or "until the sound ends".
-    /// Should never return 0 unless there's no more data.
-    ///
-    /// After the engine has finished reading the specified number of samples,
-    /// it will check whether the value of `channels()` and/or
-    /// `sample_rate()` have changed.
-    fn current_frame_len(&self) -> Option<usize> {
-        None
+#[derive(Default)]
+struct AudioQueue(Mutex<LinkedList<AudioChunk>>);
+
+impl AudioQueue {
+    fn push_chunk(&self, chunk: AudioChunk) {
+        self.0.lock().unwrap().push_front(chunk)
     }
 
-    /// Returns the number of channels. Channels are always interleaved.
-    fn channels(&self) -> u16 {
-        1
-    }
+    fn read(&self, output: &mut [f32]) {
+        let mut queue = self.0.lock().unwrap();
+        if queue.is_empty() {
+            return;
+        }
 
-    /// Returns the rate at which the source should be played. In number of
-    /// samples per second.
-    fn sample_rate(&self) -> u32 {
-        self.sample_rate
-    }
+        let mut size = 0;
+        let count = output.len();
 
-    /// Returns the total duration of this source, if known.
-    ///
-    /// `None` indicates at the same time "infinite" or "unknown".
-    fn total_duration(&self) -> Option<Duration> {
-        None
-    }
-}
+        while size < count {
+            let dst = &mut output[size..count];
+            if let Some(chunk) = queue.back_mut() {
+                if chunk.bytes.len() <= chunk.offset {
+                    queue.pop_back();
+                    continue;
+                }
 
-impl Iterator for AudioSource {
-    type Item = i16;
+                let src = &chunk.bytes[chunk.offset..];
+                let need = if src.len() > dst.len() {
+                    dst.len()
+                } else {
+                    src.len()
+                };
 
-    /// Read a value of a single sample.
-    ///
-    /// This trait is implemented by default on three types: `i16`, `u16` and
-    /// `f32`.
-    ///
-    /// - For `i16`, silence corresponds to the value `0`. The minimum and
-    ///   maximum amplitudes are represented by `i16::min_value()` and
-    ///   `i16::max_value()` respectively.
-    /// - For `u16`, silence corresponds to the value `u16::max_value() / 2`.
-    ///   The minimum and maximum amplitudes are represented by `0` and
-    ///   `u16::max_value()` respectively.
-    /// - For `f32`, silence corresponds to the value `0.0`. The minimum and
-    ///   maximum amplitudes are
-    ///  represented by `-1.0` and `1.0` respectively.
-    ///
-    /// You can implement this trait on your own type as well if you wish so.
-    fn next(&mut self) -> Option<Self::Item> {
-        self.buffer.pop()
+                dst[..need].copy_from_slice(&src[..need]);
+                chunk.offset += need;
+                size += need;
+            } else {
+                break;
+            }
+        }
     }
 }

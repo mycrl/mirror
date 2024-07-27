@@ -70,6 +70,7 @@ Napi::Value MirrorService::Init(const Napi::CallbackInfo& info)
 
 Napi::Value MirrorService::Quit(const Napi::CallbackInfo& info)
 {
+    auto env = info.Env();
     auto mirror = env.GetInstanceData<Context>()->mirror;
     if (mirror != nullptr)
     {
@@ -84,13 +85,6 @@ Napi::Value MirrorService::CreateCaptureService(const Napi::CallbackInfo& info)
 {
     auto env = info.Env();
     auto context = env.GetInstanceData<Context>();
-    if (context->mirror == nullptr)
-    {
-        Napi::Error::New(env, "mirror is null").ThrowAsJavaScriptException();
-        return env.Null();
-    }
-
-
     auto func = context->exports.Get("CaptureService").Unwrap();
     return func.As<Napi::Function>().New({}).Unwrap();
 }
@@ -112,7 +106,7 @@ Napi::Value MirrorService::CreateSender(const Napi::CallbackInfo& info)
 Napi::Value MirrorService::CreateReceiver(const Napi::CallbackInfo& info)
 {
     auto env = info.Env();
-    if (info.Length() != 2 || !info[0].IsNumber() || !info[1].IsFunction())
+    if (info.Length() != 3 || !info[0].IsNumber() || !info[1].IsObject() || !info[2].IsFunction())
     {
         Napi::TypeError::New(env, "invalid arguments").ThrowAsJavaScriptException();
         return env.Null();
@@ -120,7 +114,7 @@ Napi::Value MirrorService::CreateReceiver(const Napi::CallbackInfo& info)
 
     auto context = env.GetInstanceData<Context>();
     auto func = context->exports.Get("ReceiverService").Unwrap();
-    return func.As<Napi::Function>().New({ info[0], info[1] }).Unwrap();
+    return func.As<Napi::Function>().New({ info[0], info[1], info[2]}).Unwrap();
 }
 
 Napi::Object Init(Napi::Env env, Napi::Object exports)

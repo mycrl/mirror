@@ -17,7 +17,6 @@ public:
     static void Create(Napi::Env env, Napi::Object exports);
 
     CaptureService(const Napi::CallbackInfo& info);
-    ~CaptureService();
 
     Napi::Value StartCapture(const Napi::CallbackInfo& info);
     Napi::Value StopCapture(const Napi::CallbackInfo& info);

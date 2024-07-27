@@ -75,6 +75,11 @@ int GDICapture::StartCapture(const char* id,
 
             for (; this->_is_runing;)
             {
+                if (_frame.data[0] == nullptr)
+                {
+                    break;
+                }
+
                 HBITMAP hbitmap = _get_screen_bmp(screen);
                 if (hbitmap == nullptr)
                 {
@@ -183,6 +188,9 @@ void GDICapture::_release_frame()
     {
         delete[] _frame.data[0];
     }
+
+    _frame.data[0] = nullptr;
+    _frame.data[1] = nullptr;
 }
 
 HBITMAP GDICapture::_get_screen_bmp(HDC screen)
