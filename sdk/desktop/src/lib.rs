@@ -128,11 +128,8 @@ extern "system" fn DllMain(
     _call_reason: usize,
     _reserved: *const c_void,
 ) -> bool {
-    #[cfg(target_os = "windows")]
-    {
-        if jump_current_exe_dir().is_err() {
-            return false;
-        }
+    if jump_current_exe_dir().is_err() {
+        return false;
     }
 
     #[cfg(debug_assertions)]

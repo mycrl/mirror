@@ -121,7 +121,7 @@ fn use_library(srt_dir: String) -> Result<()> {
     Ok(())
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(not(target_os = "windows"))]
 fn use_library(srt_dir: String) -> Result<()> {
     if !is_exsit(&join(&srt_dir, "./libsrt.a")) {
         exec(

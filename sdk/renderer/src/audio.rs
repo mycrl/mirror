@@ -36,7 +36,6 @@ impl AudioPlayer {
             &config,
             SampleFormat::F32,
             move |data: &mut Data, _: &cpal::OutputCallbackInfo| {
-                println!("==================== {:#?}", data.sample_format());
                 if let Some(queue) = queue_.upgrade() {
                     let chunk_size = data.len() / config.channels as usize;
                     queue.read(&mut data.as_slice_mut().unwrap()[..chunk_size]);
