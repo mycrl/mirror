@@ -42,7 +42,6 @@ jobs:
         run: Compress-Archive -Path ./build/bin -DestinationPath ./windows-x64-${{ matrix.target }}.zip
 
       - name: Upload artifact
-        if: ${{ matrix.target == 'debug' || matrix.target == 'release' }}
         uses: actions/upload-artifact@v3
         with:
           name: windows-x64-${{ matrix.target }}
