@@ -11,6 +11,5 @@ name = "renderer"
 anyhow = "1.0.86"
 common = { path = "../../common" }
 sdl2 = { version = "0.37.0", features = ["bundled", "static-link", "raw-window-handle"] }
-log = "0.4.20"
 cpal = "0.15.3"
-rubato = "0.15.0"
+log = "0.4.20"

@@ -260,38 +260,42 @@ impl Mirror {
 
         let sink_ = sink.clone();
         let adapter_ = adapter.clone();
-        thread::spawn(move || {
-            'a: while let Some((packet, flags, timestamp)) = adapter_.next(StreamKind::Video) {
-                if video_decoder.decode(&packet, flags, timestamp) {
-                    while let Some(frame) = video_decoder.read() {
-                        if !(sink_.video)(frame) {
-                            break 'a;
+        thread::Builder::new()
+            .name("MirrorStreamVideoReceiverThread".to_string())
+            .spawn(move || {
+                'a: while let Some((packet, flags, timestamp)) = adapter_.next(StreamKind::Video) {
+                    if video_decoder.decode(&packet, flags, timestamp) {
+                        while let Some(frame) = video_decoder.read() {
+                            if !(sink_.video)(frame) {
+                                break 'a;
+                            }
                         }
+                    } else {
+                        break;
                     }
-                } else {
-                    break;
                 }
-            }
 
-            (sink_.close)()
-        });
+                (sink_.close)()
+            })?;
 
         let adapter_ = adapter.clone();
-        thread::spawn(move || {
-            'a: while let Some((packet, flags, timestamp)) = adapter_.next(StreamKind::Audio) {
-                if audio_decoder.decode(&packet, flags, timestamp) {
-                    while let Some(frame) = audio_decoder.read() {
-                        if !(sink.audio)(frame) {
-                            break 'a;
+        thread::Builder::new()
+            .name("MirrorStreamAudioReceiverThread".to_string())
+            .spawn(move || {
+                'a: while let Some((packet, flags, timestamp)) = adapter_.next(StreamKind::Audio) {
+                    if audio_decoder.decode(&packet, flags, timestamp) {
+                        while let Some(frame) = audio_decoder.read() {
+                            if !(sink.audio)(frame) {
+                                break 'a;
+                            }
                         }
+                    } else {
+                        break;
                     }
-                } else {
-                    break;
                 }
-            }
 
-            log::warn!("audio decoder thread is closed!");
-        });
+                log::warn!("audio decoder thread is closed!");
+            })?;
 
         Ok(adapter)
     }

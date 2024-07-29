@@ -36,10 +36,17 @@ SenderService::SenderService(const Napi::CallbackInfo& info) : Napi::ObjectWrap<
         Napi::Error::New(env, "create sender failed").ThrowAsJavaScriptException();
         return;
     }
-    else
-    {
-        _callback = Napi::Persistent(info[1].As<Napi::Function>());
-    }
+
+    _callback = ThreadSafeFunction::New(env,
+                                        info[1].As<Napi::Function>(),
+                                        "Callback",
+                                        0,
+                                        1,
+                                        new Ref(Persistent(info.This())),
+                                        [](Napi::Env, void*, Ref* ctx)
+                                        {
+                                            delete ctx;
+                                        });
 }
 
 Napi::Value SenderService::Close(const Napi::CallbackInfo& info)
@@ -51,7 +58,7 @@ Napi::Value SenderService::Close(const Napi::CallbackInfo& info)
         _sender = nullptr;
     }
 
-    return env.Null();
+    return env.Undefined();
 }
 
 Napi::Value SenderService::SetMulticast(const Napi::CallbackInfo& info)
@@ -60,17 +67,17 @@ Napi::Value SenderService::SetMulticast(const Napi::CallbackInfo& info)
     if (_sender == nullptr)
     {
         Napi::Error::New(env, "sender is null").ThrowAsJavaScriptException();
-        return env.Null();
+        return env.Undefined();
     }
 
     if (info.Length() != 1 || !info[0].IsBoolean())
     {
         Napi::TypeError::New(env, "invalid arguments").ThrowAsJavaScriptException();
-        return env.Null();
+        return env.Undefined();
     }
 
     mirror_sender_set_multicast(_sender, info[0].As<Napi::Boolean>());
-    return env.Null();
+    return env.Undefined();
 }
 
 Napi::Value SenderService::GetMulticast(const Napi::CallbackInfo& info)
@@ -82,5 +89,19 @@ Napi::Value SenderService::GetMulticast(const Napi::CallbackInfo& info)
 void SenderService::_close_proc(void* ctx)
 {
     auto self = (SenderService*)ctx;
-    self->_callback.Call({});
+    self->_callback.BlockingCall(nullptr);
+    self->_callback.Release();
+}
+
+void SenderService::_callback_proc(Napi::Env env,
+                                   Napi::Function callback,
+                                   Ref* context,
+                                   void* data)
+{
+    if (env == nullptr || callback == nullptr)
+    {
+        return;
+    }
+
+    callback.Call(context->Value(), {});
 }

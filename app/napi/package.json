@@ -1,12 +1,13 @@
 {
-    "name": "mirror",
+    "name": "mirror-napi",
     "version": "0.0.1",
     "description": "Cross-platform screen projection",
     "main": "index.js",
     "gypfile": true,
     "scripts": {
+        "build": "node-gyp build",
         "make": "node-gyp configure",
-        "build": "node-gyp build"
+        "preinstall": "node-gyp clean"
     },
     "repository": {
         "type": "git",
@@ -19,7 +20,7 @@
     },
     "homepage": "https://github.com/mycrl/mirror#readme",
     "dependencies": {
-        "node-addon-api": "*",
+        "node-addon-api": "8.1.0",
         "node-gyp": "10.2.0"
     }
 }

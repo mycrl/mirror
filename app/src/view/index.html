@@ -17,15 +17,15 @@
              :class="working ? 'settings-hide' : (settings.status ? 'settings-max': 'settings-min')">
 
             <!--
-        close
-        -->
+            close
+            -->
             <img id="clsoe"
-                 src="./icon/close.svg" 
-                 @click="close"/>
+                 src="./icon/close.svg"
+                 @click="close" />
 
             <!--
-        start/stop sender button
-        -->
+            start/stop sender button
+            -->
             <div id="switch">
                 <div id="box">
                     <div id="ring"
@@ -41,8 +41,8 @@
             </div>
 
             <!--
-        devices
-        -->
+            devices
+            -->
             <div id="devices">
                 <div id="kinds">
                     <div class="kind"
@@ -81,35 +81,35 @@
             </div>
 
             <!--
-        channel number
-        -->
+            channel number
+            -->
             <div id="id">
                 <p>channel:</p>
                 <span>#{{ settings.value.id }}</span>
             </div>
 
             <!--
-        settings
-        -->
+            settings
+            -->
             <div id="settings">
                 <div id="card">
 
                     <!--
-                settings switch button
-                -->
+                    settings switch button
+                    -->
                     <div id="settings-switch">
                         <img :src="settings.status ? './icon/down.svg' : './icon/settings.svg'"
                              @click="settings_switch" />
                     </div>
 
                     <!--
-                settings values
-                -->
+                    settings values
+                    -->
                     <div id="items">
 
                         <!--
-                    channel number
-                    -->
+                        channel number
+                        -->
                         <div class="item">
                             <div class="key">
                                 <span>Channel:</span>
@@ -121,8 +121,8 @@
                         </div>
 
                         <!--
-                    video encoder
-                    -->
+                        video encoder
+                        -->
                         <div class="item">
                             <div class="key">
                                 <span>Encoder:</span>
@@ -137,8 +137,8 @@
                         </div>
 
                         <!--
-                    video decoder
-                    -->
+                        video decoder
+                        -->
                         <div class="item">
                             <div class="key">
                                 <span>Decoder:</span>
@@ -153,8 +153,8 @@
                         </div>
 
                         <!--
-                    video size
-                    -->
+                        video size
+                        -->
                         <div class="item">
                             <div class="key">
                                 <span>Size:</span>
@@ -168,8 +168,8 @@
                         </div>
 
                         <!--
-                    video fps
-                    -->
+                        video fps
+                        -->
                         <div class="item">
                             <div class="key">
                                 <span>FPS:</span>
@@ -181,8 +181,8 @@
                         </div>
 
                         <!--
-                    video bit rate
-                    -->
+                        video bit rate
+                        -->
                         <div class="item">
                             <div class="key">
                                 <span>BitRate:</span>
@@ -194,8 +194,8 @@
                         </div>
 
                         <!--
-                    udp multicast ip
-                    -->
+                        udp multicast ip
+                        -->
                         <div class="item">
                             <div class="key">
                                 <span>Multicast:</span>
@@ -207,8 +207,8 @@
                         </div>
 
                         <!--
-                    network MTU
-                    -->
+                        network MTU
+                        -->
                         <div class="item">
                             <div class="key">
                                 <span>MTU:</span>

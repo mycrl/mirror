@@ -1,8 +1,8 @@
 const { app, screen, BrowserWindow, Tray, nativeImage, ipcMain, Menu } = require('electron')
-const { MirrorService } = require('mirror')
+const { MirrorService } = require('mirror-napi')
 const { join } = require('path')
 
-const tray = new Tray(nativeImage.createFromPath(join(__dirname, '../icon/light.png')))
+const tray = new Tray(nativeImage.createFromPath(join(__dirname, '../icon.ico')))
 const display = screen.getPrimaryDisplay()
 const window = new BrowserWindow({
     x: display.workAreaSize.width - 210,
@@ -20,11 +20,11 @@ const window = new BrowserWindow({
     skipTaskbar: true,
     show: false,
     webPreferences: {
-        preload: join(__dirname, '../view/preload.js'),
+        preload: join(__dirname, './view/preload.js'),
     },
 })
 
-window.loadFile(join(__dirname, '../view/index.html'))
+window.loadFile(join(__dirname, './view/index.html'))
 
 tray.setTitle('mirror')
 tray.setToolTip('service is running')
@@ -61,6 +61,11 @@ const Notify = (info) =>
     }, 3000)
 }
 
+const Log = (level, message) => 
+{
+    console.log(`-> ELECTRON: [${level}] - ${message}`)
+}
+
 tray.on('double-click', (_event, bounds) =>
 {
     window.setPosition(bounds.x - 90, display.workAreaSize.height - 420)
@@ -80,52 +85,123 @@ const State = {
 
 ipcMain.handle('create-sender', (_event, device) =>
 {
-    capture.set_input_device(device)
-    State.sender = mirror.create_sender(State.channel, () =>
+    Log('info', 'ipc create sender event')
+
+    if (State.receiver)
     {
-        Notify('Screen projection has stopped')
-    })
+        Log('info', 'receiver is exists, close receiver')
+
+        State.receiver.close()
+        State.receiver = null
+    }
+
+    if (!State.sender)
+    {
+        Log('info', 'create sender')
+
+        capture.set_input_device(device)
+        State.sender = mirror.create_sender(State.channel, () =>
+        {
+            Log('info', 'sender close callback')
+
+            Notify('Screen projection has stopped')
+        })
+    }
+    else
+    {
+        Log('error', 'sender is exists')
+    }
 })
 
 ipcMain.handle('close-sender', async (_event) =>
 {
-    if (State.sender != null)
+    Log('info', 'ipc close sender event')
+
+    if (State.sender)
     {
+        Log('info', 'close sender')
+
         State.sender.close()
         State.sender = null
     }
 
+    Log('info', 'stop capture')
+
     capture.stop()
     State.is_capture = false
+
+    if (!State.receiver)
+    {
+        Log('info', 'receiver not exists, create receiver')
+
+        State.receiver = mirror.create_receiver(State.channel, () =>
+        {
+            Log('info', 'receiver close callback')
+
+            if (State.receiver)
+            {
+                State.receiver.close()
+                State.receiver = null
+            }
+
+            Notify('Other devices have turned off screen projection')
+        })
+    }
+    else
+    {
+        Log('warn', 'receiver is exists, skip')
+    }
 })
 
 ipcMain.handle('update-settings', (_event, { id, ...settings }) =>
 {
+    Log('info', 'ipc update settings event')
+
     State.channel = id
-    if (State.receiver != null)
+    if (State.receiver)
     {
+        Log('info', 'receiver is exists, close receiver')
+
         State.receiver.close()
         State.receiver = null
     }
 
+    Log('info', 'rebuild mirror env')
+
     mirror.quit()
     mirror.init(settings)
-    State.receiver = mirror.create_receiver(id, {
-        width: display.workAreaSize.width,
-        height: display.workAreaSize.height,
-    }, () =>
-    {
-        State.receiver.close()
-        State.receiver = null
 
-        Notify('Other devices have turned off screen projection')
-    })
+    if (!State.receiver)
+    {
+        Log('info', 'receiver not exists, create receiver')
+
+        State.receiver = mirror.create_receiver(id, () =>
+        {
+            Log('info', 'receiver close callback')
+
+            if (State.receiver)
+            {
+                State.receiver.close()
+                State.receiver = null
+            }
+
+            Notify('Other devices have turned off screen projection')
+        })
+    }
+    else
+    {
+        Log('warn', 'receiver is exists, skip')
+    }
 })
 
 ipcMain.handle('get-devices', (_event, kind) =>
 {
+    Log('info', 'ipc get devices event')
+
     if (!State.is_capture)
     {
+        Log('info', 'not start capture, start capture')
+
         capture.start()
         State.is_capture = true
     }

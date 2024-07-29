@@ -334,21 +334,23 @@ impl Mirror {
 
             let stream_adapter = StreamReceiverAdapter::new();
             let stream_adapter_ = Arc::downgrade(&stream_adapter);
-            thread::spawn(move || {
-                while let Some(stream_adapter) = stream_adapter_.upgrade() {
-                    if let Some((buf, kind, flags, timestamp)) = stream_adapter.next() {
-                        if !adapter.sink(buf, kind, flags, timestamp) {
+            thread::Builder::new()
+                .name("MirrorJniStreamReceiverThread".to_string())
+                .spawn(move || {
+                    while let Some(stream_adapter) = stream_adapter_.upgrade() {
+                        if let Some((buf, kind, flags, timestamp)) = stream_adapter.next() {
+                            if !adapter.sink(buf, kind, flags, timestamp) {
+                                break;
+                            }
+                        } else {
                             break;
                         }
-                    } else {
-                        break;
                     }
-                }
 
-                log::info!("StreamReceiverAdapter is closed");
+                    log::info!("StreamReceiverAdapter is closed");
 
-                adapter.close();
-            });
+                    adapter.close();
+                })?;
 
             Ok(Box::into_raw(Box::new(stream_adapter)))
         })

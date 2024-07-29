@@ -77,7 +77,7 @@ Napi::Value CaptureService::StopCapture(const Napi::CallbackInfo& info)
 
     auto env = info.Env();
     mirror_stop_capture();
-    return env.Null();
+    return env.Undefined();
 
 }
 
@@ -132,13 +132,13 @@ Napi::Value CaptureService::SetInputDevice(const Napi::CallbackInfo& info)
     if (info.Length() != 1 || !info[0].IsObject())
     {
         Napi::TypeError::New(env, "invalid arguments").ThrowAsJavaScriptException();
-        return env.Null();
+        return Napi::Boolean::New(env, false);
     }
 
     if (!_devices.has_value())
     {
         Napi::Error::New(env, "devices is empty").ThrowAsJavaScriptException();
-        return env.Null();
+        return Napi::Boolean::New(env, false);
     }
 
     auto devices = _devices.value();
@@ -147,7 +147,7 @@ Napi::Value CaptureService::SetInputDevice(const Napi::CallbackInfo& info)
     if (index >= devices.size)
     {
         Napi::Error::New(env, "device not found").ThrowAsJavaScriptException();
-        return env.Null();
+        return Napi::Boolean::New(env, false);
     }
 
     CaptureSettings settings;
@@ -155,10 +155,10 @@ Napi::Value CaptureService::SetInputDevice(const Napi::CallbackInfo& info)
     if (!mirror_set_input_device(&devices.devices[index], &settings))
     {
         Napi::Error::New(env, "failed to set device").ThrowAsJavaScriptException();
-        return env.Null();
+        return Napi::Boolean::New(env, false);
     }
 
-    return env.Null();
+    return Napi::Boolean::New(env, true);
 }
 
 void CaptureService::_devices_finalizer(Napi::Env env, CaptureService* self)

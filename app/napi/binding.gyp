@@ -1,7 +1,7 @@
 {
     "targets": [
         {
-            "target_name": "mirror",
+            "target_name": "mirror-napi",
             "cflags!": [ 
                 "-fno-exceptions" 
             ],
@@ -17,9 +17,7 @@
                 "./src/sender.cpp",
                 "./src/sender.h",
                 "./src/receiver.cpp",
-                "./src/receiver.h",
-                "./src/window.cpp",
-                "./src/window.h"
+                "./src/receiver.h"
             ],
             "include_dirs": [
                 "<!@(node -p \"require('node-addon-api').include\")",

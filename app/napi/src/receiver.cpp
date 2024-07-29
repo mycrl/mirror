@@ -16,10 +16,6 @@ ReceiverService::ReceiverService(const Napi::CallbackInfo& info) : Napi::ObjectW
     auto env = info.Env();
     auto context = env.GetInstanceData<Context>();
     auto id = info[0].As<Napi::Number>().Uint32Value();
-    auto size = info[1].As<Napi::Object>();
-
-    _size.width = size.Get("width").Unwrap().As<Napi::Number>().Uint32Value();
-    _size.height = size.Get("height").Unwrap().As<Napi::Number>().Uint32Value();
 
     if (context->mirror == nullptr)
     {
@@ -38,73 +34,174 @@ ReceiverService::ReceiverService(const Napi::CallbackInfo& info) : Napi::ObjectW
         Napi::Error::New(env, "create receiver failed").ThrowAsJavaScriptException();
         return;
     }
-    else
-    {
-        _callback = Napi::Persistent(info[2].As<Napi::Function>());
-    }
+
+    _callback = ThreadSafeFunction::New(env,
+                                        info[1].As<Napi::Function>(),
+                                        "Callback",
+                                        0,
+                                        1,
+                                        new Ref(Persistent(info.This())),
+                                        [](Napi::Env, void*, Ref* ctx)
+                                        {
+                                            delete ctx;
+                                        });
 }
 
 Napi::Value ReceiverService::Close(const Napi::CallbackInfo& info)
 {
-    auto env = info.Env();
+    if (_renderer != nullptr)
+    {
+        renderer_destroy(_renderer);
+        _renderer = nullptr;
+    }
+
     if (_receiver != nullptr)
     {
         mirror_receiver_destroy(_receiver);
         _receiver = nullptr;
     }
 
-    return env.Null();
+    return info.Env().Undefined();
 }
 
 bool ReceiverService::_video_proc(void* ctx, VideoFrame* frame)
 {
     auto self = (ReceiverService*)ctx;
-    if (self->_status == RenderStatus::New)
+    if (self->_receiver == nullptr)
     {
-        self->_status = RenderStatus::Createing;
+        return false;
+    }
+
+    if (self->_thread == nullptr)
+    {
         self->_thread = new std::thread(
             [=]()
             {
-                self->_window.Create(self->_size.width, 
-                                     self->_size.height, 
-                                     [=](WindowHandle window_handle) 
-                                     {
-                                         if (window_handle)
-                                         {
-                                             self->_renderer = renderer_create(self->_size, window_handle);
-                                             self->_status = RenderStatus::Created;
-                                         }
-                                     });
+                int width = GetSystemMetrics(SM_CXSCREEN);
+                int height = GetSystemMetrics(SM_CYSCREEN);
 
-                self->_status = RenderStatus::New;
+                HINSTANCE hinstance = (HINSTANCE)GetModuleHandle(nullptr);
+                WNDCLASSEX wcex;
+                wcex.cbSize = sizeof(WNDCLASSEX);
+                wcex.style = CS_HREDRAW | CS_VREDRAW;
+                wcex.lpfnWndProc = ReceiverService::_wnd_proc;
+                wcex.cbClsExtra = 0;
+                wcex.cbWndExtra = 0;
+                wcex.hInstance = hinstance;
+                wcex.hIcon = LoadIcon(hinstance, IDI_APPLICATION);
+                wcex.hCursor = LoadCursor(nullptr, IDC_ARROW);
+                wcex.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
+                wcex.lpszMenuName = nullptr;
+                wcex.lpszClassName = "mirror remote casting frame";
+                wcex.hIconSm = LoadIcon(wcex.hInstance, IDI_APPLICATION);
+                if (!RegisterClassEx(&wcex))
+                {
+                    return;
+                }
+
+                HWND hwnd = CreateWindow("mirror remote casting frame",
+                                         "mirror remote casting frame",
+                                         WS_OVERLAPPEDWINDOW,
+                                         0,
+                                         0,
+                                         width,
+                                         height,
+                                         nullptr,
+                                         nullptr,
+                                         hinstance,
+                                         nullptr);
+                if (!hwnd)
+                {
+                    return;
+                }
+
+                SetWindowLong(hwnd, GWL_STYLE, 0);
+                SetWindowPos(hwnd, HWND_TOP, 0, 0, width, height, SWP_FRAMECHANGED);
+
+                ShowWindow(hwnd, SW_SHOW);
+                UpdateWindow(hwnd);
+
+                Size size;
+                size.width = width;
+                size.height = height;
+
+                auto handle = renderer_create_window_handle(hwnd, hinstance);
+                self->_renderer = renderer_create(size, handle);
+
+                MSG msg;
+                while (GetMessage(&msg, NULL, 0, 0))
+                {
+                    TranslateMessage(&msg);
+                    DispatchMessage(&msg);
+                }
+
+                renderer_window_handle_destroy(handle);
+                DestroyWindow(hwnd);
+
+                self->_thread = nullptr;
             });
     }
-    else if (self->_status == RenderStatus::Created)
+
+    if (self->_renderer == nullptr)
     {
-        if (self->_renderer) {
-            return renderer_on_video(self->_renderer, frame);
-        }
+        return true;
     }
 
-    return true;
+    return renderer_on_video(self->_renderer, frame);
 }
 
 bool ReceiverService::_audio_proc(void* ctx, AudioFrame* frame)
 {
     auto self = (ReceiverService*)ctx;
-    if (self->_renderer) {
-        return renderer_on_audio(self->_renderer, frame);
+    if (self->_receiver == nullptr)
+    {
+        return false;
     }
 
-    return true;
+    if (self->_renderer == nullptr)
+    {
+        return true;
+    }
+
+    return renderer_on_audio(self->_renderer, frame);
 }
 
 void ReceiverService::_close_proc(void* ctx)
 {
+    PostQuitMessage(0);
+
     auto self = (ReceiverService*)ctx;
-    if (self->_renderer) {
-        renderer_destroy(self->_renderer);
+    self->_callback.BlockingCall();
+    self->_callback.Release();
+}
+
+LRESULT CALLBACK ReceiverService::_wnd_proc(HWND hwnd,
+                                            UINT message,
+                                            WPARAM wparam,
+                                            LPARAM lparam)
+{
+    switch (message)
+    {
+        case WM_DESTROY:
+            PostQuitMessage(0);
+            break;
+        default:
+            return DefWindowProc(hwnd, message, wparam, lparam);
+            break;
     }
 
-    //self->_callback.Call({});
+    return 0;
+}
+
+void ReceiverService::_callback_proc(Napi::Env env,
+                                     Napi::Function callback,
+                                     Ref* context,
+                                     void* data)
+{
+    if (env == nullptr || callback == nullptr)
+    {
+        return;
+    }
+
+    callback.Call(context->Value(), {});
 }

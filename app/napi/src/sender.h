@@ -20,10 +20,18 @@ public:
     Napi::Value SetMulticast(const Napi::CallbackInfo& info);
     Napi::Value GetMulticast(const Napi::CallbackInfo& info);
 private:
-    Sender _sender = nullptr;
-    Napi::FunctionReference _callback;
+    using Ref = Napi::Reference<Napi::Value>;
 
     static void _close_proc(void* ctx);
+    static void _callback_proc(Napi::Env env,
+                               Napi::Function callback,
+                               Ref* context,
+                               void* data);
+
+    using ThreadSafeFunction = Napi::TypedThreadSafeFunction<Ref, void, _callback_proc>;
+
+    Sender _sender = nullptr;
+    ThreadSafeFunction _callback;
 };
 
 #endif // SENDER_H

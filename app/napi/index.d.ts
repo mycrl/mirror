@@ -23,26 +23,20 @@ export declare class ReceiverService
     close();
 }
 
-type DeviceType = "audio" | "video" | "screen" | "window";
+export type DeviceType = "audio" | "video" | "screen" | "window";
 
-interface Device
+export interface Device
 {
     id: string;
     kind: DeviceType;
     index: number;
 }
 
-interface Size
-{
-    width: number;
-    height: number;
-}
-
 export declare class CaptureService
 {
     start_capture(): boolean;
-    get_devices(type: DeviceType): Device[];
-    set_input_device(device: Device);
+    get_devices(type: DeviceType): Device[] | null;
+    set_input_device(device: Device): boolean;
     stop_capture();
 }
 
@@ -51,6 +45,6 @@ export declare class MirrorService
     quit();
     init(options: MirrorOptions): boolean;
     create_capture_service(): CaptureService;
-    create_sender(id: number, callback: () => void): SenderService;
-    create_receiver(id: number, size: Size, callback: () => void): ReceiverService;
+    create_sender(id: number, callback: () => void): SenderService | null;
+    create_receiver(id: number, callback: () => void): ReceiverService | null;
 }
