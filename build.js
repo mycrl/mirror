@@ -66,8 +66,8 @@ const Replace = (file, filters) => {
         if (!fs.existsSync('./target/obs.zip'))
         {
             console.log('Start download distributions...')
-            await download(`${BaseDistributions}/obs-windows-x64.zip`,
-                           './target/obs.zip')
+            await download(`${BaseDistributions}/obs-windows-x64.zip`, './target')
+            fs.renameSync('./target/obs-windows-x64.zip', './target/obs.zip')
         }
 
         await (await unzipper.Open.file('./target/obs.zip')).extract({ path: './build/bin' })
@@ -75,9 +75,12 @@ const Replace = (file, filters) => {
 
     if (!fs.existsSync('./target/ffmpeg'))
     {
-        console.log('Start download ffmpeg...')
-        await download(`${BaseDistributions}/ffmpeg-windows-x64-${Args.release ? 'release' : 'debug'}.zip`,
-                       './target/ffmpeg.zip')
+        if (!fs.existsSync('./target/ffmpeg.zip'))
+        {
+            console.log('Start download ffmpeg...')
+            await download(`${BaseDistributions}/ffmpeg-windows-x64-${Args.release ? 'release' : 'debug'}.zip`,'./target')
+            fs.renameSync(`./target/ffmpeg-windows-x64-${Args.release ? 'release' : 'debug'}.zip`, './target/ffmpeg.zip')
+        }
         
         await (await unzipper.Open.file('./target/ffmpeg.zip')).extract({ path: './target' })
     }
