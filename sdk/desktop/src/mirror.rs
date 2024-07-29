@@ -3,15 +3,21 @@ use std::{
     thread,
 };
 
+#[cfg(target_os = "windows")]
 use crate::sender::SenderObserver;
 
-use anyhow::{ensure, Result};
+#[cfg(target_os = "windows")]
 use capture::{AudioInfo, CaptureSettings, Device, DeviceManager, DeviceManagerOptions, VideoInfo};
+
+#[cfg(target_os = "windows")]
+use transport::adapter::StreamSenderAdapter;
+
+use anyhow::{ensure, Result};
 use codec::{AudioDecoder, AudioEncoderSettings, VideoDecoder, VideoEncoderSettings};
 use common::frame::{AudioFrame, VideoFrame};
 use once_cell::sync::Lazy;
 use transport::{
-    adapter::{StreamKind, StreamMultiReceiverAdapter, StreamSenderAdapter},
+    adapter::{StreamKind, StreamMultiReceiverAdapter},
     Transport, TransportOptions,
 };
 
@@ -123,22 +129,26 @@ pub fn init(options: MirrorOptions) -> Result<()> {
 
     codec::init();
     log::info!("codec initialized");
-    
+
     transport::init();
     log::info!("transport initialized");
-    
-    capture::init(DeviceManagerOptions {
-        video: VideoInfo {
-            width: options.video.width,
-            height: options.video.height,
-            fps: options.video.frame_rate,
-        },
-        audio: AudioInfo {
-            samples_per_sec: options.audio.sample_rate as u32,
-        },
-    });
-    
-    log::info!("capture initialized");
+
+    #[cfg(target_os = "windows")]
+    {
+        capture::init(DeviceManagerOptions {
+            video: VideoInfo {
+                width: options.video.width,
+                height: options.video.height,
+                fps: options.video.frame_rate,
+            },
+            audio: AudioInfo {
+                samples_per_sec: options.audio.sample_rate as u32,
+            },
+        });
+
+        log::info!("capture initialized");
+    }
+
     log::info!("all initialized");
 
     Ok(())
@@ -155,6 +165,7 @@ pub fn quit() {
 
 /// Setting up an input device, repeated settings for the same type of device
 /// will overwrite the previous device.
+#[cfg(target_os = "windows")]
 pub fn set_input_device(device: &Device, settings: Option<&CaptureSettings>) -> Result<()> {
     DeviceManager::set_input(device, settings)?;
 
@@ -238,6 +249,7 @@ impl Mirror {
     /// Create a sender, specify a bound NIC address, you can pass callback to
     /// get the device screen or sound callback, callback can be null, if it is
     /// null then it means no callback data is needed.
+    #[cfg(target_os = "windows")]
     pub fn create_sender(&self, id: u32, sink: FrameSink) -> Result<Arc<StreamSenderAdapter>> {
         log::info!("create sender: id={}", id);
 

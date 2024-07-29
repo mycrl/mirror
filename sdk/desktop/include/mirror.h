@@ -20,7 +20,7 @@
 #include <frame.h>
 #include <stdint.h>
 
-typedef enum 
+typedef enum
 {
     Video,
     Audio,
@@ -113,6 +113,8 @@ typedef struct
     size_t mtu;
 } MirrorOptions;
 
+#ifdef WIN32
+
 typedef struct
 {
     const void* description;
@@ -133,6 +135,8 @@ typedef struct
      */
     size_t size;
 } Devices;
+
+#endif // WIN32
 
 typedef const void* Mirror;
 typedef const void* Sender;
@@ -230,6 +234,8 @@ EXPORT void mirror_quit();
  */
 EXPORT bool mirror_init(MirrorOptions options);
 
+#ifdef WIN32
+
 /**
  * Get device name.
  */
@@ -266,6 +272,8 @@ EXPORT int mirror_start_capture();
  */
 EXPORT void mirror_stop_capture();
 
+#endif // WIN32
+
 /**
  * Create mirror.
  */
@@ -275,6 +283,8 @@ EXPORT Mirror mirror_create();
  * Release mirror.
  */
 EXPORT void mirror_destroy(Mirror mirror);
+
+#ifdef WIN32
 
 /**
  * Create a sender, specify a bound NIC address, you can pass callback to
@@ -297,6 +307,8 @@ EXPORT void mirror_sender_set_multicast(Sender sender, bool is_multicast);
  * Close sender.
  */
 EXPORT void mirror_sender_destroy(Sender sender);
+
+#endif // WIN32
 
 /**
  * Create a receiver, specify a bound NIC address, you can pass callback to
