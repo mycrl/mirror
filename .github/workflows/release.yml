@@ -11,6 +11,8 @@ jobs:
         target:
           - debug
           - release
+-         - app-debug
+          - app-release
     steps:
       - uses: actions/checkout@v4
       - uses: actions/cache@v3
@@ -27,12 +29,23 @@ jobs:
             npm i
             npm run build:${{ matrix.target }}
       - name: Compress distributions
+        if: ${{ matrix.target == 'debug' || matrix.target == 'release' }}
         run: Compress-Archive -Path ./build -DestinationPath ./windows-x64-${{ matrix.target }}.zip
       - name: Upload artifact
+        if: ${{ matrix.target == 'debug' || matrix.target == 'release' }}
         uses: actions/upload-artifact@v3
         with:
           name: windows-x64-${{ matrix.target }}
           path: ./windows-x64-${{ matrix.target }}.zip
+      - name: Compress distributions (App)
+        if: ${{ matrix.target == 'app-debug' || matrix.target == 'app-release' }}
+        run: Compress-Archive -Path ./build/bin -DestinationPath ./app-windows-x64-${{ matrix.target }}.zip
+      - name: Upload artifact (App)
+        if: ${{ matrix.target == 'app-debug' || matrix.target == 'app-release' }}
+        uses: actions/upload-artifact@v3
+        with:
+          name: app-windows-x64-${{ matrix.target }}
+          path: ./app-windows-x64-${{ matrix.target }}.zip
   deploy:
     needs: build
     runs-on: ubuntu-latest

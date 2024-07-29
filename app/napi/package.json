@@ -7,7 +7,8 @@
     "scripts": {
         "build": "node-gyp build",
         "make": "node-gyp configure",
-        "preinstall": "node-gyp clean"
+        "preinstall": "node-gyp clean",
+        "prepare": "node-gyp configure && node-gyp build"
     },
     "repository": {
         "type": "git",
