@@ -40,43 +40,10 @@ fn exec(command: &str, work_dir: &str) -> anyhow::Result<String> {
 }
 
 fn main() -> anyhow::Result<()> {
-    if cfg!(target_os = "macos") {
-        return Ok(());
-    }
-
     println!("cargo:rerun-if-changed=./lib");
     println!("cargo:rerun-if-changed=./build.rs");
 
     let settings = Settings::build()?;
-    if !is_exsit(&join(
-        &settings.out_dir,
-        if cfg!(target_os = "windows") {
-            "yuv.lib"
-        } else {
-            "libyuv.a"
-        },
-    )?) {
-        if cfg!(target_os = "windows") {
-            exec("Invoke-WebRequest \
-                -Uri https://github.com/mycrl/mirror/releases/download/distributions/yuv-windows-x64.lib \
-                -OutFile yuv.lib", &settings.out_dir)?;
-        } else {
-            exec(
-                "wget \
-                https://github.com/mycrl/libyuv-rs/releases/download/v0.1.2/libyuv-linux-x86_64.a \
-                -O libyuv.a",
-                &settings.out_dir,
-            )?;
-        }
-    }
-
-    if !is_exsit(&join(&settings.out_dir, "./libyuv")?) {
-        exec(
-            "git clone --branch stable https://chromium.googlesource.com/libyuv/libyuv",
-            &settings.out_dir,
-        )?;
-    }
-
     cc::Build::new()
         .cpp(true)
         .std("c++20")
@@ -91,36 +58,45 @@ fn main() -> anyhow::Result<()> {
         .file("./lib/audio_encode.cpp")
         .file("./lib/audio_decode.cpp")
         .includes(&settings.ffmpeg_include_prefix)
+        .includes(&settings.libyuv_include_prefix)
         .include("../common/include")
-        .include(&join(&settings.out_dir, "./libyuv/include")?)
         .define(
             if cfg!(target_os = "windows") {
                 "WIN32"
-            } else {
+            } else if cfg!(target_os = "linux") {
                 "LINUX"
+            } else {
+                "MACOS"
             },
             None,
         )
         .compile("codec");
 
-    println!("cargo:rustc-link-search=all={}", &settings.out_dir);
     for path in &settings.ffmpeg_lib_prefix {
         println!("cargo:rustc-link-search=all={}", path);
     }
 
-    println!("cargo:rustc-link-lib=yuv");
+    for path in &settings.libyuv_lib_prefix {
+        println!("cargo:rustc-link-search=all={}", path);
+    }
+
+    println!("cargo:rustc-link-search=all={}", &settings.out_dir);
     println!("cargo:rustc-link-lib=avcodec");
     println!("cargo:rustc-link-lib=avutil");
     println!("cargo:rustc-link-lib=codec");
+    println!("cargo:rustc-link-lib=yuv");
     Ok(())
 }
 
+#[derive(Debug)]
 struct Settings {
     is_debug: bool,
     target: String,
     out_dir: String,
     ffmpeg_include_prefix: Vec<String>,
     ffmpeg_lib_prefix: Vec<String>,
+    libyuv_include_prefix: Vec<String>,
+    libyuv_lib_prefix: Vec<String>,
 }
 
 impl Settings {
@@ -129,31 +105,25 @@ impl Settings {
         let is_debug = env::var("DEBUG")
             .map(|label| label == "true")
             .unwrap_or(true);
-        let (ffmpeg_include_prefix, ffmpeg_lib_prefix) = if let (Some(include), Some(lib)) = (
-            env::var("FFMPEG_INCLUDE_PREFIX").ok(),
-            env::var("FFMPEG_LIB_PREFIX").ok(),
-        ) {
-            (vec![include], vec![lib])
-        } else {
-            find_ffmpeg_prefix(&out_dir, is_debug)?
-        };
+        let (ffmpeg_include_prefix, ffmpeg_lib_prefix) = find_ffmpeg_prefix(&out_dir, is_debug)?;
+        let (libyuv_include_prefix, libyuv_lib_prefix) = find_libyuv_prefix(&out_dir)?;
 
         Ok(Self {
             out_dir,
             is_debug,
             ffmpeg_lib_prefix,
             ffmpeg_include_prefix,
+            libyuv_include_prefix,
+            libyuv_lib_prefix,
             target: env::var("TARGET")?,
         })
     }
 }
 
-#[allow(unused_variables)]
 fn find_ffmpeg_prefix(out_dir: &str, is_debug: bool) -> anyhow::Result<(Vec<String>, Vec<String>)> {
-    let ffmpeg_prefix = join(out_dir, "ffmpeg").unwrap();
-    if !is_exsit(&ffmpeg_prefix) {
-        #[cfg(target_os = "windows")]
-        {
+    let ffmpeg_prefix = if cfg!(target_os = "windows") {
+        let prefix = join(out_dir, "ffmpeg").unwrap();
+        if !is_exsit(&prefix) {
             exec(
                 &format!("Invoke-WebRequest \
                     -Uri https://github.com/mycrl/mirror/releases/download/distributions/ffmpeg-windows-x64-{}.zip \
@@ -167,17 +137,41 @@ fn find_ffmpeg_prefix(out_dir: &str, is_debug: bool) -> anyhow::Result<(Vec<Stri
             )?;
         }
 
-        #[cfg(target_os = "linux")]
-        {
-            exec("wget \
-                https://github.com/mycrl/mirror/releases/download/distributions/ffmpeg-linux-x64-debug.tar.xz \
-                -O ffmpeg.tar.xz", out_dir)?;
-            exec("tar xvf ./ffmpeg.tar.xz", out_dir)?;
-        }
-    }
+        prefix
+    } else {
+        exec("brew --prefix ffmpeg@6", out_dir)?.replace('\n', "")
+    };
 
     Ok((
         vec![join(&ffmpeg_prefix, "./include")?],
         vec![join(&ffmpeg_prefix, "./lib")?],
+    ))
+}
+
+fn find_libyuv_prefix(out_dir: &str) -> anyhow::Result<(Vec<String>, Vec<String>)> {
+    if !is_exsit(&join(&out_dir, "./libyuv")?) {
+        exec(
+            "git clone --branch stable https://chromium.googlesource.com/libyuv/libyuv",
+            &out_dir,
+        )?;
+    }
+
+    if cfg!(target_os = "windows") {
+        if !is_exsit(&join(&out_dir, "yuv.lib")?) {
+            exec("Invoke-WebRequest \
+                    -Uri https://github.com/mycrl/mirror/releases/download/distributions/yuv-windows-x64.lib \
+                    -OutFile yuv.lib", &out_dir)?;
+        }
+    } else {
+        if !is_exsit(&join(&out_dir, "libyuv.a")?) {
+            exec("wget \
+                    https://github.com/mycrl/mirror/releases/download/distributions/libyuv-macos-arm64.a \
+                    -O libyuv.a", &out_dir)?;
+        }
+    }
+
+    Ok((
+        vec![join(&out_dir, "./libyuv/include")?],
+        vec![out_dir.to_string()],
     ))
 }

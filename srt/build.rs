@@ -139,6 +139,12 @@ fn use_library(srt_dir: String) -> Result<()> {
 
     println!("cargo:rustc-link-search=all={}", srt_dir);
     println!("cargo:rustc-link-lib=srt");
-    println!("cargo:rustc-link-lib=stdc++");
+
+    if cfg!(target_os = "macos") {
+        println!("cargo:rustc-link-lib=c++");
+    } else {
+        println!("cargo:rustc-link-lib=libc++");
+    }
+
     Ok(())
 }
