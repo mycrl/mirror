@@ -1,8 +1,4 @@
-use std::{
-    fmt::Debug,
-    fs::{File, OpenOptions},
-    io::Write,
-};
+use std::fs::OpenOptions;
 
 use log::LevelFilter;
 use simplelog::{
@@ -10,6 +6,10 @@ use simplelog::{
     WriteLogger,
 };
 
+/// Initialize logging
+///
+/// The `name` argument is the name of the log file. This will create a log file
+/// in the current directory and output to stdio at the same time.
 pub fn init(name: &str, level: LevelFilter) -> anyhow::Result<()> {
     let config = ConfigBuilder::new()
         .set_time_format_custom(format_description!(
@@ -32,31 +32,10 @@ pub fn init(name: &str, level: LevelFilter) -> anyhow::Result<()> {
             OpenOptions::new()
                 .create(true)
                 .write(true)
-                .append(false)
-                .truncate(true)
+                .append(true)
                 .open(name)?,
         ),
     ])?;
 
     Ok(())
-}
-
-pub struct FormatLogger(File);
-
-impl FormatLogger {
-    pub fn new(name: &str) -> anyhow::Result<Self> {
-        Ok(Self(
-            OpenOptions::new()
-                .create(true)
-                .write(true)
-                .append(false)
-                .truncate(true)
-                .open(name)?,
-        ))
-    }
-
-    pub fn log<T: Debug>(&mut self, message: &T) -> anyhow::Result<()> {
-        self.0.write_all(format!("{:?}\r\n", message).as_bytes())?;
-        Ok(())
-    }
 }

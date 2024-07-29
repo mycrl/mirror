@@ -21,6 +21,7 @@ SimpleRender::SimpleRender(Args& args,
 SimpleRender::~SimpleRender()
 {
     _runing = false;
+    renderer_destroy(_renderer);
 }
 
 void SimpleRender::SetTitle(std::string title)
@@ -38,11 +39,21 @@ void SimpleRender::SetTitle(std::string title)
 
 bool SimpleRender::OnVideoFrame(VideoFrame* frame)
 {
+    if (_renderer == nullptr)
+    {
+        return false;
+    }
+
      return renderer_on_video(_renderer, frame);
 }
 
 bool SimpleRender::OnAudioFrame(AudioFrame* frame)
 {
+    if (_renderer == nullptr)
+    {
+        return false;
+    }
+
     if (!IsRender)
     {
         return true;

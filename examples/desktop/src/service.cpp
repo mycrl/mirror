@@ -5,22 +5,19 @@ MirrorServiceExt::MirrorServiceExt(Args& args, HWND hwnd, HINSTANCE hinstance)
     : _args(args)
 #endif
 {
-    MirrorOptions options;
-    options.video.encoder = const_cast<char*>(args.ArgsParams.encoder.c_str());
-    options.video.decoder = const_cast<char*>(args.ArgsParams.decoder.c_str());
-    options.video.width = args.ArgsParams.width;
-    options.video.height = args.ArgsParams.height;
-    options.video.frame_rate = args.ArgsParams.fps;
-    options.video.key_frame_interval = 21;
-    options.video.bit_rate = 500 * 1024 * 8;
-    options.audio.sample_rate = 48000;
-    options.audio.bit_rate = 64000;
-    options.server = const_cast<char*>(args.ArgsParams.server.c_str());
-    options.multicast = const_cast<char*>("239.0.0.1");
-    options.mtu = 1400;
-    Init(options);
+    _options.video.encoder = const_cast<char*>(args.ArgsParams.encoder.c_str());
+    _options.video.decoder = const_cast<char*>(args.ArgsParams.decoder.c_str());
+    _options.video.width = args.ArgsParams.width;
+    _options.video.height = args.ArgsParams.height;
+    _options.video.frame_rate = args.ArgsParams.fps;
+    _options.video.key_frame_interval = 21;
+    _options.video.bit_rate = 500 * 1024 * 8;
+    _options.audio.sample_rate = 48000;
+    _options.audio.bit_rate = 64000;
+    _options.server = const_cast<char*>(args.ArgsParams.server.c_str());
+    _options.multicast = const_cast<char*>("239.0.0.1");
+    _options.mtu = 1400;
 
-    _mirror = new MirrorService();
 #ifdef WIN32
     _render = new SimpleRender(args,
                                hwnd,
@@ -36,13 +33,19 @@ MirrorServiceExt::MirrorServiceExt(Args& args, HWND hwnd, HINSTANCE hinstance)
 
 MirrorServiceExt::~MirrorServiceExt()
 {
-    delete _mirror;
+    if (_mirror)
+    {
+        delete _mirror;
+    }
+
     delete _render;
-    Quit();
 }
 
 bool MirrorServiceExt::CreateMirrorSender()
 {
+    Init(_options);
+    _mirror = new MirrorService();
+
     if (_sender.has_value())
     {
         return true;
@@ -52,27 +55,18 @@ bool MirrorServiceExt::CreateMirrorSender()
         _render->IsRender = false;
     }
 
-    if (_settings.method == CaptureMethod::GDI)
-    {
-        _settings.method = CaptureMethod::DXGI;
-    }
-    else if (_settings.method == CaptureMethod::DXGI)
-    {
-        _settings.method = CaptureMethod::WGC;
-    }
-    else
-    {
-        _settings.method = CaptureMethod::GDI;
-    }
 
+    CaptureSettings settings;
+    settings.method = CaptureMethod::WGC;
+    
     DeviceManagerService::Start();
-    auto devices = DeviceManagerService::GetDevices(DeviceKind::Screen, &_settings);
+    auto devices = DeviceManagerService::GetDevices(DeviceKind::Video, &settings);
     if (devices.device_list.size() == 0)
     {
         return false;
     }
 
-    DeviceManagerService::SetInputDevice(devices.device_list[0], &_settings);
+    DeviceManagerService::SetInputDevice(devices.device_list[0], &settings);
     _sender = _mirror->CreateSender(_args.ArgsParams.id, _render);
     if (!_sender.has_value())
     {
@@ -86,6 +80,9 @@ bool MirrorServiceExt::CreateMirrorSender()
 
 bool MirrorServiceExt::CreateMirrorReceiver()
 {
+    Init(_options);
+    _mirror = new MirrorService();
+
     if (_receiver.has_value())
     {
         return true;
@@ -118,6 +115,12 @@ void MirrorServiceExt::Close()
     {
         _receiver.value().Close();
         _receiver = std::nullopt;
+    }
+
+    {
+        delete _mirror;
+        _mirror = nullptr;
+        Quit();
     }
 
     _render->SetTitle("");

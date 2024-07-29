@@ -11,6 +11,8 @@ jobs:
         target:
           - debug
           - release
+          - app-debug
+          - app-release
     steps:
       - uses: actions/checkout@v4
       - uses: actions/cache@v3
@@ -22,14 +24,23 @@ jobs:
             ~/.cargo/git/db/
             target/
           key: '${{ matrix.target }}-cargo-${{ hashFiles(''**/Cargo.lock'') }}'
-      - name: Setup dependencies
-        run: |
-          pip3 install meson
-          pip3 install ninja
+
+      # use auto build script
       - name: Build distributions
-        run: npm run build:${{ matrix.target }}
+        run: |
+            npm i
+            npm run build:${{ matrix.target }}
+
+      # compress shared libraries
       - name: Compress distributions
+        if: ${{ matrix.target == 'debug' || matrix.target == 'release' }}
         run: Compress-Archive -Path ./build -DestinationPath ./windows-x64-${{ matrix.target }}.zip
+
+      # compress electron app
+      - name: Compress distributions (App)
+        if: ${{ matrix.target == 'app-debug' || matrix.target == 'app-release' }}
+        run: Compress-Archive -Path ./build/bin -DestinationPath ./windows-x64-${{ matrix.target }}.zip
+
       - name: Upload artifact
         uses: actions/upload-artifact@v3
         with:

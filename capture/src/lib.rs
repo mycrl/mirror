@@ -270,7 +270,7 @@ pub fn start() -> c_int {
 
 /// Stop capturing audio and video data.
 pub fn stop() {
+    set_frame_sink::<()>(None);
     unsafe { capture_remove_logger() };
     unsafe { capture_stop() }
-    set_frame_sink::<()>(None);
 }

@@ -1,7 +1,4 @@
-use std::{
-    sync::{Arc, Mutex, Weak},
-    thread,
-};
+use std::sync::{Arc, Mutex, Weak};
 
 use bytes::BytesMut;
 use capture::AVFrameSink;
@@ -11,7 +8,6 @@ use codec::{
 };
 
 use common::frame::{AudioFormat, AudioFrame, VideoFrame};
-use crossbeam::sync::{Parker, Unparker};
 use transport::{
     adapter::{BufferFlag, StreamBufferInfo, StreamSenderAdapter},
     package,
@@ -20,8 +16,8 @@ use transport::{
 use crate::mirror::{FrameSink, OPTIONS};
 
 struct VideoSender {
+    adapter: Weak<StreamSenderAdapter>,
     encoder: VideoEncoder,
-    unparker: Unparker,
 }
 
 impl VideoSender {
@@ -35,24 +31,23 @@ impl VideoSender {
         adapter: &Arc<StreamSenderAdapter>,
         settings: &VideoEncoderSettings,
     ) -> anyhow::Result<Arc<Self>> {
-        let parker = Parker::new();
-        let sender = Arc::new(VideoSender {
+        Ok(Arc::new(Self {
             encoder: VideoEncoder::new(settings)?,
-            unparker: parker.unparker().clone(),
-        });
+            adapter: Arc::downgrade(adapter),
+        }))
+    }
 
-        let sender_ = sender.clone();
-        let adapter_ = Arc::downgrade(adapter);
-        thread::spawn(move || {
-            while let Some(adapter) = adapter_.upgrade() {
-                // Waiting for external audio and video frame updates.
-                parker.park();
-
+    // Copy the audio and video frames to the encoder and notify the encoding
+    // thread.
+    fn sink(&self, frame: &VideoFrame) {
+        if let Some(adapter) = self.adapter.upgrade() {
+            // Push the audio and video frames into the encoder.
+            if self.encoder.send_frame(frame) {
                 // Try to get the encoded data packets. The audio and video frames do not
                 // correspond to the data packets one by one, so you need to try to get multiple
                 // packets until they are empty.
-                if sender_.encoder.encode() {
-                    while let Some(packet) = sender_.encoder.read() {
+                if self.encoder.encode() {
+                    while let Some(packet) = self.encoder.read() {
                         adapter.send(
                             package::copy_from_slice(packet.buffer),
                             StreamBufferInfo::Video(packet.flags, packet.timestamp),
@@ -60,17 +55,6 @@ impl VideoSender {
                     }
                 }
             }
-        });
-
-        Ok(sender)
-    }
-
-    // Copy the audio and video frames to the encoder and notify the encoding
-    // thread.
-    fn sink(&self, frame: &VideoFrame) {
-        // Push the audio and video frames into the encoder.
-        if self.encoder.send_frame(frame) {
-            self.unparker.unpark();
         }
     }
 }

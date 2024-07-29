@@ -11,12 +11,16 @@
 
 CameraCapture::CameraCapture()
 {
+    CoInitializeEx(nullptr, COINIT_MULTITHREADED | COINIT_SPEED_OVER_MEMORY);
     MFStartup(MF_VERSION);
 }
 
 CameraCapture::~CameraCapture()
 {
+    _is_runing = false;
+
     MFShutdown();
+    CoUninitialize();
 }
 
 int CameraCapture::EnumDevices(DeviceList* list)
@@ -135,7 +139,6 @@ int CameraCapture::StartCapture(const char* id,
         return -7;
     }
 
-    device->Release();
     attributes->Release();
 
     IMFMediaType* type;
@@ -175,7 +178,6 @@ int CameraCapture::StartCapture(const char* id,
         return -13;
     }
 
-    reader->AddRef();
     ret = reader->SetCurrentMediaType(MF_SOURCE_READER_FIRST_VIDEO_STREAM,
                                       NULL,
                                       type);
@@ -208,6 +210,8 @@ int CameraCapture::StartCapture(const char* id,
                 }
             }
 
+            device->Stop();
+            device->Release();
             reader->Release();
             DeleteCriticalSection(&critsec);
         }).detach();
@@ -235,7 +239,7 @@ bool CameraCapture::_ReadSample(IMFSourceReader* reader,
                                   &flags,
                                   &timestamp,
                                   &sample);
-    if (FAILED(ret))
+    if (FAILED(ret) || !this->_is_runing)
     {
         return false;
     }

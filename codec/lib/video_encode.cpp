@@ -128,6 +128,11 @@ VideoEncoder* codec_create_video_encoder(VideoEncoderSettings* settings)
 
 bool codec_video_encoder_copy_frame(VideoEncoder* codec, VideoFrame* frame)
 {
+	if (codec->context == nullptr)
+	{
+		return false;
+	}
+
 	if (av_frame_make_writable(codec->frame) != 0)
 	{
 		return false;
@@ -161,6 +166,11 @@ bool codec_video_encoder_copy_frame(VideoEncoder* codec, VideoFrame* frame)
 
 bool codec_video_encoder_send_frame(VideoEncoder* codec)
 {
+	if (codec->context == nullptr)
+	{
+		return false;
+	}
+
 	codec->frame->pts = av_rescale_q(codec->context->frame_num,
 									 codec->context->pkt_timebase,
 									 codec->context->time_base);
@@ -174,6 +184,11 @@ bool codec_video_encoder_send_frame(VideoEncoder* codec)
 
 Packet* codec_video_encoder_read_packet(VideoEncoder* codec)
 {
+	if (codec->context == nullptr)
+	{
+		return nullptr;
+	}
+
 	if (codec->output_packet == nullptr)
 	{
 		return nullptr;

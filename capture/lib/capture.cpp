@@ -9,6 +9,8 @@
 #include "./camera.h"
 #include "./desktop.h"
 
+#include <thread>
+#include <mutex>
 #include <string>
 #include <libobs/obs.h>
 
@@ -30,8 +32,9 @@
 
 // global variable
 
-static struct
+struct
 {
+    bool initialized = false;
     bool allow_obs = true;
     Logger logger = nullptr;
     void* logger_ctx = nullptr;
@@ -47,10 +50,11 @@ static struct
     VideoFrame video_frame;
     AudioFrame audio_frame;
 #ifdef WIN32
-    CameraCapture* camera_capture = new CameraCapture();
-    GDICapture* gdi_capture = new GDICapture();
+    CameraCapture* camera_capture = nullptr;
+    GDICapture* gdi_capture = nullptr;
 #endif
 } GLOBAL = {};
+std::mutex GLOBAL_MUTEX;
 
 void logger_proc(int level, const char* message, va_list args, void* _)
 {
@@ -147,7 +151,9 @@ void update_audio_settings(DeviceDescription* description)
 
 void raw_video_callback(void* _, video_data* frame)
 {
-    if (!GLOBAL.allow_obs)
+    std::lock_guard<std::mutex> lock_guard(GLOBAL_MUTEX);
+
+    if (!GLOBAL.allow_obs || !GLOBAL.initialized)
     {
         return;
     }
@@ -168,7 +174,9 @@ void raw_video_callback(void* _, video_data* frame)
 
 void raw_audio_callback(void* _, size_t mix_idx, audio_data* data)
 {
-    if (!GLOBAL.allow_obs)
+    std::lock_guard<std::mutex> lock_guard(GLOBAL_MUTEX);
+
+    if (!GLOBAL.allow_obs || !GLOBAL.initialized)
     {
         return;
     }
@@ -189,6 +197,8 @@ void raw_audio_callback(void* _, size_t mix_idx, audio_data* data)
 
 void* capture_set_output_callback(OutputCallback proc)
 {
+    std::lock_guard<std::mutex> lock_guard(GLOBAL_MUTEX);
+
     void* previous_ctx = GLOBAL.output_callback.ctx;
     GLOBAL.output_callback = proc;
     return previous_ctx;
@@ -196,6 +206,8 @@ void* capture_set_output_callback(OutputCallback proc)
 
 void capture_init(VideoInfo* video_info, AudioInfo* audio_info)
 {
+    std::lock_guard<std::mutex> lock_guard(GLOBAL_MUTEX);
+
     base_set_log_handler(logger_proc, nullptr);
 
 #ifdef WIN32
@@ -222,10 +234,17 @@ void capture_init(VideoInfo* video_info, AudioInfo* audio_info)
 
 int capture_start()
 {
-    if (obs_initialized())
+    std::lock_guard<std::mutex> lock_guard(GLOBAL_MUTEX);
+
+    if (GLOBAL.initialized)
     {
         return -1;
     }
+
+#ifdef WIN32
+    GLOBAL.camera_capture = new CameraCapture();
+    GLOBAL.gdi_capture = new GDICapture();
+#endif // WIN32
 
     if (!obs_startup("en-US", nullptr, nullptr))
     {
@@ -317,12 +336,15 @@ int capture_start()
     audio_convert_info.samples_per_sec = GLOBAL.audio_info.samples_per_sec;
     obs_add_raw_audio_callback(1, &audio_convert_info, raw_audio_callback, nullptr);
 
+    GLOBAL.initialized = true;
     return 0;
 }
 
 void capture_stop()
 {
-    if (!obs_initialized())
+    std::lock_guard<std::mutex> lock_guard(GLOBAL_MUTEX);
+
+    if (!GLOBAL.initialized)
     {
         return;
     }
@@ -356,13 +378,22 @@ void capture_stop()
 #ifdef WIN32
     GLOBAL.camera_capture->StopCapture();
     GLOBAL.gdi_capture->StopCapture();
+
+    delete GLOBAL.camera_capture;
+    delete GLOBAL.gdi_capture;
+
+    GLOBAL.camera_capture = nullptr;
+    GLOBAL.gdi_capture = nullptr;
 #endif
 
     obs_shutdown();
+    GLOBAL.initialized = false;
 }
 
 int capture_set_input(DeviceDescription* description, CaptureSettings* settings)
 {
+    std::lock_guard<std::mutex> lock_guard(GLOBAL_MUTEX);
+
     if (
         description->type == DeviceType::kDeviceTypeVideo ||
         (description->type == DeviceType::kDeviceTypeScreen && settings->method == CaptureMethod::GDI))
@@ -387,9 +418,14 @@ int capture_set_input(DeviceDescription* description, CaptureSettings* settings)
                                                    GLOBAL.video_info.fps_num,
                                                    [](VideoFrame* frame)
                                                    {
-                                                       if (GLOBAL.output_callback.video != nullptr)
+                                                       if (GLOBAL_MUTEX.try_lock())
                                                        {
-                                                           GLOBAL.output_callback.video(GLOBAL.output_callback.ctx, frame);
+                                                           if (GLOBAL.output_callback.video != nullptr)
+                                                           {
+                                                               GLOBAL.output_callback.video(GLOBAL.output_callback.ctx, frame);
+                                                           }
+
+                                                           GLOBAL_MUTEX.unlock();
                                                        }
                                                    });
 #endif
@@ -405,9 +441,14 @@ int capture_set_input(DeviceDescription* description, CaptureSettings* settings)
                                                     GLOBAL.video_info.fps_num,
                                                     [](VideoFrame* frame)
                                                     {
-                                                        if (GLOBAL.output_callback.video != nullptr)
+                                                        if (GLOBAL_MUTEX.try_lock())
                                                         {
-                                                            GLOBAL.output_callback.video(GLOBAL.output_callback.ctx, frame);
+                                                            if (GLOBAL.output_callback.video != nullptr)
+                                                            {
+                                                                GLOBAL.output_callback.video(GLOBAL.output_callback.ctx, frame);
+                                                            }
+
+                                                            GLOBAL_MUTEX.unlock();
                                                         }
                                                     });
 #endif
@@ -432,6 +473,8 @@ int capture_set_input(DeviceDescription* description, CaptureSettings* settings)
 GetDeviceListResult capture_get_device_list(DeviceType type,
                                             CaptureSettings* settings)
 {
+    std::lock_guard<std::mutex> lock_guard(GLOBAL_MUTEX);
+
     DeviceList* list = new DeviceList{};
     list->devices = new DeviceDescription * [100];
     list->size = 0;
@@ -516,12 +559,16 @@ void capture_release_device_list(DeviceList* list)
 
 void capture_set_logger(Logger logger, void* ctx)
 {
+    std::lock_guard<std::mutex> lock_guard(GLOBAL_MUTEX);
+
     GLOBAL.logger = logger;
     GLOBAL.logger_ctx = ctx;
 }
 
 void* capture_remove_logger()
 {
+    std::lock_guard<std::mutex> lock_guard(GLOBAL_MUTEX);
+
     auto ctx = GLOBAL.logger_ctx;
     GLOBAL.logger_ctx = nullptr;
     GLOBAL.logger = nullptr;

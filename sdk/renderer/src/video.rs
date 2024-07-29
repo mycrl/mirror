@@ -8,7 +8,7 @@ use common::{frame::VideoFrame, strings::Strings};
 use sdl2::sys::{
     SDL_CreateRenderer, SDL_CreateTexture, SDL_CreateWindowFrom, SDL_DestroyRenderer,
     SDL_DestroyTexture, SDL_DestroyWindow, SDL_GetError, SDL_GetRendererInfo, SDL_Init,
-    SDL_PixelFormatEnum, SDL_Rect, SDL_RenderClear, SDL_RenderCopyEx, SDL_RenderPresent,
+    SDL_PixelFormatEnum, SDL_Quit, SDL_Rect, SDL_RenderClear, SDL_RenderCopyEx, SDL_RenderPresent,
     SDL_Renderer, SDL_RendererFlip, SDL_RendererInfo, SDL_Texture, SDL_TextureAccess,
     SDL_UpdateNVTexture, SDL_Window, SDL_INIT_VIDEO,
 };
@@ -162,6 +162,7 @@ impl Drop for VideoRender {
 
         unsafe { SDL_DestroyRenderer(self.renderer) }
         unsafe { SDL_DestroyWindow(self.window) }
+        unsafe { SDL_Quit() }
     }
 }
 

@@ -3,9 +3,12 @@
     "version": "1.0.0",
     "description": "",
     "main": "build.js",
+    "private": true,
     "scripts": {
-        "build:debug": "node ./build.js",
-        "build:release": "node ./build.js -- --release",
+        "build:debug": "node --no-deprecation ./build.js",
+        "build:release": "node --no-deprecation ./build.js -- --release",
+        "build:app-debug": "node --no-deprecation ./build.js -- --app",
+        "build:app-release": "node --no-deprecation ./build.js -- --release --app",
         "fmt": "cargo +nightly fmt"
     },
     "repository": {
@@ -17,5 +20,9 @@
     "bugs": {
         "url": "https://github.com/mycrl/mirror/issues"
     },
-    "homepage": "https://github.com/mycrl/mirror#readme"
+    "homepage": "https://github.com/mycrl/mirror#readme",
+    "dependencies": {
+        "download": "8.0.0",
+        "unzipper": "0.12.2"
+    }
 }

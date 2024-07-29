@@ -5,7 +5,7 @@ use std::{
 
 use crate::sender::SenderObserver;
 
-use anyhow::Result;
+use anyhow::{ensure, Result};
 use capture::{AudioInfo, CaptureSettings, Device, DeviceManager, DeviceManagerOptions, VideoInfo};
 use codec::{AudioDecoder, AudioEncoderSettings, VideoDecoder, VideoEncoderSettings};
 use common::frame::{AudioFrame, VideoFrame};
@@ -63,7 +63,7 @@ impl Default for VideoOptions {
     fn default() -> Self {
         Self {
             encoder: "libx264".to_string(),
-            decoder: "libopenh264".to_string(),
+            decoder: "h264".to_string(),
             frame_rate: 30,
             width: 1280,
             height: 720,
@@ -99,7 +99,7 @@ impl Default for MirrorOptions {
     fn default() -> Self {
         Self {
             multicast: "239.0.0.1".to_string(),
-            server: "127.0.0.1".to_string(),
+            server: "127.0.0.1:8080".to_string(),
             video: Default::default(),
             audio: Default::default(),
             mtu: 1500,
@@ -108,12 +108,25 @@ impl Default for MirrorOptions {
 }
 
 /// Initialize the environment, which must be initialized before using the SDK.
+#[rustfmt::skip]
 pub fn init(options: MirrorOptions) -> Result<()> {
+    {
+        ensure!(options.video.encoder == "libx264" || options.video.encoder == "h264_qsv", "invalid video encoder");
+        ensure!(options.video.decoder == "h264" || options.video.decoder == "h264_qsv", "invalid video decoder");
+        ensure!(options.video.width % 4 == 0 && options.video.width <= 4096, "invalid video width");
+        ensure!(options.video.height % 4 == 0 && options.video.height <= 2560, "invalid video height");
+        ensure!(options.video.frame_rate <= 60, "invalid video frame rate");
+    }
+
     *OPTIONS.write().unwrap() = options.clone();
     log::info!("mirror init: options={:?}", options);
 
     codec::init();
+    log::info!("codec initialized");
+    
     transport::init();
+    log::info!("transport initialized");
+    
     capture::init(DeviceManagerOptions {
         video: VideoInfo {
             width: options.video.width,
@@ -124,6 +137,9 @@ pub fn init(options: MirrorOptions) -> Result<()> {
             samples_per_sec: options.audio.sample_rate as u32,
         },
     });
+    
+    log::info!("capture initialized");
+    log::info!("all initialized");
 
     Ok(())
 }
@@ -251,38 +267,43 @@ impl Mirror {
 
         let sink_ = sink.clone();
         let adapter_ = adapter.clone();
-        thread::spawn(move || {
-            'a: while let Some((packet, flags, timestamp)) = adapter_.next(StreamKind::Video) {
-                if video_decoder.decode(&packet, flags, timestamp) {
-                    while let Some(frame) = video_decoder.read() {
-                        if !(sink_.video)(frame) {
-                            break 'a;
+        thread::Builder::new()
+            .name("MirrorStreamVideoReceiverThread".to_string())
+            .spawn(move || {
+                'a: while let Some((packet, flags, timestamp)) = adapter_.next(StreamKind::Video) {
+                    if video_decoder.decode(&packet, flags, timestamp) {
+                        while let Some(frame) = video_decoder.read() {
+                            if !(sink_.video)(frame) {
+                                break 'a;
+                            }
                         }
+                    } else {
+                        break;
                     }
-                } else {
-                    break;
                 }
-            }
 
-            (sink_.close)()
-        });
+                log::warn!("video decoder thread is closed!");
+                (sink_.close)()
+            })?;
 
         let adapter_ = adapter.clone();
-        thread::spawn(move || {
-            'a: while let Some((packet, flags, timestamp)) = adapter_.next(StreamKind::Audio) {
-                if audio_decoder.decode(&packet, flags, timestamp) {
-                    while let Some(frame) = audio_decoder.read() {
-                        if !(sink.audio)(frame) {
-                            break 'a;
+        thread::Builder::new()
+            .name("MirrorStreamAudioReceiverThread".to_string())
+            .spawn(move || {
+                'a: while let Some((packet, flags, timestamp)) = adapter_.next(StreamKind::Audio) {
+                    if audio_decoder.decode(&packet, flags, timestamp) {
+                        while let Some(frame) = audio_decoder.read() {
+                            if !(sink.audio)(frame) {
+                                break 'a;
+                            }
                         }
+                    } else {
+                        break;
                     }
-                } else {
-                    break;
                 }
-            }
 
-            log::warn!("audio decoder thread is closed!");
-        });
+                log::warn!("audio decoder thread is closed!");
+            })?;
 
         Ok(adapter)
     }

@@ -74,6 +74,11 @@ AudioEncoder* codec_create_audio_encoder(AudioEncoderSettings* settings)
 
 bool codec_audio_encoder_copy_frame(AudioEncoder* codec, AudioFrame* frame)
 {
+	if (codec->context == nullptr)
+	{
+		return false;
+	}
+
 	codec->frame->nb_samples = frame->frames;
 	codec->frame->format = codec->context->sample_fmt;
 	codec->frame->ch_layout = codec->context->ch_layout;
@@ -99,6 +104,11 @@ bool codec_audio_encoder_copy_frame(AudioEncoder* codec, AudioFrame* frame)
 
 bool codec_audio_encoder_send_frame(AudioEncoder* codec)
 {
+	if (codec->context == nullptr)
+	{
+		return false;
+	}
+
 	if (avcodec_send_frame(codec->context, codec->frame) != 0)
 	{
 		return false;
@@ -110,6 +120,11 @@ bool codec_audio_encoder_send_frame(AudioEncoder* codec)
 
 Packet* codec_audio_encoder_read_packet(AudioEncoder* codec)
 {
+	if (codec->context == nullptr)
+	{
+		return nullptr;
+	}
+
 	if (codec->output_packet == nullptr)
 	{
 		return nullptr;

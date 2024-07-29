@@ -20,7 +20,7 @@ public:
     void Close();
 private:
     Args& _args;
-    CaptureSettings _settings;
+    MirrorOptions _options;
     SimpleRender* _render = nullptr;
     MirrorService* _mirror = nullptr;
     std::optional<MirrorSender> _sender = std::nullopt;
