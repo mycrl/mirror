@@ -11,7 +11,7 @@ jobs:
         target:
           - debug
           - release
--         - app-debug
+          - app-debug
           - app-release
     steps:
       - uses: actions/checkout@v4
