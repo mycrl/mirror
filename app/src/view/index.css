@@ -35,6 +35,10 @@
     background-color: rgba(0, 0, 0, 0);
 }
 
+.settings-hide #arrow-item {
+    background-color: #353535;
+}
+
 .settings-min #arrow-item {
     background-color: #000;
 }
