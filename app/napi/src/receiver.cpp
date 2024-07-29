@@ -131,6 +131,11 @@ bool ReceiverService::_video_proc(void* ctx, VideoFrame* frame)
                 MSG msg;
                 while (GetMessage(&msg, NULL, 0, 0))
                 {
+                    if (self->_renderer == nullptr)
+                    {
+                        break;
+                    }
+
                     TranslateMessage(&msg);
                     DispatchMessage(&msg);
                 }
@@ -168,8 +173,6 @@ bool ReceiverService::_audio_proc(void* ctx, AudioFrame* frame)
 
 void ReceiverService::_close_proc(void* ctx)
 {
-    PostQuitMessage(0);
-
     auto self = (ReceiverService*)ctx;
     self->_callback.BlockingCall();
     self->_callback.Release();

@@ -1,6 +1,24 @@
 const { app, screen, BrowserWindow, Tray, nativeImage, ipcMain, Menu } = require('electron')
 const { MirrorService } = require('mirror-napi')
-const { join } = require('path')
+const { join } = require('node:path')
+const fs = require('node:fs')
+
+const Config = {
+    path: './settings.json',
+    get()
+    {
+        if (!fs.existsSync(this.path))
+        {
+            fs.writeFileSync(this.path, '{}')
+        }
+
+        return JSON.parse(fs.readFileSync(this.path, 'utf8') || "{}")
+    },
+    set(settings)
+    {
+        fs.writeFileSync(this.path, JSON.stringify(settings, null, 4))
+    }
+}
 
 const tray = new Tray(nativeImage.createFromPath(join(__dirname, '../icon.ico')))
 const display = screen.getPrimaryDisplay()
@@ -81,11 +99,16 @@ const State = {
     sender: null,
     receiver: null,
     is_capture: false,
+    is_init: false,
 }
 
 ipcMain.handle('create-sender', (_event, device) =>
 {
     Log('info', 'ipc create sender event')
+    if (!State.is_init)
+    {
+        return
+    }
 
     if (State.receiver)
     {
@@ -116,6 +139,10 @@ ipcMain.handle('create-sender', (_event, device) =>
 ipcMain.handle('close-sender', async (_event) =>
 {
     Log('info', 'ipc close sender event')
+    if (!State.is_init)
+    {
+        return
+    }
 
     if (State.sender)
     {
@@ -153,9 +180,19 @@ ipcMain.handle('close-sender', async (_event) =>
     }
 })
 
-ipcMain.handle('update-settings', (_event, { id, ...settings }) =>
+ipcMain.handle('get-settings', () =>
+{
+    return Config.get()
+})
+
+ipcMain.handle('set-settings', (_event, { id, ...settings }) =>
 {
     Log('info', 'ipc update settings event')
+
+    Config.set({
+        ...settings,
+        id,
+    })
 
     State.channel = id
     if (State.receiver)
@@ -168,8 +205,23 @@ ipcMain.handle('update-settings', (_event, { id, ...settings }) =>
 
     Log('info', 'rebuild mirror env')
 
-    mirror.quit()
-    mirror.init(settings)
+    try
+    {
+        State.is_init = false
+
+        mirror.quit()
+        mirror.init(settings)
+
+        State.is_init = true
+    }
+    catch (e)
+    {
+        Log('error', e)
+        Notify('Initialization failed due to an error in setting parameters!')
+
+        State.is_init = false
+        return
+    }
 
     if (!State.receiver)
     {
@@ -197,6 +249,11 @@ ipcMain.handle('update-settings', (_event, { id, ...settings }) =>
 ipcMain.handle('get-devices', (_event, kind) =>
 {
     Log('info', 'ipc get devices event')
+
+    if (!State.is_init)
+    {
+        return
+    }
 
     if (!State.is_capture)
     {

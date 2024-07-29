@@ -21,9 +21,6 @@
         "url": "https://github.com/mycrl/mirror/issues"
     },
     "homepage": "https://github.com/mycrl/mirror#readme",
-    "workspaces": [
-        "./app"
-    ],
     "dependencies": {
         "download": "8.0.0",
         "unzipper": "0.12.2"

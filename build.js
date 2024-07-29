@@ -168,7 +168,7 @@ const Replace = (file, filters) => {
     /* package electron app */
     if (Args.app)
     {
-        await Command('npm i')
+        await Command('npm i', { cwd: join(__dirname, './app') })
         await Command('npm run package', { cwd: join(__dirname, './app') })
         fs.cpSync('./app/dist/win-unpacked', './build/bin', { force: true, recursive: true })
     }

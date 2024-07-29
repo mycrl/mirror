@@ -47,6 +47,7 @@ window.onload = () => new Vue({
                 decoder: 'h264',
                 bitrate: 500 * 1024 * 8,
                 multicast: '239.0.0.1',
+                server: '127.0.0.1:8080',
                 mtu: 1500,
                 fps: 30,
                 size: {
@@ -104,13 +105,13 @@ window.onload = () => new Vue({
             if (!this.working)
             {
                 this.devices.kind = kind
-                this.devices.values = await electronAPI.get_devices(kind)
+                this.devices.values = await electronAPI.get_devices(kind) || []
                 this.devices.index = 0
             }
         },
         async _update_settings()
         {
-            await electronAPI.update_settings({
+            await electronAPI.set_settings({
                 id: Number(this.settings.value.id),
                 encoder: this.settings.value.encoder,
                 decoder: this.settings.value.decoder,
@@ -120,8 +121,10 @@ window.onload = () => new Vue({
                 fps: Number(this.settings.value.fps),
                 width: Number(this.settings.value.size.width),
                 height: Number(this.settings.value.size.height),
-                server: '192.168.2.129:8088',
+                server: this.settings.value.server,
             })
+
+            await this.kind_select(this.devices.kind)
         },
         close()
         {
@@ -130,7 +133,22 @@ window.onload = () => new Vue({
     },
     async mounted()
     {
+        const settings = await electronAPI.get_settings()
+        this.settings.value = {
+            id: settings.id || 0,
+            encoder: settings.encoder || 'libx264',
+            decoder: settings.decoder || 'h264',
+            bitrate: settings.bit_rate || (500 * 1024 * 8),
+            multicast: settings.multicast || '239.0.0.1',
+            mtu: settings.mtu || 1400,
+            fps: settings.fps || 24,
+            server: settings.server || '127.0.0.1:8080',
+            size: {
+                width: settings.width || 1280,
+                height: settings.height || 720,
+            }
+        }
+
         await this._update_settings()
-        await this.kind_select('screen')
     }
 })
