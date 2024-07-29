@@ -122,7 +122,11 @@ pub fn init(options: MirrorOptions) -> Result<()> {
     log::info!("mirror init: options={:?}", options);
 
     codec::init();
+    log::info!("codec initialized");
+    
     transport::init();
+    log::info!("transport initialized");
+    
     capture::init(DeviceManagerOptions {
         video: VideoInfo {
             width: options.video.width,
@@ -133,6 +137,9 @@ pub fn init(options: MirrorOptions) -> Result<()> {
             samples_per_sec: options.audio.sample_rate as u32,
         },
     });
+    
+    log::info!("capture initialized");
+    log::info!("all initialized");
 
     Ok(())
 }
@@ -275,6 +282,7 @@ impl Mirror {
                     }
                 }
 
+                log::warn!("video decoder thread is closed!");
                 (sink_.close)()
             })?;
 
