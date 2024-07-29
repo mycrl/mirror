@@ -22,12 +22,10 @@ jobs:
             ~/.cargo/git/db/
             target/
           key: '${{ matrix.target }}-cargo-${{ hashFiles(''**/Cargo.lock'') }}'
-      - name: Setup dependencies
-        run: |
-          pip3 install meson
-          pip3 install ninja
       - name: Build distributions
-        run: npm run build:${{ matrix.target }}
+        run: |
+            npm i
+            npm run build:${{ matrix.target }}
       - name: Compress distributions
         run: Compress-Archive -Path ./build -DestinationPath ./windows-x64-${{ matrix.target }}.zip
       - name: Upload artifact
