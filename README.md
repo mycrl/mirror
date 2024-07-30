@@ -28,12 +28,12 @@ Pure software screen projection is different from Miracast, AirPlay, etc., which
 * Python3 is optional and required for Android Studio projects.
 
 ##### Linux (Ubuntu/Debian)
-> For Linux, you need to install additional dependencies to build SRT.
+> For Linux, you need to install additional dependencies to build SRT and other.
 
 ```sh
 sudo apt-get update
 sudo apt-get upgrade
-sudo apt-get install tclsh pkg-config cmake libssl-dev build-essential
+sudo apt-get install tclsh pkg-config cmake libssl-dev build-essential libasound2-dev
 ```
 
 ---

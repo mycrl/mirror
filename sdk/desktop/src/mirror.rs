@@ -3,13 +3,13 @@ use std::{
     thread,
 };
 
-#[cfg(target_os = "windows")]
+#[cfg(not(target_os = "macos"))]
 use crate::sender::SenderObserver;
 
-#[cfg(target_os = "windows")]
+#[cfg(not(target_os = "macos"))]
 use capture::{AudioInfo, CaptureSettings, Device, DeviceManager, DeviceManagerOptions, VideoInfo};
 
-#[cfg(target_os = "windows")]
+#[cfg(not(target_os = "macos"))]
 use transport::adapter::StreamSenderAdapter;
 
 use anyhow::{ensure, Result};
@@ -133,7 +133,7 @@ pub fn init(options: MirrorOptions) -> Result<()> {
     transport::init();
     log::info!("transport initialized");
 
-    #[cfg(target_os = "windows")]
+    #[cfg(not(target_os = "macos"))]
     {
         capture::init(DeviceManagerOptions {
             video: VideoInfo {
@@ -165,7 +165,7 @@ pub fn quit() {
 
 /// Setting up an input device, repeated settings for the same type of device
 /// will overwrite the previous device.
-#[cfg(target_os = "windows")]
+#[cfg(not(target_os = "macos"))]
 pub fn set_input_device(device: &Device, settings: Option<&CaptureSettings>) -> Result<()> {
     DeviceManager::set_input(device, settings)?;
 
@@ -249,7 +249,7 @@ impl Mirror {
     /// Create a sender, specify a bound NIC address, you can pass callback to
     /// get the device screen or sound callback, callback can be null, if it is
     /// null then it means no callback data is needed.
-    #[cfg(target_os = "windows")]
+    #[cfg(not(target_os = "macos"))]
     pub fn create_sender(&self, id: u32, sink: FrameSink) -> Result<Arc<StreamSenderAdapter>> {
         log::info!("create sender: id={}", id);
 

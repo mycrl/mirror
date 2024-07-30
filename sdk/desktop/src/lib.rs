@@ -1,17 +1,14 @@
 pub mod mirror;
 
-#[cfg(target_os = "windows")]
+#[cfg(not(target_os = "macos"))]
 pub mod sender;
 
 use std::{
-    ffi::{c_char, c_int, c_void},
+    ffi::{c_char, c_int},
     fmt::Debug,
     ptr::null_mut,
     sync::Arc,
 };
-
-#[cfg(target_os = "windows")]
-use capture::{CaptureSettings, Device, DeviceKind, DeviceManager};
 
 use common::{
     frame::{AudioFrame, VideoFrame},
@@ -20,9 +17,13 @@ use common::{
 };
 
 use mirror::{AudioOptions, FrameSink, Mirror, MirrorOptions, VideoOptions};
-use transport::adapter::{
-    StreamMultiReceiverAdapter, StreamReceiverAdapterExt, StreamSenderAdapter,
-};
+use transport::adapter::{StreamMultiReceiverAdapter, StreamReceiverAdapterExt};
+
+#[cfg(not(target_os = "macos"))]
+use capture::{CaptureSettings, Device, DeviceKind, DeviceManager};
+
+#[cfg(not(target_os = "macos"))]
+use transport::adapter::StreamSenderAdapter;
 
 #[cfg(target_os = "windows")]
 use windows::Win32::System::Threading::{GetCurrentProcess, SetPriorityClass, HIGH_PRIORITY_CLASS};
@@ -127,11 +128,33 @@ impl TryInto<MirrorOptions> for RawMirrorOptions {
 }
 
 #[no_mangle]
+#[cfg(target_os = "windows")]
 extern "system" fn DllMain(
     _dll_module: u32,
     _call_reason: usize,
-    _reserved: *const c_void,
+    _reserved: *const std::ffi::c_void,
 ) -> bool {
+    if !mirror_load() {
+        return false;
+    }
+
+    // In order to prevent other programs from affecting the delay performance of
+    // the current program, set the priority of the current process to high.
+    {
+        if unsafe { SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS) }.is_err() {
+            log::error!(
+                "failed to set current process priority, Maybe it's \
+                because you didn't run it with administrator privileges."
+            );
+        }
+    }
+
+    true
+}
+
+/// Because Linux does not have DllMain, you need to call it manually to achieve
+/// similar behavior.
+pub extern "C" fn mirror_load() -> bool {
     if jump_current_exe_dir().is_err() {
         return false;
     }
@@ -145,17 +168,6 @@ extern "system" fn DllMain(
         std::panic::set_hook(Box::new(|info| {
             log::error!("{:?}", info);
         }));
-    }
-    // In order to prevent other programs from affecting the delay performance of
-    // the current program, set the priority of the current process to high.
-    #[cfg(target_os = "windows")]
-    {
-        if unsafe { SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS) }.is_err() {
-            log::error!(
-                "failed to set current process priority, Maybe it's \
-                because you didn't run it with administrator privileges."
-            );
-        }
     }
 
     true
@@ -194,7 +206,7 @@ pub extern "C" fn mirror_quit() {
 
 /// Get device name.
 #[no_mangle]
-#[cfg(target_os = "windows")]
+#[cfg(not(target_os = "macos"))]
 pub extern "C" fn mirror_get_device_name(device: *const Device) -> *const c_char {
     assert!(!device.is_null());
 
@@ -205,7 +217,7 @@ pub extern "C" fn mirror_get_device_name(device: *const Device) -> *const c_char
 
 /// Get device kind.
 #[no_mangle]
-#[cfg(target_os = "windows")]
+#[cfg(not(target_os = "macos"))]
 pub extern "C" fn mirror_get_device_kind(device: *const Device) -> DeviceKind {
     assert!(!device.is_null());
 
@@ -215,7 +227,7 @@ pub extern "C" fn mirror_get_device_kind(device: *const Device) -> DeviceKind {
 }
 
 #[repr(C)]
-#[cfg(target_os = "windows")]
+#[cfg(not(target_os = "macos"))]
 pub struct RawDevices {
     pub list: *const Device,
     pub capacity: usize,
@@ -224,7 +236,7 @@ pub struct RawDevices {
 
 /// Get devices from device manager.
 #[no_mangle]
-#[cfg(target_os = "windows")]
+#[cfg(not(target_os = "macos"))]
 pub extern "C" fn mirror_get_devices(
     kind: DeviceKind,
     settings: *const CaptureSettings,
@@ -262,7 +274,7 @@ pub extern "C" fn mirror_get_devices(
 
 /// Release devices.
 #[no_mangle]
-#[cfg(target_os = "windows")]
+#[cfg(not(target_os = "macos"))]
 pub extern "C" fn mirror_devices_destroy(devices: *const RawDevices) {
     assert!(!devices.is_null());
 
@@ -275,7 +287,7 @@ pub extern "C" fn mirror_devices_destroy(devices: *const RawDevices) {
 /// Setting up an input device, repeated settings for the same type of device
 /// will overwrite the previous device.
 #[no_mangle]
-#[cfg(target_os = "windows")]
+#[cfg(not(target_os = "macos"))]
 pub extern "C" fn mirror_set_input_device(
     device: *const Device,
     settings: *const CaptureSettings,
@@ -297,7 +309,7 @@ pub extern "C" fn mirror_set_input_device(
 
 /// Start capturing audio and video data.
 #[no_mangle]
-#[cfg(target_os = "windows")]
+#[cfg(not(target_os = "macos"))]
 pub extern "C" fn mirror_start_capture() -> c_int {
     log::info!("extern api: mirror start capture devices");
 
@@ -306,7 +318,7 @@ pub extern "C" fn mirror_start_capture() -> c_int {
 
 /// Stop capturing audio and video data.
 #[no_mangle]
-#[cfg(target_os = "windows")]
+#[cfg(not(target_os = "macos"))]
 pub extern "C" fn mirror_stop_capture() {
     log::info!("extern api: mirror stop capture devices");
 
@@ -335,7 +347,7 @@ pub extern "C" fn mirror_destroy(mirror: *const RawMirror) {
 
     log::info!("extern api: mirror destroy");
 
-    #[cfg(target_os = "windows")]
+    #[cfg(not(target_os = "macos"))]
     capture::set_frame_sink::<()>(None);
 
     drop(unsafe { Box::from_raw(mirror as *mut RawMirror) });
@@ -436,6 +448,7 @@ impl Into<FrameSink> for RawFrameSink {
 }
 
 #[repr(C)]
+#[cfg(not(target_os = "macos"))]
 pub struct RawSender {
     adapter: Arc<StreamSenderAdapter>,
 }
@@ -444,7 +457,7 @@ pub struct RawSender {
 /// get the device screen or sound callback, callback can be null, if it is
 /// null then it means no callback data is needed.
 #[no_mangle]
-#[cfg(target_os = "windows")]
+#[cfg(not(target_os = "macos"))]
 pub extern "C" fn mirror_create_sender(
     mirror: *const RawMirror,
     id: c_int,
@@ -465,7 +478,7 @@ pub extern "C" fn mirror_create_sender(
 
 /// Set whether the sender uses multicast transmission.
 #[no_mangle]
-#[cfg(target_os = "windows")]
+#[cfg(not(target_os = "macos"))]
 pub extern "C" fn mirror_sender_set_multicast(sender: *const RawSender, is_multicast: bool) {
     assert!(!sender.is_null());
 
@@ -476,7 +489,7 @@ pub extern "C" fn mirror_sender_set_multicast(sender: *const RawSender, is_multi
 
 /// Get whether the sender uses multicast transmission.
 #[no_mangle]
-#[cfg(target_os = "windows")]
+#[cfg(not(target_os = "macos"))]
 pub extern "C" fn mirror_sender_get_multicast(sender: *const RawSender) -> bool {
     assert!(!sender.is_null());
 
@@ -487,7 +500,7 @@ pub extern "C" fn mirror_sender_get_multicast(sender: *const RawSender) -> bool 
 
 /// Close sender.
 #[no_mangle]
-#[cfg(target_os = "windows")]
+#[cfg(not(target_os = "macos"))]
 pub extern "C" fn mirror_sender_destroy(sender: *const RawSender) {
     assert!(!sender.is_null());
 

@@ -85,6 +85,13 @@ fn main() -> anyhow::Result<()> {
     println!("cargo:rustc-link-lib=avutil");
     println!("cargo:rustc-link-lib=codec");
     println!("cargo:rustc-link-lib=yuv");
+
+    if cfg!(target_os = "macos") {
+        println!("cargo:rustc-link-lib=c++");
+    } else {
+        println!("cargo:rustc-link-lib=stdc++");
+    }
+
     Ok(())
 }
 
@@ -107,7 +114,6 @@ impl Settings {
             .unwrap_or(true);
         let (ffmpeg_include_prefix, ffmpeg_lib_prefix) = find_ffmpeg_prefix(&out_dir, is_debug)?;
         let (libyuv_include_prefix, libyuv_lib_prefix) = find_libyuv_prefix(&out_dir)?;
-
         Ok(Self {
             out_dir,
             is_debug,
@@ -121,31 +127,44 @@ impl Settings {
 }
 
 fn find_ffmpeg_prefix(out_dir: &str, is_debug: bool) -> anyhow::Result<(Vec<String>, Vec<String>)> {
-    let ffmpeg_prefix = if cfg!(target_os = "windows") {
+    if cfg!(target_os = "macos") {
+        let prefix = exec("brew --prefix ffmpeg@6", out_dir)?.replace('\n', "");
+
+        Ok((
+            vec![join(&prefix, "./include")?],
+            vec![join(&prefix, "./lib")?],
+        ))
+    } else {
         let prefix = join(out_dir, "ffmpeg").unwrap();
         if !is_exsit(&prefix) {
-            exec(
-                &format!("Invoke-WebRequest \
-                    -Uri https://github.com/mycrl/mirror/releases/download/distributions/ffmpeg-windows-x64-{}.zip \
-                    -OutFile ffmpeg.zip", if is_debug { "debug" } else { "release" }),
-                out_dir,
-            )?;
+            if cfg!(target_os = "windows") {
+                exec(
+                    &format!(
+                        "Invoke-WebRequest -Uri https://github.com/mycrl/mirror/releases/download/distributions/ffmpeg-windows-x64-{}.zip -OutFile ffmpeg.zip", 
+                        if is_debug { "debug" } else { "release" }
+                    ),
+                    out_dir,
+                )?;
 
-            exec(
-                "Expand-Archive -Path ffmpeg.zip -DestinationPath ./",
-                out_dir,
-            )?;
+                exec(
+                    "Expand-Archive -Path ffmpeg.zip -DestinationPath ./",
+                    out_dir,
+                )?;
+            } else {
+                exec(
+                    "wget https://github.com/mycrl/mirror/releases/download/distributions/ffmpeg-linux-x64-release.zip -O ffmpeg.zip",
+                    out_dir,
+                )?;
+
+                exec("unzip ffmpeg.zip", out_dir)?;
+            }
         }
 
-        prefix
-    } else {
-        exec("brew --prefix ffmpeg@6", out_dir)?.replace('\n', "")
-    };
-
-    Ok((
-        vec![join(&ffmpeg_prefix, "./include")?],
-        vec![join(&ffmpeg_prefix, "./lib")?],
-    ))
+        Ok((
+            vec![join(&prefix, "./include")?],
+            vec![join(&prefix, "./lib")?],
+        ))
+    }
 }
 
 fn find_libyuv_prefix(out_dir: &str) -> anyhow::Result<(Vec<String>, Vec<String>)> {
@@ -158,15 +177,21 @@ fn find_libyuv_prefix(out_dir: &str) -> anyhow::Result<(Vec<String>, Vec<String>
 
     if cfg!(target_os = "windows") {
         if !is_exsit(&join(&out_dir, "yuv.lib")?) {
-            exec("Invoke-WebRequest \
-                    -Uri https://github.com/mycrl/mirror/releases/download/distributions/yuv-windows-x64.lib \
-                    -OutFile yuv.lib", &out_dir)?;
+            exec(
+                "Invoke-WebRequest -Uri https://github.com/mycrl/mirror/releases/download/distributions/yuv-windows-x64.lib -OutFile yuv.lib", 
+                &out_dir
+            )?;
         }
     } else {
         if !is_exsit(&join(&out_dir, "libyuv.a")?) {
-            exec("wget \
-                    https://github.com/mycrl/mirror/releases/download/distributions/libyuv-macos-arm64.a \
-                    -O libyuv.a", &out_dir)?;
+            exec(
+                &format!(
+                    "wget https://github.com/mycrl/mirror/releases/download/distributions/libyuv-{}-{}.a -O libyuv.a", 
+                    if cfg!(target_os = "macos") { "macos" } else { "linux" },
+                    if cfg!(target_os = "macos") { "arm64" } else { "x64" },
+                ),
+                &out_dir
+            )?;
         }
     }
 
