@@ -88,7 +88,7 @@ fn main() -> anyhow::Result<()> {
 
     if cfg!(target_os = "macos") {
         println!("cargo:rustc-link-lib=c++");
-    } else {
+    } else if cfg!(target_os = "linux") {
         println!("cargo:rustc-link-lib=stdc++");
     }
 
