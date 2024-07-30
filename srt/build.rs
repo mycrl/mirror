@@ -123,6 +123,17 @@ fn use_library(srt_dir: String) -> Result<()> {
 
 #[cfg(not(target_os = "windows"))]
 fn use_library(srt_dir: String) -> Result<()> {
+    // linux patch
+    #[cfg(target_os = "linux")]
+    if !fs::read_to_string(join(&srt_dir, "CMakeLists.txt"))?
+        .contains("set(CMAKE_CXX_FLAGS \"-fPIC\")")
+    {
+        exec(
+            "sed -i '12i set(CMAKE_CXX_FLAGS \"-fPIC\")' CMakeLists.txt",
+            &srt_dir,
+        )?;
+    }
+
     if !is_exsit(&join(&srt_dir, "./libsrt.a")) {
         exec(
             "./configure \
@@ -139,12 +150,5 @@ fn use_library(srt_dir: String) -> Result<()> {
 
     println!("cargo:rustc-link-search=all={}", srt_dir);
     println!("cargo:rustc-link-lib=srt");
-
-    if cfg!(target_os = "macos") {
-        println!("cargo:rustc-link-lib=c++");
-    } else {
-        println!("cargo:rustc-link-lib=libc++");
-    }
-
     Ok(())
 }
