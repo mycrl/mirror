@@ -259,18 +259,22 @@ pub struct DeviceManagerOptions {
 /// })?;
 /// ```
 pub fn init(options: DeviceManagerOptions) {
+    unsafe { capture_set_logger(logger_proc, null()) }
     unsafe { capture_init(&options.video, &options.audio) };
 }
 
 /// Start capturing audio and video data.
 pub fn start() -> c_int {
-    unsafe { capture_set_logger(logger_proc, null()) }
     unsafe { capture_start() }
 }
 
 /// Stop capturing audio and video data.
 pub fn stop() {
     set_frame_sink::<()>(None);
-    unsafe { capture_remove_logger() };
     unsafe { capture_stop() }
+}
+
+// quit obs environment, remove logger.
+pub fn quit() {
+    unsafe { let _ = capture_remove_logger(); }
 }

@@ -101,25 +101,27 @@ fn main() -> anyhow::Result<()> {
         .file("./lib/desktop.cpp")
         .include(&join(&out_dir, "./obs-studio")?)
         .include(&join(&out_dir, "./libyuv/include")?)
-        .include("../common/include");
+        .include("../common/include")
+        .define(
+            if cfg!(target_os = "windows") {
+                "WIN32"
+            } else if cfg!(target_os = "linux") {
+                "LINUX"
+            } else {
+                "MACOS"
+            },
+            None,
+        )
+        .compile("capture");
 
     #[cfg(target_os = "windows")]
     {
-        compiler.define("WIN32", None);
-
         println!("cargo:rustc-link-lib=mfreadwrite");
         println!("cargo:rustc-link-lib=mfplat");
         println!("cargo:rustc-link-lib=mfuuid");
         println!("cargo:rustc-link-lib=mf");
         println!("cargo:rustc-link-lib=yuv");
     }
-
-    #[cfg(target_os = "linux")]
-    {
-        compiler.define("LINUX", None);
-    }
-
-    compiler.compile("capture");
 
     println!("cargo:rustc-link-search=all={}", &out_dir);
     println!("cargo:rustc-link-lib=obs");

@@ -151,64 +151,70 @@ void update_audio_settings(DeviceDescription* description)
 
 void raw_video_callback(void* _, video_data* frame)
 {
-    std::lock_guard<std::mutex> lock_guard(GLOBAL_MUTEX);
-
-    if (!GLOBAL.allow_obs || !GLOBAL.initialized)
+    if (!GLOBAL_MUTEX.try_lock())
     {
         return;
     }
 
-    if (GLOBAL.output_callback.video == nullptr ||
-        GLOBAL.output_callback.ctx == nullptr ||
-        frame == nullptr)
+    if (GLOBAL.allow_obs && GLOBAL.initialized)
     {
-        return;
+        if (GLOBAL.output_callback.video != nullptr &&
+            GLOBAL.output_callback.ctx != nullptr &&
+            frame != nullptr)
+        {
+            GLOBAL.video_frame.data[0] = frame->data[0];
+            GLOBAL.video_frame.data[1] = frame->data[1];
+            GLOBAL.video_frame.linesize[0] = (size_t)frame->linesize[0];
+            GLOBAL.video_frame.linesize[1] = (size_t)frame->linesize[1];
+            GLOBAL.output_callback.video(GLOBAL.output_callback.ctx, &GLOBAL.video_frame);
+        }
     }
 
-    GLOBAL.video_frame.data[0] = frame->data[0];
-    GLOBAL.video_frame.data[1] = frame->data[1];
-    GLOBAL.video_frame.linesize[0] = (size_t)frame->linesize[0];
-    GLOBAL.video_frame.linesize[1] = (size_t)frame->linesize[1];
-    GLOBAL.output_callback.video(GLOBAL.output_callback.ctx, &GLOBAL.video_frame);
+    GLOBAL_MUTEX.unlock();
 }
 
 void raw_audio_callback(void* _, size_t mix_idx, audio_data* data)
 {
-    std::lock_guard<std::mutex> lock_guard(GLOBAL_MUTEX);
-
-    if (!GLOBAL.allow_obs || !GLOBAL.initialized)
+    if (!GLOBAL_MUTEX.try_lock())
     {
         return;
     }
 
-    if (GLOBAL.output_callback.audio == nullptr ||
-        GLOBAL.output_callback.ctx == nullptr ||
-        data == nullptr)
+    if (GLOBAL.allow_obs && GLOBAL.initialized)
     {
-        return;
+        if (GLOBAL.output_callback.audio != nullptr &&
+            GLOBAL.output_callback.ctx != nullptr &&
+            data != nullptr)
+        {
+            GLOBAL.audio_frame.data = data->data[0];
+            GLOBAL.audio_frame.frames = data->frames;
+            GLOBAL.output_callback.audio(GLOBAL.output_callback.ctx, &GLOBAL.audio_frame);
+        }
     }
 
-    GLOBAL.audio_frame.data = data->data[0];
-    GLOBAL.audio_frame.frames = data->frames;
-    GLOBAL.output_callback.audio(GLOBAL.output_callback.ctx, &GLOBAL.audio_frame);
+    GLOBAL_MUTEX.unlock();
 }
 
 // export api
 
 void* capture_set_output_callback(OutputCallback proc)
 {
+    blog(LOG_INFO, "CaptureModule: capture set output callback");
     std::lock_guard<std::mutex> lock_guard(GLOBAL_MUTEX);
 
     void* previous_ctx = GLOBAL.output_callback.ctx;
     GLOBAL.output_callback = proc;
+    blog(LOG_INFO, "CaptureModule: capture set output callback done");
+
     return previous_ctx;
 }
 
 void capture_init(VideoInfo* video_info, AudioInfo* audio_info)
 {
-    std::lock_guard<std::mutex> lock_guard(GLOBAL_MUTEX);
-
     base_set_log_handler(logger_proc, nullptr);
+
+    blog(LOG_INFO, "CaptureModule: capture init");
+    std::lock_guard<std::mutex> lock_guard(GLOBAL_MUTEX);
 
 #ifdef WIN32
     GLOBAL.video_info.graphics_module = "libobs-d3d11";
@@ -234,6 +240,7 @@ void capture_init(VideoInfo* video_info, AudioInfo* audio_info)
 
 int capture_start()
 {
+    blog(LOG_INFO, "CaptureModule: capture start");
     std::lock_guard<std::mutex> lock_guard(GLOBAL_MUTEX);
 
     if (GLOBAL.initialized)
@@ -241,30 +248,37 @@ int capture_start()
         return -1;
     }
 
+    blog(LOG_INFO, "CaptureModule: capture not initialized");
+
 #ifdef WIN32
     GLOBAL.camera_capture = new CameraCapture();
     GLOBAL.gdi_capture = new GDICapture();
 #endif // WIN32
 
+    blog(LOG_INFO, "CaptureModule: obs startup");
     if (!obs_startup("en-US", nullptr, nullptr))
     {
         return -2;
     }
 
+    blog(LOG_INFO, "CaptureModule: obs reset video");
     if (obs_reset_video(&GLOBAL.video_info) != OBS_VIDEO_SUCCESS)
     {
         return -3;
     }
 
+    blog(LOG_INFO, "CaptureModule: obs reset audio");
     if (!obs_reset_audio(&GLOBAL.audio_info))
     {
         return -4;
     }
 
+    blog(LOG_INFO, "CaptureModule: load all modules");
     // load all modules
     obs_load_all_modules();
     obs_post_load_modules();
 
+    blog(LOG_INFO, "CaptureModule: obs create scene");
     // default scene
     GLOBAL.scene = obs_scene_create("Default");
     if (GLOBAL.scene == nullptr)
@@ -336,12 +350,14 @@ int capture_start()
     audio_convert_info.samples_per_sec = GLOBAL.audio_info.samples_per_sec;
     obs_add_raw_audio_callback(1, &audio_convert_info, raw_audio_callback, nullptr);
 
+    blog(LOG_INFO, "CaptureModule: capture start done");
     GLOBAL.initialized = true;
     return 0;
 }
 
 void capture_stop()
 {
+    blog(LOG_INFO, "CaptureModule: capture stop");
     std::lock_guard<std::mutex> lock_guard(GLOBAL_MUTEX);
 
     if (!GLOBAL.initialized)
@@ -349,9 +365,11 @@ void capture_stop()
         return;
     }
 
+    blog(LOG_INFO, "CaptureModule: remove obs output source");
     obs_set_output_source(0, nullptr);
     obs_set_output_source(1, nullptr);
 
+    blog(LOG_INFO, "CaptureModule: remove obs raw callback");
     obs_remove_raw_video_callback(raw_video_callback, nullptr);
     obs_remove_raw_audio_callback(1, raw_audio_callback, nullptr);
 
@@ -376,28 +394,35 @@ void capture_stop()
     }
 
 #ifdef WIN32
+    blog(LOG_INFO, "CaptureModule: camera capture stop");
     GLOBAL.camera_capture->StopCapture();
-    GLOBAL.gdi_capture->StopCapture();
-
     delete GLOBAL.camera_capture;
-    delete GLOBAL.gdi_capture;
-
     GLOBAL.camera_capture = nullptr;
+
+    blog(LOG_INFO, "CaptureModule: gdi capture stop");
+    GLOBAL.gdi_capture->StopCapture();
+    delete GLOBAL.gdi_capture;
     GLOBAL.gdi_capture = nullptr;
 #endif
 
+    blog(LOG_INFO, "CaptureModule: obs shutdown");
     obs_shutdown();
     GLOBAL.initialized = false;
+
+    blog(LOG_INFO, "CaptureModule: capture stop done");
 }
 
 int capture_set_input(DeviceDescription* description, CaptureSettings* settings)
 {
+    blog(LOG_INFO, "CaptureModule: capture set input device");
     std::lock_guard<std::mutex> lock_guard(GLOBAL_MUTEX);
 
     if (
         description->type == DeviceType::kDeviceTypeVideo ||
         (description->type == DeviceType::kDeviceTypeScreen && settings->method == CaptureMethod::GDI))
     {
+        blog(LOG_INFO, "CaptureModule: capture gdi or camera, skip obs");
+
         GLOBAL.allow_obs = false;
         obs_set_output_source(0, nullptr);
         obs_set_output_source(1, nullptr);
@@ -411,6 +436,8 @@ int capture_set_input(DeviceDescription* description, CaptureSettings* settings)
 
     if (description->type == DeviceType::kDeviceTypeVideo)
     {
+        blog(LOG_INFO, "CaptureModule: capture camera");
+
 #ifdef WIN32
         return GLOBAL.camera_capture->StartCapture(description->id,
                                                    GLOBAL.video_info.base_width,
@@ -420,7 +447,7 @@ int capture_set_input(DeviceDescription* description, CaptureSettings* settings)
                                                    {
                                                        if (GLOBAL_MUTEX.try_lock())
                                                        {
-                                                           if (GLOBAL.output_callback.video != nullptr)
+                                                           if (GLOBAL.output_callback.video != nullptr && GLOBAL.initialized)
                                                            {
                                                                GLOBAL.output_callback.video(GLOBAL.output_callback.ctx, frame);
                                                            }
@@ -432,8 +459,11 @@ int capture_set_input(DeviceDescription* description, CaptureSettings* settings)
     }
     else if (description->type == DeviceType::kDeviceTypeScreen)
     {
+        blog(LOG_INFO, "CaptureModule: capture screen");
+
         if (settings->method == CaptureMethod::GDI)
         {
+            blog(LOG_INFO, "CaptureModule: capture camera, use gdi");
 #ifdef WIN32
             return GLOBAL.gdi_capture->StartCapture(description->id,
                                                     GLOBAL.video_info.base_width,
@@ -443,7 +473,7 @@ int capture_set_input(DeviceDescription* description, CaptureSettings* settings)
                                                     {
                                                         if (GLOBAL_MUTEX.try_lock())
                                                         {
-                                                            if (GLOBAL.output_callback.video != nullptr)
+                                                            if (GLOBAL.output_callback.video != nullptr && GLOBAL.initialized)
                                                             {
                                                                 GLOBAL.output_callback.video(GLOBAL.output_callback.ctx, frame);
                                                             }
