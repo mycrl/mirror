@@ -1,0 +1,10 @@
+[package]
+name = "wgpu-test"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.86"
+wgpu = "22.0.0"
+winit = "0.30.4"
+pollster = "0.3.0"

@@ -276,5 +276,7 @@ pub fn stop() {
 
 // quit obs environment, remove logger.
 pub fn quit() {
-    unsafe { let _ = capture_remove_logger(); }
+    unsafe {
+        let _ = capture_remove_logger();
+    }
 }
