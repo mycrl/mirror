@@ -1,5 +1,7 @@
+use std::ptr::null;
+
 #[repr(C)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Default, Debug, Clone, Copy)]
 pub struct VideoFrameRect {
     pub width: usize,
     pub height: usize,
@@ -25,11 +27,24 @@ pub struct VideoFrameRect {
 /// JPEG: it has BT.601 matrix derived from System M primaries, yet the
 /// primaries of most images are BT.709.
 #[repr(C)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug)]
 pub struct VideoFrame {
     pub rect: VideoFrameRect,
     pub data: [*const u8; 2],
     pub linesize: [usize; 2],
+}
+
+unsafe impl Sync for VideoFrame {}
+unsafe impl Send for VideoFrame {}
+
+impl Default for VideoFrame {
+    fn default() -> Self {
+        Self {
+            linesize: [0, 0],
+            data: [null(), null()],
+            rect: VideoFrameRect::default(),
+        }
+    }
 }
 
 #[repr(C)]
@@ -73,10 +88,24 @@ pub enum AudioFormat {
 /// the number of possible digital values that can be used to represent each
 /// sample.
 #[repr(C)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug)]
 pub struct AudioFrame {
     pub sample_rate: u32,
     pub format: AudioFormat,
     pub frames: u32,
     pub data: *const u8,
+}
+
+unsafe impl Sync for AudioFrame {}
+unsafe impl Send for AudioFrame {}
+
+impl Default for AudioFrame {
+    fn default() -> Self {
+        Self {
+            frames: 0,
+            data: null(),
+            sample_rate: 0,
+            format: AudioFormat::AUDIO_S16,
+        }
+    }
 }

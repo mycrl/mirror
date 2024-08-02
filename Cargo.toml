@@ -19,5 +19,5 @@ members = [
     "sdk/android/mirror/src/main/native",
     "sdk/android/mirror/src/main/macro",
     "multicast",
-    "srt", "wgpu-test",
+    "srt", "native-capture",
 ]
