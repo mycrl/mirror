@@ -1,99 +1,110 @@
 #include "./service.h"
 
+bool video_proc(void* ctx, VideoFrame* frame)
+{
+    auto render = (SimpleRender*)ctx;
+    return render->OnVideoFrame(frame);
+}
+
+bool audio_proc(void* ctx, AudioFrame* frame)
+{
+    auto render = (SimpleRender*)ctx;
+    return render->OnAudioFrame(frame);
+}
+
+void close_proc(void* ctx)
+{
+    auto render = (SimpleRender*)ctx;
+    render->OnClose();
+}
+
 #ifdef WIN32
 MirrorServiceExt::MirrorServiceExt(Args& args, HWND hwnd, HINSTANCE hinstance) 
     : _args(args)
-#endif
 {
-    _options.video.encoder = const_cast<char*>(args.ArgsParams.encoder.c_str());
-    _options.video.decoder = const_cast<char*>(args.ArgsParams.decoder.c_str());
-    _options.video.width = args.ArgsParams.width;
-    _options.video.height = args.ArgsParams.height;
-    _options.video.frame_rate = args.ArgsParams.fps;
-    _options.video.key_frame_interval = 21;
-    _options.video.bit_rate = 500 * 1024 * 8;
-    _options.audio.sample_rate = 48000;
-    _options.audio.bit_rate = 64000;
-    _options.server = const_cast<char*>(args.ArgsParams.server.c_str());
-    _options.multicast = const_cast<char*>("239.0.0.1");
-    _options.mtu = 1400;
-
-#ifdef WIN32
     _render = new SimpleRender(args,
                                hwnd,
                                hinstance,
                                [&]
                                {
-                                   _sender = std::nullopt;
-                                   _receiver = std::nullopt;
+                                   this->Close();
                                    MessageBox(nullptr, TEXT("sender/receiver is closed!"), TEXT("Info"), 0);
                                });
-#endif
 }
+#endif
 
 MirrorServiceExt::~MirrorServiceExt()
 {
-    if (_mirror)
-    {
-        delete _mirror;
-    }
-
-    delete _render;
+    Close();
 }
 
 bool MirrorServiceExt::CreateMirrorSender()
 {
-    Init(_options);
-    _mirror = new MirrorService();
-
-    if (_sender.has_value())
+    if (_sender != nullptr)
     {
         return true;
     }
-    else
-    {
-        _render->IsRender = false;
-    }
 
-
-    CaptureSettings settings;
-    settings.method = CaptureMethod::WGC;
-    
-    DeviceManagerService::Start();
-    auto devices = DeviceManagerService::GetDevices(DeviceKind::Video, &settings);
-    if (devices.device_list.size() == 0)
+    if (!_create_mirror())
     {
         return false;
     }
 
-    DeviceManagerService::SetInputDevice(devices.device_list[0], &settings);
-    _sender = _mirror->CreateSender(_args.ArgsParams.id, _render);
-    if (!_sender.has_value())
+    SenderOptions options;
+    options.video.codec = const_cast<char*>(_args.ArgsParams.encoder.c_str());
+    options.video.width = _args.ArgsParams.width;
+    options.video.height = _args.ArgsParams.height;
+    options.video.frame_rate = _args.ArgsParams.fps;
+    options.video.key_frame_interval = 21;
+    options.video.bit_rate = 500 * 1024 * 8;
+    options.audio.sample_rate = 48000;
+    options.audio.bit_rate = 64000;
+    options.multicast = false;
+
+    FrameSink sink;
+    sink.video = video_proc;
+    sink.audio = audio_proc;
+    sink.close = close_proc;
+    sink.ctx = _render;
+
+    _render->IsRender = false;
+    _sender = mirror_create_sender(_mirror, _args.ArgsParams.id, options, sink);
+    if (_sender == nullptr)
     {
         return false;
     }
 
-    _sender.value().SetMulticast(true);
+    auto sources = mirror_sender_get_sources(_sender, SourceType::Screen);
+    mirror_sender_set_video_source(_sender, &sources.items[0]);
+
     _render->SetTitle("sender");
     return true;
 }
 
 bool MirrorServiceExt::CreateMirrorReceiver()
 {
-    Init(_options);
-    _mirror = new MirrorService();
-
-    if (_receiver.has_value())
+    if (_receiver != nullptr)
     {
         return true;
     }
-    else
+
+    if (!_create_mirror())
     {
-        _render->IsRender = true;
+        return false;
     }
 
-    _receiver = _mirror->CreateReceiver(_args.ArgsParams.id, _render);
-    if (!_receiver.has_value())
+    FrameSink sink;
+    sink.video = video_proc;
+    sink.audio = audio_proc;
+    sink.close = close_proc;
+    sink.ctx = _render;
+
+    _render->IsRender = true;
+    _receiver = mirror_create_receiver(_mirror, 
+                                       _args.ArgsParams.id, 
+                                       _args.ArgsParams.decoder.c_str(), 
+                                       sink);
+    if (_receiver == nullptr)
     {
         return false;
     }
@@ -104,25 +115,55 @@ bool MirrorServiceExt::CreateMirrorReceiver()
 
 void MirrorServiceExt::Close()
 {
-    if (_sender.has_value())
+    if (!is_created)
     {
-        _sender.value().Close();
-        _sender = std::nullopt;
-        DeviceManagerService::Stop();
+        return;
     }
 
-    if (_receiver.has_value())
+    is_created = false;
+    if (_sender != nullptr)
     {
-        _receiver.value().Close();
-        _receiver = std::nullopt;
+        mirror_sender_destroy(_sender);
+        _sender = nullptr;
     }
 
+    if (_receiver != nullptr)
     {
-        delete _mirror;
+        mirror_receiver_destroy(_receiver);
+        _receiver = nullptr;
+    }
+
+    if (_mirror != nullptr)
+    {
+        mirror_destroy(_mirror);
         _mirror = nullptr;
-        Quit();
     }
 
+    mirror_shutdown();
     _render->SetTitle("");
     _render->Clear();
+}
+
+bool MirrorServiceExt::_create_mirror()
+{
+    if (is_created)
+    {
+        return true;
+    }
+
+    if (_mirror != nullptr)
+    {
+        return true;
+    }
+
+    is_created = true;
+    mirror_startup();
+
+    MirrorOptions mirror_options;
+    mirror_options.server = const_cast<char*>(_args.ArgsParams.server.c_str());
+    mirror_options.multicast = const_cast<char*>("239.0.0.1");
+    mirror_options.mtu = 1400;
+
+    _mirror = mirror_create(mirror_options);
+    return _mirror != nullptr;
 }

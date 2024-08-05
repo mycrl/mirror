@@ -18,10 +18,10 @@ unsafe impl Sync for VideoDecoder {}
 
 impl VideoDecoder {
     /// Initialize the AVCodecContext to use the given AVCodec.
-    pub fn new(codec_name: &str) -> Result<Self, Error> {
-        log::info!("create VideoDecoder: codec name={:?}", codec_name);
+    pub fn new(codec: &str) -> Result<Self, Error> {
+        log::info!("create VideoDecoder: codec name={:?}", codec);
 
-        let codec = unsafe { codec_create_video_decoder(Strings::from(codec_name).as_ptr()) };
+        let codec = unsafe { codec_create_video_decoder(Strings::from(codec).as_ptr()) };
         if !codec.is_null() {
             Ok(Self(codec))
         } else {
@@ -30,7 +30,7 @@ impl VideoDecoder {
     }
 
     /// Supply raw packet data as input to a decoder.
-    pub fn decode(&self, data: &[u8], flags: i32, timestamp: u64) -> bool {
+    pub fn decode(&mut self, data: &[u8], flags: i32, timestamp: u64) -> bool {
         unsafe {
             codec_video_decoder_send_packet(
                 self.0,
@@ -46,7 +46,7 @@ impl VideoDecoder {
 
     /// Return decoded output data from a decoder or encoder (when the
     /// AV_CODEC_FLAG_RECON_FRAME flag is used).
-    pub fn read(&self) -> Option<&VideoFrame> {
+    pub fn read(&mut self) -> Option<&VideoFrame> {
         let frame = unsafe { codec_video_decoder_read_frame(self.0) };
         if !frame.is_null() {
             Some(unsafe { &*frame })

@@ -84,10 +84,10 @@ extern "C" fn logger_proc(level: LoggerLevel, message: *const c_char) {
     }
 }
 
-pub fn init() {
+pub fn startup() {
     unsafe { codec_set_logger(logger_proc) }
 }
 
-pub fn quit() {
+pub fn shutdown() {
     unsafe { codec_remove_logger() }
 }

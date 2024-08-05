@@ -16,9 +16,7 @@ if(MSVC)
                     src/render.h 
                     src/render.cpp 
                     src/service.h 
-                    src/service.cpp 
-                    src/wrapper.h 
-                    src/wrapper.cpp)
+                    src/service.cpp)
 else()
     add_executable(example src/main.cpp 
                     src/args.h 
@@ -26,9 +24,7 @@ else()
                     src/render.h 
                     src/render.cpp 
                     src/service.h 
-                    src/service.cpp
-                    src/wrapper.h 
-                    src/wrapper.cpp)
+                    src/service.cpp)
 endif()
 
 include_directories("../../sdk/desktop/include"

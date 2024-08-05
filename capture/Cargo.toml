@@ -4,9 +4,17 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-log = "0.4.20"
+anyhow = "1.0.82"
 common = { path = "../common" }
+log = "0.4.20"
 
-[build-dependencies]
-cc = "1.0.88"
-anyhow = "1.0.80"
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-capture = { path = "../../windows-capture" }
+
+[target.'cfg(target_os = "windows")'.dependencies.windows]
+version = "0.58.0"
+features = [
+    "Win32_System_Com", 
+    "Win32_Media", 
+    "Win32_Media_MediaFoundation", 
+]

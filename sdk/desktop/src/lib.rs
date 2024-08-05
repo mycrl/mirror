@@ -1,131 +1,29 @@
-pub mod mirror;
+mod factory;
+mod receiver;
 
 #[cfg(not(target_os = "macos"))]
-pub mod sender;
+mod sender;
 
 use std::{
     ffi::{c_char, c_int},
     fmt::Debug,
     ptr::null_mut,
-    sync::Arc,
+    sync::atomic::AtomicBool,
 };
 
+#[cfg(not(target_os = "macos"))]
+use std::{ffi::CString, mem::ManuallyDrop};
+
+use anyhow::ensure;
 use common::{
+    atomic::EasyAtomic,
     frame::{AudioFrame, VideoFrame},
     jump_current_exe_dir,
     strings::Strings,
 };
 
-use mirror::{AudioOptions, FrameSink, Mirror, MirrorOptions, VideoOptions};
-use transport::adapter::{StreamMultiReceiverAdapter, StreamReceiverAdapterExt};
-
-#[cfg(not(target_os = "macos"))]
-use capture::{CaptureSettings, Device, DeviceKind, DeviceManager};
-
-#[cfg(not(target_os = "macos"))]
-use transport::adapter::StreamSenderAdapter;
-
 #[cfg(target_os = "windows")]
 use windows::Win32::System::Threading::{GetCurrentProcess, SetPriorityClass, HIGH_PRIORITY_CLASS};
-
-#[repr(C)]
-#[derive(Debug, Clone, Copy)]
-pub struct RawVideoOptions {
-    /// Video encoder settings, possible values are `h264_qsv`, `h264_nvenc`,
-    /// `libx264` and so on.
-    pub encoder: *const c_char,
-    /// Video decoder settings, possible values are `h264_qsv`, `h264_cuvid`,
-    /// `h264`, etc.
-    pub decoder: *const c_char,
-    /// Frame rate setting in seconds.
-    pub frame_rate: u8,
-    /// The width of the video.
-    pub width: u32,
-    /// The height of the video.
-    pub height: u32,
-    /// The bit rate of the video encoding.
-    pub bit_rate: u64,
-    /// Keyframe Interval, used to specify how many frames apart to output a
-    /// keyframe.
-    pub key_frame_interval: u32,
-}
-
-unsafe impl Send for RawVideoOptions {}
-unsafe impl Sync for RawVideoOptions {}
-
-impl TryInto<VideoOptions> for RawVideoOptions {
-    type Error = anyhow::Error;
-
-    fn try_into(self) -> Result<VideoOptions, Self::Error> {
-        Ok(VideoOptions {
-            encoder: Strings::from(self.encoder).to_string()?,
-            decoder: Strings::from(self.decoder).to_string()?,
-            key_frame_interval: self.key_frame_interval,
-            frame_rate: self.frame_rate,
-            width: self.width,
-            height: self.height,
-            bit_rate: self.bit_rate,
-        })
-    }
-}
-
-/// Audio Codec Configuration.
-#[repr(C)]
-#[derive(Debug, Clone, Copy)]
-pub struct RawAudioOptions {
-    /// The sample rate of the audio, in seconds.
-    pub sample_rate: u64,
-    /// The bit rate of the video encoding.
-    pub bit_rate: u64,
-}
-
-unsafe impl Send for RawAudioOptions {}
-unsafe impl Sync for RawAudioOptions {}
-
-impl Into<AudioOptions> for RawAudioOptions {
-    fn into(self) -> AudioOptions {
-        AudioOptions {
-            encoder: "libopus".to_string(),
-            decoder: "libopus".to_string(),
-            sample_rate: self.sample_rate,
-            bit_rate: self.bit_rate,
-        }
-    }
-}
-
-#[repr(C)]
-#[derive(Debug, Clone, Copy)]
-pub struct RawMirrorOptions {
-    /// Video Codec Configuration.
-    pub video: RawVideoOptions,
-    /// Audio Codec Configuration.
-    pub audio: RawAudioOptions,
-    /// mirror server address.
-    pub server: *const c_char,
-    /// Multicast address, e.g. `239.0.0.1`.
-    pub multicast: *const c_char,
-    /// The size of the maximum transmission unit of the network, which is
-    /// related to the settings of network devices such as routers or switches,
-    /// the recommended value is 1400.
-    pub mtu: usize,
-}
-
-unsafe impl Send for RawMirrorOptions {}
-unsafe impl Sync for RawMirrorOptions {}
-
-impl TryInto<MirrorOptions> for RawMirrorOptions {
-    type Error = anyhow::Error;
-
-    fn try_into(self) -> Result<MirrorOptions, Self::Error> {
-        Ok(MirrorOptions {
-            multicast: Strings::from(self.multicast).to_string()?,
-            server: Strings::from(self.server).to_string()?,
-            video: self.video.try_into()?,
-            audio: self.audio.into(),
-            mtu: self.mtu,
-        })
-    }
-}
 
 #[no_mangle]
 #[cfg(target_os = "windows")]
@@ -189,173 +87,68 @@ pub extern "C" fn mirror_find_video_decoder() -> *const c_char {
 
 /// Initialize the environment, which must be initialized before using the SDK.
 #[no_mangle]
-pub extern "C" fn mirror_init(options: RawMirrorOptions) -> bool {
+pub extern "C" fn mirror_startup() -> bool {
     log::info!("extern api: mirror init");
 
-    checker((|| mirror::init(options.try_into()?))()).is_ok()
+    checker(factory::startup()).is_ok()
 }
 
 /// Cleans up the environment when the SDK exits, and is recommended to be
 /// called when the application exits.
 #[no_mangle]
-pub extern "C" fn mirror_quit() {
+pub extern "C" fn mirror_shutdown() {
     log::info!("extern api: mirror quit");
 
-    mirror::quit()
-}
-
-/// Get device name.
-#[no_mangle]
-#[cfg(not(target_os = "macos"))]
-pub extern "C" fn mirror_get_device_name(device: *const Device) -> *const c_char {
-    assert!(!device.is_null());
-
-    log::info!("extern api: mirror get device name");
-
-    unsafe { &*device }.c_name()
-}
-
-/// Get device kind.
-#[no_mangle]
-#[cfg(not(target_os = "macos"))]
-pub extern "C" fn mirror_get_device_kind(device: *const Device) -> DeviceKind {
-    assert!(!device.is_null());
-
-    log::info!("extern api: mirror get device kind");
-
-    unsafe { &*device }.kind()
+    let _ = checker(factory::shutdown());
 }
 
 #[repr(C)]
-#[cfg(not(target_os = "macos"))]
-pub struct RawDevices {
-    pub list: *const Device,
-    pub capacity: usize,
-    pub size: usize,
+#[derive(Debug, Clone, Copy)]
+pub struct MirrorOptions {
+    pub server: *const c_char,
+    pub multicast: *const c_char,
+    pub mtu: usize,
 }
 
-/// Get devices from device manager.
-#[no_mangle]
-#[cfg(not(target_os = "macos"))]
-pub extern "C" fn mirror_get_devices(
-    kind: DeviceKind,
-    settings: *const CaptureSettings,
-) -> RawDevices {
-    log::info!("extern api: mirror get devices: kind={:?}", kind);
+impl TryInto<transport::TransportOptions> for MirrorOptions {
+    type Error = anyhow::Error;
 
-    let devices = match checker(DeviceManager::get_devices(
-        kind,
-        if !settings.is_null() {
-            Some(unsafe { &*settings })
-        } else {
-            None
-        },
-    )) {
-        Ok(it) => it.to_vec(),
-        Err(_) => Vec::new(),
-    };
-
-    let raw_devices = RawDevices {
-        capacity: devices.capacity(),
-        list: devices.as_ptr(),
-        size: devices.len(),
-    };
-
-    #[cfg(debug_assertions)]
-    {
-        for device in &devices {
-            log::info!("Device: name={:?}", device.name());
-        }
+    fn try_into(self) -> Result<transport::TransportOptions, Self::Error> {
+        Ok(transport::TransportOptions {
+            multicast: Strings::from(self.multicast).to_string()?.parse()?,
+            server: Strings::from(self.server).to_string()?.parse()?,
+            mtu: self.mtu,
+        })
     }
-
-    std::mem::forget(devices);
-    raw_devices
-}
-
-/// Release devices.
-#[no_mangle]
-#[cfg(not(target_os = "macos"))]
-pub extern "C" fn mirror_devices_destroy(devices: *const RawDevices) {
-    assert!(!devices.is_null());
-
-    log::info!("extern api: mirror devices destroy");
-
-    let devices = unsafe { &*devices };
-    drop(unsafe { Vec::from_raw_parts(devices.list as *mut Device, devices.size, devices.size) })
-}
-
-/// Setting up an input device, repeated settings for the same type of device
-/// will overwrite the previous device.
-#[no_mangle]
-#[cfg(not(target_os = "macos"))]
-pub extern "C" fn mirror_set_input_device(
-    device: *const Device,
-    settings: *const CaptureSettings,
-) -> bool {
-    assert!(!device.is_null());
-
-    log::info!("extern api: mirror set input device");
-
-    checker(mirror::set_input_device(
-        unsafe { &*device },
-        if !settings.is_null() {
-            Some(unsafe { &*settings })
-        } else {
-            None
-        },
-    ))
-    .is_ok()
-}
-
-/// Start capturing audio and video data.
-#[no_mangle]
-#[cfg(not(target_os = "macos"))]
-pub extern "C" fn mirror_start_capture() -> c_int {
-    log::info!("extern api: mirror start capture devices");
-
-    capture::start()
-}
-
-/// Stop capturing audio and video data.
-#[no_mangle]
-#[cfg(not(target_os = "macos"))]
-pub extern "C" fn mirror_stop_capture() {
-    log::info!("extern api: mirror stop capture devices");
-
-    capture::stop();
 }
 
 #[repr(C)]
-pub struct RawMirror {
-    mirror: Mirror,
-}
+pub struct Mirror(factory::Mirror);
 
 /// Create mirror.
 #[no_mangle]
-pub extern "C" fn mirror_create() -> *const RawMirror {
+pub extern "C" fn mirror_create(options: MirrorOptions) -> *const Mirror {
     log::info!("extern api: mirror create");
 
-    checker(Mirror::new())
-        .map(|mirror| Box::into_raw(Box::new(RawMirror { mirror })))
+    let func = || factory::Mirror::new(options.try_into()?);
+
+    checker(func())
+        .map(|mirror| Box::into_raw(Box::new(Mirror(mirror))))
         .unwrap_or_else(|_| null_mut()) as *const _
 }
 
 /// Release mirror.
 #[no_mangle]
-pub extern "C" fn mirror_destroy(mirror: *const RawMirror) {
+pub extern "C" fn mirror_destroy(mirror: *const Mirror) {
     assert!(!mirror.is_null());
 
     log::info!("extern api: mirror destroy");
-
-    #[cfg(not(target_os = "macos"))]
-    capture::set_frame_sink::<()>(None);
-
-    drop(unsafe { Box::from_raw(mirror as *mut RawMirror) });
+    drop(unsafe { Box::from_raw(mirror as *mut Mirror) });
 }
 
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct RawFrameSink {
+pub struct FrameSink {
     /// Callback occurs when the video frame is updated. The video frame format
     /// is fixed to NV12. Be careful not to call blocking methods inside the
     /// callback, which will seriously slow down the encoding and decoding
@@ -417,9 +210,10 @@ pub struct RawFrameSink {
     pub ctx: usize,
 }
 
-impl Into<FrameSink> for RawFrameSink {
-    fn into(self) -> FrameSink {
-        FrameSink {
+impl Into<factory::FrameSink> for FrameSink {
+    fn into(self) -> factory::FrameSink {
+        let is_closed = AtomicBool::new(false);
+        factory::FrameSink {
             video: Box::new(move |frame: &VideoFrame| {
                 if let Some(callback) = &self.video {
                     callback(self.ctx, frame)
@@ -435,12 +229,15 @@ impl Into<FrameSink> for RawFrameSink {
                 }
             }),
             close: Box::new(move || {
-                log::info!("extern api: call close callback");
+                if !is_closed.get() {
+                    log::info!("extern api: call close callback");
 
-                if let Some(callback) = &self.close {
-                    callback(self.ctx);
+                    if let Some(callback) = &self.close {
+                        callback(self.ctx);
+                        is_closed.update(true);
 
-                    log::info!("extern api: call close callback done");
+                        log::info!("extern api: call close callback done");
+                    }
                 }
             }),
         }
@@ -448,106 +245,293 @@ impl Into<FrameSink> for RawFrameSink {
 }
 
 #[repr(C)]
-#[cfg(not(target_os = "macos"))]
-pub struct RawSender {
-    adapter: Arc<StreamSenderAdapter>,
+#[derive(Debug, Clone, Copy)]
+pub struct VideoOptions {
+    pub codec: *const c_char,
+    pub frame_rate: u8,
+    pub width: u32,
+    pub height: u32,
+    pub bit_rate: u64,
+    pub key_frame_interval: u32,
 }
+
+impl TryInto<codec::VideoEncoderSettings> for VideoOptions {
+    type Error = anyhow::Error;
+
+    fn try_into(self) -> Result<codec::VideoEncoderSettings, Self::Error> {
+        Ok(codec::VideoEncoderSettings {
+            codec: Strings::from(self.codec).to_string()?,
+            key_frame_interval: self.key_frame_interval,
+            frame_rate: self.frame_rate,
+            width: self.width,
+            height: self.height,
+            bit_rate: self.bit_rate,
+        })
+    }
+}
+
+/// Audio Codec Configuration.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct AudioOptions {
+    pub sample_rate: u64,
+    pub bit_rate: u64,
+}
+
+impl Into<codec::AudioEncoderSettings> for AudioOptions {
+    fn into(self) -> codec::AudioEncoderSettings {
+        codec::AudioEncoderSettings {
+            codec: "libopus".to_string(),
+            sample_rate: self.sample_rate,
+            bit_rate: self.bit_rate,
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct SenderOptions {
+    video: VideoOptions,
+    audio: AudioOptions,
+    multicast: bool,
+}
+
+impl TryInto<sender::SenderOptions> for SenderOptions {
+    type Error = anyhow::Error;
+
+    fn try_into(self) -> Result<sender::SenderOptions, Self::Error> {
+        Ok(sender::SenderOptions {
+            audio: self.audio.try_into()?,
+            video: self.video.try_into()?,
+            multicast: self.multicast,
+        })
+    }
+}
+
+#[repr(C)]
+#[cfg(not(target_os = "macos"))]
+pub struct Sender(sender::Sender);
 
 /// Create a sender, specify a bound NIC address, you can pass callback to
 /// get the device screen or sound callback, callback can be null, if it is
 /// null then it means no callback data is needed.
 #[no_mangle]
+#[rustfmt::skip]
 #[cfg(not(target_os = "macos"))]
 pub extern "C" fn mirror_create_sender(
-    mirror: *const RawMirror,
+    mirror: *const Mirror,
     id: c_int,
-    sink: RawFrameSink,
-) -> *const RawSender {
+    options: SenderOptions,
+    sink: FrameSink,
+) -> *const Sender {
     assert!(!mirror.is_null());
 
     log::info!("extern api: mirror create sender");
 
-    checker((|| {
+    let func = || {
+        let options: sender::SenderOptions = options.try_into()?;
+        
+        log::info!("mirror create options={:?}", options);
+        
+        ensure!(options.video.codec == "libx264" || options.video.codec == "h264_qsv", "invalid video encoder");
+        ensure!(options.video.width % 4 == 0 && options.video.width <= 4096, "invalid video width");
+        ensure!(options.video.height % 4 == 0 && options.video.height <= 2560, "invalid video height");
+        ensure!(options.video.frame_rate <= 60, "invalid video frame rate");
+
         unsafe { &*mirror }
-            .mirror
-            .create_sender(id as u32, sink.into())
-    })())
-    .map(|adapter| Box::into_raw(Box::new(RawSender { adapter })))
+            .0
+            .create_sender(id as u32, options, sink.into())
+    };
+
+    checker(func())
+    .map(|sender| Box::into_raw(Box::new(Sender(sender))))
     .unwrap_or_else(|_| null_mut())
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SourceType {
+    Camera,
+    Screen,
+    Audio,
+}
+
+impl Into<capture::SourceType> for SourceType {
+    fn into(self) -> capture::SourceType {
+        match self {
+            Self::Camera => capture::SourceType::Camera,
+            Self::Screen => capture::SourceType::Screen,
+            Self::Audio => capture::SourceType::Audio,
+        }
+    }
+}
+
+impl From<capture::SourceType> for SourceType {
+    fn from(value: capture::SourceType) -> Self {
+        match value {
+            capture::SourceType::Camera => Self::Camera,
+            capture::SourceType::Screen => Self::Screen,
+            capture::SourceType::Audio => Self::Audio,
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Debug)]
+#[cfg(not(target_os = "macos"))]
+pub struct Source {
+    index: usize,
+    kind: SourceType,
+    id: *const c_char,
+    name: *const c_char,
+}
+
+#[repr(C)]
+#[derive(Debug)]
+#[cfg(not(target_os = "macos"))]
+pub struct Sources {
+    items: *mut Source,
+    capacity: usize,
+    size: usize,
+}
+
+/// Get capture sources from sender.
+#[no_mangle]
+#[cfg(not(target_os = "macos"))]
+pub extern "C" fn mirror_sender_get_sources(sender: *const Sender, kind: SourceType) -> Sources {
+    assert!(!sender.is_null());
+
+    log::info!("extern api: mirror sender get sources: kind={:?}", kind);
+
+    let mut items = ManuallyDrop::new(
+        unsafe { &*sender }
+            .0
+            .get_sources(kind.into())
+            .unwrap_or_else(|_| Vec::new())
+            .into_iter()
+            .map(|item| Source {
+                index: item.index,
+                kind: SourceType::from(item.kind),
+                id: CString::new(item.id).unwrap().into_raw(),
+                name: CString::new(item.name).unwrap().into_raw(),
+            })
+            .collect::<Vec<Source>>(),
+    );
+
+    Sources {
+        items: items.as_mut_ptr(),
+        capacity: items.capacity(),
+        size: items.len(),
+    }
+}
+
+/// Because `Sources` are allocated internally, they also need to be released
+/// internally.
+#[no_mangle]
+#[cfg(not(target_os = "macos"))]
+pub extern "C" fn mirror_sources_destroy(sources: *const Sources) {
+    assert!(!sources.is_null());
+
+    let sources = unsafe { &*sources };
+    for item in unsafe { Vec::from_raw_parts(sources.items, sources.size, sources.capacity) } {
+        drop(unsafe { CString::from_raw(item.id as *mut _) });
+        drop(unsafe { CString::from_raw(item.name as *mut _) });
+    }
+}
+
+/// Set video capture sources to sender.
+#[no_mangle]
+#[cfg(not(target_os = "macos"))]
+pub extern "C" fn mirror_sender_set_video_source(
+    sender: *const Sender,
+    source: *const Source,
+) -> bool {
+    assert!(!sender.is_null() && !source.is_null());
+
+    log::info!("extern api: mirror sender set video source");
+
+    let func = || {
+        let source = unsafe { &*source };
+        unsafe { &*sender }.0.set_video_source(capture::Source {
+            id: Strings::from(source.id).to_string()?,
+            name: Strings::from(source.name).to_string()?,
+            kind: source.kind.into(),
+            index: source.index,
+        })
+    };
+
+    checker(func()).is_ok()
 }
 
 /// Set whether the sender uses multicast transmission.
 #[no_mangle]
 #[cfg(not(target_os = "macos"))]
-pub extern "C" fn mirror_sender_set_multicast(sender: *const RawSender, is_multicast: bool) {
+pub extern "C" fn mirror_sender_set_multicast(sender: *const Sender, is_multicast: bool) {
     assert!(!sender.is_null());
 
     log::info!("extern api: mirror set sender multicast={}", is_multicast);
-
-    unsafe { &*sender }.adapter.set_multicast(is_multicast);
+    unsafe { &*sender }.0.set_multicast(is_multicast);
 }
 
 /// Get whether the sender uses multicast transmission.
 #[no_mangle]
 #[cfg(not(target_os = "macos"))]
-pub extern "C" fn mirror_sender_get_multicast(sender: *const RawSender) -> bool {
+pub extern "C" fn mirror_sender_get_multicast(sender: *const Sender) -> bool {
     assert!(!sender.is_null());
 
     log::info!("extern api: mirror get sender multicast");
-
-    unsafe { &*sender }.adapter.get_multicast()
+    unsafe { &*sender }.0.get_multicast()
 }
 
 /// Close sender.
 #[no_mangle]
 #[cfg(not(target_os = "macos"))]
-pub extern "C" fn mirror_sender_destroy(sender: *const RawSender) {
+pub extern "C" fn mirror_sender_destroy(sender: *const Sender) {
     assert!(!sender.is_null());
 
     log::info!("extern api: mirror close sender");
-
-    capture::set_frame_sink::<()>(None);
-    unsafe { Box::from_raw(sender as *mut RawSender) }
-        .adapter
-        .close();
+    drop(unsafe { Box::from_raw(sender as *mut Sender) })
 }
 
 #[repr(C)]
-pub struct RawReceiver {
-    adapter: Arc<StreamMultiReceiverAdapter>,
-}
+pub struct Receiver(receiver::Receiver);
 
 /// Create a receiver, specify a bound NIC address, you can pass callback to
 /// get the sender's screen or sound callback, callback can not be null.
 #[no_mangle]
 pub extern "C" fn mirror_create_receiver(
-    mirror: *const RawMirror,
+    mirror: *const Mirror,
     id: c_int,
-    sink: RawFrameSink,
-) -> *const RawReceiver {
-    assert!(!mirror.is_null());
+    codec: *const c_char,
+    sink: FrameSink,
+) -> *const Receiver {
+    assert!(!mirror.is_null() && !codec.is_null());
 
     log::info!("extern api: mirror create receiver");
 
-    checker((|| {
-        unsafe { &*mirror }
-            .mirror
-            .create_receiver(id as u32, sink.into())
-    })())
-    .map(|adapter| Box::into_raw(Box::new(RawReceiver { adapter })))
-    .unwrap_or_else(|_| null_mut())
+    let func = || {
+        unsafe { &*mirror }.0.create_receiver(
+            id as u32,
+            receiver::ReceiverOptions {
+                video: Strings::from(codec).to_string()?,
+                audio: "libopus".to_string(),
+            },
+            sink.into(),
+        )
+    };
+
+    checker(func())
+        .map(|receiver| Box::into_raw(Box::new(Receiver(receiver))))
+        .unwrap_or_else(|_| null_mut())
 }
 
 /// Close receiver.
 #[no_mangle]
-pub extern "C" fn mirror_receiver_destroy(receiver: *const RawReceiver) {
+pub extern "C" fn mirror_receiver_destroy(receiver: *const Receiver) {
     assert!(!receiver.is_null());
 
     log::info!("extern api: mirror close receiver");
-
-    unsafe { Box::from_raw(receiver as *mut RawReceiver) }
-        .adapter
-        .close();
+    drop(unsafe { Box::from_raw(receiver as *mut Receiver) })
 }
 
 #[inline]

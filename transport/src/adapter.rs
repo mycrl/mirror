@@ -62,7 +62,7 @@ pub enum StreamBufferInfo {
 /// sps and pps as well as the key frame information.
 #[derive(Default)]
 pub struct StreamSenderAdapter {
-    is_multicast: AtomicBool,
+    multicast: AtomicBool,
     audio_interval: AtomicU8,
     video_config: AtomicOption<BytesMut>,
     audio_config: AtomicOption<BytesMut>,
@@ -70,18 +70,21 @@ pub struct StreamSenderAdapter {
 }
 
 impl StreamSenderAdapter {
-    pub fn new() -> Arc<Self> {
-        Arc::new(Self::default())
+    pub fn new(multicast: bool) -> Arc<Self> {
+        Arc::new(Self {
+            multicast: AtomicBool::new(multicast),
+            ..Default::default()
+        })
     }
 
     /// Toggle whether to use multicast
     pub fn set_multicast(&self, is_multicast: bool) {
-        self.is_multicast.update(is_multicast);
+        self.multicast.update(is_multicast);
     }
 
     /// Get whether to use multicast
     pub fn get_multicast(&self) -> bool {
-        self.is_multicast.get()
+        self.multicast.get()
     }
 
     pub fn close(&self) {

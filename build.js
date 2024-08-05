@@ -61,17 +61,17 @@ const Replace = (file, filters) => {
         }
     }
 
-    if (!fs.existsSync('./build/bin/data'))
-    {
-        if (!fs.existsSync('./target/obs.zip'))
-        {
-            console.log('Start download distributions...')
-            await download(`${BaseDistributions}/obs-windows-x64.zip`, './target')
-            fs.renameSync('./target/obs-windows-x64.zip', './target/obs.zip')
-        }
-
-        await (await unzipper.Open.file('./target/obs.zip')).extract({ path: './build/bin' })
-    }
+//    if (!fs.existsSync('./build/bin/data'))
+//    {
+//        if (!fs.existsSync('./target/obs.zip'))
+//        {
+//            console.log('Start download distributions...')
+//            await download(`${BaseDistributions}/obs-windows-x64.zip`, './target')
+//            fs.renameSync('./target/obs-windows-x64.zip', './target/obs.zip')
+//        }
+//
+//        await (await unzipper.Open.file('./target/obs.zip')).extract({ path: './build/bin' })
+//    }
 
     if (!fs.existsSync('./target/ffmpeg'))
     {
@@ -106,8 +106,8 @@ const Replace = (file, filters) => {
         ['./examples/desktop/src/render.h', './build/examples/src/render.h'],
         ['./examples/desktop/src/service.cpp', './build/examples/src/service.cpp'],
         ['./examples/desktop/src/service.h', './build/examples/src/service.h'],
-        ['./examples/desktop/src/wrapper.cpp', './build/examples/src/wrapper.cpp'],
-        ['./examples/desktop/src/wrapper.h', './build/examples/src/wrapper.h'],
+//        ['./examples/desktop/src/wrapper.cpp', './build/examples/src/wrapper.cpp'],
+//        ['./examples/desktop/src/wrapper.h', './build/examples/src/wrapper.h'],
         ['./examples/desktop/CMakeLists.txt', './build/examples/CMakeLists.txt'],
         ['./examples/desktop/README.md', './build/examples/README.md'],
 

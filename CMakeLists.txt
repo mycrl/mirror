@@ -3,4 +3,3 @@ project(mirror)
 
 add_subdirectory(examples/desktop)
 add_subdirectory(codec/lib)
-add_subdirectory(capture/lib)

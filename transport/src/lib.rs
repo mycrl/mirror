@@ -23,11 +23,11 @@ use crate::{
     package::{Package, PacketInfo, UnPackage},
 };
 
-pub fn init() -> bool {
+pub fn startup() -> bool {
     srt::startup()
 }
 
-pub fn exit() {
+pub fn shutdown() {
     srt::cleanup()
 }
 

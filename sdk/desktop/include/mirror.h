@@ -22,23 +22,25 @@
 
 typedef enum
 {
-    Video,
-    Audio,
+    Camera,
     Screen,
-    Window,
-} DeviceKind;
-
-typedef enum
-{
-    GDI,
-    DXGI,
-    WGC,
-} CaptureMethod;
+    Audio,
+} SourceType;
 
 typedef struct
 {
-    CaptureMethod method;
-} CaptureSettings;
+    size_t index;
+    SourceType type;
+    const char* id;
+    const char* name;
+} Source;
+
+typedef struct
+{
+    Source* items;
+    size_t capacity;
+    size_t size;
+} Sources;
 
 typedef struct
 {
@@ -46,12 +48,7 @@ typedef struct
      * Video encoder settings, possible values are `h264_qsv`, `h264_nvenc`,
      * `libx264` and so on.
      */
-    char* encoder;
-    /**
-     * Video decoder settings, possible values are `h264_qsv`, `h264_cuvid`,
-     * `h264`, etc.
-     */
-    char* decoder;
+    const char* codec;
     /**
      * Frame rate setting in seconds.
      */
@@ -89,22 +86,21 @@ typedef struct
 
 typedef struct
 {
-    /**
-     * Video Codec Configuration.
-     */
     VideoOptions video;
-    /**
-     * Audio Codec Configuration.
-     */
     AudioOptions audio;
+    bool multicast;
+} SenderOptions;
+
+typedef struct
+{
     /**
      * mirror server address.
      */
-    char* server;
+    const char* server;
     /**
      * Multicast address, e.g. `239.0.0.1`.
      */
-    char* multicast;
+    const char* multicast;
     /**
      * The size of the maximum transmission unit of the network, which is
      * related to the settings of network devices such as routers or switches,
@@ -112,27 +108,6 @@ typedef struct
      */
     size_t mtu;
 } MirrorOptions;
-
-typedef struct
-{
-    const void* description;
-} Device;
-
-typedef struct
-{
-    /**
-     * device list.
-     */
-    const Device* devices;
-    /**
-     * device vector capacity.
-     */
-    size_t capacity;
-    /**
-     * device vector size.
-     */
-    size_t size;
-} Devices;
 
 typedef const void* Mirror;
 typedef const void* Sender;
@@ -220,15 +195,17 @@ EXPORT const char* mirror_find_video_encoder();
 EXPORT const char* mirror_find_video_decoder();
 
 /**
+ * Initialize the environment, which must be initialized before using the SDK.
+ */
+EXPORT bool mirror_startup();
+
+/**
  * Cleans up the environment when the SDK exits, and is recommended to be
  * called when the application exits.
  */
-EXPORT void mirror_quit();
+EXPORT void mirror_shutdown();
 
-/**
- * Initialize the environment, which must be initialized before using the SDK.
- */
-EXPORT bool mirror_init(MirrorOptions options);
+#ifndef WIN32
 
 /**
  * Because Linux does not have DllMain, you need to call it manually to achieve
@@ -236,58 +213,43 @@ EXPORT bool mirror_init(MirrorOptions options);
  */
 EXPORT bool mirror_load();
 
-/**
- * Get device name.
- */
-EXPORT const char* mirror_get_device_name(const Device* device);
 
-/**
- * Get device kind.
- */
-EXPORT DeviceKind mirror_get_device_kind(const Device* device);
-
-/**
- * Get devices from device manager.
- */
-EXPORT Devices mirror_get_devices(DeviceKind kind, CaptureSettings* settings);
-
-/**
- * Release devices.
- */
-EXPORT void mirror_devices_destroy(Devices* devices);
-
-/**
- * Setting up an input device, repeated settings for the same type of device
- * will overwrite the previous device.
- */
-EXPORT bool mirror_set_input_device(const Device* device, CaptureSettings* settings);
-
-/**
- * Start capturing audio and video data.
- */
-EXPORT int mirror_start_capture();
-
-/**
- * Stop capturing audio and video data.
- */
-EXPORT void mirror_stop_capture();
+#endif // !WIN32
 
 /**
  * Create mirror.
  */
-EXPORT Mirror mirror_create();
+EXPORT Mirror mirror_create(MirrorOptions options);
 
 /**
  * Release mirror.
  */
 EXPORT void mirror_destroy(Mirror mirror);
 
+#ifndef MACOS
+
 /**
  * Create a sender, specify a bound NIC address, you can pass callback to
  * get the device screen or sound callback, callback can be null, if it is
  * null then it means no callback data is needed.
  */
-EXPORT Sender mirror_create_sender(Mirror mirror, int id, FrameSink sink);
+EXPORT Sender mirror_create_sender(Mirror mirror, int id, SenderOptions options, FrameSink sink);
+
+/**
+ * Get capture sources from sender.
+ */
+EXPORT Sources mirror_sender_get_sources(Sender sender, SourceType kind);
+
+/**
+ * Because `Sources` are allocated internally, they also need to be released
+ * internally. 
+ */
+EXPORT void mirror_sources_destroy(Sources* sources);
+
+/**
+ * Set video capture sources to sender.
+ */
+EXPORT bool mirror_sender_set_video_source(Sender sender, Source* source);
 
 /**
  * Get whether the sender uses multicast transmission.
@@ -304,11 +266,13 @@ EXPORT void mirror_sender_set_multicast(Sender sender, bool is_multicast);
  */
 EXPORT void mirror_sender_destroy(Sender sender);
 
+#endif // !MACOS
+
 /**
  * Create a receiver, specify a bound NIC address, you can pass callback to
  * get the sender's screen or sound callback, callback can not be null.
  */
-EXPORT Receiver mirror_create_receiver(Mirror mirror, int id, FrameSink sink);
+EXPORT Receiver mirror_create_receiver(Mirror mirror, int id, const char* codec, FrameSink sink);
 
 /**
  * Close receiver.

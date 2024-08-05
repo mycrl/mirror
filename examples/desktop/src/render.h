@@ -14,9 +14,8 @@ extern "C"
 #include <functional>
 
 #include "./args.h"
-#include "./wrapper.h"
 
-class SimpleRender : public AVFrameSink
+class SimpleRender
 {
 public:
 #ifdef WIN32

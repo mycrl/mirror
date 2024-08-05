@@ -15,20 +15,20 @@ extern "C" {
 
 #[repr(C)]
 pub struct RawAudioEncoderSettings {
-    pub codec_name: *const c_char,
+    pub codec: *const c_char,
     pub bit_rate: u64,
     pub sample_rate: u64,
 }
 
 impl Drop for RawAudioEncoderSettings {
     fn drop(&mut self) {
-        drop(unsafe { CString::from_raw(self.codec_name as *mut _) })
+        drop(unsafe { CString::from_raw(self.codec as *mut _) })
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct AudioEncoderSettings {
-    pub codec_name: String,
+    pub codec: String,
     pub bit_rate: u64,
     pub sample_rate: u64,
 }
@@ -36,7 +36,7 @@ pub struct AudioEncoderSettings {
 impl AudioEncoderSettings {
     fn as_raw(&self) -> RawAudioEncoderSettings {
         RawAudioEncoderSettings {
-            codec_name: CString::new(self.codec_name.as_str()).unwrap().into_raw(),
+            codec: CString::new(self.codec.as_str()).unwrap().into_raw(),
             sample_rate: self.sample_rate,
             bit_rate: self.bit_rate,
         }
@@ -88,17 +88,17 @@ impl AudioEncoder {
         }
     }
 
-    pub fn send_frame(&self, frame: &AudioFrame) -> bool {
+    pub fn send_frame(&mut self, frame: &AudioFrame) -> bool {
         unsafe { codec_audio_encoder_copy_frame(self.0, frame) }
     }
 
     /// Supply a raw video or audio frame to the encoder.
-    pub fn encode(&self) -> bool {
+    pub fn encode(&mut self) -> bool {
         unsafe { codec_audio_encoder_send_frame(self.0) }
     }
 
     /// Read encoded data from the encoder.
-    pub fn read(&self) -> Option<AudioEncodePacket> {
+    pub fn read(&mut self) -> Option<AudioEncodePacket> {
         let packet = unsafe { codec_audio_encoder_read_packet(self.0) };
         if !packet.is_null() {
             Some(AudioEncodePacket::from_raw(self.0, packet))

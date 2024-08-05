@@ -14,7 +14,6 @@ codec = { path = "../../codec", default-features = false }
 transport = { path = "../../transport" }
 log = "0.4.20"
 anyhow = "1.0.82"
-once_cell = "1.19.0"
 
 [target.'cfg(not(target_os = "macos"))'.dependencies]
 capture = { path = "../../capture" }

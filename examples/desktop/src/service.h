@@ -2,9 +2,13 @@
 #define SERVICE_H
 #pragma once
 
+extern "C"
+{
+#include <mirror.h>
+}
+
 #include "./args.h"
 #include "./render.h"
-#include "./wrapper.h"
 
 class MirrorServiceExt
 {
@@ -20,11 +24,13 @@ public:
     void Close();
 private:
     Args& _args;
-    MirrorOptions _options;
+    Mirror _mirror = nullptr;
+    Sender _sender = nullptr;
+    Receiver _receiver = nullptr;
     SimpleRender* _render = nullptr;
-    MirrorService* _mirror = nullptr;
-    std::optional<MirrorSender> _sender = std::nullopt;
-    std::optional<MirrorReceiver> _receiver = std::nullopt;
+    bool is_created = false;
+
+    bool _create_mirror();
 };
 
 #endif

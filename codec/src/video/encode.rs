@@ -15,7 +15,7 @@ extern "C" {
 
 #[repr(C)]
 pub struct RawVideoEncoderSettings {
-    pub codec_name: *const c_char,
+    pub codec: *const c_char,
     pub frame_rate: u8,
     pub width: u32,
     pub height: u32,
@@ -25,7 +25,7 @@ pub struct RawVideoEncoderSettings {
 
 impl Drop for RawVideoEncoderSettings {
     fn drop(&mut self) {
-        drop(unsafe { CString::from_raw(self.codec_name as *mut _) })
+        drop(unsafe { CString::from_raw(self.codec as *mut _) })
     }
 }
 
@@ -36,7 +36,7 @@ pub struct VideoEncoderSettings {
     /// The name is globally unique among encoders and among decoders (but an
     /// encoder and a decoder can share the same name). This is the primary way
     /// to find a codec from the user perspective.
-    pub codec_name: String,
+    pub codec: String,
     pub frame_rate: u8,
     /// picture width / height
     pub width: u32,
@@ -51,7 +51,7 @@ pub struct VideoEncoderSettings {
 impl VideoEncoderSettings {
     fn as_raw(&self) -> RawVideoEncoderSettings {
         RawVideoEncoderSettings {
-            codec_name: CString::new(self.codec_name.as_str()).unwrap().into_raw(),
+            codec: CString::new(self.codec.as_str()).unwrap().into_raw(),
             key_frame_interval: self.key_frame_interval,
             frame_rate: self.frame_rate,
             width: self.width,
@@ -106,17 +106,17 @@ impl VideoEncoder {
         }
     }
 
-    pub fn send_frame(&self, frame: &VideoFrame) -> bool {
+    pub fn send_frame(&mut self, frame: &VideoFrame) -> bool {
         unsafe { codec_video_encoder_copy_frame(self.0, frame) }
     }
 
     /// Supply a raw video or audio frame to the encoder.
-    pub fn encode(&self) -> bool {
+    pub fn encode(&mut self) -> bool {
         unsafe { codec_video_encoder_send_frame(self.0) }
     }
 
     /// Read encoded data from the encoder.
-    pub fn read(&self) -> Option<VideoEncodePacket> {
+    pub fn read(&mut self) -> Option<VideoEncodePacket> {
         let packet = unsafe { codec_video_encoder_read_packet(self.0) };
         if !packet.is_null() {
             Some(VideoEncodePacket::from_raw(self.0, packet))

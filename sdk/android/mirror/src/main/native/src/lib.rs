@@ -48,7 +48,7 @@ use transport::{
 #[no_mangle]
 pub extern "system" fn JNI_OnLoad(vm: JavaVM, _: *mut c_void) -> i32 {
     AndroidLogger::init();
-    transport::init();
+    transport::startup();
     JVM.lock().unwrap().replace(vm);
 
     JNI_VERSION_1_6
@@ -91,7 +91,7 @@ pub extern "system" fn JNI_OnLoad(vm: JavaVM, _: *mut c_void) -> i32 {
 /// Exported from native libraries that contain native method implementation.
 #[no_mangle]
 pub extern "system" fn JNI_OnUnload(_: JavaVM, _: *mut c_void) {
-    transport::exit();
+    transport::shutdown();
 }
 
 mod objects {
@@ -416,7 +416,7 @@ impl Mirror {
         _env: JNIEnv,
         _this: JClass,
     ) -> *const Arc<StreamSenderAdapter> {
-        Box::into_raw(Box::new(StreamSenderAdapter::new()))
+        Box::into_raw(Box::new(StreamSenderAdapter::new(false)))
     }
 
     /// /**
