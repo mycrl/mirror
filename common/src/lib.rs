@@ -18,11 +18,3 @@ pub mod atomic;
 pub mod frame;
 pub mod logger;
 pub mod strings;
-
-pub fn jump_current_exe_dir() -> anyhow::Result<()> {
-    let mut path = std::env::current_exe()?;
-    path.pop();
-    std::env::set_current_dir(path)?;
-
-    Ok(())
-}

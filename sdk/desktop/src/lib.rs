@@ -19,7 +19,7 @@ use codec::VideoEncoderSettings;
 use common::{
     atomic::EasyAtomic,
     frame::{AudioFrame, VideoFrame},
-    jump_current_exe_dir, logger,
+    logger,
     strings::Strings,
 };
 
@@ -59,10 +59,6 @@ extern "system" fn DllMain(
 /// Because Linux does not have DllMain, you need to call it manually to achieve
 /// similar behavior.
 pub extern "C" fn mirror_load() -> bool {
-    if jump_current_exe_dir().is_err() {
-        return false;
-    }
-
     if logger::init(
         log::LevelFilter::Info,
         if cfg!(debug_assertions) {
