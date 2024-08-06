@@ -132,6 +132,15 @@ impl FrameArrived for AudioSender {
 
     fn sink(&mut self, frame: &Self::Frame) -> bool {
         let ret = if let Some(adapter) = self.adapter.upgrade() {
+            // This is a rather strange implementation, but it is very useful and will have
+            // an impact on reducing latency.
+            //
+            // Why is it implemented this way? This is because the internal audio encoder
+            // has several specific limits on the number of samples submitted at a time, but
+            // I cannot control the size of the external single submission, so there is a
+            // 100 millisecond buffer here, and when the buffer is full, it is submitted to
+            // the encoder to ensure that a fixed number of audio samples are submitted each
+            // time.
             let mut buffer = self.buffer.lock().unwrap();
             buffer.extend_from_slice(unsafe {
                 std::slice::from_raw_parts(
@@ -195,6 +204,9 @@ pub struct Sender {
 }
 
 impl Sender {
+    // Create a sender. The capture of the sender is started following the sender,
+    // but both video capture and audio capture can be empty, which means you can
+    // create a sender that captures nothing.
     pub fn new(options: SenderOptions, sink: FrameSink) -> Result<Self> {
         log::info!("create sender");
 
@@ -203,6 +215,7 @@ impl Sender {
         let sink = Arc::new(sink);
 
         if let Some((source, options)) = options.video {
+            let codec = VideoSender::new(&adapter, &options, &sink)?;
             capture.set_video_source(
                 VideoCaptureSourceDescription {
                     fps: options.frame_rate,
@@ -212,17 +225,18 @@ impl Sender {
                         height: options.height,
                     },
                 },
-                VideoSender::new(&adapter, &options, &sink)?,
+                codec,
             )?;
         }
 
         if let Some((source, options)) = options.audio {
+            let codec = AudioSender::new(&adapter, &options, &sink)?;
             capture.set_audio_source(
                 AudioCaptureSourceDescription {
                     sample_rate: options.sample_rate as u32,
                     source,
                 },
-                AudioSender::new(&adapter, &options, &sink)?,
+                codec,
             )?;
         }
 
@@ -246,6 +260,11 @@ impl Drop for Sender {
     fn drop(&mut self) {
         log::info!("sender drop");
 
+        // When the sender releases, the cleanup work should be done, but there is a
+        // more troublesome point here. If it is actively released by the outside, it
+        // will also call back to the external closing event. It stands to reason that
+        // it should be distinguished whether it is an active closure, but in order to
+        // make it simpler to implement, let's do it this way first.
         let _ = self.capture.close();
         self.adapter.close();
         (self.sink.close)()

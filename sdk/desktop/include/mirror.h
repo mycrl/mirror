@@ -22,9 +22,9 @@
 
 typedef enum
 {
-    Camera,
-    Screen,
-    Microphone,
+    Camera = 1,
+    Screen = 2,
+    Microphone = 3,
 } SourceType;
 
 typedef struct

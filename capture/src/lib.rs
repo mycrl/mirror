@@ -45,6 +45,8 @@ pub trait CaptureHandler: Sync + Send {
     fn stop(&self) -> Result<(), Self::Error>;
 }
 
+/// Don't forget to initialize the environment, this is necessary for the
+/// capture module.
 pub fn startup() -> Result<()> {
     #[cfg(target_os = "windows")]
     {
@@ -63,11 +65,12 @@ pub fn shutdown() -> Result<()> {
     }
 }
 
+#[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SourceType {
-    Camera,
-    Screen,
-    Microphone,
+    Camera = 1,
+    Screen = 2,
+    Microphone = 3,
 }
 
 #[derive(Debug, Clone)]

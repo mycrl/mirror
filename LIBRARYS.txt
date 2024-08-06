@@ -1,22 +1,8 @@
 Windows:
 
-data
-obs-plugins
 avcodec-60.dll
-avdevice-60.dll
-avfilter-9.dll
-avformat-60.dll
 avutil-58.dll
-libcurl.dll
-libobs-d3d11.dll
-libobs-winrt.dll
 mirror.dll
 mirror.pdb
-obs.dll
-postproc-57.dll
 renderer.dll
 renderer.pdb
-swresample-4.dll
-swscale-7.dll
-w32-pthreads.dll
-zlib.dll

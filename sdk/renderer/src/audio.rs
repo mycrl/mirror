@@ -16,7 +16,7 @@ use cpal::{
 pub struct AudioPlayer {
     stream: Stream,
     config: StreamConfig,
-    queue: Sender<Vec<f32>>,
+    queue: Sender<Vec<i16>>,
     sampler: Option<ReSampler>,
     current_error: Arc<RwLock<Option<StreamError>>>,
 }
@@ -100,8 +100,8 @@ impl Drop for AudioPlayer {
 }
 
 struct AudioQueue {
-    queue: Receiver<Vec<f32>>,
-    current_chunk: Option<std::vec::IntoIter<f32>>,
+    queue: Receiver<Vec<i16>>,
+    current_chunk: Option<std::vec::IntoIter<i16>>,
 }
 
 static MUTE_BUF: [i16; 4800] = [0; 4800];
@@ -110,16 +110,21 @@ impl AudioQueue {
     fn read(&mut self, output: &mut [i16], channels: usize) {
         let mut index = 0;
 
+        // Copy from queue to player
         'a: while index < output.len() {
+            // Check if the buffer is empty
             if let Some(chunk) = &mut self.current_chunk {
                 loop {
+                    // Writing to the player buffer is complete
                     if index >= output.len() {
                         break;
                     }
 
+                    // Read data from the queue buffer and write it to the player buffer. If the
+                    // queue buffer is empty, jump to the step of updating the buffer.
                     if let Some(item) = chunk.next() {
                         for i in 0..channels {
-                            output[index + i] = item as i16;
+                            output[index + i] = item;
                         }
 
                         index += channels;
@@ -129,6 +134,8 @@ impl AudioQueue {
                     }
                 }
             } else {
+                // If the buffer is empty, take another one from the queue and put it into the
+                // buffer. If the queue is empty, fill it directly with silent data.
                 if let Ok(chunk) = self.queue.try_recv() {
                     self.current_chunk = Some(chunk.into_iter());
                 } else {

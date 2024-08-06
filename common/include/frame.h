@@ -24,7 +24,7 @@ typedef struct
 {
     int sample_rate;
     uint32_t frames;
-    float* data;
+    int16_t* data;
 } AudioFrame;
 
 #endif /* FRAME_H */

@@ -31,7 +31,7 @@ AudioEncoder* codec_create_audio_encoder(AudioEncoderSettings* settings)
 		return nullptr;
 	}
 
-    codec->context->sample_fmt = AV_SAMPLE_FMT_FLT;
+    codec->context->sample_fmt = AV_SAMPLE_FMT_S16;
     codec->context->ch_layout = AV_CHANNEL_LAYOUT_MONO;
     codec->context->flags |= AV_CODEC_FLAG_LOW_DELAY;
 	codec->context->flags2 |= AV_CODEC_FLAG2_FAST;

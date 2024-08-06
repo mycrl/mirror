@@ -266,9 +266,10 @@ impl GraphicsCaptureApiHandler for WindowsCapture {
 
                 if let Err(e) = func() {
                     log::error!("WindowsScreenCaptureTransformThread error={:?}", e);
+                } else {
+                    log::info!("WindowsScreenCaptureTransformThread is closed");
                 }
 
-                log::info!("WindowsScreenCaptureTransformThread is closed");
                 status_.update(false);
             })?;
 

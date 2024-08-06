@@ -92,6 +92,9 @@ pub struct Receiver {
 }
 
 impl Receiver {
+    /// Create a receiving end. The receiving end is much simpler to implement.
+    /// You only need to decode the data in the queue and call it back to the
+    /// sink.
     pub fn new(options: ReceiverOptions, sink: FrameSink) -> Result<Self> {
         log::info!("create receiver");
 

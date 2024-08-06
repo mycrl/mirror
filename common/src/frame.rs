@@ -71,7 +71,7 @@ impl Default for VideoFrame {
 pub struct AudioFrame {
     pub sample_rate: u32,
     pub frames: u32,
-    pub data: *const f32,
+    pub data: *const i16,
 }
 
 unsafe impl Sync for AudioFrame {}
@@ -95,13 +95,15 @@ pub struct ReSampler {
     sampler: Option<FastFixedIn<f32>>,
     input_buffer: Vec<f32>,
     output_buffer: Vec<f32>,
+    samples: Vec<i16>,
 }
 
 impl ReSampler {
     pub fn new(input: f64, output: f64, frames: usize) -> Result<Self, ResamplerConstructionError> {
         Ok(Self {
-            input_buffer: Vec::with_capacity(frames),
-            output_buffer: Vec::with_capacity(frames),
+            samples: Vec::with_capacity(frames),
+            input_buffer: vec![0.0; frames],
+            output_buffer: vec![0.0; frames],
             sampler: if input != output {
                 Some(FastFixedIn::new(
                     output / input,
@@ -118,30 +120,37 @@ impl ReSampler {
 
     pub fn resample<'a>(
         &'a mut self,
-        buffer: &'a [f32],
+        buffer: &'a [i16],
         channels: usize,
-    ) -> ResampleResult<&'a [f32]> {
-        // If the input channel is originally a single channel, there is no need to
-        // extract channel data.
-        let input = if channels == 1 {
-            buffer
+    ) -> ResampleResult<&'a [i16]> {
+        if channels == 1 && self.sampler.is_none() {
+            Ok(buffer)
         } else {
+            self.samples.clear();
             self.input_buffer.clear();
+
             for item in buffer.chunks(channels) {
-                self.input_buffer.push(item[0]);
+                if self.sampler.is_none() {
+                    self.samples.push(item[0]);
+                } else {
+                    // need resample
+                    self.input_buffer.push(item[0] as f32);
+                }
             }
 
-            &self.input_buffer[..]
-        };
+            if let Some(sampler) = &mut self.sampler {
+                let (_, size) = sampler.process_into_buffer(
+                    &[&self.input_buffer[..]],
+                    &mut [&mut self.output_buffer],
+                    None,
+                )?;
+                
+                for item in &self.output_buffer[..size] {
+                    self.samples.push(*item as i16);
+                }
+            }
 
-        // If the sampler implementation is empty, then no resampling is required at
-        // all, since the input and output have the same sample rate.
-        Ok(if let Some(sampler) = &mut self.sampler {
-            let (_, size) =
-                sampler.process_into_buffer(&[input], &mut [&mut self.output_buffer], None)?;
-            &self.output_buffer[..size]
-        } else {
-            input
-        })
+            Ok(&self.samples[..])
+        }
     }
 }

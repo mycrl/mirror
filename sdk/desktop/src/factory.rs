@@ -40,16 +40,6 @@ pub fn shutdown() -> Result<()> {
     Ok(())
 }
 
-/// Setting up an input device, repeated settings for the same type of device
-/// will overwrite the previous device.
-// #[cfg(not(target_os = "macos"))]
-// pub fn set_input_device(device: &Device, settings: Option<&CaptureSettings>)
-// -> Result<()> {     // DeviceManager::set_input(device, settings)?;
-
-//     log::info!("set input to device manager: device={:?}", device.name());
-//     Ok(())
-// }
-
 pub struct FrameSink {
     /// Callback occurs when the video frame is updated. The video frame format
     /// is fixed to NV12. Be careful not to call blocking methods inside the

@@ -61,18 +61,6 @@ const Replace = (file, filters) => {
         }
     }
 
-//    if (!fs.existsSync('./build/bin/data'))
-//    {
-//        if (!fs.existsSync('./target/obs.zip'))
-//        {
-//            console.log('Start download distributions...')
-//            await download(`${BaseDistributions}/obs-windows-x64.zip`, './target')
-//            fs.renameSync('./target/obs-windows-x64.zip', './target/obs.zip')
-//        }
-//
-//        await (await unzipper.Open.file('./target/obs.zip')).extract({ path: './build/bin' })
-//    }
-
     if (!fs.existsSync('./target/ffmpeg'))
     {
         if (!fs.existsSync('./target/ffmpeg.zip'))
@@ -106,8 +94,6 @@ const Replace = (file, filters) => {
         ['./examples/desktop/src/render.h', './build/examples/src/render.h'],
         ['./examples/desktop/src/service.cpp', './build/examples/src/service.cpp'],
         ['./examples/desktop/src/service.h', './build/examples/src/service.h'],
-//        ['./examples/desktop/src/wrapper.cpp', './build/examples/src/wrapper.cpp'],
-//        ['./examples/desktop/src/wrapper.h', './build/examples/src/wrapper.h'],
         ['./examples/desktop/CMakeLists.txt', './build/examples/CMakeLists.txt'],
         ['./examples/desktop/README.md', './build/examples/README.md'],
 
@@ -129,13 +115,8 @@ const Replace = (file, filters) => {
         [`./target/${Profile.toLowerCase()}/renderer.dll`, './build/bin/renderer.dll'],
         [`./target/${Profile.toLowerCase()}/mirror.dll`, './build/bin/mirror.dll'],
         ['./target/ffmpeg/bin/avcodec-60.dll', './build/bin/avcodec-60.dll'],
-        ['./target/ffmpeg/bin/avdevice-60.dll', './build/bin/avdevice-60.dll'],
-        ['./target/ffmpeg/bin/avfilter-9.dll', './build/bin/avfilter-9.dll'],
-        ['./target/ffmpeg/bin/avformat-60.dll', './build/bin/avformat-60.dll'],
         ['./target/ffmpeg/bin/avutil-58.dll', './build/bin/avutil-58.dll'],
-        ['./target/ffmpeg/bin/postproc-57.dll', './build/bin/postproc-57.dll'],
         ['./target/ffmpeg/bin/swresample-4.dll', './build/bin/swresample-4.dll'],
-        ['./target/ffmpeg/bin/swscale-7.dll', './build/bin/swscale-7.dll'],
     ])
     {
         fs.copyFileSync(...item)

@@ -24,11 +24,13 @@ use common::{
 };
 
 #[cfg(not(target_os = "macos"))]
-use capture::Capture;
+use capture::{Capture, SourceType};
 
 #[cfg(target_os = "windows")]
 use windows::Win32::System::Threading::{GetCurrentProcess, SetPriorityClass, HIGH_PRIORITY_CLASS};
 
+/// Windows yes! The Windows dynamic library has an entry, so just initialize
+/// the logger and set the process priority at the entry.
 #[no_mangle]
 #[cfg(target_os = "windows")]
 extern "system" fn DllMain(
@@ -157,34 +159,6 @@ pub extern "C" fn mirror_destroy(mirror: *const Mirror) {
 }
 
 #[repr(C)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SourceType {
-    Camera,
-    Screen,
-    Microphone,
-}
-
-impl Into<capture::SourceType> for SourceType {
-    fn into(self) -> capture::SourceType {
-        match self {
-            Self::Camera => capture::SourceType::Camera,
-            Self::Screen => capture::SourceType::Screen,
-            Self::Microphone => capture::SourceType::Microphone,
-        }
-    }
-}
-
-impl From<capture::SourceType> for SourceType {
-    fn from(value: capture::SourceType) -> Self {
-        match value {
-            capture::SourceType::Camera => Self::Camera,
-            capture::SourceType::Screen => Self::Screen,
-            capture::SourceType::Microphone => Self::Microphone,
-        }
-    }
-}
-
-#[repr(C)]
 #[derive(Debug)]
 #[cfg(not(target_os = "macos"))]
 pub struct Source {
@@ -192,6 +166,19 @@ pub struct Source {
     kind: SourceType,
     id: *const c_char,
     name: *const c_char,
+}
+
+impl TryInto<capture::Source> for &Source {
+    type Error = anyhow::Error;
+
+    fn try_into(self) -> Result<capture::Source, Self::Error> {
+        Ok(capture::Source {
+            name: Strings::from(self.name).to_string()?,
+            id: Strings::from(self.id).to_string()?,
+            index: self.index,
+            kind: self.kind,
+        })
+    }
 }
 
 #[repr(C)]
@@ -313,7 +300,9 @@ pub struct FrameSink {
 
 impl Into<factory::FrameSink> for FrameSink {
     fn into(self) -> factory::FrameSink {
+        // Record whether it is closed
         let is_closed = AtomicBool::new(false);
+
         factory::FrameSink {
             video: Box::new(move |frame: &VideoFrame| {
                 if let Some(callback) = &self.video {
@@ -330,14 +319,18 @@ impl Into<factory::FrameSink> for FrameSink {
                 }
             }),
             close: Box::new(move || {
+                // I thought about it carefully. The closing hand should only trigger the
+                // callback once. There are too many places in the system that will trigger the
+                // closing callback. It is not easy to manage the status between components.
+                // Here, the closing status is directly recorded. If it has been closed, it will
+                // not be processed anymore.
                 if !is_closed.get() {
-                    log::info!("extern api: call close callback");
+                    is_closed.update(true);
 
                     if let Some(callback) = &self.close {
                         callback(self.ctx);
-                        is_closed.update(true);
 
-                        log::info!("extern api: call close callback done");
+                        log::info!("extern api: call close callback");
                     }
                 }
             }),
@@ -345,6 +338,7 @@ impl Into<factory::FrameSink> for FrameSink {
     }
 }
 
+/// Video Codec Configuretion.
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct VideoOptions {
@@ -407,6 +401,8 @@ pub struct SenderOptions {
 impl TryInto<sender::SenderOptions> for SenderOptions {
     type Error = anyhow::Error;
 
+    // Both video and audio are optional, so the type conversion here is a bit more
+    // complicated.
     #[rustfmt::skip]
     fn try_into(self) -> Result<sender::SenderOptions, Self::Error> {
         let mut options = sender::SenderOptions {
@@ -419,33 +415,23 @@ impl TryInto<sender::SenderOptions> for SenderOptions {
             let video = unsafe { &*self.video };
             let settings: VideoEncoderSettings = video.options.try_into()?;
 
+            // Check whether the external parameters are configured correctly to 
+            // avoid some clowns inserting some inexplicable parameters.
             ensure!(settings.codec == "libx264" || settings.codec == "h264_qsv", "invalid video encoder");
             ensure!(settings.width % 4 == 0 && settings.width <= 4096, "invalid video width");
             ensure!(settings.height % 4 == 0 && settings.height <= 2560, "invalid video height");
             ensure!(settings.frame_rate <= 60, "invalid video frame rate");
 
-            let source = unsafe { &*video.source };
             options.video = Some((
-                capture::Source {
-                    id: Strings::from(source.id).to_string()?,
-                    name: Strings::from(source.name).to_string()?,
-                    kind: source.kind.into(),
-                    index: source.index,
-                },
+                unsafe { &*video.source }.try_into()?,
                 settings,
             ));
         }
 
         if !self.audio.is_null() {
             let audio = unsafe { &*self.audio };
-            let source = unsafe { &*audio.source };
             options.audio = Some((
-                capture::Source {
-                    id: Strings::from(source.id).to_string()?,
-                    name: Strings::from(source.name).to_string()?,
-                    kind: source.kind.into(),
-                    index: source.index,
-                },
+                unsafe { &*audio.source }.try_into()?,
                 audio.options.try_into()?,
             ));
         }
@@ -559,6 +545,9 @@ pub extern "C" fn mirror_receiver_destroy(receiver: *const Receiver) {
     drop(unsafe { Box::from_raw(receiver as *mut Receiver) })
 }
 
+// In fact, this is a package that is convenient for recording errors. If the
+// result is an error message, it is output to the log. This function does not
+// make any changes to the result.
 #[inline]
 fn checker<T, E: Debug>(result: Result<T, E>) -> Result<T, E> {
     if let Err(e) = &result {
