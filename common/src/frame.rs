@@ -129,12 +129,12 @@ impl ReSampler {
             self.samples.clear();
             self.input_buffer.clear();
 
-            for item in buffer.chunks(channels) {
+            for item in buffer.iter().step_by(channels) {
                 if self.sampler.is_none() {
-                    self.samples.push(item[0]);
+                    self.samples.push(*item);
                 } else {
                     // need resample
-                    self.input_buffer.push(item[0] as f32);
+                    self.input_buffer.push(*item as f32);
                 }
             }
 
@@ -144,7 +144,7 @@ impl ReSampler {
                     &mut [&mut self.output_buffer],
                     None,
                 )?;
-                
+
                 for item in &self.output_buffer[..size] {
                     self.samples.push(*item as i16);
                 }

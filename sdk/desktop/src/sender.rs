@@ -214,6 +214,17 @@ impl Sender {
         let capture = Capture::default();
         let sink = Arc::new(sink);
 
+        if let Some((source, options)) = options.audio {
+            let codec = AudioSender::new(&adapter, &options, &sink)?;
+            capture.set_audio_source(
+                AudioCaptureSourceDescription {
+                    sample_rate: options.sample_rate as u32,
+                    source,
+                },
+                codec,
+            )?;
+        }
+
         if let Some((source, options)) = options.video {
             let codec = VideoSender::new(&adapter, &options, &sink)?;
             capture.set_video_source(
@@ -224,17 +235,6 @@ impl Sender {
                         width: options.width,
                         height: options.height,
                     },
-                },
-                codec,
-            )?;
-        }
-
-        if let Some((source, options)) = options.audio {
-            let codec = AudioSender::new(&adapter, &options, &sink)?;
-            capture.set_audio_source(
-                AudioCaptureSourceDescription {
-                    sample_rate: options.sample_rate as u32,
-                    source,
                 },
                 codec,
             )?;

@@ -61,7 +61,7 @@ bool MirrorServiceExt::CreateMirrorSender()
     video_options.encoder.bit_rate = 500 * 1024 * 8;
     video_options.source = &video_sources.items[0];
 
-    auto audio_sources = mirror_get_sources(SourceType::Microphone);
+    auto audio_sources = mirror_get_sources(SourceType::Audio);
 
     AudioOptions audio_options;
     audio_options.encoder.sample_rate = 48000;

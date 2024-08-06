@@ -10,27 +10,39 @@ use once_cell::sync::Lazy;
 // Just use a default audio port globally.
 static HOST: Lazy<Host> = Lazy::new(|| cpal::default_host());
 
+enum DeviceKind {
+    Input,
+    Output,
+}
+
 #[derive(Default)]
-pub struct MicrophoneCapture {
+pub struct AudioCapture {
     stream: Mutex<Option<Stream>>,
 }
 
-unsafe impl Send for MicrophoneCapture {}
-unsafe impl Sync for MicrophoneCapture {}
+unsafe impl Send for AudioCapture {}
+unsafe impl Sync for AudioCapture {}
 
-impl CaptureHandler for MicrophoneCapture {
+impl CaptureHandler for AudioCapture {
     type Frame = AudioFrame;
     type Error = anyhow::Error;
     type CaptureOptions = AudioCaptureSourceDescription;
 
     // Get the default input device. In theory, all microphones will be listed here.
     fn get_sources() -> Result<Vec<Source>, Self::Error> {
-        let mut sources = Vec::with_capacity(10);
-        for (index, device) in HOST.input_devices()?.enumerate() {
+        let mut sources = Vec::with_capacity(20);
+
+        // If you ever need to switch back to recording, you just need to capture the
+        // output device, which is really funny, but very simple and worth mentioning!
+        for (index, device) in HOST
+            .output_devices()?
+            .chain(HOST.input_devices()?)
+            .enumerate()
+        {
             sources.push(Source {
                 id: device.name()?,
                 name: device.name()?,
-                kind: SourceType::Microphone,
+                kind: SourceType::Audio,
                 index,
             });
         }
@@ -44,18 +56,23 @@ impl CaptureHandler for MicrophoneCapture {
         mut arrived: S,
     ) -> Result<(), Self::Error> {
         // Find devices with matching names
-        let device = HOST
-            .input_devices()?
-            .into_iter()
-            .find(|it| {
+        let (device, kind) = HOST
+            .output_devices()?
+            .map(|it| (it, DeviceKind::Output))
+            .chain(HOST.output_devices()?.map(|it| (it, DeviceKind::Input)))
+            .find(|(it, _)| {
                 it.name()
                     .map(|name| name == options.source.name)
                     .unwrap_or(false)
             })
             .ok_or_else(|| anyhow!("not found the audio source"))?;
 
+        let mut config: StreamConfig = match kind {
+            DeviceKind::Input => device.default_input_config()?.into(),
+            DeviceKind::Output => device.default_output_config()?.into(),
+        };
+
         // zero buffer size
-        let mut config: StreamConfig = device.default_input_config()?.into();
         config.buffer_size = BufferSize::Fixed(0);
 
         let mut frame = AudioFrame::default();

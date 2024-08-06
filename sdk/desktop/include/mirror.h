@@ -24,7 +24,7 @@ typedef enum
 {
     Camera = 1,
     Screen = 2,
-    Microphone = 3,
+    Audio = 3,
 } SourceType;
 
 typedef struct

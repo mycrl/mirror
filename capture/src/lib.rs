@@ -1,4 +1,4 @@
-mod microphone;
+mod audio;
 
 #[cfg(target_os = "windows")]
 mod win32;
@@ -6,7 +6,7 @@ mod win32;
 #[cfg(target_os = "windows")]
 use self::win32::{camera::CameraCapture, screen::ScreenCapture};
 
-use self::microphone::MicrophoneCapture;
+use self::audio::AudioCapture;
 
 use anyhow::Result;
 use common::frame::{AudioFrame, VideoFrame};
@@ -70,7 +70,7 @@ pub fn shutdown() -> Result<()> {
 pub enum SourceType {
     Camera = 1,
     Screen = 2,
-    Microphone = 3,
+    Audio = 3,
 }
 
 #[derive(Debug, Clone)]
@@ -104,7 +104,7 @@ pub struct AudioCaptureSourceDescription {
 pub struct Capture {
     camera: CameraCapture,
     screen: ScreenCapture,
-    microphone: MicrophoneCapture,
+    audio: AudioCapture,
 }
 
 impl Capture {
@@ -115,7 +115,7 @@ impl Capture {
         Ok(match kind {
             SourceType::Camera => CameraCapture::get_sources()?,
             SourceType::Screen => ScreenCapture::get_sources()?,
-            SourceType::Microphone => MicrophoneCapture::get_sources()?,
+            SourceType::Audio => AudioCapture::get_sources()?,
         })
     }
 
@@ -136,7 +136,7 @@ impl Capture {
         Ok(())
     }
 
-    /// Capture audio devices, including microphone or system.
+    /// Capture audio devices, including audio or system.
     pub fn set_audio_source<T: FrameArrived<Frame = AudioFrame> + 'static>(
         &self,
         description: AudioCaptureSourceDescription,
@@ -145,7 +145,7 @@ impl Capture {
         log::info!("capture set audio source, description={:?}", description);
 
         match description.source.kind {
-            SourceType::Microphone => self.microphone.start(description, arrived)?,
+            SourceType::Audio => self.audio.start(description, arrived)?,
             _ => (),
         }
 
@@ -157,8 +157,7 @@ impl Capture {
 
         self.camera.stop()?;
         self.screen.stop()?;
-        self.microphone.stop()?;
-
+        self.audio.stop()?;
         Ok(())
     }
 }
