@@ -15,12 +15,16 @@ use std::{
 use std::{ffi::CString, mem::ManuallyDrop};
 
 use anyhow::ensure;
+use codec::VideoEncoderSettings;
 use common::{
     atomic::EasyAtomic,
     frame::{AudioFrame, VideoFrame},
-    jump_current_exe_dir,
+    jump_current_exe_dir, logger,
     strings::Strings,
 };
+
+#[cfg(not(target_os = "macos"))]
+use capture::Capture;
 
 #[cfg(target_os = "windows")]
 use windows::Win32::System::Threading::{GetCurrentProcess, SetPriorityClass, HIGH_PRIORITY_CLASS};
@@ -57,16 +61,22 @@ pub extern "C" fn mirror_load() -> bool {
         return false;
     }
 
-    #[cfg(debug_assertions)]
+    if logger::init(
+        log::LevelFilter::Info,
+        if cfg!(debug_assertions) {
+            Some("mirror.log")
+        } else {
+            None
+        },
+    )
+    .is_err()
     {
-        if common::logger::init("mirror.log", log::LevelFilter::Info).is_err() {
-            return false;
-        }
-
-        std::panic::set_hook(Box::new(|info| {
-            log::error!("{:?}", info);
-        }));
+        return false;
     }
+
+    std::panic::set_hook(Box::new(|info| {
+        log::error!("{:?}", info);
+    }));
 
     true
 }
@@ -144,6 +154,97 @@ pub extern "C" fn mirror_destroy(mirror: *const Mirror) {
 
     log::info!("extern api: mirror destroy");
     drop(unsafe { Box::from_raw(mirror as *mut Mirror) });
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SourceType {
+    Camera,
+    Screen,
+    Microphone,
+}
+
+impl Into<capture::SourceType> for SourceType {
+    fn into(self) -> capture::SourceType {
+        match self {
+            Self::Camera => capture::SourceType::Camera,
+            Self::Screen => capture::SourceType::Screen,
+            Self::Microphone => capture::SourceType::Microphone,
+        }
+    }
+}
+
+impl From<capture::SourceType> for SourceType {
+    fn from(value: capture::SourceType) -> Self {
+        match value {
+            capture::SourceType::Camera => Self::Camera,
+            capture::SourceType::Screen => Self::Screen,
+            capture::SourceType::Microphone => Self::Microphone,
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Debug)]
+#[cfg(not(target_os = "macos"))]
+pub struct Source {
+    index: usize,
+    kind: SourceType,
+    id: *const c_char,
+    name: *const c_char,
+}
+
+#[repr(C)]
+#[derive(Debug)]
+#[cfg(not(target_os = "macos"))]
+pub struct Sources {
+    items: *mut Source,
+    capacity: usize,
+    size: usize,
+}
+
+/// Get capture sources from sender.
+#[no_mangle]
+#[cfg(not(target_os = "macos"))]
+pub extern "C" fn mirror_get_sources(kind: SourceType) -> Sources {
+    log::info!("extern api: mirror get sources: kind={:?}", kind);
+
+    let mut items = ManuallyDrop::new(
+        Capture::get_sources(kind.into())
+            .unwrap_or_else(|_| Vec::new())
+            .into_iter()
+            .map(|item| {
+                log::info!("source: {:?}", item);
+
+                Source {
+                    index: item.index,
+                    kind: SourceType::from(item.kind),
+                    id: CString::new(item.id).unwrap().into_raw(),
+                    name: CString::new(item.name).unwrap().into_raw(),
+                }
+            })
+            .collect::<Vec<Source>>(),
+    );
+
+    Sources {
+        items: items.as_mut_ptr(),
+        capacity: items.capacity(),
+        size: items.len(),
+    }
+}
+
+/// Because `Sources` are allocated internally, they also need to be released
+/// internally.
+#[no_mangle]
+#[cfg(not(target_os = "macos"))]
+pub extern "C" fn mirror_sources_destroy(sources: *const Sources) {
+    assert!(!sources.is_null());
+
+    let sources = unsafe { &*sources };
+    for item in unsafe { Vec::from_raw_parts(sources.items, sources.size, sources.capacity) } {
+        drop(unsafe { CString::from_raw(item.id as *mut _) });
+        drop(unsafe { CString::from_raw(item.name as *mut _) });
+    }
 }
 
 #[repr(C)]
@@ -289,22 +390,67 @@ impl Into<codec::AudioEncoderSettings> for AudioOptions {
 }
 
 #[repr(C)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug)]
+pub struct SenderSourceOptions<T> {
+    source: *const Source,
+    options: T,
+}
+
+#[repr(C)]
+#[derive(Debug)]
 pub struct SenderOptions {
-    video: VideoOptions,
-    audio: AudioOptions,
+    video: *const SenderSourceOptions<VideoOptions>,
+    audio: *const SenderSourceOptions<AudioOptions>,
     multicast: bool,
 }
 
 impl TryInto<sender::SenderOptions> for SenderOptions {
     type Error = anyhow::Error;
 
+    #[rustfmt::skip]
     fn try_into(self) -> Result<sender::SenderOptions, Self::Error> {
-        Ok(sender::SenderOptions {
-            audio: self.audio.try_into()?,
-            video: self.video.try_into()?,
+        let mut options = sender::SenderOptions {
             multicast: self.multicast,
-        })
+            audio: None,
+            video: None,
+        };
+
+        if !self.video.is_null() {
+            let video = unsafe { &*self.video };
+            let settings: VideoEncoderSettings = video.options.try_into()?;
+
+            ensure!(settings.codec == "libx264" || settings.codec == "h264_qsv", "invalid video encoder");
+            ensure!(settings.width % 4 == 0 && settings.width <= 4096, "invalid video width");
+            ensure!(settings.height % 4 == 0 && settings.height <= 2560, "invalid video height");
+            ensure!(settings.frame_rate <= 60, "invalid video frame rate");
+
+            let source = unsafe { &*video.source };
+            options.video = Some((
+                capture::Source {
+                    id: Strings::from(source.id).to_string()?,
+                    name: Strings::from(source.name).to_string()?,
+                    kind: source.kind.into(),
+                    index: source.index,
+                },
+                settings,
+            ));
+        }
+
+        if !self.audio.is_null() {
+            let audio = unsafe { &*self.audio };
+            let source = unsafe { &*audio.source };
+            options.audio = Some((
+                capture::Source {
+                    id: Strings::from(source.id).to_string()?,
+                    name: Strings::from(source.name).to_string()?,
+                    kind: source.kind.into(),
+                    index: source.index,
+                },
+                audio.options.try_into()?,
+            ));
+        }
+
+        Ok(options)
     }
 }
 
@@ -330,14 +476,8 @@ pub extern "C" fn mirror_create_sender(
 
     let func = || {
         let options: sender::SenderOptions = options.try_into()?;
-        
         log::info!("mirror create options={:?}", options);
         
-        ensure!(options.video.codec == "libx264" || options.video.codec == "h264_qsv", "invalid video encoder");
-        ensure!(options.video.width % 4 == 0 && options.video.width <= 4096, "invalid video width");
-        ensure!(options.video.height % 4 == 0 && options.video.height <= 2560, "invalid video height");
-        ensure!(options.video.frame_rate <= 60, "invalid video frame rate");
-
         unsafe { &*mirror }
             .0
             .create_sender(id as u32, options, sink.into())
@@ -346,121 +486,6 @@ pub extern "C" fn mirror_create_sender(
     checker(func())
     .map(|sender| Box::into_raw(Box::new(Sender(sender))))
     .unwrap_or_else(|_| null_mut())
-}
-
-#[repr(C)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SourceType {
-    Camera,
-    Screen,
-    Audio,
-}
-
-impl Into<capture::SourceType> for SourceType {
-    fn into(self) -> capture::SourceType {
-        match self {
-            Self::Camera => capture::SourceType::Camera,
-            Self::Screen => capture::SourceType::Screen,
-            Self::Audio => capture::SourceType::Audio,
-        }
-    }
-}
-
-impl From<capture::SourceType> for SourceType {
-    fn from(value: capture::SourceType) -> Self {
-        match value {
-            capture::SourceType::Camera => Self::Camera,
-            capture::SourceType::Screen => Self::Screen,
-            capture::SourceType::Audio => Self::Audio,
-        }
-    }
-}
-
-#[repr(C)]
-#[derive(Debug)]
-#[cfg(not(target_os = "macos"))]
-pub struct Source {
-    index: usize,
-    kind: SourceType,
-    id: *const c_char,
-    name: *const c_char,
-}
-
-#[repr(C)]
-#[derive(Debug)]
-#[cfg(not(target_os = "macos"))]
-pub struct Sources {
-    items: *mut Source,
-    capacity: usize,
-    size: usize,
-}
-
-/// Get capture sources from sender.
-#[no_mangle]
-#[cfg(not(target_os = "macos"))]
-pub extern "C" fn mirror_sender_get_sources(sender: *const Sender, kind: SourceType) -> Sources {
-    assert!(!sender.is_null());
-
-    log::info!("extern api: mirror sender get sources: kind={:?}", kind);
-
-    let mut items = ManuallyDrop::new(
-        unsafe { &*sender }
-            .0
-            .get_sources(kind.into())
-            .unwrap_or_else(|_| Vec::new())
-            .into_iter()
-            .map(|item| Source {
-                index: item.index,
-                kind: SourceType::from(item.kind),
-                id: CString::new(item.id).unwrap().into_raw(),
-                name: CString::new(item.name).unwrap().into_raw(),
-            })
-            .collect::<Vec<Source>>(),
-    );
-
-    Sources {
-        items: items.as_mut_ptr(),
-        capacity: items.capacity(),
-        size: items.len(),
-    }
-}
-
-/// Because `Sources` are allocated internally, they also need to be released
-/// internally.
-#[no_mangle]
-#[cfg(not(target_os = "macos"))]
-pub extern "C" fn mirror_sources_destroy(sources: *const Sources) {
-    assert!(!sources.is_null());
-
-    let sources = unsafe { &*sources };
-    for item in unsafe { Vec::from_raw_parts(sources.items, sources.size, sources.capacity) } {
-        drop(unsafe { CString::from_raw(item.id as *mut _) });
-        drop(unsafe { CString::from_raw(item.name as *mut _) });
-    }
-}
-
-/// Set video capture sources to sender.
-#[no_mangle]
-#[cfg(not(target_os = "macos"))]
-pub extern "C" fn mirror_sender_set_video_source(
-    sender: *const Sender,
-    source: *const Source,
-) -> bool {
-    assert!(!sender.is_null() && !source.is_null());
-
-    log::info!("extern api: mirror sender set video source");
-
-    let func = || {
-        let source = unsafe { &*source };
-        unsafe { &*sender }.0.set_video_source(capture::Source {
-            id: Strings::from(source.id).to_string()?,
-            name: Strings::from(source.name).to_string()?,
-            kind: source.kind.into(),
-            index: source.index,
-        })
-    };
-
-    checker(func()).is_ok()
 }
 
 /// Set whether the sender uses multicast transmission.

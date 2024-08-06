@@ -9,7 +9,7 @@ name = "renderer"
 
 [dependencies]
 anyhow = "1.0.86"
+cpal = "0.15.3"
 common = { path = "../../common" }
 sdl2 = { version = "0.37.0", features = ["bundled", "static-link", "raw-window-handle"] }
-cpal = "0.15.3"
 log = "0.4.20"

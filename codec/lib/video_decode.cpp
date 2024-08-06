@@ -187,8 +187,8 @@ VideoFrame* codec_video_decoder_read_frame(VideoDecoder* codec)
         return nullptr;
     }
 
-    codec->output_frame->rect.width = codec->frame->width;
-    codec->output_frame->rect.height = codec->frame->height;
+    codec->output_frame->width = codec->frame->width;
+    codec->output_frame->height = codec->frame->height;
 
     if (codec->frame->format != AV_PIX_FMT_NV12 && !codec->format_format.has_value())
     {

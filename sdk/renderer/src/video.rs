@@ -106,8 +106,8 @@ impl VideoRender {
                     self.renderer,
                     SDL_PixelFormatEnum::SDL_PIXELFORMAT_NV12 as u32,
                     SDL_TextureAccess::SDL_TEXTUREACCESS_STREAMING as c_int,
-                    frame.rect.width as c_int,
-                    frame.rect.height as c_int,
+                    frame.width as c_int,
+                    frame.height as c_int,
                 )
             };
 

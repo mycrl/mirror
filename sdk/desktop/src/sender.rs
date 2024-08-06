@@ -1,16 +1,23 @@
 use crate::factory::FrameSink;
 
-use std::sync::{Arc, Mutex, Weak};
+use std::{
+    mem::size_of,
+    sync::{Arc, Mutex, Weak},
+};
 
 use anyhow::Result;
 use bytes::BytesMut;
-use capture::{Capture, FrameArrived, Size, Source, SourceType, VideoCaptureSourceDescription};
+use capture::{
+    AudioCaptureSourceDescription, Capture, FrameArrived, Size, Source,
+    VideoCaptureSourceDescription,
+};
+
 use codec::{
     audio::create_opus_identification_header, AudioEncoder, AudioEncoderSettings, VideoEncoder,
     VideoEncoderSettings,
 };
 
-use common::frame::{AudioFormat, AudioFrame, VideoFrame};
+use common::frame::{AudioFrame, VideoFrame};
 use transport::{
     adapter::{BufferFlag, StreamBufferInfo, StreamSenderAdapter},
     package,
@@ -127,15 +134,17 @@ impl FrameArrived for AudioSender {
         let ret = if let Some(adapter) = self.adapter.upgrade() {
             let mut buffer = self.buffer.lock().unwrap();
             buffer.extend_from_slice(unsafe {
-                std::slice::from_raw_parts(frame.data, frame.frames as usize * 2)
+                std::slice::from_raw_parts(
+                    frame.data as *const _,
+                    frame.frames as usize * size_of::<f32>(),
+                )
             });
 
             if buffer.len() >= self.frames * 2 {
                 let payload = buffer.split_to(self.frames * 2);
                 let frame = AudioFrame {
-                    format: AudioFormat::AUDIO_S16,
+                    data: payload.as_ptr() as *const _,
                     frames: self.frames as u32,
-                    data: payload.as_ptr(),
                     sample_rate: 0,
                 };
 
@@ -174,14 +183,13 @@ impl FrameArrived for AudioSender {
 
 #[derive(Debug)]
 pub struct SenderOptions {
-    pub video: VideoEncoderSettings,
-    pub audio: AudioEncoderSettings,
+    pub video: Option<(Source, VideoEncoderSettings)>,
+    pub audio: Option<(Source, AudioEncoderSettings)>,
     pub multicast: bool,
 }
 
 pub struct Sender {
     pub(crate) adapter: Arc<StreamSenderAdapter>,
-    options: SenderOptions,
     sink: Arc<FrameSink>,
     capture: Capture,
 }
@@ -190,34 +198,39 @@ impl Sender {
     pub fn new(options: SenderOptions, sink: FrameSink) -> Result<Self> {
         log::info!("create sender");
 
-        Ok(Self {
-            adapter: StreamSenderAdapter::new(options.multicast),
-            capture: Capture::new()?,
-            sink: Arc::new(sink),
-            options,
-        })
-    }
+        let adapter = StreamSenderAdapter::new(options.multicast);
+        let capture = Capture::default();
+        let sink = Arc::new(sink);
 
-    pub fn get_sources(&self, kind: SourceType) -> Result<Vec<Source>> {
-        self.capture.get_sources(kind)
-    }
-
-    pub fn set_video_source(&self, source: Source) -> Result<()> {
-        log::info!("sender set source={:?}", source);
-
-        self.capture.set_video_source(
-            VideoCaptureSourceDescription {
-                fps: self.options.video.frame_rate,
-                source,
-                size: Size {
-                    width: self.options.video.width,
-                    height: self.options.video.height,
+        if let Some((source, options)) = options.video {
+            capture.set_video_source(
+                VideoCaptureSourceDescription {
+                    fps: options.frame_rate,
+                    source,
+                    size: Size {
+                        width: options.width,
+                        height: options.height,
+                    },
                 },
-            },
-            VideoSender::new(&self.adapter, &self.options.video, &self.sink)?,
-        )?;
+                VideoSender::new(&adapter, &options, &sink)?,
+            )?;
+        }
 
-        Ok(())
+        if let Some((source, options)) = options.audio {
+            capture.set_audio_source(
+                AudioCaptureSourceDescription {
+                    sample_rate: options.sample_rate as u32,
+                    source,
+                },
+                AudioSender::new(&adapter, &options, &sink)?,
+            )?;
+        }
+
+        Ok(Self {
+            adapter,
+            capture,
+            sink,
+        })
     }
 
     pub fn get_multicast(&self) -> bool {
@@ -233,6 +246,7 @@ impl Drop for Sender {
     fn drop(&mut self) {
         log::info!("sender drop");
 
+        let _ = self.capture.close();
         self.adapter.close();
         (self.sink.close)()
     }

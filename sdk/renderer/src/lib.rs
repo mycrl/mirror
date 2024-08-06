@@ -7,7 +7,11 @@ use std::{
 };
 
 use audio::AudioPlayer;
-use common::frame::{AudioFrame, VideoFrame};
+use common::{
+    frame::{AudioFrame, VideoFrame},
+    jump_current_exe_dir, logger,
+};
+
 use video::{Size, VideoRender, WindowHandle};
 
 #[repr(C)]
@@ -31,12 +35,18 @@ extern "system" fn DllMain(
     _call_reason: usize,
     _reserved: *const c_void,
 ) -> bool {
-    #[cfg(debug_assertions)]
-    {
-        if common::jump_current_exe_dir().is_ok() {
-            if common::logger::init("renderer.log", log::LevelFilter::Info).is_err() {
-                return false;
-            }
+    if jump_current_exe_dir().is_ok() {
+        if logger::init(
+            log::LevelFilter::Info,
+            if cfg!(debug_assertions) {
+                Some("renderer.log")
+            } else {
+                None
+            },
+        )
+        .is_err()
+        {
+            return false;
         }
     }
 

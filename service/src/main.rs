@@ -29,7 +29,7 @@ fn main() -> Result<()> {
     // Initialize srt and logger
     srt::startup();
     jump_current_exe_dir()?;
-    logger::init("mirror-service.log", LevelFilter::Info)?;
+    logger::init(LevelFilter::Info, Some("mirror-service.log"))?;
 
     // Parse command line parameters. Note that if the command line parameters are
     // incorrect, panic will occur.

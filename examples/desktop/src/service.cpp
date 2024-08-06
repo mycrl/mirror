@@ -50,15 +50,27 @@ bool MirrorServiceExt::CreateMirrorSender()
         return false;
     }
 
+    auto video_sources = mirror_get_sources(SourceType::Screen);
+
+    VideoOptions video_options;
+    video_options.encoder.codec = const_cast<char*>(_args.ArgsParams.encoder.c_str());
+    video_options.encoder.width = _args.ArgsParams.width;
+    video_options.encoder.height = _args.ArgsParams.height;
+    video_options.encoder.frame_rate = _args.ArgsParams.fps;
+    video_options.encoder.key_frame_interval = 21;
+    video_options.encoder.bit_rate = 500 * 1024 * 8;
+    video_options.source = &video_sources.items[0];
+
+    auto audio_sources = mirror_get_sources(SourceType::Microphone);
+
+    AudioOptions audio_options;
+    audio_options.encoder.sample_rate = 48000;
+    audio_options.encoder.bit_rate = 64000;
+    audio_options.source = &audio_sources.items[0];
+
     SenderOptions options;
-    options.video.codec = const_cast<char*>(_args.ArgsParams.encoder.c_str());
-    options.video.width = _args.ArgsParams.width;
-    options.video.height = _args.ArgsParams.height;
-    options.video.frame_rate = _args.ArgsParams.fps;
-    options.video.key_frame_interval = 21;
-    options.video.bit_rate = 500 * 1024 * 8;
-    options.audio.sample_rate = 48000;
-    options.audio.bit_rate = 64000;
+    options.video = &video_options;
+    options.audio = &audio_options;
     options.multicast = false;
 
     FrameSink sink;
@@ -73,9 +85,6 @@ bool MirrorServiceExt::CreateMirrorSender()
     {
         return false;
     }
-
-    auto sources = mirror_sender_get_sources(_sender, SourceType::Screen);
-    mirror_sender_set_video_source(_sender, &sources.items[0]);
 
     _render->SetTitle("sender");
     return true;

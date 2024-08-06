@@ -1,11 +1,8 @@
 use std::ptr::null;
 
-#[repr(C)]
-#[derive(Default, Debug, Clone, Copy)]
-pub struct VideoFrameRect {
-    pub width: usize,
-    pub height: usize,
-}
+use rubato::{
+    FastFixedIn, PolynomialDegree, ResampleResult, Resampler, ResamplerConstructionError,
+};
 
 /// YCbCr (NV12)
 ///
@@ -29,7 +26,8 @@ pub struct VideoFrameRect {
 #[repr(C)]
 #[derive(Debug)]
 pub struct VideoFrame {
-    pub rect: VideoFrameRect,
+    pub width: u32,
+    pub height: u32,
     pub data: [*const u8; 2],
     pub linesize: [usize; 2],
 }
@@ -40,31 +38,12 @@ unsafe impl Send for VideoFrame {}
 impl Default for VideoFrame {
     fn default() -> Self {
         Self {
+            width: 0,
+            height: 0,
             linesize: [0, 0],
             data: [null(), null()],
-            rect: VideoFrameRect::default(),
         }
     }
-}
-
-#[repr(C)]
-#[allow(non_camel_case_types)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AudioFormat {
-    AUDIO_NONE = -1,
-    AUDIO_U8,   // unsigned 8 bits
-    AUDIO_S16,  // signed 16 bits
-    AUDIO_S32,  // signed 32 bits
-    AUDIO_FLT,  // float
-    AUDIO_DBL,  // double
-    AUDIO_U8P,  // unsigned 8 bits, planar
-    AUDIO_S16P, // signed 16 bits, planar
-    AUDIO_S32P, // signed 32 bits, planar
-    AUDIO_FLTP, // float, planar
-    AUDIO_DBLP, // double, planar
-    AUDIO_S64,  // signed 64 bits
-    AUDIO_S64P, // signed 64 bits, planar
-    AUDIO_NB,   // Number of sample formats.
 }
 
 /// Pulse-code modulation
@@ -91,9 +70,8 @@ pub enum AudioFormat {
 #[derive(Debug)]
 pub struct AudioFrame {
     pub sample_rate: u32,
-    pub format: AudioFormat,
     pub frames: u32,
-    pub data: *const u8,
+    pub data: *const f32,
 }
 
 unsafe impl Sync for AudioFrame {}
@@ -105,7 +83,65 @@ impl Default for AudioFrame {
             frames: 0,
             data: null(),
             sample_rate: 0,
-            format: AudioFormat::AUDIO_S16,
         }
+    }
+}
+
+/// Audio resampler, quickly resample input to a single channel count and
+/// different sampling rates.
+///
+/// Note that due to the fast sampling, the quality may be reduced.
+pub struct ReSampler {
+    sampler: Option<FastFixedIn<f32>>,
+    input_buffer: Vec<f32>,
+    output_buffer: Vec<f32>,
+}
+
+impl ReSampler {
+    pub fn new(input: f64, output: f64, frames: usize) -> Result<Self, ResamplerConstructionError> {
+        Ok(Self {
+            input_buffer: Vec::with_capacity(frames),
+            output_buffer: Vec::with_capacity(frames),
+            sampler: if input != output {
+                Some(FastFixedIn::new(
+                    output / input,
+                    2.0,
+                    PolynomialDegree::Linear,
+                    frames,
+                    1,
+                )?)
+            } else {
+                None
+            },
+        })
+    }
+
+    pub fn resample<'a>(
+        &'a mut self,
+        buffer: &'a [f32],
+        channels: usize,
+    ) -> ResampleResult<&'a [f32]> {
+        // If the input channel is originally a single channel, there is no need to
+        // extract channel data.
+        let input = if channels == 1 {
+            buffer
+        } else {
+            self.input_buffer.clear();
+            for item in buffer.chunks(channels) {
+                self.input_buffer.push(item[0]);
+            }
+
+            &self.input_buffer[..]
+        };
+
+        // If the sampler implementation is empty, then no resampling is required at
+        // all, since the input and output have the same sample rate.
+        Ok(if let Some(sampler) = &mut self.sampler {
+            let (_, size) =
+                sampler.process_into_buffer(&[input], &mut [&mut self.output_buffer], None)?;
+            &self.output_buffer[..size]
+        } else {
+            input
+        })
     }
 }

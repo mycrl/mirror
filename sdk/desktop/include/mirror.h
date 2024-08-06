@@ -24,7 +24,7 @@ typedef enum
 {
     Camera,
     Screen,
-    Audio,
+    Microphone,
 } SourceType;
 
 typedef struct
@@ -70,7 +70,7 @@ typedef struct
      * keyframe.
      */
     uint32_t key_frame_interval;
-} VideoOptions;
+} VideoEncoderOptions;
 
 typedef struct
 {
@@ -82,12 +82,24 @@ typedef struct
      * The bit rate of the video encoding.
      */
     uint64_t bit_rate;
+} AudioEncoderOptions;
+
+typedef struct
+{
+    Source* source;
+    VideoEncoderOptions encoder;
+} VideoOptions;
+
+typedef struct
+{
+    Source* source;
+    AudioEncoderOptions encoder;
 } AudioOptions;
 
 typedef struct
 {
-    VideoOptions video;
-    AudioOptions audio;
+    VideoOptions* video;
+    AudioOptions* audio;
     bool multicast;
 } SenderOptions;
 
@@ -229,27 +241,22 @@ EXPORT void mirror_destroy(Mirror mirror);
 #ifndef MACOS
 
 /**
+ * Get capture sources.
+ */
+EXPORT Sources mirror_get_sources(SourceType kind);
+
+/**
+ * Because `Sources` are allocated internally, they also need to be released
+ * internally.
+ */
+EXPORT void mirror_sources_destroy(Sources* sources);
+
+/**
  * Create a sender, specify a bound NIC address, you can pass callback to
  * get the device screen or sound callback, callback can be null, if it is
  * null then it means no callback data is needed.
  */
 EXPORT Sender mirror_create_sender(Mirror mirror, int id, SenderOptions options, FrameSink sink);
-
-/**
- * Get capture sources from sender.
- */
-EXPORT Sources mirror_sender_get_sources(Sender sender, SourceType kind);
-
-/**
- * Because `Sources` are allocated internally, they also need to be released
- * internally. 
- */
-EXPORT void mirror_sources_destroy(Sources* sources);
-
-/**
- * Set video capture sources to sender.
- */
-EXPORT bool mirror_sender_set_video_source(Sender sender, Source* source);
 
 /**
  * Get whether the sender uses multicast transmission.

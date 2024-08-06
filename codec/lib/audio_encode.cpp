@@ -31,7 +31,7 @@ AudioEncoder* codec_create_audio_encoder(AudioEncoderSettings* settings)
 		return nullptr;
 	}
 
-    codec->context->sample_fmt = AV_SAMPLE_FMT_S16;
+    codec->context->sample_fmt = AV_SAMPLE_FMT_FLT;
     codec->context->ch_layout = AV_CHANNEL_LAYOUT_MONO;
     codec->context->flags |= AV_CODEC_FLAG_LOW_DELAY;
 	codec->context->flags2 |= AV_CODEC_FLAG2_FAST;
@@ -90,8 +90,8 @@ bool codec_audio_encoder_copy_frame(AudioEncoder* codec, AudioFrame* frame)
 
 	av_samples_fill_arrays(codec->frame->data, 
 						   codec->frame->linesize, 
-						   frame->data, 
-						   1, 
+						   (const uint8_t*)frame->data, 
+						   1,
 						   frame->frames, 
 						   AV_SAMPLE_FMT_S16, 
 						   0);
