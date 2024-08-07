@@ -115,6 +115,7 @@ pub struct Capture {
 
 impl Capture {
     /// Returns a list of devices by type.
+    #[allow(unreachable_patterns)]
     pub fn get_sources(kind: SourceType) -> Result<Vec<Source>> {
         log::info!("capture get sources, kind={:?}", kind);
 

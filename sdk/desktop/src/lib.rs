@@ -549,6 +549,10 @@ pub extern "C" fn mirror_receiver_destroy(receiver: *const Receiver) {
 fn checker<T, E: Debug>(result: Result<T, E>) -> Result<T, E> {
     if let Err(e) = &result {
         log::error!("{:?}", e);
+
+        if cfg!(debug_assertions) {
+            println!("{:?}", e);
+        }
     }
 
     result
