@@ -4,8 +4,11 @@ pub mod screen;
 use anyhow::Result;
 use windows::{
     core::{GUID, HSTRING, PCWSTR, PWSTR},
-    Win32::Media::MediaFoundation::{
-        IMFActivate, IMFAttributes, IMFMediaType, MFShutdown, MFStartup, MF_VERSION,
+    Win32::{
+        Media::MediaFoundation::{
+            IMFActivate, IMFAttributes, IMFMediaType, MFShutdown, MFStartup, MF_VERSION,
+        },
+        System::Com::{CoInitializeEx, CoUninitialize, COINIT_MULTITHREADED},
     },
 };
 
@@ -83,7 +86,11 @@ impl AsIMFAttributes for IMFMediaType {
 
 /// Initializes Microsoft Media Foundation.
 pub fn startup() -> Result<()> {
-    unsafe { MFStartup(MF_VERSION, 0) }?;
+    unsafe {
+        CoInitializeEx(None, COINIT_MULTITHREADED).ok()?;
+        MFStartup(MF_VERSION, 0)?;
+    }
+
     Ok(())
 }
 
@@ -91,6 +98,10 @@ pub fn startup() -> Result<()> {
 /// once for every call to MFStartup. Do not call this function from work
 /// queue threads.
 pub fn shutdown() -> Result<()> {
-    unsafe { MFShutdown() }?;
+    unsafe {
+        MFShutdown()?;
+        CoUninitialize();
+    }
+
     Ok(())
 }

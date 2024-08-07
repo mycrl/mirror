@@ -29,29 +29,32 @@ impl From<RawSize> for Size {
     }
 }
 
+/// Windows yes! The Windows dynamic library has an entry, so just initialize
+/// the logger and set the process priority at the entry.
 #[no_mangle]
-extern "system" fn DllMain(
-    _dll_module: u32,
-    _call_reason: usize,
-    _reserved: *const c_void,
-) -> bool {
-    logger::init(
-        log::LevelFilter::Info,
-        if cfg!(debug_assertions) {
-            Some("renderer.log")
-        } else {
-            None
+extern "system" fn DllMain(_module: u32, call_reason: usize, _reserved: *const c_void) -> bool {
+    match call_reason {
+        1 /* DLL_PROCESS_ATTACH */ => {
+            logger::init(
+                log::LevelFilter::Info,
+                if cfg!(debug_assertions) {
+                    Some("renderer.log")
+                } else {
+                    None
+                },
+            )
+            .is_ok()
         },
-    )
-    .is_ok()
+        _ => true,
+    }
 }
 
 /// Create the window handle used by the SDK through the original window handle.
 #[no_mangle]
 #[cfg(target_os = "windows")]
 extern "C" fn renderer_create_window_handle(
-    hwnd: *mut std::ffi::c_void,
-    _hinstance: *mut std::ffi::c_void,
+    hwnd: *mut c_void,
+    _hinstance: *mut c_void,
 ) -> *const WindowHandle {
     assert!(!hwnd.is_null());
 

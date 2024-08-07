@@ -148,7 +148,6 @@ void MirrorServiceExt::Close()
         _mirror = nullptr;
     }
 
-    mirror_shutdown();
     _render->SetTitle("");
     _render->Clear();
 }
@@ -166,7 +165,6 @@ bool MirrorServiceExt::_create_mirror()
     }
 
     is_created = true;
-    mirror_startup();
 
     MirrorOptions mirror_options;
     mirror_options.server = const_cast<char*>(_args.ArgsParams.server.c_str());

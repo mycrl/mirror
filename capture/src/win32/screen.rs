@@ -21,10 +21,11 @@ use windows::{
             CLSID_VideoProcessorMFT, IMF2DBuffer, IMFMediaBuffer, IMFTransform,
             MFCreate2DMediaBuffer, MFCreateDXGISurfaceBuffer, MFCreateMediaType, MFCreateSample,
             MFMediaType_Video, MFVideoFormat_NV12, MFVideoFormat_RGB32,
-            MFVideoInterlace_Progressive, MFT_MESSAGE_NOTIFY_BEGIN_STREAMING,
-            MFT_MESSAGE_NOTIFY_END_OF_STREAM, MFT_OUTPUT_DATA_BUFFER,
-            MFT_OUTPUT_STATUS_SAMPLE_READY, MF_E_TRANSFORM_NEED_MORE_INPUT, MF_MT_FRAME_RATE,
-            MF_MT_FRAME_SIZE, MF_MT_INTERLACE_MODE, MF_MT_MAJOR_TYPE, MF_MT_SUBTYPE,
+            MFVideoInterlace_Progressive, MFT_INPUT_STATUS_ACCEPT_DATA,
+            MFT_MESSAGE_NOTIFY_BEGIN_STREAMING, MFT_MESSAGE_NOTIFY_END_OF_STREAM,
+            MFT_OUTPUT_DATA_BUFFER, MFT_OUTPUT_STATUS_SAMPLE_READY, MF_E_TRANSFORM_NEED_MORE_INPUT,
+            MF_MT_FRAME_RATE, MF_MT_FRAME_SIZE, MF_MT_INTERLACE_MODE, MF_MT_MAJOR_TYPE,
+            MF_MT_SUBTYPE,
         },
         System::Com::{CoCreateInstance, CLSCTX_INPROC_SERVER},
     },
@@ -146,51 +147,59 @@ impl Transform {
     // little about the order of operations, other than what is documented in the
     // calls themselves.
     fn process(&self, texture: &ID3D11Texture2D) -> Result<Option<IMFMediaBuffer>> {
-        // Creates a media buffer to manage a Microsoft DirectX Graphics Infrastructure
-        // (DXGI) surface.
-        let buffer =
-            unsafe { MFCreateDXGISurfaceBuffer(&ID3D11Texture2D::IID, texture, 0, false)? };
+        if unsafe { self.processor.GetInputStatus(0)? } == MFT_INPUT_STATUS_ACCEPT_DATA.0 as u32 {
+            // Creates a media buffer to manage a Microsoft DirectX Graphics Infrastructure
+            // (DXGI) surface.
+            let buffer =
+                unsafe { MFCreateDXGISurfaceBuffer(&ID3D11Texture2D::IID, texture, 0, false)? };
 
-        // Call IMFTransform::ProcessInput on at least one input stream to deliver an
-        // input sample to the MFT.
-        let sample = unsafe { MFCreateSample()? };
-        unsafe { sample.AddBuffer(&buffer)? };
-        let _ = unsafe { self.processor.ProcessInput(0, &sample, 0) };
+            // Call IMFTransform::ProcessInput on at least one input stream to deliver an
+            // input sample to the MFT.
+            let sample = unsafe { MFCreateSample()? };
+            unsafe { sample.AddBuffer(&buffer)? };
+            unsafe { self.processor.ProcessInput(0, &sample, 0)? };
+        }
 
         // Call IMFTransform::GetOutputStatus to query whether the MFT can generate an
         // output sample.
-        if unsafe { self.processor.GetOutputStatus()? } != MFT_OUTPUT_STATUS_SAMPLE_READY.0 as u32 {
-            return Ok(None);
-        }
+        Ok(
+            if unsafe { self.processor.GetOutputStatus()? }
+                == MFT_OUTPUT_STATUS_SAMPLE_READY.0 as u32
+            {
+                let buffer = unsafe {
+                    MFCreate2DMediaBuffer(
+                        self.size.width,
+                        self.size.height,
+                        MFVideoFormat_NV12.data1,
+                        false,
+                    )?
+                };
 
-        let buffer = unsafe {
-            MFCreate2DMediaBuffer(
-                self.size.width,
-                self.size.height,
-                MFVideoFormat_NV12.data1,
-                false,
-            )?
-        };
+                let sample = unsafe { MFCreateSample()? };
+                unsafe { sample.AddBuffer(&buffer)? };
 
-        let sample = unsafe { MFCreateSample()? };
-        unsafe { sample.AddBuffer(&buffer)? };
+                let mut status = 0;
+                let mut buffers = [MFT_OUTPUT_DATA_BUFFER::default()];
 
-        let mut status = 0;
-        let mut buffers = [MFT_OUTPUT_DATA_BUFFER::default()];
+                // Generates output from the current input data.
+                buffers[0].dwStreamID = 0;
+                buffers[0].pSample = ManuallyDrop::new(Some(sample));
+                if let Err(e) =
+                    unsafe { self.processor.ProcessOutput(0, &mut buffers, &mut status) }
+                {
+                    return if e.code() != MF_E_TRANSFORM_NEED_MORE_INPUT {
+                        Err(anyhow!("{:?}", e))
+                    } else {
+                        Ok(None)
+                    };
+                }
 
-        // Generates output from the current input data.
-        buffers[0].dwStreamID = 0;
-        buffers[0].pSample = ManuallyDrop::new(Some(sample));
-        if let Err(e) = unsafe { self.processor.ProcessOutput(0, &mut buffers, &mut status) } {
-            return if e.code() != MF_E_TRANSFORM_NEED_MORE_INPUT {
-                Err(anyhow!("{:?}", e))
+                unsafe { ManuallyDrop::drop(&mut buffers[0].pSample) };
+                Some(buffer)
             } else {
-                Ok(None)
-            };
-        }
-
-        unsafe { ManuallyDrop::drop(&mut buffers[0].pSample) };
-        Ok(Some(buffer))
+                None
+            },
+        )
     }
 }
 
@@ -319,7 +328,7 @@ impl CaptureHandler for ScreenCapture {
         for item in Monitor::enumerate()? {
             displays.push(Source {
                 name: item.name()?,
-                index: item.index()? - 1,
+                index: item.index()?,
                 id: item.device_name()?,
                 kind: SourceType::Screen,
             });

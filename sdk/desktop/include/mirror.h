@@ -206,6 +206,8 @@ EXPORT const char* mirror_find_video_encoder();
  */
 EXPORT const char* mirror_find_video_decoder();
 
+#ifndef WIN32
+
 /**
  * Initialize the environment, which must be initialized before using the SDK.
  */
@@ -216,8 +218,6 @@ EXPORT bool mirror_startup();
  * called when the application exits.
  */
 EXPORT void mirror_shutdown();
-
-#ifndef WIN32
 
 /**
  * Because Linux does not have DllMain, you need to call it manually to achieve

@@ -34,31 +34,26 @@ use windows::Win32::System::Threading::{GetCurrentProcess, SetPriorityClass, HIG
 #[no_mangle]
 #[cfg(target_os = "windows")]
 extern "system" fn DllMain(
-    _dll_module: u32,
-    _call_reason: usize,
-    _reserved: *const std::ffi::c_void,
+    _module: u32,
+    call_reason: usize,
+    reserved: *const std::ffi::c_void,
 ) -> bool {
-    if !mirror_load() {
-        return false;
-    }
+    match call_reason {
+        1 /* DLL_PROCESS_ATTACH */ => mirror_startup(),
+        0 /* DLL_PROCESS_DETACH */ => {
+            if reserved.is_null() {
+                mirror_shutdown();
+            }
 
-    // In order to prevent other programs from affecting the delay performance of
-    // the current program, set the priority of the current process to high.
-    {
-        if unsafe { SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS) }.is_err() {
-            log::error!(
-                "failed to set current process priority, Maybe it's \
-                because you didn't run it with administrator privileges."
-            );
-        }
+            true
+        },
+        _ => true,
     }
-
-    true
 }
 
-/// Because Linux does not have DllMain, you need to call it manually to achieve
-/// similar behavior.
-pub extern "C" fn mirror_load() -> bool {
+/// Initialize the environment, which must be initialized before using the SDK.
+#[no_mangle]
+pub extern "C" fn mirror_startup() -> bool {
     if logger::init(
         log::LevelFilter::Info,
         if cfg!(debug_assertions) {
@@ -76,7 +71,27 @@ pub extern "C" fn mirror_load() -> bool {
         log::error!("{:?}", info);
     }));
 
-    true
+    // In order to prevent other programs from affecting the delay performance of
+    // the current program, set the priority of the current process to high.
+    {
+        if unsafe { SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS) }.is_err() {
+            log::error!(
+                "failed to set current process priority, Maybe it's \
+                because you didn't run it with administrator privileges."
+            );
+        }
+    }
+
+    checker(factory::startup()).is_ok()
+}
+
+/// Cleans up the environment when the SDK exits, and is recommended to be
+/// called when the application exits.
+#[no_mangle]
+pub extern "C" fn mirror_shutdown() {
+    log::info!("extern api: mirror quit");
+
+    let _ = checker(factory::shutdown());
 }
 
 /// Automatically search for encoders, limited hardware, fallback to software
@@ -91,23 +106,6 @@ pub extern "C" fn mirror_find_video_encoder() -> *const c_char {
 #[no_mangle]
 pub extern "C" fn mirror_find_video_decoder() -> *const c_char {
     unsafe { codec::video::codec_find_video_decoder() }
-}
-
-/// Initialize the environment, which must be initialized before using the SDK.
-#[no_mangle]
-pub extern "C" fn mirror_startup() -> bool {
-    log::info!("extern api: mirror init");
-
-    checker(factory::startup()).is_ok()
-}
-
-/// Cleans up the environment when the SDK exits, and is recommended to be
-/// called when the application exits.
-#[no_mangle]
-pub extern "C" fn mirror_shutdown() {
-    log::info!("extern api: mirror quit");
-
-    let _ = checker(factory::shutdown());
 }
 
 #[repr(C)]
