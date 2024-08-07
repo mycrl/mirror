@@ -33,7 +33,9 @@ pub fn startup() -> Result<()> {
 pub fn shutdown() -> Result<()> {
     log::info!("mirror shutdown");
 
+    #[cfg(not(target_os = "macos"))]
     capture::shutdown()?;
+
     codec::shutdown();
     transport::shutdown();
 

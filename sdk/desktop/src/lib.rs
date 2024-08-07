@@ -14,8 +14,6 @@ use std::{
 #[cfg(not(target_os = "macos"))]
 use std::{ffi::CString, mem::ManuallyDrop};
 
-use anyhow::ensure;
-use codec::VideoEncoderSettings;
 use common::{
     atomic::EasyAtomic,
     frame::{AudioFrame, VideoFrame},
@@ -73,6 +71,7 @@ pub extern "C" fn mirror_startup() -> bool {
 
     // In order to prevent other programs from affecting the delay performance of
     // the current program, set the priority of the current process to high.
+    #[cfg(target_os = "windows")]
     {
         if unsafe { SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS) }.is_err() {
             log::error!(
@@ -162,6 +161,7 @@ pub struct Source {
     name: *const c_char,
 }
 
+#[cfg(not(target_os = "macos"))]
 impl TryInto<capture::Source> for &Source {
     type Error = anyhow::Error;
 
@@ -379,6 +379,7 @@ impl Into<codec::AudioEncoderSettings> for AudioOptions {
 
 #[repr(C)]
 #[derive(Debug)]
+#[cfg(not(target_os = "macos"))]
 pub struct SenderSourceOptions<T> {
     source: *const Source,
     options: T,
@@ -386,12 +387,14 @@ pub struct SenderSourceOptions<T> {
 
 #[repr(C)]
 #[derive(Debug)]
+#[cfg(not(target_os = "macos"))]
 pub struct SenderOptions {
     video: *const SenderSourceOptions<VideoOptions>,
     audio: *const SenderSourceOptions<AudioOptions>,
     multicast: bool,
 }
 
+#[cfg(not(target_os = "macos"))]
 impl TryInto<sender::SenderOptions> for SenderOptions {
     type Error = anyhow::Error;
 
@@ -407,14 +410,14 @@ impl TryInto<sender::SenderOptions> for SenderOptions {
 
         if !self.video.is_null() {
             let video = unsafe { &*self.video };
-            let settings: VideoEncoderSettings = video.options.try_into()?;
+            let settings: codec::VideoEncoderSettings = video.options.try_into()?;
 
             // Check whether the external parameters are configured correctly to 
             // avoid some clowns inserting some inexplicable parameters.
-            ensure!(settings.codec == "libx264" || settings.codec == "h264_qsv", "invalid video encoder");
-            ensure!(settings.width % 4 == 0 && settings.width <= 4096, "invalid video width");
-            ensure!(settings.height % 4 == 0 && settings.height <= 2560, "invalid video height");
-            ensure!(settings.frame_rate <= 60, "invalid video frame rate");
+            anyhow::ensure!(settings.codec == "libx264" || settings.codec == "h264_qsv", "invalid video encoder");
+            anyhow::ensure!(settings.width % 4 == 0 && settings.width <= 4096, "invalid video width");
+            anyhow::ensure!(settings.height % 4 == 0 && settings.height <= 2560, "invalid video height");
+            anyhow::ensure!(settings.frame_rate <= 60, "invalid video frame rate");
 
             options.video = Some((
                 unsafe { &*video.source }.try_into()?,

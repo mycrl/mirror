@@ -1,10 +1,12 @@
+#![cfg(not(target_os = "macos"))]
+
 mod audio;
 
 #[cfg(target_os = "windows")]
 mod win32;
 
 #[cfg(target_os = "windows")]
-use self::win32::{camera::CameraCapture, screen::ScreenCapture};
+use win32::{CameraCapture, ScreenCapture};
 
 use self::audio::AudioCapture;
 
@@ -52,8 +54,10 @@ pub fn startup() -> Result<()> {
     {
         log::info!("capture MediaFoundation satrtup");
 
-        self::win32::startup()
+        self::win32::startup()?;
     }
+
+    Ok(())
 }
 
 pub fn shutdown() -> Result<()> {
@@ -61,8 +65,10 @@ pub fn shutdown() -> Result<()> {
     {
         log::info!("capture MediaFoundation shutdown");
 
-        self::win32::shutdown()
+        self::win32::shutdown()?;
     }
+
+    Ok(())
 }
 
 #[repr(C)]
@@ -116,6 +122,7 @@ impl Capture {
             SourceType::Camera => CameraCapture::get_sources()?,
             SourceType::Screen => ScreenCapture::get_sources()?,
             SourceType::Audio => AudioCapture::get_sources()?,
+            _ => Vec::new(),
         })
     }
 

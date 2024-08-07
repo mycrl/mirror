@@ -1,5 +1,7 @@
-pub mod camera;
-pub mod screen;
+mod camera;
+mod screen;
+
+pub use self::{camera::CameraCapture, screen::ScreenCapture};
 
 use anyhow::Result;
 use windows::{
