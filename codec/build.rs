@@ -59,7 +59,7 @@ fn main() -> anyhow::Result<()> {
         .file("./lib/audio_decode.cpp")
         .includes(&settings.ffmpeg_include_prefix)
         .includes(&settings.libyuv_include_prefix)
-        .include("../common/include")
+        .include("../frame/include")
         .define(
             if cfg!(target_os = "windows") {
                 "WIN32"
