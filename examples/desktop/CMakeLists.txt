@@ -29,7 +29,7 @@ endif()
 
 include_directories("../../sdk/desktop/include"
                     "../../sdk/renderer/include"
-                    "../../common/include")
+                    "../../frame/include")
 
 # If it is WIN32, you need to set the runtime library.
 if(MSVC)

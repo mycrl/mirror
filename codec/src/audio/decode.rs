@@ -1,8 +1,9 @@
+use crate::{Error, RawPacket};
+
 use std::{ffi::c_char, os::raw::c_void};
 
-use common::{frame::AudioFrame, strings::Strings};
-
-use crate::{Error, RawPacket};
+use frame::AudioFrame;
+use utils::strings::Strings;
 
 extern "C" {
     fn codec_create_audio_decoder(codec_name: *const c_char) -> *const c_void;

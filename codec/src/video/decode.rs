@@ -1,8 +1,9 @@
-use std::{ffi::c_char, os::raw::c_void};
-
-use common::{frame::VideoFrame, strings::Strings};
+use frame::VideoFrame;
+use utils::strings::Strings;
 
 use crate::{Error, RawPacket};
+
+use std::{ffi::c_char, os::raw::c_void};
 
 extern "C" {
     fn codec_create_video_decoder(codec_name: *const c_char) -> *const c_void;

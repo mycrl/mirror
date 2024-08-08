@@ -3,9 +3,9 @@ mod encode;
 
 use std::ffi::c_char;
 
-use common::strings::Strings;
 pub use decode::VideoDecoder;
 pub use encode::{VideoEncodePacket, VideoEncoder, VideoEncoderSettings};
+use utils::strings::Strings;
 
 extern "C" {
     pub fn codec_find_video_encoder() -> *const c_char;

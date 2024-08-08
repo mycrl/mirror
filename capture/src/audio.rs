@@ -3,8 +3,8 @@ use crate::{AudioCaptureSourceDescription, CaptureHandler, Source, SourceType};
 use std::sync::Mutex;
 
 use anyhow::{anyhow, Result};
-use common::frame::{AudioFrame, ReSampler};
 use cpal::{traits::*, BufferSize, Host, Stream, StreamConfig};
+use frame::{AudioFrame, AudioResampler};
 use once_cell::sync::Lazy;
 
 // Just use a default audio port globally.
@@ -96,7 +96,7 @@ impl CaptureHandler for AudioCapture {
                 // samples for each sample is fixed. It is currently observed that it is fixed,
                 // so the default number of samples is fixed here.
                 if resampler.is_none() {
-                    if let Ok(sampler) = ReSampler::new(
+                    if let Ok(sampler) = AudioResampler::new(
                         config.sample_rate.0 as f64,
                         options.sample_rate as f64,
                         data.len(),

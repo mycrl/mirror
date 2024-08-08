@@ -7,11 +7,9 @@ use std::{
 };
 
 use audio::AudioPlayer;
-use common::{
-    frame::{AudioFrame, VideoFrame},
-    logger,
-};
+use utils::logger;
 
+use frame::{AudioFrame, VideoFrame};
 use video::{Size, VideoRender, WindowHandle};
 
 #[repr(C)]

@@ -14,12 +14,8 @@ use std::{
 #[cfg(not(target_os = "macos"))]
 use std::{ffi::CString, mem::ManuallyDrop};
 
-use common::{
-    atomic::EasyAtomic,
-    frame::{AudioFrame, VideoFrame},
-    logger,
-    strings::Strings,
-};
+use frame::{AudioFrame, VideoFrame};
+use utils::{atomic::EasyAtomic, logger, strings::Strings};
 
 #[cfg(not(target_os = "macos"))]
 use capture::{Capture, SourceType};

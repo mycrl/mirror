@@ -1,8 +1,8 @@
+use crate::{Error, RawPacket};
+
 use std::ffi::{c_char, c_void, CString};
 
-use common::frame::VideoFrame;
-
-use crate::{Error, RawPacket};
+use frame::VideoFrame;
 
 extern "C" {
     fn codec_create_video_encoder(settings: *const RawVideoEncoderSettings) -> *const c_void;

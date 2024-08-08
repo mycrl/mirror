@@ -1,8 +1,8 @@
+use crate::{Error, RawPacket};
+
 use std::ffi::{c_char, c_void, CString};
 
-use common::frame::AudioFrame;
-
-use crate::{Error, RawPacket};
+use frame::AudioFrame;
 
 extern "C" {
     fn codec_create_audio_encoder(settings: *const RawAudioEncoderSettings) -> *const c_void;

@@ -9,8 +9,8 @@ lto = true
 [workspace]
 resolver = "2"
 members = [
+    "utils",
     "codec",
-    "common",
     "service",
     "capture",
     "transport",
@@ -19,5 +19,6 @@ members = [
     "sdk/android/mirror/src/main/native",
     "sdk/android/mirror/src/main/macro",
     "multicast",
-    "srt",
+    "srt", 
+    "frame",
 ]

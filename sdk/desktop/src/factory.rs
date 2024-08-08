@@ -4,7 +4,7 @@ use crate::receiver::{Receiver, ReceiverOptions};
 use crate::sender::{Sender, SenderOptions};
 
 use anyhow::Result;
-use common::frame::{AudioFrame, VideoFrame};
+use frame::{AudioFrame, VideoFrame};
 use transport::{Transport, TransportOptions};
 
 /// Initialize the environment, which must be initialized before using the SDK.

@@ -11,7 +11,7 @@ use win32::{CameraCapture, ScreenCapture};
 use self::audio::AudioCapture;
 
 use anyhow::Result;
-use common::frame::{AudioFrame, VideoFrame};
+use frame::{AudioFrame, VideoFrame};
 
 pub trait FrameArrived: Sync + Send {
     /// The type of data captured, such as video frames.

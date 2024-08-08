@@ -4,10 +4,10 @@ use std::{net::SocketAddr, process::exit, sync::Arc, thread};
 
 use anyhow::Result;
 use clap::Parser;
-use common::logger;
 use log::LevelFilter;
 use service::route::Route;
 use tokio::runtime::Runtime;
+use utils::logger;
 
 // #[global_allocator]
 // static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;

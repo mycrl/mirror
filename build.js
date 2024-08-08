@@ -100,7 +100,7 @@ const Replace = (file, filters) => {
         /* inculde */
         ['./sdk/renderer/include/renderer.h', './build/include/renderer.h'],
         ['./sdk/desktop/include/mirror.h', './build/include/mirror.h'],
-        ['./common/include/frame.h', './build/include/frame.h'],
+        ['./frame/include/frame.h', './build/include/frame.h'],
 
         /* service */
         [`./target/${Profile.toLowerCase()}/service.exe`, './build/server/mirror-service.exe'],
@@ -141,7 +141,7 @@ const Replace = (file, filters) => {
     Replace('./build/examples/CMakeLists.txt', [
         ['../../sdk/renderer/include', '../include'],
         ['../../sdk/desktop/include', '../include'],
-        ['../../common/include', '../include'],
+        ['../../frame/include', '../include'],
         ['../../target/debug', '../lib'],
         ['../../target/release', '../lib'],
     ])

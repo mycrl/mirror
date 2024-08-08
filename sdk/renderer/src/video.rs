@@ -4,7 +4,7 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
-use common::{frame::VideoFrame, strings::Strings};
+use frame::VideoFrame;
 use sdl2::sys::{
     SDL_CreateRenderer, SDL_CreateTexture, SDL_CreateWindowFrom, SDL_DestroyRenderer,
     SDL_DestroyTexture, SDL_DestroyWindow, SDL_GetError, SDL_GetRendererInfo, SDL_Init,
@@ -12,6 +12,7 @@ use sdl2::sys::{
     SDL_Renderer, SDL_RendererFlip, SDL_RendererInfo, SDL_Texture, SDL_TextureAccess,
     SDL_UpdateNVTexture, SDL_Window, SDL_INIT_VIDEO,
 };
+use utils::strings::Strings;
 
 #[derive(Debug, Clone, Copy)]
 pub struct Size {

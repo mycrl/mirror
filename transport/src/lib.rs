@@ -14,9 +14,9 @@ use std::{
 };
 
 use bytes::BytesMut;
-use common::atomic::EasyAtomic;
 use service::{signal::Signal, SocketKind, StreamInfo};
 use smallvec::SmallVec;
+use utils::atomic::EasyAtomic;
 
 use crate::{
     adapter::{StreamReceiverAdapterExt, StreamSenderAdapter},

@@ -17,7 +17,7 @@ use codec::{
     VideoEncoderSettings,
 };
 
-use common::frame::{AudioFrame, VideoFrame};
+use frame::{AudioFrame, VideoFrame};
 use transport::{
     adapter::{BufferFlag, StreamBufferInfo, StreamSenderAdapter},
     package,

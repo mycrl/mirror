@@ -12,7 +12,8 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
-use common::{atomic::EasyAtomic, frame::VideoFrame};
+use frame::VideoFrame;
+use utils::atomic::EasyAtomic;
 use windows::{
     core::Interface,
     Win32::{

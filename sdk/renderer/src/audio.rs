@@ -7,17 +7,17 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
-use common::frame::{AudioFrame, ReSampler};
 use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
     Stream, StreamConfig, StreamError,
 };
+use frame::{AudioFrame, AudioResampler};
 
 pub struct AudioPlayer {
     stream: Stream,
     config: StreamConfig,
     queue: Sender<Vec<i16>>,
-    sampler: Option<ReSampler>,
+    sampler: Option<AudioResampler>,
     current_error: Arc<RwLock<Option<StreamError>>>,
 }
 
@@ -71,7 +71,7 @@ impl AudioPlayer {
         }
 
         if self.sampler.is_none() {
-            self.sampler = Some(ReSampler::new(
+            self.sampler = Some(AudioResampler::new(
                 frame.sample_rate as f64,
                 self.config.sample_rate.0 as f64,
                 frame.frames as usize,

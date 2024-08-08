@@ -9,7 +9,8 @@ name = "mirror"
 
 [dependencies]
 bytes = "1.5"
-common = { path = "../../common" }
+utils = { path = "../../utils" }
+frame = { path = "../../frame" }
 codec = { path = "../../codec", default-features = false }
 transport = { path = "../../transport" }
 log = "0.4.20"

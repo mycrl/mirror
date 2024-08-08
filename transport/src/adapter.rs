@@ -8,7 +8,7 @@ use std::{
 };
 
 use bytes::{Bytes, BytesMut};
-use common::atomic::{AtomicOption, EasyAtomic};
+use utils::atomic::{AtomicOption, EasyAtomic};
 
 #[repr(i32)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

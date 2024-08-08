@@ -8,7 +8,7 @@ bytes = "1.5.0"
 log = "0.4.20"
 srt = { path = "../srt" }
 multicast = { path = "../multicast" }
-common = { path = "../common" }
+utils = { path = "../utils" }
 service = { path = "../service" }
 xxhash-rust = { version = "0.8.11", features = ["xxh3", "xxh64"]}
 smallvec = "1.13.2"
