@@ -169,10 +169,11 @@ impl CaptureHandler for CameraCapture {
                     activate.get_string(MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_SYMBOLIC_LINK),
                 ) {
                     sources.push(Source {
-                        id,
-                        name,
-                        index: sources.len(),
+                        is_default: sources.len() == 0,
                         kind: SourceType::Camera,
+                        index: sources.len(),
+                        name,
+                        id,
                     });
                 }
             }

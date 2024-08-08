@@ -85,6 +85,7 @@ pub struct Source {
     pub name: String,
     pub index: usize,
     pub kind: SourceType,
+    pub is_default: bool,
 }
 
 #[derive(Debug, Clone, Copy)]

@@ -155,6 +155,7 @@ pub struct Source {
     kind: SourceType,
     id: *const c_char,
     name: *const c_char,
+    is_default: bool,
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -165,6 +166,7 @@ impl TryInto<capture::Source> for &Source {
         Ok(capture::Source {
             name: Strings::from(self.name).to_string()?,
             id: Strings::from(self.id).to_string()?,
+            is_default: self.is_default,
             index: self.index,
             kind: self.kind,
         })
@@ -195,6 +197,7 @@ pub extern "C" fn mirror_get_sources(kind: SourceType) -> Sources {
 
                 Source {
                     index: item.index,
+                    is_default: item.is_default,
                     kind: SourceType::from(item.kind),
                     id: CString::new(item.id).unwrap().into_raw(),
                     name: CString::new(item.name).unwrap().into_raw(),

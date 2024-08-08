@@ -33,6 +33,7 @@ typedef struct
     SourceType type;
     const char* id;
     const char* name;
+    bool is_default;
 } Source;
 
 typedef struct

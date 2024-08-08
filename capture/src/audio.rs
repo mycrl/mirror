@@ -30,10 +30,14 @@ impl CaptureHandler for AudioCapture {
 
     // Get the default input device. In theory, all microphones will be listed here.
     fn get_sources() -> Result<Vec<Source>, Self::Error> {
-        let mut sources = Vec::with_capacity(20);
+        let default_name = HOST
+            .default_output_device()
+            .map(|it| it.name().ok())
+            .flatten();
 
         // If you ever need to switch back to recording, you just need to capture the
         // output device, which is really funny, but very simple and worth mentioning!
+        let mut sources = Vec::with_capacity(20);
         for (index, device) in HOST
             .output_devices()?
             .chain(HOST.input_devices()?)
@@ -43,6 +47,7 @@ impl CaptureHandler for AudioCapture {
                 id: device.name()?,
                 name: device.name()?,
                 kind: SourceType::Audio,
+                is_default: device.name().ok() == default_name,
                 index,
             });
         }

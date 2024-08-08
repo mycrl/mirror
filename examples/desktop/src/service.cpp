@@ -59,14 +59,28 @@ bool MirrorServiceExt::CreateMirrorSender()
     video_options.encoder.frame_rate = _args.ArgsParams.fps;
     video_options.encoder.key_frame_interval = 21;
     video_options.encoder.bit_rate = 500 * 1024 * 8;
-    video_options.source = &video_sources.items[0];
+    
+    for (int i = 0; i < video_sources.size; i++)
+    {
+        if (video_sources.items[i].is_default)
+        {
+            video_options.source = &video_sources.items[i];
+        }
+    }
 
     auto audio_sources = mirror_get_sources(SourceType::Audio);
 
     AudioOptions audio_options;
     audio_options.encoder.sample_rate = 48000;
     audio_options.encoder.bit_rate = 64000;
-    audio_options.source = &audio_sources.items[0];
+
+    for (int i = 0; i < audio_sources.size; i++)
+    {
+        if (audio_sources.items[i].is_default)
+        {
+            audio_options.source = &audio_sources.items[i];
+        }
+    }
 
     SenderOptions options;
     options.video = &video_options;

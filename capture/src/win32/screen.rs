@@ -325,6 +325,8 @@ impl CaptureHandler for ScreenCapture {
     type CaptureOptions = VideoCaptureSourceDescription;
 
     fn get_sources() -> Result<Vec<Source>, Self::Error> {
+        let primary_name = Monitor::primary()?.name()?;
+
         let mut displays = Vec::with_capacity(10);
         for item in Monitor::enumerate()? {
             displays.push(Source {
@@ -332,6 +334,7 @@ impl CaptureHandler for ScreenCapture {
                 index: item.index()?,
                 id: item.device_name()?,
                 kind: SourceType::Screen,
+                is_default: item.name()? == primary_name,
             });
         }
 
@@ -343,7 +346,10 @@ impl CaptureHandler for ScreenCapture {
         options: Self::CaptureOptions,
         arrived: S,
     ) -> Result<(), Self::Error> {
-        let source = Monitor::from_index(options.source.index)?;
+        let source = Monitor::enumerate()?
+            .into_iter()
+            .find(|it| it.name().ok() == Some(options.source.name.clone()))
+            .ok_or_else(|| anyhow!("not found the source"))?;
 
         // Start capturing the screen. This runs in a free thread. If it runs in the
         // current thread, you will encounter problems with Winrt runtime
