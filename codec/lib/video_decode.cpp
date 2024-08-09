@@ -38,7 +38,6 @@ VideoDecoder* codec_create_video_decoder(const char* codec_name)
     codec->context->delay = 0;
     codec->context->max_samples = 1;
     codec->context->has_b_frames = 0;
-    codec->context->thread_count = 1;
     codec->context->skip_alpha = true;
     codec->context->pix_fmt = AV_PIX_FMT_NV12;
     codec->context->flags |= AV_CODEC_FLAG_LOW_DELAY;

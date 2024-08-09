@@ -11,5 +11,5 @@ mod video;
 
 pub use self::{
     audio::{AudioFrame, AudioResampler},
-    video::VideoFrame,
+    video::{VideoFrame, VideoSize, VideoTransform},
 };

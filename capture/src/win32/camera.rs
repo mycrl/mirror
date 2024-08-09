@@ -1,4 +1,3 @@
-use super::{IMFValue, MediaFoundationIMFAttributesSetHelper};
 use crate::{CaptureHandler, FrameArrived, Source, SourceType, VideoCaptureSourceDescription};
 
 use std::{
@@ -10,7 +9,11 @@ use std::{
 
 use anyhow::{anyhow, Result};
 use frame::VideoFrame;
-use utils::atomic::EasyAtomic;
+use utils::{
+    atomic::EasyAtomic,
+    win32::{IMFValue, MediaFoundationIMFAttributesSetHelper},
+};
+
 use windows::{
     core::Interface,
     Win32::Media::MediaFoundation::{
