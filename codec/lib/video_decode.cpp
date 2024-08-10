@@ -39,6 +39,8 @@ VideoDecoder* codec_create_video_decoder(const char* codec_name)
     codec->context->max_samples = 1;
     codec->context->has_b_frames = 0;
     codec->context->skip_alpha = true;
+    codec->context->thread_count = 4;
+	codec->context->thread_type = FF_THREAD_SLICE;
     codec->context->pix_fmt = AV_PIX_FMT_NV12;
     codec->context->flags |= AV_CODEC_FLAG_LOW_DELAY;
     codec->context->flags2 |= AV_CODEC_FLAG2_FAST | AV_CODEC_FLAG2_CHUNKS;
