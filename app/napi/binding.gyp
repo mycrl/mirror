@@ -21,7 +21,7 @@
             ],
             "include_dirs": [
                 "<!@(node -p \"require('node-addon-api').include\")",
-                "../../common/include",
+                "../../frame/include",
                 "../../sdk/desktop/include",
                 "../../sdk/renderer/include"
             ],

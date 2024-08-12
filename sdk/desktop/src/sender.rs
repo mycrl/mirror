@@ -9,8 +9,8 @@ use std::{
 use anyhow::Result;
 use bytes::BytesMut;
 use capture::{
-    AudioCaptureSourceDescription, Capture, FrameArrived, Size, Source,
-    VideoCaptureSourceDescription,
+    AudioCaptureSourceDescription, Capture, CaptureOptions, FrameArrived, Size, Source,
+    SourceCaptureOptions, VideoCaptureSourceDescription,
 };
 
 use codec::{
@@ -261,25 +261,24 @@ impl Sender {
     pub fn new(options: SenderOptions, sink: FrameSink) -> Result<Self> {
         log::info!("create sender");
 
+        let mut capture_options = CaptureOptions::default();
         let adapter = StreamSenderAdapter::new(options.multicast);
-        let capture = Capture::default();
         let sink = Arc::new(sink);
 
         if let Some((source, options)) = options.audio {
-            let codec = AudioSender::new(&adapter, &options, &sink)?;
-            capture.set_audio_source(
-                AudioCaptureSourceDescription {
+            capture_options.audio = Some(SourceCaptureOptions {
+                arrived: AudioSender::new(&adapter, &options, &sink)?,
+                description: AudioCaptureSourceDescription {
                     sample_rate: options.sample_rate as u32,
                     source,
                 },
-                codec,
-            )?;
+            });
         }
 
         if let Some((source, options)) = options.video {
-            let codec = VideoSender::new(&adapter, &options, &sink)?;
-            capture.set_video_source(
-                VideoCaptureSourceDescription {
+            capture_options.video = Some(SourceCaptureOptions {
+                arrived: VideoSender::new(&adapter, &options, &sink)?,
+                description: VideoCaptureSourceDescription {
                     fps: options.frame_rate,
                     source,
                     size: Size {
@@ -287,13 +286,12 @@ impl Sender {
                         height: options.height,
                     },
                 },
-                codec,
-            )?;
+            });
         }
 
         Ok(Self {
+            capture: Capture::new(capture_options)?,
             adapter,
-            capture,
             sink,
         })
     }
@@ -316,7 +314,10 @@ impl Drop for Sender {
         // will also call back to the external closing event. It stands to reason that
         // it should be distinguished whether it is an active closure, but in order to
         // make it simpler to implement, let's do it this way first.
-        let _ = self.capture.close();
+        if let Err(e) = self.capture.close() {
+            log::warn!("mirror sender capture close error={:?}", e);
+        }
+
         self.adapter.close();
         (self.sink.close)()
     }

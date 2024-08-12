@@ -16,9 +16,7 @@ enum DeviceKind {
 }
 
 #[derive(Default)]
-pub struct AudioCapture {
-    stream: Mutex<Option<Stream>>,
-}
+pub struct AudioCapture(Mutex<Option<Stream>>);
 
 unsafe impl Send for AudioCapture {}
 unsafe impl Sync for AudioCapture {}
@@ -129,7 +127,7 @@ impl CaptureHandler for AudioCapture {
         // If there is a previous stream, end it first.
         // Normally, a Capture instance is only used once, but here a defensive process
         // is done to avoid multiple calls due to external errors.
-        if let Some(stream) = self.stream.lock().unwrap().replace(stream) {
+        if let Some(stream) = self.0.lock().unwrap().replace(stream) {
             stream.pause()?;
         }
 
@@ -137,7 +135,7 @@ impl CaptureHandler for AudioCapture {
     }
 
     fn stop(&self) -> Result<(), Self::Error> {
-        if let Some(stream) = self.stream.lock().unwrap().take() {
+        if let Some(stream) = self.0.lock().unwrap().take() {
             stream.pause()?;
         }
 

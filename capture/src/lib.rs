@@ -13,40 +13,6 @@ use self::audio::AudioCapture;
 use anyhow::Result;
 use frame::{AudioFrame, VideoFrame};
 
-pub trait FrameArrived: Sync + Send {
-    /// The type of data captured, such as video frames.
-    type Frame;
-
-    /// This method is called when the capture source captures new data. If it
-    /// returns false, the source stops capturing.
-    fn sink(&mut self, frame: &Self::Frame) -> bool;
-}
-
-pub trait CaptureHandler: Sync + Send {
-    type Error;
-
-    /// The type of data captured, such as video frames.
-    type Frame;
-
-    /// Start capturing configuration information, which may be different for
-    /// each source.
-    type CaptureOptions;
-
-    /// Get a list of sources, such as multiple screens in a display source.
-    fn get_sources() -> Result<Vec<Source>, Self::Error>;
-
-    /// Start capturing. This function will not block until capturing is
-    /// stopped, and it maintains its own capture thread internally.
-    fn start<S: FrameArrived<Frame = Self::Frame> + 'static>(
-        &self,
-        options: Self::CaptureOptions,
-        arrived: S,
-    ) -> Result<(), Self::Error>;
-
-    /// Stop capturing the current source.
-    fn stop(&self) -> Result<(), Self::Error>;
-}
-
 /// Don't forget to initialize the environment, this is necessary for the
 /// capture module.
 pub fn startup() -> Result<()> {
@@ -69,6 +35,40 @@ pub fn shutdown() -> Result<()> {
     }
 
     Ok(())
+}
+
+pub trait FrameArrived: Sync + Send {
+    /// The type of data captured, such as video frames.
+    type Frame;
+
+    /// This method is called when the capture source captures new data. If it
+    /// returns false, the source stops capturing.
+    fn sink(&mut self, frame: &Self::Frame) -> bool;
+}
+
+pub trait CaptureHandler: Sync + Send {
+    type Error;
+
+    /// The type of data captured, such as video frames.
+    type Frame;
+
+    /// Start capturing configuration information, which may be different for
+    /// each source.
+    type CaptureOptions;
+
+    /// Get a list of sources, such as multiple screens in a display source.
+    fn get_sources() -> Result<Vec<Source>, Self::Error>;
+
+    /// Stop capturing the current source.
+    fn stop(&self) -> Result<(), Self::Error>;
+
+    /// Start capturing. This function will not block until capturing is
+    /// stopped, and it maintains its own capture thread internally.
+    fn start<S: FrameArrived<Frame = Self::Frame> + 'static>(
+        &self,
+        options: Self::CaptureOptions,
+        arrived: S,
+    ) -> Result<(), Self::Error>;
 }
 
 #[repr(C)]
@@ -107,12 +107,41 @@ pub struct AudioCaptureSourceDescription {
     pub sample_rate: u32,
 }
 
-#[derive(Default)]
-pub struct Capture {
-    camera: CameraCapture,
-    screen: ScreenCapture,
-    audio: AudioCapture,
+pub struct SourceCaptureOptions<T, P> {
+    pub description: P,
+    pub arrived: T,
 }
+
+pub struct CaptureOptions<V, A>
+where
+    V: FrameArrived<Frame = VideoFrame>,
+    A: FrameArrived<Frame = AudioFrame>,
+{
+    pub video: Option<SourceCaptureOptions<V, VideoCaptureSourceDescription>>,
+    pub audio: Option<SourceCaptureOptions<A, AudioCaptureSourceDescription>>,
+}
+
+impl<V, A> Default for CaptureOptions<V, A>
+where
+    V: FrameArrived<Frame = VideoFrame>,
+    A: FrameArrived<Frame = AudioFrame>,
+{
+    fn default() -> Self {
+        Self {
+            video: None,
+            audio: None,
+        }
+    }
+}
+
+enum CaptureImplement {
+    Camera(CameraCapture),
+    Screen(ScreenCapture),
+    Audio(AudioCapture),
+}
+
+#[derive(Default)]
+pub struct Capture(Vec<CaptureImplement>);
 
 impl Capture {
     /// Returns a list of devices by type.
@@ -128,45 +157,57 @@ impl Capture {
         })
     }
 
-    /// Capture video devices, including screens or webcams.
-    pub fn set_video_source<T: FrameArrived<Frame = VideoFrame> + 'static>(
-        &self,
-        description: VideoCaptureSourceDescription,
-        arrived: T,
-    ) -> Result<()> {
-        log::info!("capture set video source, description={:?}", description);
+    pub fn new<V, A>(CaptureOptions { video, audio }: CaptureOptions<V, A>) -> Result<Self>
+    where
+        V: FrameArrived<Frame = VideoFrame> + 'static,
+        A: FrameArrived<Frame = AudioFrame> + 'static,
+    {
+        let mut devices = Vec::with_capacity(3);
 
-        match description.source.kind {
-            SourceType::Camera => self.camera.start(description, arrived)?,
-            SourceType::Screen => self.screen.start(description, arrived)?,
-            _ => (),
+        if let Some(SourceCaptureOptions {
+            description,
+            arrived,
+        }) = video
+        {
+            match description.source.kind {
+                SourceType::Camera => {
+                    let camera = CameraCapture::default();
+                    camera.start(description, arrived)?;
+                    devices.push(CaptureImplement::Camera(camera));
+                }
+                SourceType::Screen => {
+                    let screen = ScreenCapture::default();
+                    screen.start(description, arrived)?;
+                    devices.push(CaptureImplement::Screen(screen));
+                }
+                _ => (),
+            }
         }
 
-        Ok(())
-    }
-
-    /// Capture audio devices, including audio or system.
-    pub fn set_audio_source<T: FrameArrived<Frame = AudioFrame> + 'static>(
-        &self,
-        description: AudioCaptureSourceDescription,
-        arrived: T,
-    ) -> Result<()> {
-        log::info!("capture set audio source, description={:?}", description);
-
-        match description.source.kind {
-            SourceType::Audio => self.audio.start(description, arrived)?,
-            _ => (),
+        if let Some(SourceCaptureOptions {
+            description,
+            arrived,
+        }) = audio
+        {
+            let audio = AudioCapture::default();
+            audio.start(description, arrived)?;
+            devices.push(CaptureImplement::Audio(audio));
         }
 
-        Ok(())
+        Ok(Self(devices))
     }
 
     pub fn close(&self) -> Result<()> {
         log::info!("close capture");
 
-        self.camera.stop()?;
-        self.screen.stop()?;
-        self.audio.stop()?;
+        for item in self.0.iter() {
+            match item {
+                CaptureImplement::Screen(it) => it.stop(),
+                CaptureImplement::Camera(it) => it.stop(),
+                CaptureImplement::Audio(it) => it.stop(),
+            }?;
+        }
+
         Ok(())
     }
 }
