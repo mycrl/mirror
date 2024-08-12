@@ -60,8 +60,8 @@ impl AudioResampler {
     pub fn new(input: f64, output: f64, frames: usize) -> Result<Self, ResamplerConstructionError> {
         Ok(Self {
             samples: Vec::with_capacity(frames),
-            input_buffer: vec![0.0; frames],
-            output_buffer: vec![0.0; frames],
+            input_buffer: Vec::with_capacity(48000),
+            output_buffer: vec![0.0; 48000],
             sampler: if input != output {
                 Some(FastFixedIn::new(
                     output / input,

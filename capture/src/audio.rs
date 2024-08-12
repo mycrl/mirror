@@ -3,7 +3,7 @@ use crate::{AudioCaptureSourceDescription, CaptureHandler, Source, SourceType};
 use std::sync::Mutex;
 
 use anyhow::{anyhow, Result};
-use cpal::{traits::*, BufferSize, Host, Stream, StreamConfig};
+use cpal::{traits::*, Host, Stream, StreamConfig};
 use frame::{AudioFrame, AudioResampler};
 use once_cell::sync::Lazy;
 
@@ -64,7 +64,7 @@ impl CaptureHandler for AudioCapture {
         let (device, kind) = HOST
             .output_devices()?
             .map(|it| (it, DeviceKind::Output))
-            .chain(HOST.output_devices()?.map(|it| (it, DeviceKind::Input)))
+            .chain(HOST.input_devices()?.map(|it| (it, DeviceKind::Input)))
             .find(|(it, _)| {
                 it.name()
                     .map(|name| name == options.source.name)
@@ -72,13 +72,10 @@ impl CaptureHandler for AudioCapture {
             })
             .ok_or_else(|| anyhow!("not found the audio source"))?;
 
-        let mut config: StreamConfig = match kind {
+        let config: StreamConfig = match kind {
             DeviceKind::Input => device.default_input_config()?.into(),
             DeviceKind::Output => device.default_output_config()?.into(),
         };
-
-        // zero buffer size
-        config.buffer_size = BufferSize::Fixed(0);
 
         let mut frame = AudioFrame::default();
         frame.sample_rate = options.sample_rate;
@@ -104,7 +101,7 @@ impl CaptureHandler for AudioCapture {
                     if let Ok(sampler) = AudioResampler::new(
                         config.sample_rate.0 as f64,
                         options.sample_rate as f64,
-                        data.len(),
+                        data.len() / config.channels as usize,
                     ) {
                         resampler = Some(sampler);
                     }
