@@ -60,7 +60,7 @@ add_library(codec STATIC
 
 include_directories("${FFMPEG_PREFIX}/include"
                     "${THIRD_PARTY_DIR}/libyuv/include"
-                    "../../common/include")
+                    "../../frame/include")
 
 target_link_directories(codec PRIVATE "${FFMPEG_PREFIX}/lib")
 target_link_libraries(codec avcodec 

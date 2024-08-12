@@ -15,13 +15,15 @@ use std::{
 use std::{ffi::CString, mem::ManuallyDrop};
 
 use frame::{AudioFrame, VideoFrame};
-use utils::{atomic::EasyAtomic, logger, strings::Strings};
+use utils::{
+    atomic::EasyAtomic,
+    logger,
+    strings::Strings,
+    win32::{set_process_priority, ProcessPriority},
+};
 
 #[cfg(not(target_os = "macos"))]
 use capture::{Capture, SourceType};
-
-#[cfg(target_os = "windows")]
-use windows::Win32::System::Threading::{GetCurrentProcess, SetPriorityClass, HIGH_PRIORITY_CLASS};
 
 /// Windows yes! The Windows dynamic library has an entry, so just initialize
 /// the logger and set the process priority at the entry.
@@ -69,7 +71,7 @@ pub extern "C" fn mirror_startup() -> bool {
     // the current program, set the priority of the current process to high.
     #[cfg(target_os = "windows")]
     {
-        if unsafe { SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS) }.is_err() {
+        if set_process_priority(ProcessPriority::High).is_err() {
             log::error!(
                 "failed to set current process priority, Maybe it's \
                 because you didn't run it with administrator privileges."

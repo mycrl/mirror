@@ -11,7 +11,7 @@ use anyhow::{anyhow, Result};
 use frame::VideoFrame;
 use utils::{
     atomic::EasyAtomic,
-    win32::{IMFValue, MediaFoundationIMFAttributesSetHelper},
+    win32::{IMFValue, MediaFoundationIMFAttributesSetHelper, MediaThreadClass},
 };
 
 use windows::{
@@ -241,6 +241,8 @@ impl CaptureHandler for CameraCapture {
         thread::Builder::new()
             .name("WindowsCameraCaptureThread".to_string())
             .spawn(move || {
+                let thread_class_guard = MediaThreadClass::Capture.join().ok();
+
                 loop {
                     if let Err(e) = ctx.poll() {
                         log::error!("WindowsCameraCaptureThread error={}", e);
@@ -251,6 +253,10 @@ impl CaptureHandler for CameraCapture {
 
                 log::info!("WindowsCameraCaptureThread stop");
                 ctx.status.update(false);
+
+                if let Some(guard) = thread_class_guard {
+                    drop(guard)
+                }
             })?;
 
         Ok(())

@@ -1,20 +1,29 @@
 use std::{mem::ManuallyDrop, ptr::null};
 
-use utils::win32::{IMFValue, MediaFoundationIMFAttributesSetHelper};
 use windows::{
     core::{Interface, Result},
     Win32::{
-        Graphics::Direct3D11::ID3D11Texture2D,
-        Media::MediaFoundation::{
-            CLSID_VideoProcessorMFT, IMFMediaBuffer, IMFTransform, MFCreate2DMediaBuffer,
-            MFCreateDXGISurfaceBuffer, MFCreateMediaType, MFCreateSample, MFMediaType_Video,
-            MFVideoFormat_NV12, MFVideoFormat_RGB32, MFVideoInterlace_Progressive,
-            MFT_INPUT_STATUS_ACCEPT_DATA, MFT_MESSAGE_NOTIFY_BEGIN_STREAMING,
-            MFT_MESSAGE_NOTIFY_END_OF_STREAM, MFT_OUTPUT_DATA_BUFFER,
-            MFT_OUTPUT_STATUS_SAMPLE_READY, MF_E_TRANSFORM_NEED_MORE_INPUT, MF_MT_FRAME_RATE,
-            MF_MT_FRAME_SIZE, MF_MT_INTERLACE_MODE, MF_MT_MAJOR_TYPE, MF_MT_SUBTYPE,
+        Foundation::RECT,
+        Graphics::{
+            Direct3D::{
+                D3D_DRIVER_TYPE_HARDWARE, D3D_FEATURE_LEVEL, D3D_FEATURE_LEVEL_11_0,
+                D3D_FEATURE_LEVEL_11_1,
+            },
+            Direct3D11::{
+                D3D11CreateDevice, ID3D11Device, ID3D11DeviceContext, ID3D11Texture2D,
+                ID3D11VideoContext, ID3D11VideoDevice, ID3D11VideoProcessor,
+                ID3D11VideoProcessorEnumerator, ID3D11VideoProcessorInputView,
+                ID3D11VideoProcessorOutputView, D3D11_BIND_RENDER_TARGET, D3D11_BOX,
+                D3D11_CPU_ACCESS_READ, D3D11_CREATE_DEVICE_FLAG, D3D11_MAPPED_SUBRESOURCE,
+                D3D11_MAP_READ, D3D11_SDK_VERSION, D3D11_TEXTURE2D_DESC, D3D11_USAGE_DEFAULT,
+                D3D11_USAGE_STAGING, D3D11_VIDEO_FRAME_FORMAT_PROGRESSIVE,
+                D3D11_VIDEO_PROCESSOR_COLOR_SPACE, D3D11_VIDEO_PROCESSOR_CONTENT_DESC,
+                D3D11_VIDEO_PROCESSOR_INPUT_VIEW_DESC, D3D11_VIDEO_PROCESSOR_OUTPUT_VIEW_DESC,
+                D3D11_VIDEO_PROCESSOR_STREAM, D3D11_VIDEO_USAGE_PLAYBACK_NORMAL,
+                D3D11_VPIV_DIMENSION_TEXTURE2D, D3D11_VPOV_DIMENSION_TEXTURE2D,
+            },
+            Dxgi::Common::{DXGI_FORMAT_NV12, DXGI_FORMAT_R8G8B8A8_UNORM},
         },
-        System::Com::{CoCreateInstance, CLSCTX_INPROC_SERVER},
     },
 };
 
@@ -65,177 +74,355 @@ pub struct VideoSize {
     pub height: u32,
 }
 
+/// Used to convert video frames using hardware accelerators, including color
+/// space conversion and scaling. Note that the output is fixed to NV12, but the
+/// input is optional and is RGBA by default. However, if you use the `process`
+/// method, you can let the external texture decide what format to use, because
+/// this method does not copy the texture.
+#[allow(unused)]
 pub struct VideoTransform {
-    processor: IMFTransform,
-    size: VideoSize,
+    d3d_device: ID3D11Device,
+    d3d_context: ID3D11DeviceContext,
+    video_device: ID3D11VideoDevice,
+    video_context: ID3D11VideoContext,
+    input_texture: ID3D11Texture2D,
+    output_texture: ID3D11Texture2D,
+    video_enumerator: ID3D11VideoProcessorEnumerator,
+    video_processor: ID3D11VideoProcessor,
+    input_view: ID3D11VideoProcessorInputView,
+    output_view: ID3D11VideoProcessorOutputView,
 }
 
 unsafe impl Send for VideoTransform {}
 unsafe impl Sync for VideoTransform {}
 
 impl VideoTransform {
-    #[rustfmt::skip]
-    pub fn new(input: VideoSize, input_fps: u8, output: VideoSize, output_fps: u8) -> Result<Self> {
-        // Create and configure the Video Processor MFT.
-        let processor: IMFTransform =
-            unsafe { CoCreateInstance(&CLSID_VideoProcessorMFT, None, CLSCTX_INPROC_SERVER)? };
+    // Only use d3d11 implementation
+    const FEATURE_LEVELS: [D3D_FEATURE_LEVEL; 2] = [D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0];
 
-        // Configure the input type to be a D3D texture in RGB32 format.
-        let mut input_ty = unsafe { MFCreateMediaType()? };
-        input_ty.set(MF_MT_MAJOR_TYPE, IMFValue::GUID(MFMediaType_Video))?;
-        input_ty.set(MF_MT_SUBTYPE, IMFValue::GUID(MFVideoFormat_RGB32))?;
-        input_ty.set(MF_MT_INTERLACE_MODE, IMFValue::U32(MFVideoInterlace_Progressive.0 as u32))?;
-        input_ty.set(MF_MT_FRAME_SIZE, IMFValue::DoubleU32(input.width, input.height),)?;
-        input_ty.set(MF_MT_FRAME_RATE, IMFValue::DoubleU32(input_fps as u32, 1))?;
-        unsafe { processor.SetInputType(0, &input_ty, 0)? };
+    /// Create `VideoTransform`, the default_device parameter is used to
+    /// directly use the device when it has been created externally, so there is
+    /// no need to copy across devices, which improves processing performance.
+    pub fn new(
+        input: VideoSize,
+        output: VideoSize,
+        default_device: Option<(ID3D11Device, ID3D11DeviceContext)>,
+    ) -> Result<Self> {
+        let (d3d_device, d3d_context) = if let Some(default_device) = default_device {
+            default_device
+        } else {
+            unsafe {
+                let (mut d3d_device, mut d3d_context, mut feature_level) =
+                    (None, None, D3D_FEATURE_LEVEL::default());
 
-        // Configure the output type to NV12 format.
-        let mut output_ty = unsafe { MFCreateMediaType()? };
-        output_ty.set(MF_MT_MAJOR_TYPE, IMFValue::GUID(MFMediaType_Video))?;
-        output_ty.set(MF_MT_SUBTYPE, IMFValue::GUID(MFVideoFormat_NV12))?;
-        output_ty.set(MF_MT_INTERLACE_MODE, IMFValue::U32(MFVideoInterlace_Progressive.0 as u32))?;
-        output_ty.set(MF_MT_FRAME_SIZE, IMFValue::DoubleU32(output.width, output.height))?;
-        output_ty.set(MF_MT_FRAME_RATE, IMFValue::DoubleU32(output_fps as u32, 1))?;
-        unsafe { processor.SetOutputType(0, &output_ty, 0)? };
+                D3D11CreateDevice(
+                    None,
+                    D3D_DRIVER_TYPE_HARDWARE,
+                    None,
+                    D3D11_CREATE_DEVICE_FLAG(0),
+                    Some(&Self::FEATURE_LEVELS),
+                    D3D11_SDK_VERSION,
+                    Some(&mut d3d_device),
+                    Some(&mut feature_level),
+                    Some(&mut d3d_context),
+                )?;
 
-        // Call IMFTransform::ProcessMessage with the MFT_MESSAGE_NOTIFY_BEGIN_STREAMING
-        // message. This message requests the MFT to allocate any resources it needs
-        // during streaming.
-        unsafe { processor.ProcessMessage(MFT_MESSAGE_NOTIFY_BEGIN_STREAMING, 0)? };
+                (d3d_device.unwrap(), d3d_context.unwrap())
+            }
+        };
+
+        let video_device = d3d_device.cast::<ID3D11VideoDevice>()?;
+        let video_context = d3d_context.cast::<ID3D11VideoContext>()?;
+
+        let input_texture = unsafe {
+            let mut desc = D3D11_TEXTURE2D_DESC::default();
+            desc.Width = input.width;
+            desc.Height = input.height;
+            desc.MipLevels = 1;
+            desc.ArraySize = 1;
+            desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+            desc.SampleDesc.Count = 1;
+            desc.SampleDesc.Quality = 0;
+            desc.Usage = D3D11_USAGE_DEFAULT;
+            desc.BindFlags = D3D11_BIND_RENDER_TARGET.0 as u32;
+            desc.CPUAccessFlags = 0;
+            desc.MiscFlags = 0;
+
+            let mut texture = None;
+            d3d_device.CreateTexture2D(&desc, None, Some(&mut texture))?;
+            texture.unwrap()
+        };
+
+        let output_texture = unsafe {
+            let mut desc = D3D11_TEXTURE2D_DESC::default();
+            desc.Width = output.width;
+            desc.Height = output.height;
+            desc.MipLevels = 1;
+            desc.ArraySize = 1;
+            desc.Format = DXGI_FORMAT_NV12;
+            desc.SampleDesc.Count = 1;
+            desc.SampleDesc.Quality = 0;
+            desc.Usage = D3D11_USAGE_DEFAULT;
+            desc.BindFlags = D3D11_BIND_RENDER_TARGET.0 as u32;
+            desc.CPUAccessFlags = 0;
+            desc.MiscFlags = 0;
+
+            let mut texture = None;
+            d3d_device.CreateTexture2D(&desc, None, Some(&mut texture))?;
+            texture.unwrap()
+        };
+
+        let (video_enumerator, video_processor) = unsafe {
+            let mut desc = D3D11_VIDEO_PROCESSOR_CONTENT_DESC::default();
+            desc.InputFrameFormat = D3D11_VIDEO_FRAME_FORMAT_PROGRESSIVE;
+            desc.InputWidth = input.width;
+            desc.InputHeight = input.height;
+            desc.OutputWidth = output.width;
+            desc.OutputHeight = output.height;
+            desc.Usage = D3D11_VIDEO_USAGE_PLAYBACK_NORMAL;
+
+            let enumerator = video_device.CreateVideoProcessorEnumerator(&desc)?;
+            let processor = video_device.CreateVideoProcessor(&enumerator, 0)?;
+            (enumerator, processor)
+        };
+
+        let input_view = unsafe {
+            let mut desc = D3D11_VIDEO_PROCESSOR_INPUT_VIEW_DESC::default();
+            desc.FourCC = 0;
+            desc.ViewDimension = D3D11_VPIV_DIMENSION_TEXTURE2D;
+            desc.Anonymous.Texture2D.MipSlice = 0;
+
+            let mut view = None;
+            video_device.CreateVideoProcessorInputView(
+                &input_texture,
+                &video_enumerator,
+                &desc,
+                Some(&mut view),
+            )?;
+
+            view.unwrap()
+        };
+
+        let output_view = unsafe {
+            let mut desc = D3D11_VIDEO_PROCESSOR_OUTPUT_VIEW_DESC::default();
+            desc.ViewDimension = D3D11_VPOV_DIMENSION_TEXTURE2D;
+
+            let mut view = None;
+            video_device.CreateVideoProcessorOutputView(
+                &output_texture,
+                &video_enumerator,
+                &desc,
+                Some(&mut view),
+            )?;
+
+            view.unwrap()
+        };
+
+        unsafe {
+            video_context.VideoProcessorSetStreamSourceRect(
+                &video_processor,
+                0,
+                true,
+                Some(&RECT {
+                    left: 0,
+                    top: 0,
+                    right: input.width as i32,
+                    bottom: input.height as i32,
+                }),
+            );
+        }
+
+        unsafe {
+            video_context.VideoProcessorSetStreamDestRect(
+                &video_processor,
+                0,
+                true,
+                Some(&RECT {
+                    left: 0,
+                    top: 0,
+                    right: output.width as i32,
+                    bottom: output.height as i32,
+                }),
+            );
+        }
+
+        unsafe {
+            let color_space = D3D11_VIDEO_PROCESSOR_COLOR_SPACE::default();
+            video_context.VideoProcessorSetStreamColorSpace(&video_processor, 0, &color_space);
+        }
 
         Ok(Self {
-            processor,
-            size: output,
+            d3d_device,
+            d3d_context,
+            video_device,
+            video_context,
+            video_enumerator,
+            video_processor,
+            input_texture,
+            output_texture,
+            input_view,
+            output_view,
         })
     }
 
-    // Process Data
-    // An MFT is designed to be a reliable state machine. It does not make any calls
-    // back to the client.
-    //
-    // 1. Call IMFTransform::ProcessMessage with the
-    //    MFT_MESSAGE_NOTIFY_BEGIN_STREAMING message. This message requests the MFT
-    //    to allocate any resources it needs during streaming.
-    //
-    // 2. Call IMFTransform::ProcessInput on at least one input stream to deliver an
-    //    input sample to the MFT.
-    //
-    // 3. (Optional.) Call IMFTransform::GetOutputStatus to query whether the MFT
-    //    can generate an output sample. If the method returns S_OK, check the
-    //    pdwFlags parameter. If pdwFlags contains the
-    //    MFT_OUTPUT_STATUS_SAMPLE_READY flag, go to step 4. If pdwFlags is zero, go
-    //    back to step 2. If the method returns E_NOTIMPL, go to step 4.
-    //
-    // 4. Call IMFTransform::ProcessOutput to get output data.
-    //  * If the method returns MF_E_TRANSFORM_NEED_MORE_INPUT, it means the MFT
-    //    requires more input data; go back to step 2.
-    //  * If the method returns MF_E_TRANSFORM_STREAM_CHANGE, it means the number of
-    //    output streams has changed, or the output format has changed. The client
-    //    might need to query for new stream // identifiers or set new media types.
-    //    For more information, see the documentation for ProcessOutput.
-    //
-    // 5. If there is still input data to process, go to step 2. If the MFT has
-    //    consumed all of the available input data, proceed to step 6.
-    //
-    // 6. Call ProcessMessage with the MFT_MESSAGE_NOTIFY_END_OF_STREAM message.
-    //
-    // 7. Call ProcessMessage with the MFT_MESSAGE_COMMAND_DRAIN message.
-    //
-    // 8. Call ProcessOutput to get the remaining output. Repeat this step until the
-    //    method returns MF_E_TRANSFORM_NEED_MORE_INPUT. This return value signals
-    //    that all of the output has been drained from the MFT. (Do not treat this
-    //    as an error condition.)
-    //
-    // The sequence described here keeps as little data as possible in the MFT.
-    // After every call to ProcessInput, the client attempts to get output. Several
-    // input samples might be needed to produce one output sample, or a single input
-    // sample might generate several output samples. The optimal behavior for the
-    // client is to pull output samples from the MFT until the MFT requires more
-    // input.
-    //
-    // However, the MFT should be able to handle a different order of method calls
-    // by the client. For example, the client might simply alternate between calls
-    // to ProcessInput and ProcessOutput. The MFT should restrict the amount of
-    // input that it gets by returning MF_E_NOTACCEPTING from ProcessInput whenever
-    // it has some output to produce.
-    //
-    // The order of method calls described here is not the only valid sequence of
-    // events. For example, steps 3 and 4 assume that the client starts with the
-    // input types and then tries the output types. The client can also reverse this
-    // order and start with the output types. In either case, if the MFT requires
-    // the opposite order, it should return the error code
-    // MF_E_TRANSFORM_TYPE_NOT_SET.
-    //
-    // The client can call informational methods, such as GetInputCurrentType and
-    // GetOutputStreamInfo, at any time during streaming. The client can also
-    // attempt to change the media types at any time. The MFT should return an error
-    // code if this is not a valid operation. In short, MFTs should assume very
-    // little about the order of operations, other than what is documented in the
-    // calls themselves.
-    pub fn process(&self, texture: &ID3D11Texture2D) -> Result<Option<IMFMediaBuffer>> {
-        if unsafe { self.processor.GetInputStatus(0)? } == MFT_INPUT_STATUS_ACCEPT_DATA.0 as u32 {
-            // Creates a media buffer to manage a Microsoft DirectX Graphics Infrastructure
-            // (DXGI) surface.
-            let buffer =
-                unsafe { MFCreateDXGISurfaceBuffer(&ID3D11Texture2D::IID, texture, 0, false)? };
+    /// To update the internal texture, simply copy it to the internal texture.
+    pub fn update(&mut self, texture: &ID3D11Texture2D) {
+        unsafe {
+            self.d3d_context.CopyResource(&self.input_texture, texture);
+        }
+    }
 
-            // Call IMFTransform::ProcessInput on at least one input stream to deliver an
-            // input sample to the MFT.
-            let sample = unsafe { MFCreateSample()? };
-            unsafe { sample.AddBuffer(&buffer)? };
-            unsafe { self.processor.ProcessInput(0, &sample, 0)? };
+    /// Directly convert the current internal texture and get the converted
+    /// result.
+    pub fn get_output(&mut self) -> Result<Texture> {
+        self.blt(self.input_view.clone())
+    }
+
+    /// Perform the conversion. This method will not copy the passed texture,
+    /// but will use the texture directly, which can save a copy step and
+    /// improve performance.
+    pub fn process(&mut self, texture: &ID3D11Texture2D) -> Result<Texture> {
+        let input_view = unsafe {
+            let mut desc = D3D11_VIDEO_PROCESSOR_INPUT_VIEW_DESC::default();
+            desc.FourCC = 0;
+            desc.ViewDimension = D3D11_VPIV_DIMENSION_TEXTURE2D;
+            desc.Anonymous.Texture2D.MipSlice = 0;
+
+            let mut view = None;
+            self.video_device.CreateVideoProcessorInputView(
+                texture,
+                &self.video_enumerator,
+                &desc,
+                Some(&mut view),
+            )?;
+
+            view.unwrap()
+        };
+
+        self.blt(input_view)
+    }
+
+    /// Perform the conversion. This method will copy the passed in texture, so
+    /// there are restrictions on the format of the passed in texture. Because
+    /// the internal texture is fixed to RGBA, the external texture can only be
+    /// RGBA.
+    pub fn process_with_copy(&mut self, texture: &ID3D11Texture2D) -> Result<Texture> {
+        self.update(texture);
+        self.blt(self.input_view.clone())
+    }
+
+    /// Perform the conversion. This method will copy the texture array to the
+    /// internal texture, so there are restrictions on the format of the
+    /// incoming texture. Because the internal one is fixed to RGBA, the
+    /// external texture can only be RGBA.
+    pub fn process_buffer(&mut self, buf: &[u8], size: VideoSize) -> Result<Texture> {
+        unsafe {
+            let mut dbox = D3D11_BOX::default();
+            dbox.left = 0;
+            dbox.top = 0;
+            dbox.front = 0;
+            dbox.back = 1;
+            dbox.right = size.width;
+            dbox.bottom = size.height;
+            self.d3d_context.UpdateSubresource(
+                &self.input_texture,
+                0,
+                Some(&dbox),
+                buf.as_ptr() as *const _,
+                size.width * 4,
+                size.width * size.height,
+            );
         }
 
-        // Call IMFTransform::GetOutputStatus to query whether the MFT can generate an
-        // output sample.
-        Ok(
-            if unsafe { self.processor.GetOutputStatus()? }
-                == MFT_OUTPUT_STATUS_SAMPLE_READY.0 as u32
-            {
-                let buffer = unsafe {
-                    MFCreate2DMediaBuffer(
-                        self.size.width,
-                        self.size.height,
-                        MFVideoFormat_NV12.data1,
-                        false,
-                    )?
-                };
+        self.blt(self.input_view.clone())
+    }
 
-                let sample = unsafe { MFCreateSample()? };
-                unsafe { sample.AddBuffer(&buffer)? };
+    fn blt(&mut self, input_view: ID3D11VideoProcessorInputView) -> Result<Texture> {
+        unsafe {
+            let mut streams = [D3D11_VIDEO_PROCESSOR_STREAM::default()];
+            streams[0].Enable = true.into();
+            streams[0].OutputIndex = 0;
+            streams[0].InputFrameOrField = 0;
+            streams[0].pInputSurface = ManuallyDrop::new(Some(input_view));
+            self.video_context.VideoProcessorBlt(
+                &self.video_processor,
+                &self.output_view,
+                0,
+                &streams,
+            )?;
 
-                let mut status = 0;
-                let mut buffers = [MFT_OUTPUT_DATA_BUFFER::default()];
+            ManuallyDrop::drop(&mut streams[0].pInputSurface);
+        }
 
-                // Generates output from the current input data.
-                buffers[0].dwStreamID = 0;
-                buffers[0].pSample = ManuallyDrop::new(Some(sample));
-                if let Err(e) =
-                    unsafe { self.processor.ProcessOutput(0, &mut buffers, &mut status) }
-                {
-                    return if e.code() != MF_E_TRANSFORM_NEED_MORE_INPUT {
-                        Err(e)
-                    } else {
-                        Ok(None)
-                    };
-                }
-
-                unsafe { ManuallyDrop::drop(&mut buffers[0].pSample) };
-                Some(buffer)
-            } else {
-                None
-            },
-        )
+        Ok(Texture::new(
+            &self.d3d_device,
+            &self.d3d_context,
+            &self.output_texture,
+        )?)
     }
 }
 
-impl Drop for VideoTransform {
-    fn drop(&mut self) {
-        // Notifies a Media Foundation transform (MFT) that an input stream has ended.
+pub struct Texture<'a> {
+    d3d_context: &'a ID3D11DeviceContext,
+    texture: ID3D11Texture2D,
+    resource: D3D11_MAPPED_SUBRESOURCE,
+}
+
+unsafe impl Send for Texture<'_> {}
+unsafe impl Sync for Texture<'_> {}
+
+impl<'a> Texture<'a> {
+    fn new(
+        d3d_device: &ID3D11Device,
+        d3d_context: &'a ID3D11DeviceContext,
+        source_texture: &ID3D11Texture2D,
+    ) -> Result<Self> {
+        let texture = unsafe {
+            let mut desc = D3D11_TEXTURE2D_DESC::default();
+            source_texture.GetDesc(&mut desc);
+
+            desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ.0 as u32;
+            desc.Usage = D3D11_USAGE_STAGING;
+            desc.BindFlags = 0;
+            desc.MiscFlags = 0;
+
+            let mut texture = None;
+            d3d_device.CreateTexture2D(&desc, None, Some(&mut texture))?;
+            texture.unwrap()
+        };
+
         unsafe {
-            let _ = self
-                .processor
-                .ProcessMessage(MFT_MESSAGE_NOTIFY_END_OF_STREAM, 0);
+            d3d_context.CopyResource(&texture, source_texture);
+        }
+
+        let mut resource = D3D11_MAPPED_SUBRESOURCE::default();
+        unsafe {
+            d3d_context.Map(&texture, 0, D3D11_MAP_READ, 0, Some(&mut resource))?;
+        }
+
+        Ok(Self {
+            d3d_context,
+            resource,
+            texture,
+        })
+    }
+
+    /// Represents a pointer to texture data. Internally, the texture is copied
+    /// to the CPU first, and then the internal data is mapped.
+    pub fn buffer(&self) -> *const u8 {
+        self.resource.pData as *const _
+    }
+
+    /// The stride of the texture data
+    pub fn stride(&self) -> usize {
+        self.resource.RowPitch as usize
+    }
+}
+
+impl Drop for Texture<'_> {
+    fn drop(&mut self) {
+        unsafe {
+            self.d3d_context.Unmap(&self.texture, 0);
         }
     }
 }

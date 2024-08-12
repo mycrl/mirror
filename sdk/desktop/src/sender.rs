@@ -3,6 +3,7 @@ use crate::factory::FrameSink;
 use std::{
     mem::size_of,
     sync::{Arc, Mutex, Weak},
+    thread,
 };
 
 use anyhow::Result;
@@ -17,53 +18,19 @@ use codec::{
     VideoEncoderSettings,
 };
 
+use crossbeam::sync::{Parker, Unparker};
 use frame::{AudioFrame, VideoFrame};
 use transport::{
     adapter::{BufferFlag, StreamBufferInfo, StreamSenderAdapter},
     package,
 };
 
+use utils::win32::MediaThreadClass;
+
 struct VideoSender {
-    adapter: Weak<StreamSenderAdapter>,
-    encoder: VideoEncoder,
+    encoder: Arc<Mutex<VideoEncoder>>,
     sink: Weak<FrameSink>,
-}
-
-impl FrameArrived for VideoSender {
-    type Frame = VideoFrame;
-
-    fn sink(&mut self, frame: &Self::Frame) -> bool {
-        let ret = if let Some(adapter) = self.adapter.upgrade() {
-            // Push the audio and video frames into the encoder.
-            if self.encoder.send_frame(frame) {
-                // Try to get the encoded data packets. The audio and video frames do not
-                // correspond to the data packets one by one, so you need to try to get multiple
-                // packets until they are empty.
-                if self.encoder.encode() {
-                    while let Some(packet) = self.encoder.read() {
-                        adapter.send(
-                            package::copy_from_slice(packet.buffer),
-                            StreamBufferInfo::Video(packet.flags, packet.timestamp),
-                        );
-                    }
-                }
-            }
-
-            true
-        } else {
-            if let Some(sink) = self.sink.upgrade() {
-                (sink.close)();
-            }
-
-            false
-        };
-
-        if let Some(sink) = self.sink.upgrade() {
-            (sink.video)(frame);
-        }
-
-        ret
-    }
+    unparker: Unparker,
 }
 
 impl VideoSender {
@@ -78,20 +45,83 @@ impl VideoSender {
         settings: &VideoEncoderSettings,
         sink: &Arc<FrameSink>,
     ) -> Result<Self> {
+        let parker = Parker::new();
+        let unparker = parker.unparker().clone();
+        let encoder = Arc::new(Mutex::new(VideoEncoder::new(settings)?));
+
+        let sink_ = Arc::downgrade(sink);
+        let adapter_ = Arc::downgrade(adapter);
+        let encoder_ = Arc::downgrade(&encoder);
+        thread::Builder::new()
+            .name("VideoEncoderThread".to_string())
+            .spawn(move || {
+                let thread_class_guard = MediaThreadClass::DisplayPostProcessing.join().ok();
+
+                loop {
+                    parker.park();
+
+                    if let (Some(adapter), Some(codec)) = (adapter_.upgrade(), encoder_.upgrade()) {
+                        let mut encoder = codec.lock().unwrap();
+
+                        // Try to get the encoded data packets. The audio and video frames do not
+                        // correspond to the data packets one by one, so you need to try to get
+                        // multiple packets until they are empty.
+                        if encoder.encode() {
+                            while let Some(packet) = encoder.read() {
+                                adapter.send(
+                                    package::copy_from_slice(packet.buffer),
+                                    StreamBufferInfo::Video(packet.flags, packet.timestamp),
+                                );
+                            }
+                        } else {
+                            break;
+                        }
+                    } else {
+                        break;
+                    }
+                }
+
+                if let Some(sink) = sink_.upgrade() {
+                    (sink.close)();
+                }
+
+                if let Some(guard) = thread_class_guard {
+                    drop(guard)
+                }
+            })?;
+
         Ok(Self {
-            encoder: VideoEncoder::new(settings)?,
-            adapter: Arc::downgrade(adapter),
             sink: Arc::downgrade(sink),
+            unparker,
+            encoder,
         })
     }
 }
 
+impl FrameArrived for VideoSender {
+    type Frame = VideoFrame;
+
+    fn sink(&mut self, frame: &Self::Frame) -> bool {
+        // // Push the audio and video frames into the encoder.
+        if self.encoder.lock().unwrap().send_frame(frame) {
+            self.unparker.unpark();
+        } else {
+            return false;
+        }
+
+        if let Some(sink) = self.sink.upgrade() {
+            (sink.video)(frame);
+        }
+
+        true
+    }
+}
+
 struct AudioSender {
+    buffer: Arc<Mutex<BytesMut>>,
     sink: Weak<FrameSink>,
-    adapter: Weak<StreamSenderAdapter>,
-    buffer: Mutex<BytesMut>,
-    encoder: AudioEncoder,
-    frames: usize,
+    unparker: Unparker,
+    chunk_count: usize,
 }
 
 impl AudioSender {
@@ -117,12 +147,72 @@ impl AudioSender {
             StreamBufferInfo::Audio(BufferFlag::Config as i32, 0),
         );
 
+        let parker = Parker::new();
+        let unparker = parker.unparker().clone();
+        let mut encoder = AudioEncoder::new(settings)?;
+        let buffer = Arc::new(Mutex::new(BytesMut::with_capacity(48000)));
+        let chunk_count = settings.sample_rate as usize / 1000 * 100;
+
+        let sink_ = Arc::downgrade(sink);
+        let buffer_ = Arc::downgrade(&buffer);
+        let adapter_ = Arc::downgrade(adapter);
+        thread::Builder::new()
+            .name("AudioEncoderThread".to_string())
+            .spawn(move || {
+                let thread_class_guard = MediaThreadClass::ProAudio.join().ok();
+
+                loop {
+                    parker.park();
+
+                    if let (Some(adapter), Some(buffer)) = (adapter_.upgrade(), buffer_.upgrade()) {
+                        let payload = buffer
+                            .lock()
+                            .unwrap()
+                            .split_to(chunk_count * size_of::<i16>());
+                        let frame = AudioFrame {
+                            data: payload.as_ptr() as *const _,
+                            frames: chunk_count as u32,
+                            sample_rate: 0,
+                        };
+
+                        if encoder.send_frame(&frame) {
+                            // Push the audio and video frames into the encoder.
+                            if encoder.encode() {
+                                // Try to get the encoded data packets. The audio and video frames
+                                // do not correspond to the data
+                                // packets one by one, so you need to try to get
+                                // multiple packets until they are empty.
+                                while let Some(packet) = encoder.read() {
+                                    adapter.send(
+                                        package::copy_from_slice(packet.buffer),
+                                        StreamBufferInfo::Audio(packet.flags, packet.timestamp),
+                                    );
+                                }
+                            } else {
+                                break;
+                            }
+                        } else {
+                            break;
+                        }
+                    } else {
+                        break;
+                    }
+                }
+
+                if let Some(sink) = sink_.upgrade() {
+                    (sink.close)();
+                }
+
+                if let Some(guard) = thread_class_guard {
+                    drop(guard)
+                }
+            })?;
+
         Ok(AudioSender {
             sink: Arc::downgrade(sink),
-            encoder: AudioEncoder::new(settings)?,
-            adapter: Arc::downgrade(adapter),
-            buffer: Mutex::new(BytesMut::with_capacity(48000)),
-            frames: settings.sample_rate as usize / 1000 * 100,
+            chunk_count,
+            unparker,
+            buffer,
         })
     }
 }
@@ -131,62 +221,23 @@ impl FrameArrived for AudioSender {
     type Frame = AudioFrame;
 
     fn sink(&mut self, frame: &Self::Frame) -> bool {
-        let ret = if let Some(adapter) = self.adapter.upgrade() {
-            // This is a rather strange implementation, but it is very useful and will have
-            // an impact on reducing latency.
-            //
-            // Why is it implemented this way? This is because the internal audio encoder
-            // has several specific limits on the number of samples submitted at a time, but
-            // I cannot control the size of the external single submission, so there is a
-            // 100 millisecond buffer here, and when the buffer is full, it is submitted to
-            // the encoder to ensure that a fixed number of audio samples are submitted each
-            // time.
-            let mut buffer = self.buffer.lock().unwrap();
-            buffer.extend_from_slice(unsafe {
-                std::slice::from_raw_parts(
-                    frame.data as *const _,
-                    frame.frames as usize * size_of::<f32>(),
-                )
-            });
+        let mut buffer = self.buffer.lock().unwrap();
+        buffer.extend_from_slice(unsafe {
+            std::slice::from_raw_parts(
+                frame.data as *const _,
+                frame.frames as usize * size_of::<i16>(),
+            )
+        });
 
-            if buffer.len() >= self.frames * 2 {
-                let payload = buffer.split_to(self.frames * 2);
-                let frame = AudioFrame {
-                    data: payload.as_ptr() as *const _,
-                    frames: self.frames as u32,
-                    sample_rate: 0,
-                };
-
-                if self.encoder.send_frame(&frame) {
-                    // Push the audio and video frames into the encoder.
-                    if self.encoder.encode() {
-                        // Try to get the encoded data packets. The audio and video frames do not
-                        // correspond to the data packets one by one, so you need to try to get
-                        // multiple packets until they are empty.
-                        while let Some(packet) = self.encoder.read() {
-                            adapter.send(
-                                package::copy_from_slice(packet.buffer),
-                                StreamBufferInfo::Audio(packet.flags, packet.timestamp),
-                            );
-                        }
-                    }
-                }
-            }
-
-            true
-        } else {
-            if let Some(sink) = self.sink.upgrade() {
-                (sink.close)();
-            }
-
-            false
-        };
+        if buffer.len() >= self.chunk_count * 2 {
+            self.unparker.unpark();
+        }
 
         if let Some(sink) = self.sink.upgrade() {
             (sink.audio)(frame);
         }
 
-        ret
+        true
     }
 }
 

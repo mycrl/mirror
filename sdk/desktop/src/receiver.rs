@@ -1,10 +1,11 @@
+use crate::factory::FrameSink;
+
 use std::{sync::Arc, thread};
 
 use anyhow::Result;
 use codec::{AudioDecoder, VideoDecoder};
 use transport::adapter::{StreamKind, StreamMultiReceiverAdapter, StreamReceiverAdapterExt};
-
-use crate::factory::FrameSink;
+use utils::win32::MediaThreadClass;
 
 #[derive(Debug, Clone)]
 pub struct ReceiverOptions {
@@ -24,6 +25,8 @@ fn create_video_decoder(
     thread::Builder::new()
         .name("VideoDecoderThread".to_string())
         .spawn(move || {
+            let thread_class_guard = MediaThreadClass::Playback.join().ok();
+
             'a: while let (Some(adapter), Some(sink)) = (adapter_.upgrade(), sink_.upgrade()) {
                 if let Some((packet, flags, timestamp)) = adapter.next(StreamKind::Video) {
                     if codec.decode(&packet, flags, timestamp) {
@@ -44,6 +47,10 @@ fn create_video_decoder(
             if let Some(sink) = sink_.upgrade() {
                 (sink.close)()
             }
+
+            if let Some(guard) = thread_class_guard {
+                drop(guard)
+            }
         })?;
 
     Ok(())
@@ -61,6 +68,8 @@ fn create_audio_decoder(
     thread::Builder::new()
         .name("AudioDecoderThread".to_string())
         .spawn(move || {
+            let thread_class_guard = MediaThreadClass::ProAudio.join().ok();
+
             'a: while let (Some(adapter), Some(sink)) = (adapter_.upgrade(), sink_.upgrade()) {
                 if let Some((packet, flags, timestamp)) = adapter.next(StreamKind::Audio) {
                     if codec.decode(&packet, flags, timestamp) {
@@ -80,6 +89,10 @@ fn create_audio_decoder(
             log::warn!("audio decoder thread is closed!");
             if let Some(sink) = sink_.upgrade() {
                 (sink.close)()
+            }
+
+            if let Some(guard) = thread_class_guard {
+                drop(guard)
             }
         })?;
 

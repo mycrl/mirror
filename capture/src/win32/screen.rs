@@ -1,20 +1,16 @@
 use crate::{CaptureHandler, FrameArrived, Source, SourceType, VideoCaptureSourceDescription};
 
 use std::{
-    ptr::null_mut,
-    sync::{atomic::AtomicBool, Arc, Mutex, RwLock},
+    sync::{atomic::AtomicBool, Arc, Mutex},
     thread,
     time::Duration,
 };
 
 use anyhow::{anyhow, Result};
 use frame::{VideoFrame, VideoSize, VideoTransform};
-use utils::atomic::EasyAtomic;
-use windows::{
-    core::Interface,
-    Win32::{Graphics::Direct3D11::ID3D11Texture2D, Media::MediaFoundation::IMF2DBuffer},
-};
+use utils::{atomic::EasyAtomic, win32::MediaThreadClass};
 
+use windows::Win32::Graphics::Direct3D11::{ID3D11Device, ID3D11DeviceContext};
 use windows_capture::{
     capture::{CaptureControl, GraphicsCaptureApiHandler},
     frame::Frame,
@@ -24,72 +20,76 @@ use windows_capture::{
 };
 
 struct WindowsCapture {
-    texture: Arc<RwLock<Option<ID3D11Texture2D>>>,
+    transform: Arc<Mutex<VideoTransform>>,
     status: Arc<AtomicBool>,
 }
 
 impl GraphicsCaptureApiHandler for WindowsCapture {
-    type Flags = (Box<dyn FrameArrived<Frame = VideoFrame>>, Context);
+    type Flags = Context;
     type Error = anyhow::Error;
 
-    fn new((mut arrived, ctx): Self::Flags) -> Result<Self, Self::Error> {
-        let texture: Arc<RwLock<Option<ID3D11Texture2D>>> = Default::default();
+    fn new(
+        d3d_device: ID3D11Device,
+        d3d_context: ID3D11DeviceContext,
+        mut ctx: Self::Flags,
+    ) -> Result<Self, Self::Error> {
         let status: Arc<AtomicBool> = Arc::new(AtomicBool::new(true));
+        let transform = Arc::new(Mutex::new(VideoTransform::new(
+            VideoSize {
+                width: ctx.source.width()?,
+                height: ctx.source.height()?,
+            },
+            VideoSize {
+                width: ctx.options.size.width,
+                height: ctx.options.size.height,
+            },
+            Some((d3d_device, d3d_context)),
+        )?));
 
         let mut frame = VideoFrame::default();
         frame.width = ctx.options.size.width;
         frame.height = ctx.options.size.height;
 
-        let texture_ = Arc::downgrade(&texture);
-        let status_ = status.clone();
+        let status_ = Arc::downgrade(&status);
+        let transform_ = Arc::downgrade(&transform);
         thread::Builder::new()
-            .name("WindowsScreenCaptureTransformThread".to_string())
+            .name("WindowsScreenCaptureThread".to_string())
             .spawn(move || {
-                let mut func = || {
-                    while let Some(texture) = texture_.upgrade() {
-                        if let Some(texture) = texture.read().unwrap().as_ref() {
-                            if let Some(buffer) = ctx.transform.process(texture)? {
-                                // If the buffer contains 2-D image data (such as an uncompressed
-                                // video frame), you should query
-                                // the buffer for the IMF2DBuffer
-                                // interface. The methods on
-                                // IMF2DBuffer are optimized for 2-D data.
-                                let texture = buffer.cast::<IMF2DBuffer>()?;
+                let thread_class_guard = MediaThreadClass::Capture.join().ok();
 
-                                // Gives the caller access to the memory in the buffer.
-                                let mut stride = 0;
-                                let mut data = null_mut();
-                                unsafe { texture.Lock2D(&mut data, &mut stride)? };
+                while let Some(transform) = transform_.upgrade() {
+                    thread::sleep(Duration::from_millis(1000 / ctx.options.fps as u64));
 
-                                frame.data[0] = data;
-                                frame.data[1] =
-                                    unsafe { data.add(stride as usize * frame.height as usize) };
-                                frame.linesize = [stride as usize, stride as usize];
-                                if !arrived.sink(&frame) {
-                                    break;
-                                }
+                    let mut transform = transform.lock().unwrap();
+                    let texture = match transform.get_output() {
+                        Ok(t) => t,
+                        Err(e) => {
+                            log::error!("video transform get output error={:?}", e);
 
-                                // Unlocks a buffer that was previously locked.
-                                unsafe { texture.Unlock2D()? };
-                            }
+                            break;
                         }
+                    };
 
-                        thread::sleep(Duration::from_millis(1000 / ctx.options.fps as u64));
+                    let (buffer, stride) = (texture.buffer(), texture.stride());
+
+                    frame.data[0] = buffer;
+                    frame.data[1] = unsafe { buffer.add(stride * frame.height as usize) };
+                    frame.linesize = [stride, stride];
+                    if !ctx.arrived.sink(&frame) {
+                        break;
                     }
-
-                    Ok::<(), anyhow::Error>(())
-                };
-
-                if let Err(e) = func() {
-                    log::error!("WindowsScreenCaptureTransformThread error={:?}", e);
-                } else {
-                    log::info!("WindowsScreenCaptureTransformThread is closed");
                 }
 
-                status_.update(false);
+                if let Some(status) = status_.upgrade() {
+                    status.update(false);
+                }
+
+                if let Some(guard) = thread_class_guard {
+                    drop(guard)
+                }
             })?;
 
-        Ok(Self { texture, status })
+        Ok(Self { status, transform })
     }
 
     fn on_frame_arrived(
@@ -98,13 +98,10 @@ impl GraphicsCaptureApiHandler for WindowsCapture {
         capture_control: InternalCaptureControl,
     ) -> Result<(), Self::Error> {
         if self.status.get() {
-            // Video conversion always runs at a fixed frame rate. Here we simply update the
-            // latest frame to effectively solve the frame rate mismatch problem.
-            if let Ok(mut texture) = self.texture.write() {
-                drop(texture.replace(frame.texture()?));
-            }
+            self.transform.lock().unwrap().update(frame.texture_ref());
         } else {
             log::info!("windows screen capture control stop");
+
             capture_control.stop();
         }
 
@@ -118,8 +115,9 @@ impl GraphicsCaptureApiHandler for WindowsCapture {
 }
 
 struct Context {
-    transform: VideoTransform,
+    arrived: Box<dyn FrameArrived<Frame = VideoFrame>>,
     options: VideoCaptureSourceDescription,
+    source: Monitor,
 }
 
 #[derive(Default)]
@@ -167,26 +165,13 @@ impl CaptureHandler for ScreenCapture {
             .replace(WindowsCapture::start_free_threaded(Settings {
                 cursor_capture: CursorCaptureSettings::WithoutCursor,
                 draw_border: DrawBorderSettings::Default,
-                color_format: ColorFormat::Bgra8,
+                color_format: ColorFormat::Rgba8,
                 item: source,
-                flags: (
-                    Box::new(arrived),
-                    Context {
-                        transform: VideoTransform::new(
-                            VideoSize {
-                                width: source.width()?,
-                                height: source.height()?,
-                            },
-                            options.fps,
-                            VideoSize {
-                                width: options.size.width,
-                                height: options.size.height,
-                            },
-                            options.fps,
-                        )?,
-                        options,
-                    },
-                ),
+                flags: Context {
+                    arrived: Box::new(arrived),
+                    options,
+                    source,
+                },
             })?)
         {
             control.stop()?;
