@@ -15,12 +15,7 @@ use std::{
 use std::{ffi::CString, mem::ManuallyDrop};
 
 use frame::{AudioFrame, VideoFrame};
-use utils::{
-    atomic::EasyAtomic,
-    logger,
-    strings::Strings,
-    win32::{set_process_priority, ProcessPriority},
-};
+use utils::{atomic::EasyAtomic, strings::Strings};
 
 #[cfg(not(target_os = "macos"))]
 use capture::{Capture, SourceType};
@@ -50,35 +45,6 @@ extern "system" fn DllMain(
 /// Initialize the environment, which must be initialized before using the SDK.
 #[no_mangle]
 pub extern "C" fn mirror_startup() -> bool {
-    if logger::init(
-        log::LevelFilter::Info,
-        if cfg!(debug_assertions) {
-            Some("mirror.log")
-        } else {
-            None
-        },
-    )
-    .is_err()
-    {
-        return false;
-    }
-
-    std::panic::set_hook(Box::new(|info| {
-        log::error!("{:?}", info);
-    }));
-
-    // In order to prevent other programs from affecting the delay performance of
-    // the current program, set the priority of the current process to high.
-    #[cfg(target_os = "windows")]
-    {
-        if set_process_priority(ProcessPriority::High).is_err() {
-            log::error!(
-                "failed to set current process priority, Maybe it's \
-                because you didn't run it with administrator privileges."
-            );
-        }
-    }
-
     checker(factory::startup()).is_ok()
 }
 

@@ -6,11 +6,40 @@ use crate::sender::{Sender, SenderOptions};
 use anyhow::Result;
 use frame::{AudioFrame, VideoFrame};
 use transport::{Transport, TransportOptions};
+use utils::logger;
+
+#[cfg(target_os = "windows")]
+use utils::win32::{set_process_priority, ProcessPriority};
 
 /// Initialize the environment, which must be initialized before using the SDK.
 #[rustfmt::skip]
 pub fn startup() -> Result<()> {
+    logger::init(
+        log::LevelFilter::Info,
+        if cfg!(debug_assertions) {
+            Some("mirror.log")
+        } else {
+            None
+        },
+    )?;
+
     log::info!("mirror startup");
+
+    std::panic::set_hook(Box::new(|info| {
+        log::error!("{:?}", info);
+    }));
+
+    // In order to prevent other programs from affecting the delay performance of
+    // the current program, set the priority of the current process to high.
+    #[cfg(target_os = "windows")]
+    {
+        if set_process_priority(ProcessPriority::High).is_err() {
+            log::error!(
+                "failed to set current process priority, Maybe it's \
+                because you didn't run it with administrator privileges."
+            );
+        }
+    }
 
     codec::startup();
     log::info!("codec initialized");

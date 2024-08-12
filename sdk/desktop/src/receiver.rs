@@ -5,6 +5,8 @@ use std::{sync::Arc, thread};
 use anyhow::Result;
 use codec::{AudioDecoder, VideoDecoder};
 use transport::adapter::{StreamKind, StreamMultiReceiverAdapter, StreamReceiverAdapterExt};
+
+#[cfg(target_os = "windows")]
 use utils::win32::MediaThreadClass;
 
 #[derive(Debug, Clone)]
@@ -25,6 +27,7 @@ fn create_video_decoder(
     thread::Builder::new()
         .name("VideoDecoderThread".to_string())
         .spawn(move || {
+            #[cfg(target_os = "windows")]
             let thread_class_guard = MediaThreadClass::Playback.join().ok();
 
             'a: while let (Some(adapter), Some(sink)) = (adapter_.upgrade(), sink_.upgrade()) {
@@ -48,6 +51,7 @@ fn create_video_decoder(
                 (sink.close)()
             }
 
+            #[cfg(target_os = "windows")]
             if let Some(guard) = thread_class_guard {
                 drop(guard)
             }
@@ -68,6 +72,7 @@ fn create_audio_decoder(
     thread::Builder::new()
         .name("AudioDecoderThread".to_string())
         .spawn(move || {
+            #[cfg(target_os = "windows")]
             let thread_class_guard = MediaThreadClass::ProAudio.join().ok();
 
             'a: while let (Some(adapter), Some(sink)) = (adapter_.upgrade(), sink_.upgrade()) {
@@ -91,6 +96,7 @@ fn create_audio_decoder(
                 (sink.close)()
             }
 
+            #[cfg(target_os = "windows")]
             if let Some(guard) = thread_class_guard {
                 drop(guard)
             }

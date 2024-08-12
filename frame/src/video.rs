@@ -1,5 +1,9 @@
-use std::{mem::ManuallyDrop, ptr::null};
+use std::ptr::null;
 
+#[cfg(target_os = "windows")]
+use std::mem::ManuallyDrop;
+
+#[cfg(target_os = "windows")]
 use windows::{
     core::{Interface, Result},
     Win32::{
@@ -80,6 +84,7 @@ pub struct VideoSize {
 /// method, you can let the external texture decide what format to use, because
 /// this method does not copy the texture.
 #[allow(unused)]
+#[cfg(target_os = "windows")]
 pub struct VideoTransform {
     d3d_device: ID3D11Device,
     d3d_context: ID3D11DeviceContext,
@@ -93,9 +98,13 @@ pub struct VideoTransform {
     output_view: ID3D11VideoProcessorOutputView,
 }
 
+#[cfg(target_os = "windows")]
 unsafe impl Send for VideoTransform {}
+
+#[cfg(target_os = "windows")]
 unsafe impl Sync for VideoTransform {}
 
+#[cfg(target_os = "windows")]
 impl VideoTransform {
     // Only use d3d11 implementation
     const FEATURE_LEVELS: [D3D_FEATURE_LEVEL; 2] = [D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0];
@@ -362,15 +371,20 @@ impl VideoTransform {
     }
 }
 
+#[cfg(target_os = "windows")]
 pub struct Texture<'a> {
     d3d_context: &'a ID3D11DeviceContext,
     texture: ID3D11Texture2D,
     resource: D3D11_MAPPED_SUBRESOURCE,
 }
 
+#[cfg(target_os = "windows")]
 unsafe impl Send for Texture<'_> {}
+
+#[cfg(target_os = "windows")]
 unsafe impl Sync for Texture<'_> {}
 
+#[cfg(target_os = "windows")]
 impl<'a> Texture<'a> {
     fn new(
         d3d_device: &ID3D11Device,
@@ -419,6 +433,7 @@ impl<'a> Texture<'a> {
     }
 }
 
+#[cfg(target_os = "windows")]
 impl Drop for Texture<'_> {
     fn drop(&mut self) {
         unsafe {

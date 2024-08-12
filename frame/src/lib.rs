@@ -11,5 +11,8 @@ mod video;
 
 pub use self::{
     audio::{AudioFrame, AudioResampler},
-    video::{Texture, VideoFrame, VideoSize, VideoTransform},
+    video::{VideoFrame, VideoSize},
 };
+
+#[cfg(target_os = "windows")]
+pub use self::video::{Texture, VideoTransform};
