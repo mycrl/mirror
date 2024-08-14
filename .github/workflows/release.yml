@@ -26,6 +26,10 @@ jobs:
             target/
           key: '${{ matrix.target }}-cargo-${{ hashFiles(''**/Cargo.lock'') }}'
 
+      - name: Install
+        if: runner.os == 'Windows'
+        run: sudo apt-get install tclsh pkg-config cmake libssl-dev build-essential libasound2-dev -y
+
       # use auto build script
       - name: Build distributions
         run: |
