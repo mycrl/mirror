@@ -9,6 +9,20 @@ if (NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE "Debug")
 endif()
 
+set(THIRD_PARTY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party")
+
+if(UNIX)
+    if (NOT EXISTS "${THIRD_PARTY_DIR}")
+        execute_process(COMMAND mkdir "${THIRD_PARTY_DIR}")
+    endif()
+
+    if (NOT EXISTS "${THIRD_PARTY_DIR}/sdl2")
+        execute_process(
+            WORKING_DIRECTORY "${THIRD_PARTY_DIR}"
+            COMMAND bash -c "git clone --branch SDL2 https://github.com/libsdl-org/SDL sdl2")
+    endif()
+endif()
+
 if(MSVC)
     add_executable(example WIN32 src/main.cpp 
                     src/args.h 
@@ -30,6 +44,10 @@ endif()
 include_directories("../../sdk/desktop/include"
                     "../../sdk/renderer/include"
                     "../../frame/include")
+
+if(UNIX)
+    include_directories("${THIRD_PARTY_DIR}/sdl2/include")
+endif()
 
 # If it is WIN32, you need to set the runtime library.
 if(MSVC)
@@ -66,4 +84,10 @@ if(WIN32)
                           bcrypt
                           mirror.dll.lib
                           renderer.dll.lib)
+endif()
+
+if(UNIX)
+    target_link_libraries(example
+                          libmirror.so
+                          librenderer.so)
 endif()

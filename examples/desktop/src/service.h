@@ -15,6 +15,8 @@ class MirrorServiceExt
 public:
 #ifdef WIN32
     MirrorServiceExt(Args& args, HWND hwnd, HINSTANCE hinstance);
+#else
+    MirrorServiceExt(Args& args);
 #endif
 
     ~MirrorServiceExt();
@@ -22,6 +24,7 @@ public:
     bool CreateMirrorSender();
     bool CreateMirrorReceiver();
     void Close();
+    void RunEventLoop(std::function<bool(SDL_Event*)> handler);
 private:
     Args& _args;
     Mirror _mirror = nullptr;

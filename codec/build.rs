@@ -134,11 +134,10 @@ fn find_ffmpeg_prefix(out_dir: &str, is_debug: bool) -> anyhow::Result<(Vec<Stri
             vec![join(&prefix, "./include")?],
             vec![join(&prefix, "./lib")?],
         ))
-    } else {
+    } else if cfg!(target_os = "windows") {
         let prefix = join(out_dir, "ffmpeg").unwrap();
         if !is_exsit(&prefix) {
-            if cfg!(target_os = "windows") {
-                exec(
+            exec(
                     &format!(
                         "Invoke-WebRequest -Uri https://github.com/mycrl/mirror/releases/download/distributions/ffmpeg-windows-x64-{}.zip -OutFile ffmpeg.zip", 
                         if is_debug { "debug" } else { "release" }
@@ -146,18 +145,25 @@ fn find_ffmpeg_prefix(out_dir: &str, is_debug: bool) -> anyhow::Result<(Vec<Stri
                     out_dir,
                 )?;
 
-                exec(
-                    "Expand-Archive -Path ffmpeg.zip -DestinationPath ./",
-                    out_dir,
-                )?;
-            } else {
-                exec(
-                    "wget https://github.com/mycrl/mirror/releases/download/distributions/ffmpeg-linux-x64-release.zip -O ffmpeg.zip",
-                    out_dir,
-                )?;
+            exec(
+                "Expand-Archive -Path ffmpeg.zip -DestinationPath ./",
+                out_dir,
+            )?;
+        }
 
-                exec("unzip ffmpeg.zip", out_dir)?;
-            }
+        Ok((
+            vec![join(&prefix, "./include")?],
+            vec![join(&prefix, "./lib")?],
+        ))
+    } else {
+        let prefix = join(out_dir, "ffmpeg").unwrap();
+        if !is_exsit(&prefix) {
+            exec(
+                "wget https://github.com/mycrl/mirror/releases/download/distributions/ffmpeg-linux-x64-release.zip -O ffmpeg.zip",
+                out_dir,
+            )?;
+
+            exec("unzip ffmpeg.zip", out_dir)?;
         }
 
         Ok((

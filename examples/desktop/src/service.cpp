@@ -31,6 +31,15 @@ MirrorServiceExt::MirrorServiceExt(Args& args, HWND hwnd, HINSTANCE hinstance)
                                    MessageBox(nullptr, TEXT("sender/receiver is closed!"), TEXT("Info"), 0);
                                });
 }
+#else
+MirrorServiceExt::MirrorServiceExt(Args& args): _args(args)
+{
+    _render = new SimpleRender(args,
+                               [&]
+                               {
+                                   this->Close();
+                               });
+}
 #endif
 
 MirrorServiceExt::~MirrorServiceExt()
@@ -187,4 +196,9 @@ bool MirrorServiceExt::_create_mirror()
 
     _mirror = mirror_create(mirror_options);
     return _mirror != nullptr;
+}
+
+void MirrorServiceExt::RunEventLoop(std::function<bool(SDL_Event*)> handler)
+{
+    _render->RunEventLoop(handler);
 }

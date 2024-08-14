@@ -5,8 +5,14 @@ mod audio;
 #[cfg(target_os = "windows")]
 mod win32;
 
+#[cfg(target_os = "linux")]
+mod unix;
+
 #[cfg(target_os = "windows")]
 use win32::{CameraCapture, ScreenCapture};
+
+#[cfg(target_os = "linux")]
+use unix::ScreenCapture;
 
 use self::audio::AudioCapture;
 
@@ -23,6 +29,13 @@ pub fn startup() -> Result<()> {
         self::win32::startup()?;
     }
 
+    #[cfg(target_os = "linux")]
+    {
+        log::info!("capture linux satrtup");
+
+        self::unix::startup();
+    }
+
     Ok(())
 }
 
@@ -32,6 +45,13 @@ pub fn shutdown() -> Result<()> {
         log::info!("capture MediaFoundation shutdown");
 
         self::win32::shutdown()?;
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        log::info!("capture linux shutdown");
+
+        self::unix::shutdown();
     }
 
     Ok(())
@@ -135,7 +155,7 @@ where
 }
 
 enum CaptureImplement {
-    Camera(CameraCapture),
+    // Camera(CameraCapture),
     Screen(ScreenCapture),
     Audio(AudioCapture),
 }
@@ -150,7 +170,7 @@ impl Capture {
         log::info!("capture get sources, kind={:?}", kind);
 
         Ok(match kind {
-            SourceType::Camera => CameraCapture::get_sources()?,
+            // SourceType::Camera => CameraCapture::get_sources()?,
             SourceType::Screen => ScreenCapture::get_sources()?,
             SourceType::Audio => AudioCapture::get_sources()?,
             _ => Vec::new(),
@@ -170,11 +190,11 @@ impl Capture {
         }) = video
         {
             match description.source.kind {
-                SourceType::Camera => {
-                    let camera = CameraCapture::default();
-                    camera.start(description, arrived)?;
-                    devices.push(CaptureImplement::Camera(camera));
-                }
+                // SourceType::Camera => {
+                //     let camera = CameraCapture::default();
+                //     camera.start(description, arrived)?;
+                //     devices.push(CaptureImplement::Camera(camera));
+                // }
                 SourceType::Screen => {
                     let screen = ScreenCapture::default();
                     screen.start(description, arrived)?;
@@ -203,7 +223,7 @@ impl Capture {
         for item in self.0.iter() {
             match item {
                 CaptureImplement::Screen(it) => it.stop(),
-                CaptureImplement::Camera(it) => it.stop(),
+                // CaptureImplement::Camera(it) => it.stop(),
                 CaptureImplement::Audio(it) => it.stop(),
             }?;
         }

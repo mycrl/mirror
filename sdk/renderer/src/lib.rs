@@ -7,6 +7,7 @@ use std::{
 };
 
 use audio::AudioPlayer;
+use sdl2::sys::SDL_Event;
 use utils::logger;
 
 use frame::{AudioFrame, VideoFrame};
@@ -32,19 +33,23 @@ impl From<RawSize> for Size {
 #[no_mangle]
 extern "system" fn DllMain(_module: u32, call_reason: usize, _reserved: *const c_void) -> bool {
     match call_reason {
-        1 /* DLL_PROCESS_ATTACH */ => {
-            logger::init(
-                log::LevelFilter::Info,
-                if cfg!(debug_assertions) {
-                    Some("renderer.log")
-                } else {
-                    None
-                },
-            )
-            .is_ok()
-        },
+        1 /* DLL_PROCESS_ATTACH */ => renderer_startup(),
         _ => true,
     }
+}
+
+/// Initialize the environment, which must be initialized before using the SDK.
+#[no_mangle]
+extern "C" fn renderer_startup() -> bool {
+    logger::init(
+        log::LevelFilter::Info,
+        if cfg!(debug_assertions) {
+            Some("renderer.log")
+        } else {
+            None
+        },
+    )
+    .is_ok()
 }
 
 /// Create the window handle used by the SDK through the original window handle.
@@ -75,19 +80,41 @@ struct RawRenderer {
 /// Creating a window renderer.
 #[no_mangle]
 extern "C" fn renderer_create(size: RawSize, handle: *const WindowHandle) -> *mut RawRenderer {
-    assert!(!handle.is_null());
-
     let func = || {
         Ok::<RawRenderer, anyhow::Error>(RawRenderer {
-            video: VideoRender::new(size.into(), unsafe { &*handle })?,
+            video: VideoRender::new(
+                size.into(),
+                if handle.is_null() {
+                    Some(unsafe { &*handle })
+                } else {
+                    None
+                },
+            )?,
             audio: AudioPlayer::new()?,
         })
     };
 
-    func()
-        .map_err(|e| log::error!("{:?}", e))
-        .map(|ret| Box::into_raw(Box::new(ret)))
-        .unwrap_or_else(|_| null_mut())
+    // func()
+    //     .map_err(|e| log::error!("{:?}", e))
+    //     .map(|ret| Box::into_raw(Box::new(ret)))
+    //     .unwrap_or_else(|_| null_mut())
+
+    Box::into_raw(Box::new(func().unwrap()))
+}
+
+/// Wait indefinitely for the next available event.
+#[no_mangle]
+extern "C" fn renderer_event_loop(
+    render: *mut RawRenderer,
+    handle: Option<extern "C" fn(event: *const c_void, ctx: *const c_void) -> bool>,
+    ctx: *const c_void,
+) {
+    assert!(!render.is_null() && handle.is_some());
+
+    let func = handle.unwrap();
+    unsafe { &mut *render }.video.start_loop(move |event| {
+        func(unsafe { std::mem::transmute::<*const SDL_Event, *const c_void>(event) }, ctx)
+    });
 }
 
 /// Push the video frame into the renderer, which will update the window

@@ -25,6 +25,7 @@ use transport::{
     package,
 };
 
+#[cfg(target_os = "windows")]
 use utils::win32::MediaThreadClass;
 
 struct VideoSender {
@@ -55,6 +56,7 @@ impl VideoSender {
         thread::Builder::new()
             .name("VideoEncoderThread".to_string())
             .spawn(move || {
+                #[cfg(target_os = "windows")]
                 let thread_class_guard = MediaThreadClass::DisplayPostProcessing.join().ok();
 
                 loop {
@@ -85,6 +87,7 @@ impl VideoSender {
                     (sink.close)();
                 }
 
+                #[cfg(target_os = "windows")]
                 if let Some(guard) = thread_class_guard {
                     drop(guard)
                 }
@@ -159,6 +162,7 @@ impl AudioSender {
         thread::Builder::new()
             .name("AudioEncoderThread".to_string())
             .spawn(move || {
+                #[cfg(target_os = "windows")]
                 let thread_class_guard = MediaThreadClass::ProAudio.join().ok();
 
                 loop {
@@ -203,6 +207,7 @@ impl AudioSender {
                     (sink.close)();
                 }
 
+                #[cfg(target_os = "windows")]
                 if let Some(guard) = thread_class_guard {
                     drop(guard)
                 }

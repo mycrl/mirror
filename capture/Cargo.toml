@@ -20,3 +20,6 @@ features = [
     "Win32_Media", 
     "Win32_Media_MediaFoundation", 
 ]
+
+[target.'cfg(target_os = "linux")'.dependencies]
+scap = { git = "https://github.com/CapSoftware/scap", branch = "main" }

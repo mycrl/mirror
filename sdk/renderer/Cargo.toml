@@ -12,5 +12,10 @@ anyhow = "1.0.86"
 cpal = "0.15.3"
 utils = { path = "../../utils" }
 frame = { path = "../../frame" }
-sdl2 = { version = "0.37.0", features = ["bundled", "static-link", "raw-window-handle"] }
 log = "0.4.20"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+sdl2 = { version = "0.37.0", features = ["bundled", "static-link","raw-window-handle"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+sdl2 = { version = "0.37.0", features = ["bundled", "raw-window-handle"] }

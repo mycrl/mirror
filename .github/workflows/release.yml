@@ -5,14 +5,15 @@ on:
       - v*
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: '${{ matrix.os }}'
     strategy:
       matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
         target:
           - debug
           - release
-          - app-debug
-          - app-release
     steps:
       - uses: actions/checkout@v4
       - uses: actions/cache@v3
@@ -32,20 +33,27 @@ jobs:
             npm run build:${{ matrix.target }}
 
       # compress shared libraries
-      - name: Compress distributions
-        if: ${{ matrix.target == 'debug' || matrix.target == 'release' }}
+      - name: Compress distributions (Windows)
+        if: runner.os == 'Windows'
         run: Compress-Archive -Path ./build -DestinationPath ./windows-x64-${{ matrix.target }}.zip
 
-      # compress electron app
-      - name: Compress distributions (App)
-        if: ${{ matrix.target == 'app-debug' || matrix.target == 'app-release' }}
-        run: Compress-Archive -Path ./build/bin -DestinationPath ./windows-x64-${{ matrix.target }}.zip
+      - name: Compress distributions (Linux)
+        if: runner.os == 'Linux'
+        run: zip -r ./linux-x64-${{ matrix.target }}.zip ./build
 
-      - name: Upload artifact
+      - name: Upload artifact (Windows)
+        if: runner.os == 'Windows'
         uses: actions/upload-artifact@v3
         with:
           name: windows-x64-${{ matrix.target }}
           path: ./windows-x64-${{ matrix.target }}.zip
+          
+      - name: Upload artifact (Linux)
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v3
+        with:
+          name: linux-x64-${{ matrix.target }}
+          path: ./linux-x64-${{ matrix.target }}.zip
   deploy:
     needs: build
     runs-on: ubuntu-latest

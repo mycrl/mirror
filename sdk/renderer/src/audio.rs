@@ -104,7 +104,7 @@ struct AudioQueue {
     current_chunk: Option<std::vec::IntoIter<i16>>,
 }
 
-static MUTE_BUF: [i16; 4800] = [0; 4800];
+static MUTE_BUF: [i16; 48000] = [0; 48000];
 
 impl AudioQueue {
     fn read(&mut self, output: &mut [i16], channels: usize) {

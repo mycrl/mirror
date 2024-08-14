@@ -15,8 +15,8 @@ const Args = process
 const Command = (cmd, options = {}) => new Promise((
     resolve,
     reject,
-    ps = exec('$ProgressPreference = \'SilentlyContinue\';' + cmd, {
-        shell: 'powershell.exe',
+    ps = exec(process.platform == 'win32' ? '$ProgressPreference = \'SilentlyContinue\';' + cmd : cmd, {
+        shell: process.platform == 'win32' ? 'powershell.exe' : 'bash',
         cwd: __dirname,
         ...options,
     }
@@ -65,9 +65,13 @@ const Replace = (file, filters) => {
     {
         if (!fs.existsSync('./target/ffmpeg.zip'))
         {
+            const name = process.platform == 'win32' ? 
+                `ffmpeg-windows-x64-${Args.release ? 'release' : 'debug'}.zip` : 
+                'ffmpeg-linux-x64-release.zip'
+
             console.log('Start download ffmpeg...')
-            await download(`${BaseDistributions}/ffmpeg-windows-x64-${Args.release ? 'release' : 'debug'}.zip`,'./target')
-            fs.renameSync(`./target/ffmpeg-windows-x64-${Args.release ? 'release' : 'debug'}.zip`, './target/ffmpeg.zip')
+            await download(`${BaseDistributions}/${name}`,'./target')
+            fs.renameSync(`./target/${name}`, './target/ffmpeg.zip')
         }
         
         await (await unzipper.Open.file('./target/ffmpeg.zip')).extract({ path: './target' })
@@ -86,6 +90,8 @@ const Replace = (file, filters) => {
     await Command(`cmake --build . --config=${Profile}`, { cwd: join(__dirname, './examples/desktop/build') })
 
     for (const item of [
+        ['./LIBRARYS.txt', './build/bin/LIBRARYS.txt'],
+
         /* examples */
         ['./examples/desktop/src/main.cpp', './build/examples/src/main.cpp'],
         ['./examples/desktop/src/args.cpp', './build/examples/src/args.cpp'],
@@ -101,40 +107,60 @@ const Replace = (file, filters) => {
         ['./sdk/renderer/include/renderer.h', './build/include/renderer.h'],
         ['./sdk/desktop/include/mirror.h', './build/include/mirror.h'],
         ['./frame/include/frame.h', './build/include/frame.h'],
-
-        /* service */
-        [`./target/${Profile.toLowerCase()}/service.exe`, './build/server/mirror-service.exe'],
-
-        /* lib */
-        [`./target/${Profile.toLowerCase()}/mirror.dll.lib`, './build/lib/mirror.dll.lib'],
-        [`./target/${Profile.toLowerCase()}/renderer.dll.lib`, './build/lib/renderer.dll.lib'],
-
-        /* bin */
-        ['./LIBRARYS.txt', './build/bin/LIBRARYS.txt'],
-        [`./examples/desktop/build/${Profile}/example.exe`, './build/bin/example.exe'],
-        [`./target/${Profile.toLowerCase()}/renderer.dll`, './build/bin/renderer.dll'],
-        [`./target/${Profile.toLowerCase()}/mirror.dll`, './build/bin/mirror.dll'],
-        ['./target/ffmpeg/bin/avcodec-60.dll', './build/bin/avcodec-60.dll'],
-        ['./target/ffmpeg/bin/avutil-58.dll', './build/bin/avutil-58.dll'],
-        ['./target/ffmpeg/bin/swresample-4.dll', './build/bin/swresample-4.dll'],
     ])
     {
         fs.copyFileSync(...item)
     }
 
-    for (const item of [
-        ['./target/debug/mirror.pdb', './build/bin/mirror.pdb'],
-        ['./target/debug/renderer.pdb', './build/bin/renderer.pdb'],
-        ['./target/debug/service.pdb', './build/server/service.pdb'],
-    ])
+    if (process.platform == 'win32')
     {
-        if (!Args.release)
+        for (const item of [
+            [`./examples/desktop/build/${Profile}/example.exe`, './build/bin/example.exe'],
+            [`./target/${Profile.toLowerCase()}/service.exe`, './build/server/mirror-service.exe'],
+            [`./target/${Profile.toLowerCase()}/mirror.dll.lib`, './build/lib/mirror.dll.lib'],
+            [`./target/${Profile.toLowerCase()}/renderer.dll.lib`, './build/lib/renderer.dll.lib'],
+            [`./target/${Profile.toLowerCase()}/mirror.dll`, './build/bin/mirror.dll'],
+            [`./target/${Profile.toLowerCase()}/renderer.dll`, './build/bin/renderer.dll'],
+            [`./target/ffmpeg/bin/avcodec-60.dll`, './build/bin/avcodec-60.dll'],
+            [`./target/ffmpeg/bin/avutil-58.dll`, './build/bin/avutil-58.dll'],
+            [`./target/ffmpeg/bin/swresample-4.dll`, './build/bin/swresample-4.dll'],
+        ])
         {
             fs.copyFileSync(...item)
         }
-        else
+    }
+    else
+    {
+        for (const item of [
+            ['./examples/desktop/build/example', './build/bin/example'],
+            [`./target/${Profile.toLowerCase()}/service`, './build/server/mirror-service'],
+            [`./target/${Profile.toLowerCase()}/libmirror.so`, './build/bin/libmirror.so'],
+            [`./target/${Profile.toLowerCase()}/librenderer.so`, './build/bin/librenderer.so'],
+            ['./target/ffmpeg/lib/libavcodec.so', './build/bin/libavcodec.so'],
+            ['./target/ffmpeg/lib/libavutil.so', './build/bin/libavutil.so'],
+            ['./target/ffmpeg/lib/libswresample.so', './build/bin/libswresample.so'],
+        ])
         {
-            fs.rmSync(item[1], { force: true, recursive: true })
+            fs.copyFileSync(...item)
+        }
+    }
+
+    if (process.platform == 'win32')
+    {
+        for (const item of [
+            ['./target/debug/mirror.pdb', './build/bin/mirror.pdb'],
+            ['./target/debug/renderer.pdb', './build/bin/renderer.pdb'],
+            ['./target/debug/service.pdb', './build/server/service.pdb'],
+        ])
+        {
+            if (!Args.release)
+            {
+                fs.copyFileSync(...item)
+            }
+            else
+            {
+                fs.rmSync(item[1], { force: true, recursive: true })
+            }
         }
     }
 
