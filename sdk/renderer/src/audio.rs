@@ -52,9 +52,6 @@ impl AudioPlayer {
             )?
         };
 
-        // Start playing audio by default
-        stream.play()?;
-
         Ok(Self {
             stream,
             queue,
@@ -76,6 +73,9 @@ impl AudioPlayer {
                 self.config.sample_rate.0 as f64,
                 frame.frames as usize,
             )?);
+
+            // Start playing audio by first push.
+            self.stream.play()?;
         }
 
         if let Some(sampler) = &mut self.sampler {

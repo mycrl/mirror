@@ -58,8 +58,6 @@ impl GraphicsCaptureApiHandler for WindowsCapture {
                 let thread_class_guard = MediaThreadClass::Capture.join().ok();
 
                 while let Some(transform) = transform_.upgrade() {
-                    thread::sleep(Duration::from_millis(1000 / ctx.options.fps as u64));
-
                     let mut transform = transform.lock().unwrap();
                     let texture = match transform.get_output() {
                         Ok(t) => t,
@@ -78,6 +76,8 @@ impl GraphicsCaptureApiHandler for WindowsCapture {
                     if !ctx.arrived.sink(&frame) {
                         break;
                     }
+
+                    thread::sleep(Duration::from_millis(1000 / ctx.options.fps as u64));
                 }
 
                 if let Some(status) = status_.upgrade() {

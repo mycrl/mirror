@@ -94,12 +94,10 @@ extern "C" fn renderer_create(size: RawSize, handle: *const WindowHandle) -> *mu
         })
     };
 
-    // func()
-    //     .map_err(|e| log::error!("{:?}", e))
-    //     .map(|ret| Box::into_raw(Box::new(ret)))
-    //     .unwrap_or_else(|_| null_mut())
-
-    Box::into_raw(Box::new(func().unwrap()))
+    func()
+        .map_err(|e| log::error!("{:?}", e))
+        .map(|ret| Box::into_raw(Box::new(ret)))
+        .unwrap_or_else(|_| null_mut())
 }
 
 /// Wait indefinitely for the next available event.
@@ -113,7 +111,10 @@ extern "C" fn renderer_event_loop(
 
     let func = handle.unwrap();
     unsafe { &mut *render }.video.start_loop(move |event| {
-        func(unsafe { std::mem::transmute::<*const SDL_Event, *const c_void>(event) }, ctx)
+        func(
+            unsafe { std::mem::transmute::<*const SDL_Event, *const c_void>(event) },
+            ctx,
+        )
     });
 }
 

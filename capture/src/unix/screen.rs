@@ -1,18 +1,136 @@
+use crate::{
+    CaptureHandler, FrameArrived, Size, Source, SourceType, VideoCaptureSourceDescription,
+};
+
 use std::{
+    env,
+    ptr::{null, null_mut},
     sync::{atomic::AtomicBool, Arc},
-    thread,
+    thread, time::Duration,
 };
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use frame::VideoFrame;
-use scap::{
-    capturer::{Capturer, Options, Resolution},
-    frame::FrameType,
-    get_all_targets, Target,
+use libc::{shmat, shmctl, shmdt, shmget, IPC_CREAT, IPC_PRIVATE, IPC_RMID};
+use utils::{atomic::EasyAtomic, strings::Strings};
+use x11::{
+    xlib::{
+        XCloseDisplay, XDefaultRootWindow, XDefaultVisual, XDestroyImage, XImage,
+        XOpenDisplay, ZPixmap, _XDisplay,
+    },
+    xshm::{XShmAttach, XShmCreateImage, XShmDetach, XShmGetImage, XShmSegmentInfo},
 };
-use utils::atomic::EasyAtomic;
 
-use crate::{CaptureHandler, FrameArrived, Source, SourceType, VideoCaptureSourceDescription};
+struct Display {
+    display: *mut _XDisplay,
+    image: *mut XImage,
+    info: XShmSegmentInfo,
+}
+
+unsafe impl Send for Display {}
+unsafe impl Sync for Display {}
+
+impl Display {
+    fn new(size: Size) -> Result<Self> {
+        let name = Strings::from(env::var("DISPLAY")?.as_str());
+        let display = unsafe { XOpenDisplay(name.as_ptr()) };
+        if display.is_null() {
+            return Err(anyhow!("x11 open display failed"));
+        }
+
+        let mut info = unsafe { std::mem::zeroed::<XShmSegmentInfo>() };
+        let image = unsafe {
+            XShmCreateImage(
+                display,
+                XDefaultVisual(display, 0),
+                24,
+                ZPixmap,
+                null_mut(),
+                &mut info,
+                size.width,
+                size.height,
+            )
+        };
+
+        if image.is_null() {
+            unsafe { XCloseDisplay(display) };
+            return Err(anyhow!("x11 create image failed"));
+        }
+
+        let r_image = unsafe { &mut *image };
+        info.shmid = unsafe {
+            shmget(
+                IPC_PRIVATE,
+                r_image.bytes_per_line as usize * r_image.height as usize,
+                IPC_CREAT | 0777,
+            )
+        };
+
+        r_image.data = unsafe { shmat(info.shmid, null(), 0) as *mut _ };
+        info.shmaddr = r_image.data;
+
+        if r_image.data.is_null() {
+            unsafe {
+                XDestroyImage(image);
+                XCloseDisplay(display);
+                shmctl(info.shmid, IPC_RMID, null_mut());
+            }
+
+            return Err(anyhow!("shmat failed"));
+        }
+
+        if unsafe { XShmAttach(display, &mut info) } == 0 {
+            unsafe {
+                XDestroyImage(image);
+                XCloseDisplay(display);
+                shmdt(info.shmaddr as *const _);
+                shmctl(info.shmid, IPC_RMID, null_mut());
+            }
+
+            return Err(anyhow!("x11 attch mmap failed"));
+        }
+
+        Ok(Self {
+            display,
+            image,
+            info,
+        })
+    }
+
+    fn capture(&mut self) -> Option<&[u8]> {
+        if unsafe {
+            XShmGetImage(
+                self.display,
+                XDefaultRootWindow(self.display),
+                self.image,
+                0,
+                0,
+                1,
+            )
+        } != 0
+        {
+            let image = unsafe { &*self.image };
+            let data_size = (image.bytes_per_line * image.height) as usize;
+            Some(unsafe { std::slice::from_raw_parts(image.data as *const u8, data_size) })
+        } else {
+            None
+        }
+    }
+}
+
+impl Drop for Display {
+    fn drop(&mut self) {
+        unsafe {
+            XShmDetach(self.display, &mut self.info);
+            XDestroyImage(self.image);
+
+            shmdt(self.info.shmaddr as *const _);
+            shmctl(self.info.shmid, IPC_RMID, null_mut());
+
+            XCloseDisplay(self.display);
+        }
+    }
+}
 
 #[derive(Default)]
 pub struct ScreenCapture(Arc<AtomicBool>);
@@ -23,20 +141,13 @@ impl CaptureHandler for ScreenCapture {
     type CaptureOptions = VideoCaptureSourceDescription;
 
     fn get_sources() -> Result<Vec<Source>, Self::Error> {
-        let mut sources = Vec::with_capacity(5);
-        for item in get_all_targets() {
-            if let Target::Display(item) = item {
-                sources.push(Source {
-                    name: item.title,
-                    id: item.id.to_string(),
-                    index: item.id as usize,
-                    kind: SourceType::Screen,
-                    is_default: true,
-                });
-            }
-        }
-
-        Ok(sources)
+        Ok(vec![Source {
+            index: 0,
+            is_default: true,
+            kind: SourceType::Screen,
+            id: "default display".to_string(),
+            name: "default display".to_string(),
+        }])
     }
 
     fn start<S: FrameArrived<Frame = Self::Frame> + 'static>(
@@ -44,35 +155,20 @@ impl CaptureHandler for ScreenCapture {
         options: Self::CaptureOptions,
         mut arrived: S,
     ) -> Result<(), Self::Error> {
-        let mut capturer = Capturer::new(Options {
-            fps: options.fps as u32,
-            target: None,
-            show_cursor: false,
-            show_highlight: true,
-            excluded_targets: None,
-            output_type: FrameType::YUVFrame,
-            output_resolution: Resolution::_720p,
-            crop_area: None,
-        });
+        let mut display = Display::new(options.size)?;
 
+        self.0.update(true);
+        
         let status = self.0.clone();
-        thread::Builder::new()
-            .name("LinuxScreenCaptureThread".to_string())
-            .spawn(move || {
-                capturer.start_capture();
-                status.update(true);
+        thread::Builder::new().name("X11ScreenCaptureThread".to_string()).spawn(move || {
+            while status.get() {
+                let frame = display.capture().unwrap();
 
-                while let Ok(frame) = capturer.get_next_frame() {
-                    if !status.get() {
-                        break;
-                    }
+                thread::sleep(Duration::from_millis(1000 / options.fps as u64));
+            }
 
-                    println!("==================");
-                }
-
-                capturer.stop_capture();
-                status.update(false);
-            })?;
+            status.update(false);
+        })?;
 
         Ok(())
     }

@@ -51,16 +51,14 @@ if (NOT EXISTS "${THIRD_PARTY_DIR}/libyuv")
 endif()
 
 add_library(codec STATIC 
-            video_decode.cpp
-            video_encode.cpp
-            audio_decode.cpp
-            audio_encode.cpp
-            codec.cpp
-            codec.h)
+            lib/h264.cpp
+            lib/opus.cpp
+            lib/codec.cpp
+            lib/codec.h)
 
 include_directories("${FFMPEG_PREFIX}/include"
                     "${THIRD_PARTY_DIR}/libyuv/include"
-                    "../../frame/include")
+                    "../frame/include")
 
 target_link_directories(codec PRIVATE "${FFMPEG_PREFIX}/lib")
 target_link_libraries(codec avcodec 

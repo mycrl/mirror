@@ -22,4 +22,5 @@ features = [
 ]
 
 [target.'cfg(target_os = "linux")'.dependencies]
-scap = { git = "https://github.com/CapSoftware/scap", branch = "main" }
+libc = "0.2.155"
+x11 = "2.21.0"

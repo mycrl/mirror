@@ -136,9 +136,9 @@ const Replace = (file, filters) => {
             [`./target/${Profile.toLowerCase()}/service`, './build/server/mirror-service'],
             [`./target/${Profile.toLowerCase()}/libmirror.so`, './build/bin/libmirror.so'],
             [`./target/${Profile.toLowerCase()}/librenderer.so`, './build/bin/librenderer.so'],
-            ['./target/ffmpeg/lib/libavcodec.so', './build/bin/libavcodec.so'],
-            ['./target/ffmpeg/lib/libavutil.so', './build/bin/libavutil.so'],
-            ['./target/ffmpeg/lib/libswresample.so', './build/bin/libswresample.so'],
+            ['./target/ffmpeg/lib/libavcodec.so.60', './build/bin/libavcodec.so.60'],
+            ['./target/ffmpeg/lib/libavutil.so.58', './build/bin/libavutil.so.58'],
+            ['./target/ffmpeg/lib/libswresample.so.4', './build/bin/libswresample.so.4'],
         ])
         {
             fs.copyFileSync(...item)

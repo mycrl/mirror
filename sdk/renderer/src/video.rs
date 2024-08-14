@@ -36,8 +36,6 @@ unsafe impl Send for VideoRender {}
 unsafe impl Sync for VideoRender {}
 
 impl VideoRender {
-    const DEFAULT_TITLE: &'static str = "default";
-
     pub fn new(size: Size, handle: Option<&WindowHandle>) -> Result<Self> {
         log::info!("renderer: create video render, size={:?}", size);
 
@@ -52,14 +50,15 @@ impl VideoRender {
                 })
             }
         } else {
+            let title = Strings::from("default");
             unsafe {
                 SDL_CreateWindow(
-                    Self::DEFAULT_TITLE.as_ptr() as *const _,
+                    title.as_ptr(),
                     0,
                     0,
                     size.width as i32,
                     size.height as i32,
-                    0x00000004 /* SDL_WINDOW_SHOWN */ | 0x00000002 /* SDL_WINDOW_OPENGL */ | 0x00002000 /* SDL_WINDOW_ALLOW_HIGHDPI */,  
+                    0x00000004 /* SDL_WINDOW_SHOWN */ | 0x00000002 /* SDL_WINDOW_OPENGL */ | 0x00002000, /* SDL_WINDOW_ALLOW_HIGHDPI */
                 )
             }
         };

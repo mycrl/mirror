@@ -5,7 +5,7 @@
 //  Created by Mr.Panda on 2024/2/14.
 //
 
-#include "codec.h"
+#include "./codec.h"
 
 static const char* DefaultVideoDecoder = "h264";
 static CodecDesc VideoDecoders[] = {

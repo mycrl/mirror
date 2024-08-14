@@ -29,13 +29,6 @@ pub fn startup() -> Result<()> {
         self::win32::startup()?;
     }
 
-    #[cfg(target_os = "linux")]
-    {
-        log::info!("capture linux satrtup");
-
-        self::unix::startup();
-    }
-
     Ok(())
 }
 
@@ -45,13 +38,6 @@ pub fn shutdown() -> Result<()> {
         log::info!("capture MediaFoundation shutdown");
 
         self::win32::shutdown()?;
-    }
-
-    #[cfg(target_os = "linux")]
-    {
-        log::info!("capture linux shutdown");
-
-        self::unix::shutdown();
     }
 
     Ok(())
