@@ -4,27 +4,24 @@ use crate::{
 
 use std::{
     env,
-    ptr::{null, null_mut},
     sync::{atomic::AtomicBool, Arc},
-    thread, time::Duration,
+    thread,
+    time::Duration,
 };
 
 use anyhow::{anyhow, Result};
-use frame::VideoFrame;
-use libc::{shmat, shmctl, shmdt, shmget, IPC_CREAT, IPC_PRIVATE, IPC_RMID};
+use frame::{VideoFrame, VideoSize, VideoTransform};
 use utils::{atomic::EasyAtomic, strings::Strings};
-use x11::{
-    xlib::{
-        XCloseDisplay, XDefaultRootWindow, XDefaultVisual, XDestroyImage, XImage,
-        XOpenDisplay, ZPixmap, _XDisplay,
-    },
-    xshm::{XShmAttach, XShmCreateImage, XShmDetach, XShmGetImage, XShmSegmentInfo},
+use x11::xlib::{
+    XAllPlanes, XCloseDisplay, XDefaultRootWindow, XDestroyImage, XGetImage, XGetWindowAttributes,
+    XImage, XOpenDisplay, XWindowAttributes, ZPixmap, _XDisplay,
 };
 
 struct Display {
+    input: Size,
+    output: Size,
+    root: u64,
     display: *mut _XDisplay,
-    image: *mut XImage,
-    info: XShmSegmentInfo,
 }
 
 unsafe impl Send for Display {}
@@ -38,82 +35,60 @@ impl Display {
             return Err(anyhow!("x11 open display failed"));
         }
 
-        let mut info = unsafe { std::mem::zeroed::<XShmSegmentInfo>() };
-        let image = unsafe {
-            XShmCreateImage(
-                display,
-                XDefaultVisual(display, 0),
-                24,
-                ZPixmap,
-                null_mut(),
-                &mut info,
-                size.width,
-                size.height,
-            )
-        };
+        let root = unsafe { XDefaultRootWindow(display) };
 
-        if image.is_null() {
-            unsafe { XCloseDisplay(display) };
-            return Err(anyhow!("x11 create image failed"));
-        }
-
-        let r_image = unsafe { &mut *image };
-        info.shmid = unsafe {
-            shmget(
-                IPC_PRIVATE,
-                r_image.bytes_per_line as usize * r_image.height as usize,
-                IPC_CREAT | 0777,
-            )
-        };
-
-        r_image.data = unsafe { shmat(info.shmid, null(), 0) as *mut _ };
-        info.shmaddr = r_image.data;
-
-        if r_image.data.is_null() {
-            unsafe {
-                XDestroyImage(image);
-                XCloseDisplay(display);
-                shmctl(info.shmid, IPC_RMID, null_mut());
-            }
-
-            return Err(anyhow!("shmat failed"));
-        }
-
-        if unsafe { XShmAttach(display, &mut info) } == 0 {
-            unsafe {
-                XDestroyImage(image);
-                XCloseDisplay(display);
-                shmdt(info.shmaddr as *const _);
-                shmctl(info.shmid, IPC_RMID, null_mut());
-            }
-
-            return Err(anyhow!("x11 attch mmap failed"));
+        let mut attr = unsafe { std::mem::zeroed::<XWindowAttributes>() };
+        unsafe {
+            XGetWindowAttributes(display, root, &mut attr);
         }
 
         Ok(Self {
+            root,
             display,
-            image,
-            info,
+            output: size,
+            input: Size {
+                width: attr.width as u32,
+                height: attr.height as u32,
+            },
         })
     }
 
-    fn capture(&mut self) -> Option<&[u8]> {
-        if unsafe {
-            XShmGetImage(
+    fn capture(&mut self) -> Option<Texture> {
+        let image = unsafe {
+            XGetImage(
                 self.display,
-                XDefaultRootWindow(self.display),
-                self.image,
+                self.root,
                 0,
                 0,
-                1,
+                self.input.width,
+                self.input.height,
+                XAllPlanes(),
+                ZPixmap,
             )
-        } != 0
-        {
-            let image = unsafe { &*self.image };
-            let data_size = (image.bytes_per_line * image.height) as usize;
-            Some(unsafe { std::slice::from_raw_parts(image.data as *const u8, data_size) })
+        };
+
+        if !image.is_null() {
+            Some(Texture(image))
         } else {
             None
+        }
+    }
+}
+
+struct Texture(*mut XImage);
+
+impl AsRef<[u8]> for Texture {
+    fn as_ref(&self) -> &[u8] {
+        let image = unsafe { &*self.0 };
+        let data_size = (image.bytes_per_line * image.height) as usize;
+        unsafe { std::slice::from_raw_parts(image.data as *const u8, data_size) }
+    }
+}
+
+impl Drop for Texture {
+    fn drop(&mut self) {
+        unsafe {
+            XDestroyImage(self.0);
         }
     }
 }
@@ -121,12 +96,6 @@ impl Display {
 impl Drop for Display {
     fn drop(&mut self) {
         unsafe {
-            XShmDetach(self.display, &mut self.info);
-            XDestroyImage(self.image);
-
-            shmdt(self.info.shmaddr as *const _);
-            shmctl(self.info.shmid, IPC_RMID, null_mut());
-
             XCloseDisplay(self.display);
         }
     }
@@ -158,17 +127,44 @@ impl CaptureHandler for ScreenCapture {
         let mut display = Display::new(options.size)?;
 
         self.0.update(true);
-        
+
         let status = self.0.clone();
-        thread::Builder::new().name("X11ScreenCaptureThread".to_string()).spawn(move || {
-            while status.get() {
-                let frame = display.capture().unwrap();
+        thread::Builder::new()
+            .name("X11ScreenCaptureThread".to_string())
+            .spawn(move || {
+                let mut processor = VideoTransform::new(
+                    VideoSize {
+                        width: display.input.width,
+                        height: display.input.height,
+                    },
+                    VideoSize {
+                        width: display.output.width,
+                        height: display.output.height,
+                    },
+                );
 
-                thread::sleep(Duration::from_millis(1000 / options.fps as u64));
-            }
+                let mut frame = VideoFrame::default();
+                frame.width = options.size.width;
+                frame.height = options.size.height;
+                frame.linesize = [frame.width as usize, frame.width as usize];
 
-            status.update(false);
-        })?;
+                while status.get() {
+                    let data = display.capture().unwrap();
+                    let texture = processor.process(data.as_ref());
+
+                    frame.data[0] = texture.as_ptr();
+                    frame.data[1] =
+                        unsafe { texture.as_ptr().add((frame.width * frame.height) as usize) };
+
+                    if !arrived.sink(&frame) {
+                        break;
+                    }
+
+                    thread::sleep(Duration::from_millis(1000 / options.fps as u64));
+                }
+
+                status.update(false);
+            })?;
 
         Ok(())
     }

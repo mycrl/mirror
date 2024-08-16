@@ -17,3 +17,6 @@ features = [
     "Win32_Graphics_Direct3D",
     "Win32_Graphics_Direct3D11",
 ]
+
+[target.'cfg(target_os = "linux")'.dependencies]
+libyuv = "0.1.2"
