@@ -23,7 +23,7 @@ public:
     Napi::Value GetDevices(const Napi::CallbackInfo& info);
     Napi::Value SetInputDevice(const Napi::CallbackInfo& info);
 private:
-    std::optional<Devices> _devices = std::nullopt;
+    std::optional<Sources> _devices = std::nullopt;
 
     static void _devices_finalizer(Napi::Env env, CaptureService* self);
 };

@@ -14,20 +14,20 @@ use std::{
 };
 
 use bytes::BytesMut;
-use common::atomic::EasyAtomic;
 use service::{signal::Signal, SocketKind, StreamInfo};
 use smallvec::SmallVec;
+use utils::atomic::EasyAtomic;
 
 use crate::{
     adapter::{StreamReceiverAdapterExt, StreamSenderAdapter},
     package::{Package, PacketInfo, UnPackage},
 };
 
-pub fn init() -> bool {
+pub fn startup() -> bool {
     srt::startup()
 }
 
-pub fn exit() {
+pub fn shutdown() {
     srt::cleanup()
 }
 

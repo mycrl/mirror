@@ -5,7 +5,8 @@ edition = "2021"
 
 [dependencies]
 log = "0.4.20"
-common = { path = "../common" }
+utils = { path = "../utils" }
+frame = { path = "../frame" }
 
 [build-dependencies]
 cc = "1.0.88"

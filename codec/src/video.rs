@@ -1,21 +1,47 @@
-use std::ffi::{c_char, c_void, CString};
-
-use common::frame::VideoFrame;
-
 use crate::{Error, RawPacket};
 
+use std::{
+    ffi::{c_char, CString},
+    os::raw::c_void,
+};
+
+use frame::VideoFrame;
+use utils::strings::Strings;
+
 extern "C" {
+    pub fn codec_find_video_encoder() -> *const c_char;
+    pub fn codec_find_video_decoder() -> *const c_char;
     fn codec_create_video_encoder(settings: *const RawVideoEncoderSettings) -> *const c_void;
     fn codec_video_encoder_copy_frame(codec: *const c_void, frame: *const VideoFrame) -> bool;
     fn codec_video_encoder_send_frame(codec: *const c_void) -> bool;
     fn codec_video_encoder_read_packet(codec: *const c_void) -> *const RawPacket;
     fn codec_unref_video_encoder_packet(codec: *const c_void);
     fn codec_release_video_encoder(codec: *const c_void);
+    fn codec_create_video_decoder(codec_name: *const c_char) -> *const c_void;
+    fn codec_video_decoder_send_packet(codec: *const c_void, packet: RawPacket) -> bool;
+    fn codec_video_decoder_read_frame(codec: *const c_void) -> *const VideoFrame;
+    fn codec_release_video_decoder(codec: *const c_void);
+}
+
+/// Automatically search for encoders, limited hardware, fallback to software
+/// implementation if hardware acceleration unit is not found.
+pub fn find_video_encoder() -> String {
+    Strings::from(unsafe { codec_find_video_encoder() })
+        .to_string()
+        .unwrap()
+}
+
+/// Automatically search for decoders, limited hardware, fallback to software
+/// implementation if hardware acceleration unit is not found.
+pub fn find_video_decoder() -> String {
+    Strings::from(unsafe { codec_find_video_decoder() })
+        .to_string()
+        .unwrap()
 }
 
 #[repr(C)]
 pub struct RawVideoEncoderSettings {
-    pub codec_name: *const c_char,
+    pub codec: *const c_char,
     pub frame_rate: u8,
     pub width: u32,
     pub height: u32,
@@ -25,7 +51,7 @@ pub struct RawVideoEncoderSettings {
 
 impl Drop for RawVideoEncoderSettings {
     fn drop(&mut self) {
-        drop(unsafe { CString::from_raw(self.codec_name as *mut _) })
+        drop(unsafe { CString::from_raw(self.codec as *mut _) })
     }
 }
 
@@ -36,7 +62,7 @@ pub struct VideoEncoderSettings {
     /// The name is globally unique among encoders and among decoders (but an
     /// encoder and a decoder can share the same name). This is the primary way
     /// to find a codec from the user perspective.
-    pub codec_name: String,
+    pub codec: String,
     pub frame_rate: u8,
     /// picture width / height
     pub width: u32,
@@ -51,7 +77,7 @@ pub struct VideoEncoderSettings {
 impl VideoEncoderSettings {
     fn as_raw(&self) -> RawVideoEncoderSettings {
         RawVideoEncoderSettings {
-            codec_name: CString::new(self.codec_name.as_str()).unwrap().into_raw(),
+            codec: CString::new(self.codec.as_str()).unwrap().into_raw(),
             key_frame_interval: self.key_frame_interval,
             frame_rate: self.frame_rate,
             width: self.width,
@@ -106,17 +132,17 @@ impl VideoEncoder {
         }
     }
 
-    pub fn send_frame(&self, frame: &VideoFrame) -> bool {
+    pub fn send_frame(&mut self, frame: &VideoFrame) -> bool {
         unsafe { codec_video_encoder_copy_frame(self.0, frame) }
     }
 
     /// Supply a raw video or audio frame to the encoder.
-    pub fn encode(&self) -> bool {
+    pub fn encode(&mut self) -> bool {
         unsafe { codec_video_encoder_send_frame(self.0) }
     }
 
     /// Read encoded data from the encoder.
-    pub fn read(&self) -> Option<VideoEncodePacket> {
+    pub fn read(&mut self) -> Option<VideoEncodePacket> {
         let packet = unsafe { codec_video_encoder_read_packet(self.0) };
         if !packet.is_null() {
             Some(VideoEncodePacket::from_raw(self.0, packet))
@@ -131,5 +157,58 @@ impl Drop for VideoEncoder {
         log::info!("close VideoEncoder");
 
         unsafe { codec_release_video_encoder(self.0) }
+    }
+}
+
+pub struct VideoDecoder(*const c_void);
+
+unsafe impl Send for VideoDecoder {}
+unsafe impl Sync for VideoDecoder {}
+
+impl VideoDecoder {
+    /// Initialize the AVCodecContext to use the given AVCodec.
+    pub fn new(codec: &str) -> Result<Self, Error> {
+        log::info!("create VideoDecoder: codec name={:?}", codec);
+
+        let codec = unsafe { codec_create_video_decoder(Strings::from(codec).as_ptr()) };
+        if !codec.is_null() {
+            Ok(Self(codec))
+        } else {
+            Err(Error::VideoDecoder)
+        }
+    }
+
+    /// Supply raw packet data as input to a decoder.
+    pub fn decode(&mut self, data: &[u8], flags: i32, timestamp: u64) -> bool {
+        unsafe {
+            codec_video_decoder_send_packet(
+                self.0,
+                RawPacket {
+                    buffer: data.as_ptr(),
+                    len: data.len(),
+                    timestamp,
+                    flags,
+                },
+            )
+        }
+    }
+
+    /// Return decoded output data from a decoder or encoder (when the
+    /// AV_CODEC_FLAG_RECON_FRAME flag is used).
+    pub fn read(&mut self) -> Option<&VideoFrame> {
+        let frame = unsafe { codec_video_decoder_read_frame(self.0) };
+        if !frame.is_null() {
+            Some(unsafe { &*frame })
+        } else {
+            None
+        }
+    }
+}
+
+impl Drop for VideoDecoder {
+    fn drop(&mut self) {
+        log::info!("close VideoDecoder");
+
+        unsafe { codec_release_video_decoder(self.0) }
     }
 }

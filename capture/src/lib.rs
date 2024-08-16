@@ -1,280 +1,227 @@
-mod device;
-mod manager;
+#![cfg(not(target_os = "macos"))]
 
-use std::{
-    ffi::{c_char, c_int, c_void},
-    ptr::null,
-    sync::Arc,
-};
+mod audio;
 
-use common::{
-    frame::{AudioFrame, VideoFrame},
-    strings::Strings,
-};
+#[cfg(target_os = "windows")]
+mod win32;
 
-use log::{log, Level};
+#[cfg(target_os = "linux")]
+mod unix;
 
-pub use device::{Device, DeviceKind, DeviceList};
-pub use manager::DeviceManager;
+#[cfg(target_os = "windows")]
+use win32::{CameraCapture, ScreenCapture};
 
-#[repr(C)]
-#[derive(Debug, Clone, Copy)]
-pub enum CaptureMethod {
-    GDI,
-    DXGI,
-    WGC,
+#[cfg(target_os = "linux")]
+use unix::ScreenCapture;
+
+use self::audio::AudioCapture;
+
+use anyhow::Result;
+use frame::{AudioFrame, VideoFrame};
+
+/// Don't forget to initialize the environment, this is necessary for the
+/// capture module.
+pub fn startup() -> Result<()> {
+    #[cfg(target_os = "windows")]
+    {
+        log::info!("capture MediaFoundation satrtup");
+
+        self::win32::startup()?;
+    }
+
+    Ok(())
+}
+
+pub fn shutdown() -> Result<()> {
+    #[cfg(target_os = "windows")]
+    {
+        log::info!("capture MediaFoundation shutdown");
+
+        self::win32::shutdown()?;
+    }
+
+    Ok(())
+}
+
+pub trait FrameArrived: Sync + Send {
+    /// The type of data captured, such as video frames.
+    type Frame;
+
+    /// This method is called when the capture source captures new data. If it
+    /// returns false, the source stops capturing.
+    fn sink(&mut self, frame: &Self::Frame) -> bool;
+}
+
+pub trait CaptureHandler: Sync + Send {
+    type Error;
+
+    /// The type of data captured, such as video frames.
+    type Frame;
+
+    /// Start capturing configuration information, which may be different for
+    /// each source.
+    type CaptureOptions;
+
+    /// Get a list of sources, such as multiple screens in a display source.
+    fn get_sources() -> Result<Vec<Source>, Self::Error>;
+
+    /// Stop capturing the current source.
+    fn stop(&self) -> Result<(), Self::Error>;
+
+    /// Start capturing. This function will not block until capturing is
+    /// stopped, and it maintains its own capture thread internally.
+    fn start<S: FrameArrived<Frame = Self::Frame> + 'static>(
+        &self,
+        options: Self::CaptureOptions,
+        arrived: S,
+    ) -> Result<(), Self::Error>;
 }
 
 #[repr(C)]
-#[derive(Debug, Clone, Copy)]
-pub struct CaptureSettings {
-    pub method: CaptureMethod,
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SourceType {
+    Camera = 1,
+    Screen = 2,
+    Audio = 3,
 }
 
-#[repr(C)]
+#[derive(Debug, Clone)]
+pub struct Source {
+    pub id: String,
+    pub name: String,
+    pub index: usize,
+    pub kind: SourceType,
+    pub is_default: bool,
+}
+
 #[derive(Debug, Clone, Copy)]
-pub struct VideoInfo {
-    pub fps: u8,
+pub struct Size {
     pub width: u32,
     pub height: u32,
 }
 
-#[repr(C)]
-#[derive(Debug, Clone, Copy)]
-pub struct AudioInfo {
-    pub samples_per_sec: u32,
+#[derive(Debug, Clone)]
+pub struct VideoCaptureSourceDescription {
+    pub source: Source,
+    pub size: Size,
+    pub fps: u8,
 }
 
-#[repr(C)]
-struct RawOutputCallback {
-    video: Option<extern "C" fn(ctx: *const c_void, frame: *const VideoFrame)>,
-    audio: Option<extern "C" fn(ctx: *const c_void, frame: *const AudioFrame)>,
-    ctx: *const c_void,
+#[derive(Debug, Clone)]
+pub struct AudioCaptureSourceDescription {
+    pub source: Source,
+    pub sample_rate: u32,
 }
 
-#[repr(C)]
-#[derive(Debug)]
-#[allow(dead_code)]
-enum LoggerLevel {
-    Error = 100,
-    Warn = 200,
-    Info = 300,
-    Debug = 400,
+pub struct SourceCaptureOptions<T, P> {
+    pub description: P,
+    pub arrived: T,
 }
 
-impl Into<Level> for LoggerLevel {
-    fn into(self) -> Level {
-        match self {
-            Self::Error => Level::Error,
-            Self::Warn => Level::Warn,
-            Self::Info => Level::Info,
-            Self::Debug => Level::Debug,
+pub struct CaptureOptions<V, A>
+where
+    V: FrameArrived<Frame = VideoFrame>,
+    A: FrameArrived<Frame = AudioFrame>,
+{
+    pub video: Option<SourceCaptureOptions<V, VideoCaptureSourceDescription>>,
+    pub audio: Option<SourceCaptureOptions<A, AudioCaptureSourceDescription>>,
+}
+
+impl<V, A> Default for CaptureOptions<V, A>
+where
+    V: FrameArrived<Frame = VideoFrame>,
+    A: FrameArrived<Frame = AudioFrame>,
+{
+    fn default() -> Self {
+        Self {
+            video: None,
+            audio: None,
         }
     }
 }
 
-extern "C" fn logger_proc(
-    level: LoggerLevel,
-    message: *const c_char,
-    _: *const c_char,
-    _: *const c_void,
-) {
-    if let Ok(msg) = Strings::from(message).to_string() {
-        log!(target: "obs", level.into(), "{}", msg);
+enum CaptureImplement {
+    // Camera(CameraCapture),
+    Screen(ScreenCapture),
+    Audio(AudioCapture),
+}
+
+#[derive(Default)]
+pub struct Capture(Vec<CaptureImplement>);
+
+impl Capture {
+    /// Returns a list of devices by type.
+    #[allow(unreachable_patterns)]
+    pub fn get_sources(kind: SourceType) -> Result<Vec<Source>> {
+        log::info!("capture get sources, kind={:?}", kind);
+
+        Ok(match kind {
+            // SourceType::Camera => CameraCapture::get_sources()?,
+            SourceType::Screen => ScreenCapture::get_sources()?,
+            SourceType::Audio => AudioCapture::get_sources()?,
+            _ => Vec::new(),
+        })
+    }
+
+    pub fn new<V, A>(CaptureOptions { video, audio }: CaptureOptions<V, A>) -> Result<Self>
+    where
+        V: FrameArrived<Frame = VideoFrame> + 'static,
+        A: FrameArrived<Frame = AudioFrame> + 'static,
+    {
+        let mut devices = Vec::with_capacity(3);
+
+        if let Some(SourceCaptureOptions {
+            description,
+            arrived,
+        }) = video
+        {
+            match description.source.kind {
+                // SourceType::Camera => {
+                //     let camera = CameraCapture::default();
+                //     camera.start(description, arrived)?;
+                //     devices.push(CaptureImplement::Camera(camera));
+                // }
+                SourceType::Screen => {
+                    let screen = ScreenCapture::default();
+                    screen.start(description, arrived)?;
+                    devices.push(CaptureImplement::Screen(screen));
+                }
+                _ => (),
+            }
+        }
+
+        if let Some(SourceCaptureOptions {
+            description,
+            arrived,
+        }) = audio
+        {
+            let audio = AudioCapture::default();
+            audio.start(description, arrived)?;
+            devices.push(CaptureImplement::Audio(audio));
+        }
+
+        Ok(Self(devices))
+    }
+
+    pub fn close(&self) -> Result<()> {
+        log::info!("close capture");
+
+        for item in self.0.iter() {
+            match item {
+                CaptureImplement::Screen(it) => it.stop(),
+                // CaptureImplement::Camera(it) => it.stop(),
+                CaptureImplement::Audio(it) => it.stop(),
+            }?;
+        }
+
+        Ok(())
     }
 }
 
-extern "C" {
-    fn capture_set_logger(
-        logger: extern "C" fn(
-            level: LoggerLevel,
-            msg: *const c_char,
-            args: *const c_char,
-            ctx: *const c_void,
-        ),
-        ctx: *const c_void,
-    );
-    fn capture_remove_logger() -> *const c_void;
-    /// Initializes the OBS core context.
-    fn capture_init(video_info: *const VideoInfo, audio_info: *const AudioInfo);
-    /// Adds/removes a raw video callback. Allows the ability to obtain raw
-    /// video frames without necessarily using an output.
-    fn capture_set_output_callback(proc: RawOutputCallback) -> *const c_void;
-    /// Start capturing audio and video data.
-    fn capture_start() -> c_int;
-    /// Stop capturing audio and video data.
-    fn capture_stop();
-}
+impl Drop for Capture {
+    fn drop(&mut self) {
+        log::info!("capture drop");
 
-#[derive(Debug)]
-pub struct DeviceError(i32);
-
-impl std::error::Error for DeviceError {}
-
-impl std::fmt::Display for DeviceError {
-    #[rustfmt::skip]
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Capture Error: code={}", self.0)
+        drop(self.close());
     }
-}
-
-pub trait AVFrameSink {
-    /// This function is called when obs pushes frames internally, and the
-    /// format of the video frame is fixed to NV12.
-    ///
-    /// ```
-    /// struct FrameSink {
-    ///     frame: Arc<Mutex<Vec<u8>>>,
-    /// }
-    ///
-    /// impl AVFrameSink for FrameSink {
-    ///     fn video(&self, frmae: &VideoFrame) {
-    ///         let mut frame_ = self.frame.lock().unwrap();
-    ///
-    ///         unsafe {
-    ///             libyuv::nv12_to_argb(
-    ///                 frmae.data[0],
-    ///                 frmae.linesize[0] as i32,
-    ///                 frmae.data[1],
-    ///                 frmae.linesize[1] as i32,
-    ///                 frame_.as_mut_ptr(),
-    ///                 1920 * 4,
-    ///                 1920,
-    ///                 1080,
-    ///             );
-    ///         }
-    ///     }
-    /// }
-    /// ```
-    #[allow(unused_variables)]
-    fn video(&self, frmae: &VideoFrame) {}
-    /// This function is called when obs pushes frames internally, and the
-    /// format of the audio frame is fixed to PCM.
-    ///
-    /// ```
-    /// struct FrameSink {
-    ///     frame: Arc<Mutex<Vec<u8>>>,
-    /// }
-    ///
-    /// impl AVFrameSink for FrameSink {
-    ///     fn audio(&self, frmae: &AudioFrame) {
-    ///         let mut frame_ = self.frame.lock().unwrap();
-    ///         frame_.clear();
-    ///         frame.extend_from_slice(frame.data[0]);
-    ///         frame.extend_from_slice(frame.data[1]);
-    ///     }
-    /// }
-    /// ```
-    #[allow(unused_variables)]
-    fn audio(&self, frame: &AudioFrame) {}
-}
-
-impl AVFrameSink for () {}
-
-struct Context(Arc<dyn AVFrameSink>);
-
-extern "C" fn video_sink_proc(ctx: *const c_void, frame: *const VideoFrame) {
-    if !ctx.is_null() {
-        unsafe { &*(ctx as *const Context) }
-            .0
-            .video(unsafe { &*frame });
-    }
-}
-
-extern "C" fn audio_sink_proc(ctx: *const c_void, frame: *const AudioFrame) {
-    if !ctx.is_null() {
-        unsafe { &*(ctx as *const Context) }
-            .0
-            .audio(unsafe { &*frame });
-    }
-}
-
-/// This function is called when obs pushes frames internally, and the
-/// format of the video frame is fixed to NV12.
-///
-/// ```
-/// struct FrameSink {
-///     frame: Arc<Mutex<Vec<u8>>>,
-/// }
-///
-/// impl AVFrameSink for FrameSink {
-///     fn video(&self, frmae: &VideoFrame) {
-///         let mut frame_ = self.frame.lock().unwrap();
-///
-///         unsafe {
-///             libyuv::nv12_to_argb(
-///                 frmae.data[0],
-///                 frmae.linesize[0] as i32,
-///                 frmae.data[1],
-///                 frmae.linesize[1] as i32,
-///                 frame_.as_mut_ptr(),
-///                 1920 * 4,
-///                 1920,
-///                 1080,
-///             );
-///         }
-///     }
-/// }
-///
-/// let frame = Arc::new(Mutex::new(vec![0u8; (1920 * 1080 * 4) as usize]));
-/// set_frame_sink(FrameSink { frame });
-/// ```
-pub fn set_frame_sink<S: AVFrameSink + 'static>(sink: Option<S>) {
-    let previous = unsafe {
-        capture_set_output_callback(
-            sink.map(|it| RawOutputCallback {
-                ctx: Box::into_raw(Box::new(Context(Arc::new(it)))) as *const c_void,
-                video: Some(video_sink_proc),
-                audio: Some(audio_sink_proc),
-            })
-            .unwrap_or_else(|| RawOutputCallback {
-                video: None,
-                audio: None,
-                ctx: null(),
-            }),
-        )
-    };
-
-    if !previous.is_null() {
-        drop(unsafe { Box::from_raw(previous as *mut Context) })
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct DeviceManagerOptions {
-    pub video: VideoInfo,
-    pub audio: AudioInfo,
-}
-
-/// Initialize the OBS environment, this is a required step, before calling any
-/// function.
-///
-/// ```
-/// init(DeviceManagerOptions {
-///     video: VideoInfo {
-///         fps: 30,
-///         width: WIDTH as u32,
-///         height: HEIGHT as u32,
-///     },
-/// })?;
-/// ```
-pub fn init(options: DeviceManagerOptions) {
-    unsafe { capture_set_logger(logger_proc, null()) }
-    unsafe { capture_init(&options.video, &options.audio) };
-}
-
-/// Start capturing audio and video data.
-pub fn start() -> c_int {
-    unsafe { capture_start() }
-}
-
-/// Stop capturing audio and video data.
-pub fn stop() {
-    set_frame_sink::<()>(None);
-    unsafe { capture_stop() }
-}
-
-// quit obs environment, remove logger.
-pub fn quit() {
-    unsafe { let _ = capture_remove_logger(); }
 }

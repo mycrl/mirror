@@ -1,8 +1,25 @@
-mod decode;
-mod encode;
+use crate::{Error, RawPacket};
 
-pub use decode::AudioDecoder;
-pub use encode::{AudioEncodePacket, AudioEncoder, AudioEncoderSettings};
+use std::{
+    ffi::{c_char, CString},
+    os::raw::c_void,
+};
+
+use frame::AudioFrame;
+use utils::strings::Strings;
+
+extern "C" {
+    fn codec_create_audio_decoder(codec_name: *const c_char) -> *const c_void;
+    fn codec_audio_decoder_send_packet(codec: *const c_void, packet: *const RawPacket) -> bool;
+    fn codec_audio_decoder_read_frame(codec: *const c_void) -> *const AudioFrame;
+    fn codec_release_audio_decoder(codec: *const c_void);
+    fn codec_create_audio_encoder(settings: *const RawAudioEncoderSettings) -> *const c_void;
+    fn codec_audio_encoder_copy_frame(codec: *const c_void, frame: *const AudioFrame) -> bool;
+    fn codec_audio_encoder_send_frame(codec: *const c_void) -> bool;
+    fn codec_audio_encoder_read_packet(codec: *const c_void) -> *const RawPacket;
+    fn codec_unref_audio_encoder_packet(codec: *const c_void);
+    fn codec_release_audio_encoder(codec: *const c_void);
+}
 
 /// Header Packets
 ///
@@ -241,4 +258,160 @@ pub fn create_opus_identification_header(channel: u8, sample_rate: u32) -> [u8; 
         0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
         0x00, 0xb4, 0xc4, 0x04, 0x00, 0x00, 0x00, 0x00,
     ]
+}
+
+pub struct AudioDecoder(*const c_void);
+
+unsafe impl Send for AudioDecoder {}
+unsafe impl Sync for AudioDecoder {}
+
+impl AudioDecoder {
+    /// Initialize the AVCodecContext to use the given AVCodec.
+    pub fn new(codec: &str) -> Result<Self, Error> {
+        log::info!("create AudioDecoder: codec name={:?}", codec);
+
+        let codec = unsafe { codec_create_audio_decoder(Strings::from(codec).as_ptr()) };
+        if !codec.is_null() {
+            Ok(Self(codec))
+        } else {
+            Err(Error::AudioDecoder)
+        }
+    }
+
+    /// Supply raw packet data as input to a decoder.
+    pub fn decode(&mut self, data: &[u8], flags: i32, timestamp: u64) -> bool {
+        unsafe {
+            codec_audio_decoder_send_packet(
+                self.0,
+                &RawPacket {
+                    buffer: data.as_ptr(),
+                    len: data.len(),
+                    timestamp,
+                    flags,
+                },
+            )
+        }
+    }
+
+    /// Return decoded output data from a decoder or encoder (when the
+    /// AV_CODEC_FLAG_RECON_FRAME flag is used).
+    pub fn read(&mut self) -> Option<&AudioFrame> {
+        let frame = unsafe { codec_audio_decoder_read_frame(self.0) };
+        if !frame.is_null() {
+            Some(unsafe { &*frame })
+        } else {
+            None
+        }
+    }
+}
+
+impl Drop for AudioDecoder {
+    fn drop(&mut self) {
+        log::info!("close AudioDecoder");
+
+        unsafe { codec_release_audio_decoder(self.0) }
+    }
+}
+
+#[repr(C)]
+pub struct RawAudioEncoderSettings {
+    pub codec: *const c_char,
+    pub bit_rate: u64,
+    pub sample_rate: u64,
+}
+
+impl Drop for RawAudioEncoderSettings {
+    fn drop(&mut self) {
+        drop(unsafe { CString::from_raw(self.codec as *mut _) })
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct AudioEncoderSettings {
+    pub codec: String,
+    pub bit_rate: u64,
+    pub sample_rate: u64,
+}
+
+impl AudioEncoderSettings {
+    fn as_raw(&self) -> RawAudioEncoderSettings {
+        RawAudioEncoderSettings {
+            codec: CString::new(self.codec.as_str()).unwrap().into_raw(),
+            sample_rate: self.sample_rate,
+            bit_rate: self.bit_rate,
+        }
+    }
+}
+
+#[repr(C)]
+pub struct AudioEncodePacket<'a> {
+    codec: *const c_void,
+    pub buffer: &'a [u8],
+    pub flags: i32,
+    pub timestamp: u64,
+}
+
+impl Drop for AudioEncodePacket<'_> {
+    fn drop(&mut self) {
+        unsafe { codec_unref_audio_encoder_packet(self.codec) }
+    }
+}
+
+impl<'a> AudioEncodePacket<'a> {
+    fn from_raw(codec: *const c_void, ptr: *const RawPacket) -> Self {
+        let raw = unsafe { &*ptr };
+        Self {
+            buffer: unsafe { std::slice::from_raw_parts(raw.buffer, raw.len) },
+            timestamp: raw.timestamp,
+            flags: raw.flags,
+            codec,
+        }
+    }
+}
+
+pub struct AudioEncoder(*const c_void);
+
+unsafe impl Send for AudioEncoder {}
+unsafe impl Sync for AudioEncoder {}
+
+impl AudioEncoder {
+    /// Initialize the AVCodecContext to use the given AVCodec.
+    pub fn new(settings: &AudioEncoderSettings) -> Result<Self, Error> {
+        log::info!("create AudioEncoder: settings={:?}", settings);
+
+        let settings = settings.as_raw();
+        let codec = unsafe { codec_create_audio_encoder(&settings) };
+        if !codec.is_null() {
+            Ok(Self(codec))
+        } else {
+            Err(Error::AudioEncoder)
+        }
+    }
+
+    pub fn send_frame(&mut self, frame: &AudioFrame) -> bool {
+        unsafe { codec_audio_encoder_copy_frame(self.0, frame) }
+    }
+
+    /// Supply a raw video or audio frame to the encoder.
+    pub fn encode(&mut self) -> bool {
+        unsafe { codec_audio_encoder_send_frame(self.0) }
+    }
+
+    /// Read encoded data from the encoder.
+    pub fn read(&mut self) -> Option<AudioEncodePacket> {
+        let packet = unsafe { codec_audio_encoder_read_packet(self.0) };
+        if !packet.is_null() {
+            Some(AudioEncodePacket::from_raw(self.0, packet))
+        } else {
+            None
+        }
+    }
+}
+
+impl Drop for AudioEncoder {
+    fn drop(&mut self) {
+        log::info!("close AudioEncoder");
+
+        unsafe { codec_release_audio_encoder(self.0) }
+    }
 }

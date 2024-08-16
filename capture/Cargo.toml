@@ -4,9 +4,22 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+anyhow = "1.0.82"
+cpal = "0.15.3"
+utils = { path = "../utils" }
+frame = { path = "../frame" }
+once_cell = "1.19.0"
 log = "0.4.20"
-common = { path = "../common" }
 
-[build-dependencies]
-cc = "1.0.88"
-anyhow = "1.0.80"
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-capture = { git = "https://github.com/mycrl/windows-capture", branch = "expose-d3d" }
+
+[target.'cfg(target_os = "windows")'.dependencies.windows]
+version = "0.58.0"
+features = [
+    "Win32_Media", 
+    "Win32_Media_MediaFoundation", 
+]
+
+[target.'cfg(target_os = "linux")'.dependencies]
+x11 = "2.21.0"

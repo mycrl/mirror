@@ -13,6 +13,11 @@
 #include "./render.h"
 #include "./service.h"
 
+extern "C"
+{
+#include <renderer.h>
+}
+
 static MirrorServiceExt* mirror_service = nullptr;
 
 #ifdef WIN32
@@ -105,4 +110,44 @@ int WinMain(HINSTANCE hinstance,
     delete mirror_service;
     return 0;
 }
+
+#else
+
+int main(int argc, char* argv[])
+{
+    mirror_startup();
+    renderer_startup();
+
+    Args args = Args(argc >= 2 ? std::string(argv[1]) : "");
+    mirror_service = new MirrorServiceExt(args);
+    mirror_service->RunEventLoop([&](SDL_Event* event) {
+        if (event->type == SDL_QUIT)
+        {
+            return false;
+        }
+        else if (event->type == SDL_KEYDOWN)
+        {
+            switch (event->key.keysym.sym)
+            {
+                case SDLK_r:
+                    mirror_service->CreateMirrorReceiver();
+
+                    break;
+                case SDLK_s:
+                    mirror_service->CreateMirrorSender();
+
+                    break;
+                case SDLK_k:
+                    mirror_service->Close();
+
+                    break;
+            }
+        }
+
+        return true;
+    });
+
+    mirror_shutdown();
+}
+
 #endif

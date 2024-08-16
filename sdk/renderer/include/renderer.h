@@ -32,6 +32,13 @@ typedef struct
 typedef const void* WindowHandle;
 typedef const void* Render;
 
+typedef bool (*EventLoopHandler)(const void* event, void* ctx);
+
+/**
+ * Initialize the environment, which must be initialized before using the SDK.
+ */
+EXPORT bool renderer_startup();
+
 /**
  * Create the window handle used by the SDK through the original window handle.
  */
@@ -48,6 +55,11 @@ EXPORT void renderer_window_handle_destroy(WindowHandle handle);
  * Creating a window renderer.
  */
 EXPORT Render renderer_create(Size size, WindowHandle window);
+
+/**
+ * Wait indefinitely for the next available event.
+ */
+EXPORT void renderer_event_loop(Render render, EventLoopHandler handler, void* ctx);
 
 /**
  * Push the video frame into the renderer, which will update the window texture.
