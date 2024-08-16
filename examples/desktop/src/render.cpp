@@ -63,6 +63,11 @@ bool SimpleRender::OnVideoFrame(VideoFrame* frame)
         return true;
     }
 
+    if (!IsRender)
+    {
+        return true;
+    }
+
     return renderer_on_video(_renderer, frame);
 }
 
