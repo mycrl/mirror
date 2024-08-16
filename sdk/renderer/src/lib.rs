@@ -7,11 +7,10 @@ use std::{
 };
 
 use audio::AudioPlayer;
-use sdl2::sys::SDL_Event;
 use utils::logger;
-
 use frame::{AudioFrame, VideoFrame};
 use video::{Size, VideoRender, WindowHandle};
+use sdl2::sys::SDL_Event;
 
 #[repr(C)]
 struct RawSize {

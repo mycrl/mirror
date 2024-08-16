@@ -12,6 +12,7 @@ use sdl2::sys::{
     SDL_RenderCopyEx, SDL_RenderPresent, SDL_Renderer, SDL_RendererFlip, SDL_RendererInfo,
     SDL_Texture, SDL_TextureAccess, SDL_UpdateNVTexture, SDL_WaitEvent, SDL_Window, SDL_INIT_VIDEO,
 };
+
 use utils::strings::Strings;
 
 #[derive(Debug, Clone, Copy)]
