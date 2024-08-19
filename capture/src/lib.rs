@@ -6,13 +6,13 @@ mod audio;
 mod win32;
 
 #[cfg(target_os = "linux")]
-mod unix;
+mod linux;
 
 #[cfg(target_os = "windows")]
 use win32::{CameraCapture, ScreenCapture};
 
 #[cfg(target_os = "linux")]
-use unix::ScreenCapture;
+use linux::ScreenCapture;
 
 use self::audio::AudioCapture;
 
