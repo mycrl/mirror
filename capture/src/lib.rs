@@ -12,7 +12,7 @@ mod linux;
 use win32::{CameraCapture, ScreenCapture};
 
 #[cfg(target_os = "linux")]
-use linux::ScreenCapture;
+use linux::{CameraCapture, ScreenCapture};
 
 use self::audio::AudioCapture;
 
@@ -141,7 +141,7 @@ where
 }
 
 enum CaptureImplement {
-    // Camera(CameraCapture),
+    Camera(CameraCapture),
     Screen(ScreenCapture),
     Audio(AudioCapture),
 }
@@ -176,11 +176,11 @@ impl Capture {
         }) = video
         {
             match description.source.kind {
-                // SourceType::Camera => {
-                //     let camera = CameraCapture::default();
-                //     camera.start(description, arrived)?;
-                //     devices.push(CaptureImplement::Camera(camera));
-                // }
+                SourceType::Camera => {
+                    let camera = CameraCapture::default();
+                    camera.start(description, arrived)?;
+                    devices.push(CaptureImplement::Camera(camera));
+                }
                 SourceType::Screen => {
                     let screen = ScreenCapture::default();
                     screen.start(description, arrived)?;
@@ -209,7 +209,7 @@ impl Capture {
         for item in self.0.iter() {
             match item {
                 CaptureImplement::Screen(it) => it.stop(),
-                // CaptureImplement::Camera(it) => it.stop(),
+                CaptureImplement::Camera(it) => it.stop(),
                 CaptureImplement::Audio(it) => it.stop(),
             }?;
         }

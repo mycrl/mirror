@@ -444,6 +444,11 @@ pub mod win32 {
 pub mod unix {
     use super::VideoSize;
 
+    pub enum VideoFormat {
+        ARGB,
+        YUY2,
+    }
+
     pub struct VideoTransform {
         input: VideoSize,
         output: VideoSize,
@@ -461,20 +466,36 @@ pub mod unix {
             }
         }
 
-        pub fn process(&mut self, texture: &[u8]) -> &[u8] {
-            unsafe {
-                libyuv::argb_to_nv12(
-                    texture.as_ptr(),
-                    self.input.width as i32 * 4,
-                    self.source.as_mut_ptr(),
-                    self.input.width as i32,
-                    self.source
-                        .as_mut_ptr()
-                        .add(self.input.width as usize * self.input.height as usize),
-                    self.input.width as i32,
-                    self.input.width as i32,
-                    self.input.height as i32,
-                );
+        pub fn process(&mut self, texture: &[u8], format: VideoFormat) -> &[u8] {
+            match format {
+                VideoFormat::ARGB => unsafe {
+                    libyuv::argb_to_nv12(
+                        texture.as_ptr(),
+                        self.input.width as i32 * 4,
+                        self.source.as_mut_ptr(),
+                        self.input.width as i32,
+                        self.source
+                            .as_mut_ptr()
+                            .add(self.input.width as usize * self.input.height as usize),
+                        self.input.width as i32,
+                        self.input.width as i32,
+                        self.input.height as i32,
+                    );
+                },
+                VideoFormat::YUY2 => unsafe {
+                    libyuv::yuy2_to_nv12(
+                        texture.as_ptr(),
+                        self.input.width as i32,
+                        self.source.as_mut_ptr(),
+                        self.input.width as i32,
+                        self.source
+                            .as_mut_ptr()
+                            .add(self.input.width as usize * self.input.height as usize),
+                        self.input.width as i32,
+                        self.input.width as i32,
+                        self.input.height as i32,
+                    );
+                },
             }
 
             unsafe {
