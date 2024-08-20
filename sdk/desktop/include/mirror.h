@@ -207,6 +207,10 @@ EXPORT const char* mirror_find_video_encoder();
  */
 EXPORT const char* mirror_find_video_decoder();
 
+/**
+ * Because Linux does not have DllMain, you need to call it manually to achieve
+ * similar behavior.
+ */
 #ifndef WIN32
 
 /**
@@ -219,12 +223,6 @@ EXPORT bool mirror_startup();
  * called when the application exits.
  */
 EXPORT void mirror_shutdown();
-
-/**
- * Because Linux does not have DllMain, you need to call it manually to achieve
- * similar behavior.
- */
-EXPORT bool mirror_load();
 
 
 #endif // !WIN32
