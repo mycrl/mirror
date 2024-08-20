@@ -224,7 +224,6 @@ EXPORT bool mirror_startup();
  */
 EXPORT void mirror_shutdown();
 
-
 #endif // !WIN32
 
 /**
