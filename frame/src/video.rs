@@ -54,23 +54,19 @@ pub mod win32 {
 
     use std::mem::ManuallyDrop;
 
+    use utils::win32::{create_d3d_device, Direct3DDevice};
     use windows::{
         core::{Interface, Result},
         Win32::{
             Foundation::RECT,
             Graphics::{
-                Direct3D::{
-                    D3D_DRIVER_TYPE_HARDWARE, D3D_FEATURE_LEVEL, D3D_FEATURE_LEVEL_11_0,
-                    D3D_FEATURE_LEVEL_11_1,
-                },
                 Direct3D11::{
-                    D3D11CreateDevice, ID3D11Device, ID3D11DeviceContext, ID3D11Texture2D,
-                    ID3D11VideoContext, ID3D11VideoDevice, ID3D11VideoProcessor,
-                    ID3D11VideoProcessorEnumerator, ID3D11VideoProcessorInputView,
-                    ID3D11VideoProcessorOutputView, D3D11_BIND_RENDER_TARGET, D3D11_BOX,
-                    D3D11_CPU_ACCESS_READ, D3D11_CREATE_DEVICE_FLAG, D3D11_MAPPED_SUBRESOURCE,
-                    D3D11_MAP_READ, D3D11_SDK_VERSION, D3D11_TEXTURE2D_DESC, D3D11_USAGE_DEFAULT,
-                    D3D11_USAGE_STAGING, D3D11_VIDEO_FRAME_FORMAT_PROGRESSIVE,
+                    ID3D11Device, ID3D11DeviceContext, ID3D11Texture2D, ID3D11VideoContext,
+                    ID3D11VideoDevice, ID3D11VideoProcessor, ID3D11VideoProcessorEnumerator,
+                    ID3D11VideoProcessorInputView, ID3D11VideoProcessorOutputView,
+                    D3D11_BIND_RENDER_TARGET, D3D11_BOX, D3D11_CPU_ACCESS_READ,
+                    D3D11_MAPPED_SUBRESOURCE, D3D11_MAP_READ, D3D11_TEXTURE2D_DESC,
+                    D3D11_USAGE_DEFAULT, D3D11_USAGE_STAGING, D3D11_VIDEO_FRAME_FORMAT_PROGRESSIVE,
                     D3D11_VIDEO_PROCESSOR_COLOR_SPACE, D3D11_VIDEO_PROCESSOR_CONTENT_DESC,
                     D3D11_VIDEO_PROCESSOR_INPUT_VIEW_DESC, D3D11_VIDEO_PROCESSOR_OUTPUT_VIEW_DESC,
                     D3D11_VIDEO_PROCESSOR_STREAM, D3D11_VIDEO_USAGE_PLAYBACK_NORMAL,
@@ -105,10 +101,6 @@ pub mod win32 {
     unsafe impl Sync for VideoTransform {}
 
     impl VideoTransform {
-        // Only use d3d11 implementation
-        const FEATURE_LEVELS: [D3D_FEATURE_LEVEL; 2] =
-            [D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0];
-
         /// Create `VideoTransform`, the default_device parameter is used to
         /// directly use the device when it has been created externally, so
         /// there is no need to copy across devices, which improves
@@ -116,29 +108,13 @@ pub mod win32 {
         pub fn new(
             input: VideoSize,
             output: VideoSize,
-            default_device: Option<(ID3D11Device, ID3D11DeviceContext)>,
+            direct3d: Option<Direct3DDevice>,
         ) -> Result<Self> {
-            let (d3d_device, d3d_context) = if let Some(default_device) = default_device {
-                default_device
+            let (d3d_device, d3d_context) = if let Some(direct3d) = direct3d {
+                (direct3d.device, direct3d.context)
             } else {
-                unsafe {
-                    let (mut d3d_device, mut d3d_context, mut feature_level) =
-                        (None, None, D3D_FEATURE_LEVEL::default());
-
-                    D3D11CreateDevice(
-                        None,
-                        D3D_DRIVER_TYPE_HARDWARE,
-                        None,
-                        D3D11_CREATE_DEVICE_FLAG(0),
-                        Some(&Self::FEATURE_LEVELS),
-                        D3D11_SDK_VERSION,
-                        Some(&mut d3d_device),
-                        Some(&mut feature_level),
-                        Some(&mut d3d_context),
-                    )?;
-
-                    (d3d_device.unwrap(), d3d_context.unwrap())
-                }
+                let Direct3DDevice { device, context } = create_d3d_device()?;
+                (device, context)
             };
 
             let video_device = d3d_device.cast::<ID3D11VideoDevice>()?;

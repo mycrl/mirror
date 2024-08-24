@@ -9,14 +9,12 @@ use std::{
 use anyhow::{anyhow, Result};
 use frame::{VideoFrame, VideoSize, VideoTransform};
 use utils::{atomic::EasyAtomic, win32::MediaThreadClass};
-
-use windows::Win32::Graphics::Direct3D11::{ID3D11Device, ID3D11DeviceContext};
 use windows_capture::{
     capture::{CaptureControl, GraphicsCaptureApiHandler},
     frame::Frame,
     graphics_capture_api::InternalCaptureControl,
     monitor::Monitor,
-    settings::{ColorFormat, CursorCaptureSettings, DrawBorderSettings, Settings},
+    settings::{ColorFormat, CursorCaptureSettings, Direct3D, DrawBorderSettings, Settings},
 };
 
 struct WindowsCapture {
@@ -28,11 +26,7 @@ impl GraphicsCaptureApiHandler for WindowsCapture {
     type Flags = Context;
     type Error = anyhow::Error;
 
-    fn new(
-        d3d_device: ID3D11Device,
-        d3d_context: ID3D11DeviceContext,
-        mut ctx: Self::Flags,
-    ) -> Result<Self, Self::Error> {
+    fn new(mut ctx: Self::Flags) -> Result<Self, Self::Error> {
         let status: Arc<AtomicBool> = Arc::new(AtomicBool::new(true));
         let transform = Arc::new(Mutex::new(VideoTransform::new(
             VideoSize {
@@ -43,7 +37,7 @@ impl GraphicsCaptureApiHandler for WindowsCapture {
                 width: ctx.options.size.width,
                 height: ctx.options.size.height,
             },
-            Some((d3d_device, d3d_context)),
+            Some(ctx.options.direct3d),
         )?));
 
         let mut frame = VideoFrame::default();
@@ -169,9 +163,13 @@ impl CaptureHandler for ScreenCapture {
                 item: source,
                 flags: Context {
                     arrived: Box::new(arrived),
-                    options,
+                    options: options.clone(),
                     source,
                 },
+                direct3d: Some(Direct3D {
+                    device: options.direct3d.device,
+                    context: options.direct3d.context,
+                }),
             })?)
         {
             control.stop()?;

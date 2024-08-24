@@ -26,7 +26,7 @@ use transport::{
 };
 
 #[cfg(target_os = "windows")]
-use utils::win32::MediaThreadClass;
+use utils::win32::{create_d3d_device, MediaThreadClass};
 
 struct VideoSender {
     encoder: Arc<Mutex<VideoEncoder>>,
@@ -266,6 +266,9 @@ impl Sender {
     pub fn new(options: SenderOptions, sink: FrameSink) -> Result<Self> {
         log::info!("create sender");
 
+        #[cfg(target_os = "windows")]
+        let direct3d = create_d3d_device()?;
+
         let mut capture_options = CaptureOptions::default();
         let adapter = StreamSenderAdapter::new(options.multicast);
         let sink = Arc::new(sink);
@@ -285,11 +288,13 @@ impl Sender {
                 arrived: VideoSender::new(&adapter, &options, &sink)?,
                 description: VideoCaptureSourceDescription {
                     fps: options.frame_rate,
-                    source,
                     size: Size {
                         width: options.width,
                         height: options.height,
                     },
+                    source,
+                    #[cfg(target_os = "windows")]
+                    direct3d,
                 },
             });
         }

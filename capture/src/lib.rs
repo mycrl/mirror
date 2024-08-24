@@ -8,13 +8,16 @@ mod win32;
 #[cfg(target_os = "linux")]
 mod linux;
 
+use self::audio::AudioCapture;
+
 #[cfg(target_os = "windows")]
 use win32::{CameraCapture, ScreenCapture};
 
 #[cfg(target_os = "linux")]
 use linux::{CameraCapture, ScreenCapture};
 
-use self::audio::AudioCapture;
+#[cfg(target_os = "windows")]
+use utils::win32::Direct3DDevice;
 
 use anyhow::Result;
 use frame::{AudioFrame, VideoFrame};
@@ -102,6 +105,8 @@ pub struct Size {
 
 #[derive(Debug, Clone)]
 pub struct VideoCaptureSourceDescription {
+    #[cfg(target_os = "windows")]
+    pub direct3d: Direct3DDevice,
     pub source: Source,
     pub size: Size,
     pub fps: u8,

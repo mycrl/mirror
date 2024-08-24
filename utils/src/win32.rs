@@ -4,6 +4,16 @@ use windows::{
     core::{s, Result, GUID, HSTRING, PCSTR, PCWSTR, PWSTR},
     Win32::{
         Foundation::HANDLE,
+        Graphics::{
+            Direct3D::{
+                D3D_DRIVER_TYPE_HARDWARE, D3D_FEATURE_LEVEL, D3D_FEATURE_LEVEL_11_0,
+                D3D_FEATURE_LEVEL_11_1,
+            },
+            Direct3D11::{
+                D3D11CreateDevice, ID3D11Device, ID3D11DeviceContext, D3D11_CREATE_DEVICE_FLAG,
+                D3D11_SDK_VERSION,
+            },
+        },
         Media::MediaFoundation::{IMFActivate, IMFAttributes, IMFMediaType},
         System::Threading::{
             AvRevertMmThreadCharacteristics, AvSetMmThreadCharacteristicsA, GetCurrentProcess,
@@ -165,5 +175,35 @@ impl MediaThreadClass {
         }
 
         Ok(MediaThreadClassGuard)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Direct3DDevice {
+    pub device: ID3D11Device,
+    pub context: ID3D11DeviceContext,
+}
+
+pub fn create_d3d_device() -> Result<Direct3DDevice> {
+    unsafe {
+        let (mut d3d_device, mut d3d_context, mut feature_level) =
+            (None, None, D3D_FEATURE_LEVEL::default());
+
+        D3D11CreateDevice(
+            None,
+            D3D_DRIVER_TYPE_HARDWARE,
+            None,
+            D3D11_CREATE_DEVICE_FLAG(0),
+            Some(&[D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0]),
+            D3D11_SDK_VERSION,
+            Some(&mut d3d_device),
+            Some(&mut feature_level),
+            Some(&mut d3d_context),
+        )?;
+
+        Ok(Direct3DDevice {
+            device: d3d_device.unwrap(),
+            context: d3d_context.unwrap(),
+        })
     }
 }
