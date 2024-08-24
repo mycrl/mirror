@@ -36,20 +36,7 @@ impl CaptureHandler for CameraCapture {
         options: Self::CaptureOptions,
         arrived: S,
     ) -> Result<(), Self::Error> {
-        let ctx = PlatformContext::default();
-        let mut devices = ctx
-            .open_device(&options.source.id)?
-            .streams()?
-            .into_iter()
-            .filter(|it| it.pixfmt == PixelFormat::Custom("YUYV".to_string()))
-            .filter(|it| it.width <= options.size.width && it.height <= options.size.height)
-            .collect::<Vec<_>>();
-        devices.sort_by(|a, b| a.width.partial_cmp(&b.width).unwrap());
-        let device = devices
-            .first()
-            .ok_or_else(|| anyhow!("not found a device"))?;
-
-        Ok(())
+        todo!()
     }
 
     fn stop(&self) -> Result<(), Self::Error> {
