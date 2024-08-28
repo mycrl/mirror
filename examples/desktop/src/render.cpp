@@ -3,7 +3,8 @@
 #ifdef WIN32
 SimpleRender::SimpleRender(Args& args,
                            HWND hwnd,
-                           HINSTANCE hinstance,
+                           ID3D11Device* d3d_device,
+                           ID3D11DeviceContext* d3d_device_context,
                            std::function<void()> closed_callback)
     : _callback(closed_callback)
     , _args(args)
@@ -13,8 +14,13 @@ SimpleRender::SimpleRender(Args& args,
     size.width = args.ArgsParams.width;
     size.height = args.ArgsParams.height;
 
-    _window_handle = renderer_create_window_handle(hwnd, hinstance);
-    _renderer = renderer_create(size, _window_handle);
+    RendererOptions options;
+    options.size = size;
+    options.hwnd = hwnd;
+    options.d3d_device = d3d_device;
+    options.d3d_device_context = d3d_device_context;
+
+    _renderer = renderer_create(options);
 }
 #else
 SimpleRender::SimpleRender(Args& args, std::function<void()> closed_callback)
@@ -58,15 +64,10 @@ bool SimpleRender::OnVideoFrame(VideoFrame* frame)
         return false;
     }
     
-    if (!IsRender)
+    /*if (!IsRender)
     {
         return true;
-    }
-
-    if (!IsRender)
-    {
-        return true;
-    }
+    }*/
 
     return renderer_on_video(_renderer, frame);
 }
@@ -98,6 +99,7 @@ void SimpleRender::Clear()
 
 }
 
+#ifdef LINUX
 struct EventLoopContext
 {
     std::function<bool(SDL_Event*)> func;
@@ -115,3 +117,4 @@ void SimpleRender::RunEventLoop(std::function<bool(SDL_Event*)> handler)
     ctx->func = handler;
     renderer_event_loop(_renderer, event_proc, ctx);
 }
+#endif // LINUX

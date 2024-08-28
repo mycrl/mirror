@@ -114,7 +114,7 @@ fn find_ffmpeg_prefix(out_dir: &str, is_debug: bool) -> anyhow::Result<(Vec<Stri
         if !is_exsit(&prefix) {
             exec(
                     &format!(
-                        "Invoke-WebRequest -Uri https://github.com/mycrl/mirror/releases/download/distributions/ffmpeg-windows-x64-{}.zip -OutFile ffmpeg.zip", 
+                        "Invoke-WebRequest -Uri https://github.com/mycrl/third-party/releases/download/distributions/ffmpeg-windows-x64-{}.zip -OutFile ffmpeg.zip", 
                         if is_debug { "debug" } else { "release" }
                     ),
                     out_dir,
@@ -134,7 +134,7 @@ fn find_ffmpeg_prefix(out_dir: &str, is_debug: bool) -> anyhow::Result<(Vec<Stri
         let prefix = join(out_dir, "ffmpeg").unwrap();
         if !is_exsit(&prefix) {
             exec(
-                "wget https://github.com/mycrl/mirror/releases/download/distributions/ffmpeg-linux-x64-release.zip -O ffmpeg.zip",
+                "wget https://github.com/mycrl/third-party/releases/download/distributions/ffmpeg-linux-x64-release.zip -O ffmpeg.zip",
                 out_dir,
             )?;
 
@@ -159,7 +159,7 @@ fn find_libyuv_prefix(out_dir: &str) -> anyhow::Result<(Vec<String>, Vec<String>
     if cfg!(target_os = "windows") {
         if !is_exsit(&join(&out_dir, "yuv.lib")?) {
             exec(
-                "Invoke-WebRequest -Uri https://github.com/mycrl/mirror/releases/download/distributions/yuv-windows-x64.lib -OutFile yuv.lib", 
+                "Invoke-WebRequest -Uri https://github.com/mycrl/third-party/releases/download/distributions/yuv-windows-x64.lib -OutFile yuv.lib", 
                 &out_dir
             )?;
         }
@@ -167,7 +167,7 @@ fn find_libyuv_prefix(out_dir: &str) -> anyhow::Result<(Vec<String>, Vec<String>
         if !is_exsit(&join(&out_dir, "libyuv.a")?) {
             exec(
                 &format!(
-                    "wget https://github.com/mycrl/mirror/releases/download/distributions/libyuv-{}-{}.a -O libyuv.a", 
+                    "wget https://github.com/mycrl/third-party/releases/download/distributions/libyuv-{}-{}.a -O libyuv.a", 
                     if cfg!(target_os = "macos") { "macos" } else { "linux" },
                     if cfg!(target_os = "macos") { "arm64" } else { "x64" },
                 ),

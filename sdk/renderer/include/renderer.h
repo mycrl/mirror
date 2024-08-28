@@ -29,37 +29,32 @@ typedef struct
 	int height;
 } Size;
 
+typedef struct
+{
+	Size size;
+#ifdef WIN32
+	HWND hwnd;
+	void* d3d_device;
+    void* d3d_device_context;
+#endif // WIN32
+} RendererOptions;
+
 typedef const void* WindowHandle;
 typedef const void* Render;
 
-typedef bool (*EventLoopHandler)(const void* event, void* ctx);
+#ifndef WIN32
 
 /**
  * Initialize the environment, which must be initialized before using the SDK.
  */
 EXPORT bool renderer_startup();
 
-/**
- * Create the window handle used by the SDK through the original window handle.
- */
-#ifdef WIN32
-EXPORT WindowHandle renderer_create_window_handle(HWND hwnd, HINSTANCE hinstance);
-#endif // WIN32
-
-/**
- * Destroy the window handle without affecting external window handles.
- */
-EXPORT void renderer_window_handle_destroy(WindowHandle handle);
+#endif // !WIN32
 
 /**
  * Creating a window renderer.
  */
-EXPORT Render renderer_create(Size size, WindowHandle window);
-
-/**
- * Wait indefinitely for the next available event.
- */
-EXPORT void renderer_event_loop(Render render, EventLoopHandler handler, void* ctx);
+EXPORT Render renderer_create(RendererOptions options);
 
 /**
  * Push the video frame into the renderer, which will update the window texture.

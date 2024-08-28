@@ -7,7 +7,7 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
-use frame::{VideoFrame, VideoSize, VideoTransform};
+use frame::{Resource, VideoFormat, VideoFrame, VideoSize, VideoTransform, VideoTransformOptions};
 use utils::{atomic::EasyAtomic, win32::MediaThreadClass};
 use windows_capture::{
     capture::{CaptureControl, GraphicsCaptureApiHandler},
@@ -28,21 +28,28 @@ impl GraphicsCaptureApiHandler for WindowsCapture {
 
     fn new(mut ctx: Self::Flags) -> Result<Self, Self::Error> {
         let status: Arc<AtomicBool> = Arc::new(AtomicBool::new(true));
-        let transform = Arc::new(Mutex::new(VideoTransform::new(
-            VideoSize {
-                width: ctx.source.width()?,
-                height: ctx.source.height()?,
-            },
-            VideoSize {
-                width: ctx.options.size.width,
-                height: ctx.options.size.height,
-            },
-            Some(ctx.options.direct3d),
-        )?));
+        let transform = Arc::new(Mutex::new(VideoTransform::new(VideoTransformOptions {
+            direct3d: ctx.options.direct3d,
+            input: Resource::Default(
+                VideoFormat::RGBA,
+                VideoSize {
+                    width: ctx.source.width()?,
+                    height: ctx.source.height()?,
+                },
+            ),
+            output: Resource::Default(
+                VideoFormat::NV12,
+                VideoSize {
+                    width: ctx.options.size.width,
+                    height: ctx.options.size.height,
+                },
+            ),
+        })?));
 
         let mut frame = VideoFrame::default();
         frame.width = ctx.options.size.width;
         frame.height = ctx.options.size.height;
+        frame.hardware = false;
 
         let status_ = Arc::downgrade(&status);
         let transform_ = Arc::downgrade(&transform);
@@ -53,20 +60,24 @@ impl GraphicsCaptureApiHandler for WindowsCapture {
 
                 while let Some(transform) = transform_.upgrade() {
                     let mut transform = transform.lock().unwrap();
-                    let texture = match transform.get_output() {
-                        Ok(t) => t,
-                        Err(e) => {
-                            log::error!("video transform get output error={:?}", e);
+                    if let Err(e) = transform.process(None) {
+                        log::error!("video transform process error={:?}", e);
 
-                            break;
-                        }
+                        break;
+                    }
+
+                    let buffer = if let Ok(buf) = transform.get_output_buffer() {
+                        buf
+                    } else {
+                        break;
                     };
 
-                    let (buffer, stride) = (texture.buffer(), texture.stride());
+                    frame.linesize = [buffer.stride(), buffer.stride()];
+                    frame.data[0] = buffer.buffer() as *const _;
+                    frame.data[1] = unsafe {
+                        buffer.buffer().add(buffer.stride() * frame.height as usize) as *const _
+                    };
 
-                    frame.data[0] = buffer;
-                    frame.data[1] = unsafe { buffer.add(stride * frame.height as usize) };
-                    frame.linesize = [stride, stride];
                     if !ctx.arrived.sink(&frame) {
                         break;
                     }
@@ -89,14 +100,17 @@ impl GraphicsCaptureApiHandler for WindowsCapture {
     fn on_frame_arrived(
         &mut self,
         frame: &mut Frame,
-        capture_control: InternalCaptureControl,
+        control: InternalCaptureControl,
     ) -> Result<(), Self::Error> {
         if self.status.get() {
-            self.transform.lock().unwrap().update(frame.texture_ref());
+            self.transform
+                .lock()
+                .unwrap()
+                .update_input(frame.texture_ref());
         } else {
             log::info!("windows screen capture control stop");
 
-            capture_control.stop();
+            control.stop();
         }
 
         Ok(())
@@ -156,21 +170,21 @@ impl CaptureHandler for ScreenCapture {
             .0
             .lock()
             .unwrap()
-            .replace(WindowsCapture::start_free_threaded(Settings {
-                cursor_capture: CursorCaptureSettings::WithoutCursor,
-                draw_border: DrawBorderSettings::Default,
-                color_format: ColorFormat::Rgba8,
-                item: source,
-                flags: Context {
+            .replace(WindowsCapture::start_free_threaded(Settings::new(
+                source,
+                CursorCaptureSettings::WithoutCursor,
+                DrawBorderSettings::Default,
+                ColorFormat::Rgba8,
+                Context {
                     arrived: Box::new(arrived),
                     options: options.clone(),
                     source,
                 },
-                direct3d: Some(Direct3D {
+                Some(Direct3D {
                     device: options.direct3d.device,
                     context: options.direct3d.context,
                 }),
-            })?)
+            ))?)
         {
             control.stop()?;
         }

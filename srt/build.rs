@@ -52,7 +52,7 @@ fn use_android_library(out_dir: String) -> Result<()> {
         exec(
             "wget \
             -O libsrt.a \
-            https://github.com/mycrl/mirror/releases/download/distributions/libsrt-arm64-v8a.a",
+            https://github.com/mycrl/third-party/releases/download/distributions/libsrt-arm64-v8a.a",
             &out_dir,
         )?;
     }
@@ -61,7 +61,7 @@ fn use_android_library(out_dir: String) -> Result<()> {
         exec(
             "wget \
             -O libssl.a \
-            https://github.com/mycrl/mirror/releases/download/distributions/libssl-arm64-v8a.a",
+            https://github.com/mycrl/third-party/releases/download/distributions/libssl-arm64-v8a.a",
             &out_dir,
         )?;
     }
@@ -70,7 +70,7 @@ fn use_android_library(out_dir: String) -> Result<()> {
         exec(
             "wget \
             -O libcrypto.a \
-            https://github.com/mycrl/mirror/releases/download/distributions/libcrypto-arm64-v8a.a",
+            https://github.com/mycrl/third-party/releases/download/distributions/libcrypto-arm64-v8a.a",
             &out_dir,
         )?;
     }

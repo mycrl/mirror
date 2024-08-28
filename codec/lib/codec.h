@@ -17,11 +17,19 @@
 #endif
 #endif
 
+#include <string>
 #include <optional>
+
+#ifdef WIN32
+#include <d3d11.h>
+#endif // WIN32
 
 extern "C"
 {
 #include <frame.h>
+#ifdef WIN32
+#include <libavutil/hwcontext_d3d11va.h>
+#endif // WIN32
 #include <libavutil/hwcontext.h>
 #include <libavcodec/avcodec.h>
 #include <libavutil/frame.h>
@@ -37,7 +45,7 @@ struct Packet
 
 struct VideoEncoderSettings
 {
-	const char* codec_name;
+	const char* codec;
 	uint8_t frame_rate;
 	uint32_t width;
 	uint32_t height;
@@ -48,16 +56,23 @@ struct VideoEncoderSettings
 struct VideoEncoder
 {
 	bool initialized;
-    const AVCodec* codec;
 	AVCodecContext* context;
 	AVPacket* packet;
 	AVFrame* frame;
 	Packet* output_packet;
 };
 
+struct VideoDecoderSettings
+{
+#ifdef WIN32
+	ID3D11Device* d3d11_device;
+	ID3D11DeviceContext* d3d11_device_context;
+#endif // WIN32
+	const char* codec;
+};
+
 struct VideoDecoder
 {
-    const AVCodec* codec;
 	AVCodecContext* context;
 	AVCodecParserContext* parser;
 	AVPacket* packet;
@@ -68,14 +83,13 @@ struct VideoDecoder
 
 struct AudioEncoderSettings
 {
-	const char* codec_name;
+	const char* codec;
 	uint64_t bit_rate;
 	uint64_t sample_rate;
 };
 
 struct AudioEncoder
 {
-    const AVCodec* codec;
 	AVCodecContext* context;
 	AVPacket* packet;
 	AVFrame* frame;
@@ -83,9 +97,13 @@ struct AudioEncoder
 	uint64_t pts;
 };
 
+struct AudioDecoderSettings
+{
+	const char* codec;
+};
+
 struct AudioDecoder
 {
-    const AVCodec* codec;
 	AVCodecContext* context;
 	AVCodecParserContext* parser;
 	AVPacket* packet;
@@ -119,7 +137,7 @@ extern "C"
 	EXPORT Packet* codec_video_encoder_read_packet(VideoEncoder* codec);
 	EXPORT void codec_unref_video_encoder_packet(VideoEncoder* codec);
 	EXPORT void codec_release_video_encoder(VideoEncoder* codec);
-	EXPORT VideoDecoder* codec_create_video_decoder(const char* codec_name);
+	EXPORT VideoDecoder* codec_create_video_decoder(VideoDecoderSettings* settings);
 	EXPORT void codec_release_video_decoder(VideoDecoder* codec);
 	EXPORT bool codec_video_decoder_send_packet(VideoDecoder* codec, Packet packet);
 	EXPORT VideoFrame* codec_video_decoder_read_frame(VideoDecoder* codec);
@@ -129,10 +147,19 @@ extern "C"
 	EXPORT Packet* codec_audio_encoder_read_packet(AudioEncoder* codec);
 	EXPORT void codec_unref_audio_encoder_packet(AudioEncoder* codec);
 	EXPORT void codec_release_audio_encoder(AudioEncoder* codec);
-	EXPORT AudioDecoder* codec_create_audio_decoder(const char* codec_name);
+	EXPORT AudioDecoder* codec_create_audio_decoder(AudioDecoderSettings* settings);
 	EXPORT void codec_release_audio_decoder(AudioDecoder* codec);
 	EXPORT bool codec_audio_decoder_send_packet(AudioDecoder* codec, Packet* packet);
 	EXPORT AudioFrame* codec_audio_decoder_read_frame(AudioDecoder* codec);
 }
+
+struct CodecContext
+{
+	const AVCodec* codec;
+	AVCodecContext* context;
+};
+
+std::optional<CodecContext> create_video_decoder_context(VideoDecoderSettings* settings);
+std::optional<CodecContext> create_video_encoder_context(std::string& name);
 
 #endif /* codec_h */

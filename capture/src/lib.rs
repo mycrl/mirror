@@ -22,30 +22,6 @@ use utils::win32::Direct3DDevice;
 use anyhow::Result;
 use frame::{AudioFrame, VideoFrame};
 
-/// Don't forget to initialize the environment, this is necessary for the
-/// capture module.
-pub fn startup() -> Result<()> {
-    #[cfg(target_os = "windows")]
-    {
-        log::info!("capture MediaFoundation satrtup");
-
-        self::win32::startup()?;
-    }
-
-    Ok(())
-}
-
-pub fn shutdown() -> Result<()> {
-    #[cfg(target_os = "windows")]
-    {
-        log::info!("capture MediaFoundation shutdown");
-
-        self::win32::shutdown()?;
-    }
-
-    Ok(())
-}
-
 pub trait FrameArrived: Sync + Send {
     /// The type of data captured, such as video frames.
     type Frame;
@@ -161,7 +137,7 @@ impl Capture {
         log::info!("capture get sources, kind={:?}", kind);
 
         Ok(match kind {
-            // SourceType::Camera => CameraCapture::get_sources()?,
+            SourceType::Camera => CameraCapture::get_sources()?,
             SourceType::Screen => ScreenCapture::get_sources()?,
             SourceType::Audio => AudioCapture::get_sources()?,
             _ => Vec::new(),
@@ -209,8 +185,6 @@ impl Capture {
     }
 
     pub fn close(&self) -> Result<()> {
-        log::info!("close capture");
-
         for item in self.0.iter() {
             match item {
                 CaptureImplement::Screen(it) => it.stop(),
@@ -218,6 +192,8 @@ impl Capture {
                 CaptureImplement::Audio(it) => it.stop(),
             }?;
         }
+
+        log::info!("close capture");
 
         Ok(())
     }

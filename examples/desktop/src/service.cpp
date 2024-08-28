@@ -19,12 +19,19 @@ void close_proc(void* ctx)
 }
 
 #ifdef WIN32
-MirrorServiceExt::MirrorServiceExt(Args& args, HWND hwnd, HINSTANCE hinstance) 
+MirrorServiceExt::MirrorServiceExt(Args& args, HWND hwnd, HINSTANCE hinstance)
     : _args(args)
 {
+    MirrorOptions mirror_options;
+    mirror_options.server = const_cast<char*>(_args.ArgsParams.server.c_str());
+    mirror_options.multicast = const_cast<char*>("239.0.0.1");
+    mirror_options.mtu = 1400;
+
+    _mirror = mirror_create(mirror_options);
     _render = new SimpleRender(args,
                                hwnd,
-                               hinstance,
+                               (ID3D11Device*)mirror_get_direct3d_device(_mirror),
+                               (ID3D11DeviceContext*)mirror_get_direct3d_device_context(_mirror),
                                [&]
                                {
                                    this->Close();
@@ -32,7 +39,7 @@ MirrorServiceExt::MirrorServiceExt(Args& args, HWND hwnd, HINSTANCE hinstance)
                                });
 }
 #else
-MirrorServiceExt::MirrorServiceExt(Args& args): _args(args)
+MirrorServiceExt::MirrorServiceExt(Args& args) : _args(args)
 {
     _render = new SimpleRender(args,
                                [&]
@@ -45,6 +52,12 @@ MirrorServiceExt::MirrorServiceExt(Args& args): _args(args)
 MirrorServiceExt::~MirrorServiceExt()
 {
     Close();
+
+    if (_mirror != nullptr)
+    {
+        mirror_destroy(_mirror);
+        _mirror = nullptr;
+    }
 }
 
 bool MirrorServiceExt::CreateMirrorSender()
@@ -52,11 +65,6 @@ bool MirrorServiceExt::CreateMirrorSender()
     if (_sender != nullptr)
     {
         return true;
-    }
-
-    if (!_create_mirror())
-    {
-        return false;
     }
 
     auto video_sources = mirror_get_sources(SourceType::Screen);
@@ -68,7 +76,7 @@ bool MirrorServiceExt::CreateMirrorSender()
     video_options.encoder.frame_rate = _args.ArgsParams.fps;
     video_options.encoder.key_frame_interval = 21;
     video_options.encoder.bit_rate = 500 * 1024 * 8;
-    
+
     for (int i = 0; i < video_sources.size; i++)
     {
         if (video_sources.items[i].is_default)
@@ -110,6 +118,7 @@ bool MirrorServiceExt::CreateMirrorSender()
     }
 
     _render->SetTitle("sender");
+    _is_runing = true;
     return true;
 }
 
@@ -120,11 +129,6 @@ bool MirrorServiceExt::CreateMirrorReceiver()
         return true;
     }
 
-    if (!_create_mirror())
-    {
-        return false;
-    }
-
     FrameSink sink;
     sink.video = video_proc;
     sink.audio = audio_proc;
@@ -132,9 +136,9 @@ bool MirrorServiceExt::CreateMirrorReceiver()
     sink.ctx = _render;
 
     _render->IsRender = true;
-    _receiver = mirror_create_receiver(_mirror, 
-                                       _args.ArgsParams.id, 
-                                       _args.ArgsParams.decoder.c_str(), 
+    _receiver = mirror_create_receiver(_mirror,
+                                       _args.ArgsParams.id,
+                                       _args.ArgsParams.decoder.c_str(),
                                        sink);
     if (_receiver == nullptr)
     {
@@ -142,17 +146,21 @@ bool MirrorServiceExt::CreateMirrorReceiver()
     }
 
     _render->SetTitle("receiver");
+    _is_runing = true;
     return true;
 }
 
 void MirrorServiceExt::Close()
 {
-    if (!is_created)
+    if (_is_runing)
+    {
+        _is_runing = false;
+    }
+    else
     {
         return;
     }
 
-    is_created = false;
     if (_sender != nullptr)
     {
         mirror_sender_destroy(_sender);
@@ -165,40 +173,13 @@ void MirrorServiceExt::Close()
         _receiver = nullptr;
     }
 
-    if (_mirror != nullptr)
-    {
-        mirror_destroy(_mirror);
-        _mirror = nullptr;
-    }
-
     _render->SetTitle("");
     _render->Clear();
 }
 
-bool MirrorServiceExt::_create_mirror()
-{
-    if (is_created)
-    {
-        return true;
-    }
-
-    if (_mirror != nullptr)
-    {
-        return true;
-    }
-
-    is_created = true;
-
-    MirrorOptions mirror_options;
-    mirror_options.server = const_cast<char*>(_args.ArgsParams.server.c_str());
-    mirror_options.multicast = const_cast<char*>("239.0.0.1");
-    mirror_options.mtu = 1400;
-
-    _mirror = mirror_create(mirror_options);
-    return _mirror != nullptr;
-}
-
+#ifdef LINUX
 void MirrorServiceExt::RunEventLoop(std::function<bool(SDL_Event*)> handler)
 {
     _render->RunEventLoop(handler);
 }
+#endif // LINUX

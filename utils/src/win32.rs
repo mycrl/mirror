@@ -10,19 +10,48 @@ use windows::{
                 D3D_FEATURE_LEVEL_11_1,
             },
             Direct3D11::{
-                D3D11CreateDevice, ID3D11Device, ID3D11DeviceContext, D3D11_CREATE_DEVICE_FLAG,
-                D3D11_SDK_VERSION,
+                D3D11CreateDevice, ID3D11Device, ID3D11DeviceContext,
+                D3D11_CREATE_DEVICE_BGRA_SUPPORT, D3D11_CREATE_DEVICE_DEBUG, D3D11_SDK_VERSION,
             },
         },
-        Media::MediaFoundation::{IMFActivate, IMFAttributes, IMFMediaType},
-        System::Threading::{
-            AvRevertMmThreadCharacteristics, AvSetMmThreadCharacteristicsA, GetCurrentProcess,
-            SetPriorityClass, BELOW_NORMAL_PRIORITY_CLASS, HIGH_PRIORITY_CLASS,
-            NORMAL_PRIORITY_CLASS, PROCESS_CREATION_FLAGS, PROCESS_MODE_BACKGROUND_BEGIN,
-            REALTIME_PRIORITY_CLASS,
+        Media::MediaFoundation::{
+            IMFActivate, IMFAttributes, IMFMediaType, MFShutdown, MFStartup, MF_VERSION,
+        },
+        System::{
+            Com::{CoInitializeEx, CoUninitialize, COINIT_MULTITHREADED},
+            Threading::{
+                AvRevertMmThreadCharacteristics, AvSetMmThreadCharacteristicsA, GetCurrentProcess,
+                SetPriorityClass, BELOW_NORMAL_PRIORITY_CLASS, HIGH_PRIORITY_CLASS,
+                NORMAL_PRIORITY_CLASS, PROCESS_CREATION_FLAGS, PROCESS_MODE_BACKGROUND_BEGIN,
+                REALTIME_PRIORITY_CLASS,
+            },
         },
     },
 };
+
+pub use windows::core::Interface;
+
+/// Initializes Microsoft Media Foundation.
+pub fn startup() -> Result<()> {
+    unsafe {
+        CoInitializeEx(None, COINIT_MULTITHREADED).ok()?;
+        MFStartup(MF_VERSION, 0)?;
+    }
+
+    Ok(())
+}
+
+/// Shuts down the Microsoft Media Foundation platform. Call this function
+/// once for every call to MFStartup. Do not call this function from work
+/// queue threads.
+pub fn shutdown() -> Result<()> {
+    unsafe {
+        MFShutdown()?;
+        CoUninitialize();
+    }
+
+    Ok(())
+}
 
 #[allow(unused)]
 pub enum IMFValue {
@@ -184,26 +213,41 @@ pub struct Direct3DDevice {
     pub context: ID3D11DeviceContext,
 }
 
-pub fn create_d3d_device() -> Result<Direct3DDevice> {
-    unsafe {
-        let (mut d3d_device, mut d3d_context, mut feature_level) =
-            (None, None, D3D_FEATURE_LEVEL::default());
+impl Direct3DDevice {
+    pub fn new() -> Result<Direct3DDevice> {
+        unsafe {
+            let (mut d3d_device, mut d3d_context, mut feature_level) =
+                (None, None, D3D_FEATURE_LEVEL::default());
 
-        D3D11CreateDevice(
-            None,
-            D3D_DRIVER_TYPE_HARDWARE,
-            None,
-            D3D11_CREATE_DEVICE_FLAG(0),
-            Some(&[D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0]),
-            D3D11_SDK_VERSION,
-            Some(&mut d3d_device),
-            Some(&mut feature_level),
-            Some(&mut d3d_context),
-        )?;
+            D3D11CreateDevice(
+                None,
+                D3D_DRIVER_TYPE_HARDWARE,
+                None,
+                D3D11_CREATE_DEVICE_BGRA_SUPPORT | D3D11_CREATE_DEVICE_DEBUG,
+                Some(&[D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0]),
+                D3D11_SDK_VERSION,
+                Some(&mut d3d_device),
+                Some(&mut feature_level),
+                Some(&mut d3d_context),
+            )?;
 
-        Ok(Direct3DDevice {
-            device: d3d_device.unwrap(),
-            context: d3d_context.unwrap(),
+            Ok(Direct3DDevice {
+                device: d3d_device.unwrap(),
+                context: d3d_context.unwrap(),
+            })
+        }
+    }
+
+    pub fn thread_safety_clone(&self) -> Result<Self> {
+        let context = unsafe {
+            let mut context = None;
+            self.device.CreateDeferredContext(0, Some(&mut context))?;
+            context.unwrap()
+        };
+
+        Ok(Self {
+            device: self.device.clone(),
+            context,
         })
     }
 }

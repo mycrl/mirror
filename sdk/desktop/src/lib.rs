@@ -5,7 +5,7 @@ mod receiver;
 mod sender;
 
 use std::{
-    ffi::{c_char, c_int},
+    ffi::{c_char, c_int, c_void},
     fmt::Debug,
     ptr::null_mut,
     sync::atomic::AtomicBool,
@@ -19,6 +19,9 @@ use utils::{atomic::EasyAtomic, strings::Strings};
 
 #[cfg(not(target_os = "macos"))]
 use capture::{Capture, SourceType};
+
+#[cfg(target_os = "windows")]
+use utils::win32::Interface;
 
 /// Windows yes! The Windows dynamic library has an entry, so just initialize
 /// the logger and set the process priority at the entry.
@@ -100,7 +103,6 @@ pub extern "C" fn mirror_create(options: MirrorOptions) -> *const Mirror {
     log::info!("extern api: mirror create");
 
     let func = || factory::Mirror::new(options.try_into()?);
-
     checker(func())
         .map(|mirror| Box::into_raw(Box::new(Mirror(mirror))))
         .unwrap_or_else(|_| null_mut()) as *const _
@@ -113,6 +115,32 @@ pub extern "C" fn mirror_destroy(mirror: *const Mirror) {
 
     log::info!("extern api: mirror destroy");
     drop(unsafe { Box::from_raw(mirror as *mut Mirror) });
+}
+
+/// Get direct3d device.
+#[no_mangle]
+#[cfg(target_os = "windows")]
+pub extern "C" fn mirror_get_direct3d_device(mirror: *const Mirror) -> *mut c_void {
+    assert!(!mirror.is_null());
+
+    unsafe { &*mirror }
+        .0
+        .get_direct3d_device()
+        .map(|it| it.device.as_raw())
+        .unwrap_or_else(|| null_mut())
+}
+
+/// Get direct3d device context.
+#[no_mangle]
+#[cfg(target_os = "windows")]
+pub extern "C" fn mirror_get_direct3d_device_context(mirror: *const Mirror) -> *mut c_void {
+    assert!(!mirror.is_null());
+
+    unsafe { &*mirror }
+        .0
+        .get_direct3d_device()
+        .map(|it| it.context.as_raw())
+        .unwrap_or_else(|| null_mut())
 }
 
 #[repr(C)]
@@ -518,7 +546,7 @@ fn checker<T, E: Debug>(result: Result<T, E>) -> Result<T, E> {
         log::error!("{:?}", e);
 
         if cfg!(debug_assertions) {
-            println!("{:?}", e);
+            println!("{:#?}", e);
         }
     }
 

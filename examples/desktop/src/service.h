@@ -24,16 +24,18 @@ public:
     bool CreateMirrorSender();
     bool CreateMirrorReceiver();
     void Close();
+
+#ifdef LINUX
     void RunEventLoop(std::function<bool(SDL_Event*)> handler);
+#endif // LINUX
+
 private:
     Args& _args;
     Mirror _mirror = nullptr;
     Sender _sender = nullptr;
     Receiver _receiver = nullptr;
     SimpleRender* _render = nullptr;
-    bool is_created = false;
-
-    bool _create_mirror();
+    bool _is_runing = true;
 };
 
 #endif

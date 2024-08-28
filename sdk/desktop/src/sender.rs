@@ -26,7 +26,7 @@ use transport::{
 };
 
 #[cfg(target_os = "windows")]
-use utils::win32::{create_d3d_device, MediaThreadClass};
+use utils::win32::MediaThreadClass;
 
 struct VideoSender {
     encoder: Arc<Mutex<VideoEncoder>>,
@@ -105,7 +105,7 @@ impl FrameArrived for VideoSender {
     type Frame = VideoFrame;
 
     fn sink(&mut self, frame: &Self::Frame) -> bool {
-        // // Push the audio and video frames into the encoder.
+        // Push the audio and video frames into the encoder.
         if self.encoder.lock().unwrap().send_frame(frame) {
             self.unparker.unpark();
         } else {
@@ -266,9 +266,6 @@ impl Sender {
     pub fn new(options: SenderOptions, sink: FrameSink) -> Result<Self> {
         log::info!("create sender");
 
-        #[cfg(target_os = "windows")]
-        let direct3d = create_d3d_device()?;
-
         let mut capture_options = CaptureOptions::default();
         let adapter = StreamSenderAdapter::new(options.multicast);
         let sink = Arc::new(sink);
@@ -294,7 +291,11 @@ impl Sender {
                     },
                     source,
                     #[cfg(target_os = "windows")]
-                    direct3d,
+                    direct3d: crate::factory::DIRECT_3D_DEVICE
+                        .read()
+                        .unwrap()
+                        .clone()
+                        .expect("D3D device was not initialized successfully!"),
                 },
             });
         }

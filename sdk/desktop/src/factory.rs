@@ -3,13 +3,21 @@ use crate::receiver::{Receiver, ReceiverOptions};
 #[cfg(not(target_os = "macos"))]
 use crate::sender::{Sender, SenderOptions};
 
+use std::sync::RwLock;
+
 use anyhow::Result;
 use frame::{AudioFrame, VideoFrame};
 use transport::{Transport, TransportOptions};
 use utils::logger;
 
 #[cfg(target_os = "windows")]
-use utils::win32::{set_process_priority, ProcessPriority};
+use utils::win32::{
+    set_process_priority, shutdown as win32_shutdown, startup as win32_startup, Direct3DDevice,
+    ProcessPriority,
+};
+
+#[cfg(target_os = "windows")]
+pub(crate) static DIRECT_3D_DEVICE: RwLock<Option<Direct3DDevice>> = RwLock::new(None);
 
 /// Initialize the environment, which must be initialized before using the SDK.
 #[rustfmt::skip]
@@ -24,6 +32,11 @@ pub fn startup() -> Result<()> {
     )?;
 
     log::info!("mirror startup");
+
+    #[cfg(target_os = "windows")]
+    {
+        win32_startup()?;
+    }
 
     std::panic::set_hook(Box::new(|info| {
         log::error!("{:?}", info);
@@ -47,12 +60,6 @@ pub fn startup() -> Result<()> {
     transport::startup();
     log::info!("transport initialized");
 
-    #[cfg(not(target_os = "macos"))]
-    {
-        capture::startup()?;
-        log::info!("capture initialized");
-    }
-
     log::info!("all initialized");
     Ok(())
 }
@@ -62,8 +69,8 @@ pub fn startup() -> Result<()> {
 pub fn shutdown() -> Result<()> {
     log::info!("mirror shutdown");
 
-    #[cfg(not(target_os = "macos"))]
-    capture::shutdown()?;
+    #[cfg(target_os = "windows")]
+    win32_shutdown()?;
 
     codec::shutdown();
     transport::shutdown();
@@ -138,7 +145,24 @@ impl Mirror {
     pub fn new(options: TransportOptions) -> Result<Self> {
         log::info!("create mirror: options={:?}", options);
 
+        // Check if the D3D device has been created. If not, create a global one.
+        #[cfg(target_os = "windows")]
+        {
+            if DIRECT_3D_DEVICE.read().unwrap().is_none() {
+                DIRECT_3D_DEVICE
+                    .write()
+                    .unwrap()
+                    .replace(Direct3DDevice::new()?);
+            }
+        }
+
         Ok(Self(Transport::new(options)?))
+    }
+
+    /// get direct3d device
+    #[cfg(target_os = "windows")]
+    pub fn get_direct3d_device(&self) -> Option<Direct3DDevice> {
+        DIRECT_3D_DEVICE.read().unwrap().clone()
     }
 
     /// Create a sender, specify a bound NIC address, you can pass callback to

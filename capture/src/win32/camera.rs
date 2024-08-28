@@ -114,8 +114,9 @@ impl<T: FrameArrived<Frame = VideoFrame>> Context<T> {
             return Err(anyhow!("failed to lock textture 2d"));
         }
 
-        self.frame.data[0] = data;
-        self.frame.data[1] = unsafe { data.add(stride as usize * self.frame.height as usize) };
+        self.frame.data[0] = data as *const _;
+        self.frame.data[1] =
+            unsafe { data.add(stride as usize * self.frame.height as usize) as *const _ };
         self.frame.linesize = [stride as usize, stride as usize];
         if !self.arrived.sink(&self.frame) {
             return Err(anyhow!("FrameArrived sink return false"));
