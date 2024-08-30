@@ -29,12 +29,12 @@ public:
     void RunEventLoop(std::function<bool(SDL_Event*)> handler);
 #endif // LINUX
 
+    SimpleRender* Render = nullptr;
 private:
     Args& _args;
     Mirror _mirror = nullptr;
     Sender _sender = nullptr;
     Receiver _receiver = nullptr;
-    SimpleRender* _render = nullptr;
     bool _is_runing = true;
 };
 

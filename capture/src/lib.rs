@@ -3,10 +3,20 @@
 mod audio;
 
 #[cfg(target_os = "windows")]
-mod win32;
+mod win32 {
+    mod camera;
+    mod screen;
+
+    pub use self::{camera::CameraCapture, screen::ScreenCapture};
+}
 
 #[cfg(target_os = "linux")]
-mod linux;
+mod linux {
+    mod camera;
+    mod screen;
+
+    pub use self::{camera::CameraCapture, screen::ScreenCapture};
+}
 
 use self::audio::AudioCapture;
 
@@ -83,6 +93,7 @@ pub struct Size {
 pub struct VideoCaptureSourceDescription {
     #[cfg(target_os = "windows")]
     pub direct3d: Direct3DDevice,
+    pub hardware: bool,
     pub source: Source,
     pub size: Size,
     pub fps: u8,

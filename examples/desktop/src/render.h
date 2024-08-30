@@ -27,10 +27,9 @@ public:
     SimpleRender(Args& args,
                  HWND hwnd,
                  ID3D11Device* d3d_device,
-                 ID3D11DeviceContext* d3d_device_context,
-                 std::function<void()> closed_callback);
+                 ID3D11DeviceContext* d3d_device_context);
 #else
-    SimpleRender(Args& args, std::function<void()> closed_callback);
+    SimpleRender(Args& args);
 #endif
 
     ~SimpleRender();
@@ -38,8 +37,8 @@ public:
     void SetTitle(std::string title);
     bool OnVideoFrame(VideoFrame* frame);
     bool OnAudioFrame(AudioFrame* frame);
-    void OnClose();
-    void Clear();
+    void Close();
+    void Create();
 
 #ifdef LINUX
     void RunEventLoop(std::function<bool(SDL_Event*)> handler);
@@ -48,9 +47,8 @@ public:
     bool IsRender = true;
 private:
     Args& _args;
-    bool _runing = true;
-    std::function<void()> _callback;
     Render _renderer = nullptr;
+    RendererOptions _options = {};
 #ifdef WIN32
     WindowHandle _window_handle = nullptr;
     HWND _hwnd;

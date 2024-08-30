@@ -9,15 +9,12 @@ use std::{
 use anyhow::anyhow;
 use audio::AudioPlayer;
 use frame::{AudioFrame, VideoFrame};
-use utils::{logger, win32::Direct3DDevice};
-use video::{Size, VideoRender, VideoRenderOptions};
-use windows::{
-    core::Interface,
-    Win32::{
-        Foundation::HWND,
-        Graphics::Direct3D11::{ID3D11Device, ID3D11DeviceContext},
-    },
+use utils::{
+    logger,
+    win32::{d3d_context_borrowed_raw, d3d_device_borrowed_raw, Direct3DDevice},
 };
+use video::{Size, VideoRender, VideoRenderOptions};
+use windows::Win32::Foundation::HWND;
 
 #[repr(C)]
 struct RawSize {
@@ -86,16 +83,12 @@ extern "C" fn renderer_create(options: RawRendererOptions) -> *mut RawRenderer {
                 size: options.size.into(),
                 window_handle: HWND(options.hwnd),
                 direct3d: Direct3DDevice {
-                    device: unsafe {
-                        ID3D11Device::from_raw_borrowed(&options.d3d_device)
-                            .ok_or_else(|| anyhow!("invalid d3d11 device"))?
-                            .clone()
-                    },
-                    context: unsafe {
-                        ID3D11DeviceContext::from_raw_borrowed(&options.d3d_device_context)
-                            .ok_or_else(|| anyhow!("invalid d3d11 device context"))?
-                            .clone()
-                    },
+                    device: d3d_device_borrowed_raw(&options.d3d_device)
+                        .ok_or_else(|| anyhow!("invalid d3d11 device"))?
+                        .clone(),
+                    context: d3d_context_borrowed_raw(&options.d3d_device_context)
+                        .ok_or_else(|| anyhow!("invalid d3d11 device context"))?
+                        .clone(),
                 },
             })?,
         })

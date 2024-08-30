@@ -11,13 +11,11 @@ mod video;
 
 pub use self::{
     audio::{AudioFrame, AudioResampler},
-    video::{VideoFrame, VideoSize},
+    video::{VideoFormat, VideoFrame, VideoSize},
 };
 
 #[cfg(target_os = "windows")]
-pub use self::video::win32::{
-    Resource, TextureBuffer, VideoFormat, VideoTransform, VideoTransformOptions,
-};
+pub use self::video::win32::{Resource, TextureBuffer, VideoTransform, VideoTransformOptions};
 
 #[cfg(target_os = "linux")]
 pub use self::video::unix::{VideoFormat, VideoTransform};

@@ -8,17 +8,27 @@ use std::{
 
 use anyhow::{anyhow, Result};
 use frame::{Resource, VideoFormat, VideoFrame, VideoSize, VideoTransform, VideoTransformOptions};
-use utils::{atomic::EasyAtomic, win32::MediaThreadClass};
+use utils::{
+    atomic::EasyAtomic,
+    win32::{Interface, MediaThreadClass},
+};
+
+use windows::Win32::Graphics::{Direct3D11::ID3D11Texture2D, Dxgi::IDXGIResource};
 use windows_capture::{
     capture::{CaptureControl, GraphicsCaptureApiHandler},
     frame::Frame,
     graphics_capture_api::InternalCaptureControl,
     monitor::Monitor,
-    settings::{ColorFormat, CursorCaptureSettings, Direct3D, DrawBorderSettings, Settings},
+    settings::{ColorFormat, CursorCaptureSettings, DrawBorderSettings, Settings},
 };
 
+struct SharedResource(ID3D11Texture2D);
+
+unsafe impl Sync for SharedResource {}
+unsafe impl Send for SharedResource {}
+
 struct WindowsCapture {
-    transform: Arc<Mutex<VideoTransform>>,
+    shared_resource: Arc<Mutex<Option<SharedResource>>>,
     status: Arc<AtomicBool>,
 }
 
@@ -28,7 +38,19 @@ impl GraphicsCaptureApiHandler for WindowsCapture {
 
     fn new(mut ctx: Self::Flags) -> Result<Self, Self::Error> {
         let status: Arc<AtomicBool> = Arc::new(AtomicBool::new(true));
-        let transform = Arc::new(Mutex::new(VideoTransform::new(VideoTransformOptions {
+        let shared_resource: Arc<Mutex<Option<SharedResource>>> = Default::default();
+
+        let mut frame = VideoFrame::default();
+        frame.width = ctx.options.size.width;
+        frame.height = ctx.options.size.height;
+        frame.hardware = ctx.options.hardware;
+        frame.format = if ctx.options.hardware {
+            VideoFormat::RGBA
+        } else {
+            VideoFormat::NV12
+        };
+
+        let mut transform = VideoTransform::new(VideoTransformOptions {
             direct3d: ctx.options.direct3d,
             input: Resource::Default(
                 VideoFormat::RGBA,
@@ -38,51 +60,66 @@ impl GraphicsCaptureApiHandler for WindowsCapture {
                 },
             ),
             output: Resource::Default(
-                VideoFormat::NV12,
+                frame.format,
                 VideoSize {
                     width: ctx.options.size.width,
                     height: ctx.options.size.height,
                 },
             ),
-        })?));
-
-        let mut frame = VideoFrame::default();
-        frame.width = ctx.options.size.width;
-        frame.height = ctx.options.size.height;
-        frame.hardware = false;
+        })?;
 
         let status_ = Arc::downgrade(&status);
-        let transform_ = Arc::downgrade(&transform);
+        let shared_resource_ = Arc::downgrade(&shared_resource);
         thread::Builder::new()
             .name("WindowsScreenCaptureThread".to_string())
             .spawn(move || {
                 let thread_class_guard = MediaThreadClass::Capture.join().ok();
 
-                while let Some(transform) = transform_.upgrade() {
-                    let mut transform = transform.lock().unwrap();
-                    if let Err(e) = transform.process(None) {
-                        log::error!("video transform process error={:?}", e);
+                let mut func = || {
+                    while let Some(shared_resource) = shared_resource_.upgrade() {
+                        if let Some(resource) = shared_resource.lock().unwrap().take() {
+                            let texture = transform.open_shared_texture(unsafe {
+                                resource.0.cast::<IDXGIResource>()?.GetSharedHandle()?
+                            })?;
 
-                        break;
+                            let view = transform.create_input_view(&texture, 0)?;
+                            transform.process(Some(view))?;
+                        }
+
+                        if frame.hardware {
+                            frame.data[0] = transform.get_output().as_raw();
+                            frame.data[1] = 0 as *const _;
+
+                            if !ctx.arrived.sink(&frame) {
+                                break;
+                            }
+                        } else {
+                            let texture = transform.get_output_buffer()?;
+                            frame.data[0] = texture.buffer() as *const _;
+                            frame.data[1] = unsafe {
+                                texture
+                                    .buffer()
+                                    .add(frame.width as usize * frame.height as usize)
+                            } as *const _;
+
+                            frame.linesize[0] = texture.stride();
+                            frame.linesize[1] = texture.stride();
+
+                            if !ctx.arrived.sink(&frame) {
+                                break;
+                            }
+                        }
+
+                        thread::sleep(Duration::from_millis(1000 / ctx.options.fps as u64));
                     }
 
-                    let buffer = if let Ok(buf) = transform.get_output_buffer() {
-                        buf
-                    } else {
-                        break;
-                    };
+                    Ok::<_, anyhow::Error>(())
+                };
 
-                    frame.linesize = [buffer.stride(), buffer.stride()];
-                    frame.data[0] = buffer.buffer() as *const _;
-                    frame.data[1] = unsafe {
-                        buffer.buffer().add(buffer.stride() * frame.height as usize) as *const _
-                    };
-
-                    if !ctx.arrived.sink(&frame) {
-                        break;
-                    }
-
-                    thread::sleep(Duration::from_millis(1000 / ctx.options.fps as u64));
+                if let Err(e) = func() {
+                    log::error!("WindowsScreenCaptureThread stop, error={:?}", e);
+                } else {
+                    log::info!("WindowsScreenCaptureThread stop");
                 }
 
                 if let Some(status) = status_.upgrade() {
@@ -94,7 +131,10 @@ impl GraphicsCaptureApiHandler for WindowsCapture {
                 }
             })?;
 
-        Ok(Self { status, transform })
+        Ok(Self {
+            shared_resource,
+            status,
+        })
     }
 
     fn on_frame_arrived(
@@ -103,10 +143,10 @@ impl GraphicsCaptureApiHandler for WindowsCapture {
         control: InternalCaptureControl,
     ) -> Result<(), Self::Error> {
         if self.status.get() {
-            self.transform
+            self.shared_resource
                 .lock()
                 .unwrap()
-                .update_input(frame.texture_ref());
+                .replace(SharedResource(frame.texture()?));
         } else {
             log::info!("windows screen capture control stop");
 
@@ -177,13 +217,10 @@ impl CaptureHandler for ScreenCapture {
                 ColorFormat::Rgba8,
                 Context {
                     arrived: Box::new(arrived),
-                    options: options.clone(),
+                    options,
                     source,
                 },
-                Some(Direct3D {
-                    device: options.direct3d.device,
-                    context: options.direct3d.context,
-                }),
+                None,
             ))?)
         {
             control.stop()?;

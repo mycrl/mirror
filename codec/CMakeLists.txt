@@ -50,6 +50,14 @@ if (NOT EXISTS "${THIRD_PARTY_DIR}/libyuv")
     endif()
 endif()
 
+if (NOT EXISTS "${THIRD_PARTY_DIR}/media-sdk")
+    if (WIN32)
+        execute_process(
+            WORKING_DIRECTORY "${THIRD_PARTY_DIR}"
+            COMMAND powershell.exe -Command "git clone https://github.com/Intel-Media-SDK/MediaSDK media-sdk")
+    endif()
+endif()
+
 add_library(codec STATIC 
             lib/h264.cpp
             lib/opus.cpp
@@ -58,6 +66,7 @@ add_library(codec STATIC
 
 include_directories("${FFMPEG_PREFIX}/include"
                     "${THIRD_PARTY_DIR}/libyuv/include"
+                    "${THIRD_PARTY_DIR}/media-sdk/api/include"
                     "../frame/include")
 
 target_link_directories(codec PRIVATE "${FFMPEG_PREFIX}/lib")

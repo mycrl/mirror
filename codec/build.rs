@@ -52,6 +52,13 @@ fn main() -> anyhow::Result<()> {
     let (ffmpeg_include_prefix, ffmpeg_lib_prefix) = find_ffmpeg_prefix(&out_dir, is_debug)?;
     let (libyuv_include_prefix, libyuv_lib_prefix) = find_libyuv_prefix(&out_dir)?;
 
+    if !is_exsit(&join(&out_dir, "./media-sdk")?) {
+        exec(
+            "git clone https://github.com/Intel-Media-SDK/MediaSDK media-sdk",
+            &out_dir,
+        )?;
+    }
+
     cc::Build::new()
         .cpp(true)
         .std("c++20")
@@ -65,6 +72,7 @@ fn main() -> anyhow::Result<()> {
         .file("./lib/opus.cpp")
         .includes(&ffmpeg_include_prefix)
         .includes(&libyuv_include_prefix)
+        .include(join(&out_dir, "./media-sdk/api/include")?)
         .include("../frame/include")
         .define(
             if cfg!(target_os = "windows") {
@@ -92,9 +100,13 @@ fn main() -> anyhow::Result<()> {
     println!("cargo:rustc-link-lib=codec");
     println!("cargo:rustc-link-lib=yuv");
 
-    if cfg!(target_os = "macos") {
+    #[cfg(target_os = "macos")]
+    {
         println!("cargo:rustc-link-lib=c++");
-    } else if cfg!(target_os = "linux") {
+    }
+
+    #[cfg(target_os = "macos")]
+    {
         println!("cargo:rustc-link-lib=stdc++");
     }
 

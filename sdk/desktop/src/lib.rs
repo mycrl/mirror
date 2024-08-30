@@ -339,11 +339,11 @@ pub struct VideoOptions {
     pub key_frame_interval: u32,
 }
 
-impl TryInto<codec::VideoEncoderSettings> for VideoOptions {
+impl TryInto<crate::sender::VideoOptions> for VideoOptions {
     type Error = anyhow::Error;
 
-    fn try_into(self) -> Result<codec::VideoEncoderSettings, Self::Error> {
-        Ok(codec::VideoEncoderSettings {
+    fn try_into(self) -> Result<crate::sender::VideoOptions, Self::Error> {
+        Ok(crate::sender::VideoOptions {
             codec: Strings::from(self.codec).to_string()?,
             key_frame_interval: self.key_frame_interval,
             frame_rate: self.frame_rate,
@@ -362,10 +362,9 @@ pub struct AudioOptions {
     pub bit_rate: u64,
 }
 
-impl Into<codec::AudioEncoderSettings> for AudioOptions {
-    fn into(self) -> codec::AudioEncoderSettings {
-        codec::AudioEncoderSettings {
-            codec: "libopus".to_string(),
+impl Into<crate::sender::AudioOptions> for AudioOptions {
+    fn into(self) -> crate::sender::AudioOptions {
+        crate::sender::AudioOptions {
             sample_rate: self.sample_rate,
             bit_rate: self.bit_rate,
         }
@@ -405,7 +404,7 @@ impl TryInto<sender::SenderOptions> for SenderOptions {
 
         if !self.video.is_null() {
             let video = unsafe { &*self.video };
-            let settings: codec::VideoEncoderSettings = video.options.try_into()?;
+            let settings: crate::sender::VideoOptions = video.options.try_into()?;
 
             // Check whether the external parameters are configured correctly to 
             // avoid some clowns inserting some inexplicable parameters.

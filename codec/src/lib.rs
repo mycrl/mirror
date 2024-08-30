@@ -91,3 +91,7 @@ pub fn startup() {
 pub fn shutdown() {
     unsafe { codec_remove_logger() }
 }
+
+pub fn is_hardware_codec(codec: &str) -> bool {
+    codec == "h264_qsv" || codec == "h264_cuvid" || codec == "d3d11va" || codec == "h264_nvenc"
+}

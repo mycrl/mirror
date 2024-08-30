@@ -5,8 +5,8 @@
 //  Created by Panda on 2024/2/14.
 //
 
-#ifndef codec_h
-#define codec_h
+#ifndef CODEC_H
+#define CODEC_H
 #pragma once
 
 #ifndef EXPORT
@@ -18,22 +18,31 @@
 #endif
 
 #include <string>
+#include <vector>
 #include <optional>
 
 #ifdef WIN32
-#include <d3d11.h>
+#include <d3d11_4.h>
 #endif // WIN32
 
 extern "C"
 {
 #include <frame.h>
-#ifdef WIN32
-#include <libavutil/hwcontext_d3d11va.h>
-#endif // WIN32
+#include <libavutil/hwcontext_qsv.h>
 #include <libavutil/hwcontext.h>
 #include <libavcodec/avcodec.h>
 #include <libavutil/frame.h>
+
+#ifdef WIN32
+#include <libavutil/hwcontext_d3d11va.h>
+#endif // WIN32
 }
+
+struct CodecContext
+{
+	const AVCodec* codec;
+	AVCodecContext* context;
+};
 
 struct Packet
 {
@@ -45,6 +54,10 @@ struct Packet
 
 struct VideoEncoderSettings
 {
+#ifdef WIN32
+	ID3D11Device* d3d11_device;
+	ID3D11DeviceContext* d3d11_device_context;
+#endif // WIN32
 	const char* codec;
 	uint8_t frame_rate;
 	uint32_t width;
@@ -78,7 +91,6 @@ struct VideoDecoder
 	AVPacket* packet;
 	AVFrame* frame;
 	VideoFrame* output_frame;
-	std::optional<int> format_format;
 };
 
 struct AudioEncoderSettings
@@ -153,13 +165,15 @@ extern "C"
 	EXPORT AudioFrame* codec_audio_decoder_read_frame(AudioDecoder* codec);
 }
 
-struct CodecContext
-{
-	const AVCodec* codec;
-	AVCodecContext* context;
-};
+#ifdef WIN32
+std::optional<CodecContext> create_video_context(CodecKind kind, 
+												 std::string& codec, 
+												 int width,
+												 int height,
+												 ID3D11Device* d3d11_device, 
+												 ID3D11DeviceContext* d3d11_device_context);
+#endif // WIN32
 
-std::optional<CodecContext> create_video_decoder_context(VideoDecoderSettings* settings);
-std::optional<CodecContext> create_video_encoder_context(std::string& name);
+AVFrame* create_video_frame(AVCodecContext* context);
 
-#endif /* codec_h */
+#endif // CODEC_H

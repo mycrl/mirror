@@ -1,4 +1,4 @@
-use std::cell::Cell;
+use std::{cell::Cell, ffi::c_void};
 
 use windows::{
     core::{s, Result, GUID, HSTRING, PCSTR, PCWSTR, PWSTR},
@@ -10,7 +10,7 @@ use windows::{
                 D3D_FEATURE_LEVEL_11_1,
             },
             Direct3D11::{
-                D3D11CreateDevice, ID3D11Device, ID3D11DeviceContext,
+                D3D11CreateDevice, ID3D11Device, ID3D11DeviceContext, ID3D11Texture2D,
                 D3D11_CREATE_DEVICE_BGRA_SUPPORT, D3D11_CREATE_DEVICE_DEBUG, D3D11_SDK_VERSION,
             },
         },
@@ -237,17 +237,16 @@ impl Direct3DDevice {
             })
         }
     }
+}
 
-    pub fn thread_safety_clone(&self) -> Result<Self> {
-        let context = unsafe {
-            let mut context = None;
-            self.device.CreateDeferredContext(0, Some(&mut context))?;
-            context.unwrap()
-        };
+pub fn d3d_texture_borrowed_raw<'a>(raw: &'a *mut c_void) -> Option<&'a ID3D11Texture2D> {
+    unsafe { ID3D11Texture2D::from_raw_borrowed(raw) }
+}
 
-        Ok(Self {
-            device: self.device.clone(),
-            context,
-        })
-    }
+pub fn d3d_device_borrowed_raw<'a>(raw: &'a *mut c_void) -> Option<&'a ID3D11Device> {
+    unsafe { ID3D11Device::from_raw_borrowed(raw) }
+}
+
+pub fn d3d_context_borrowed_raw<'a>(raw: &'a *mut c_void) -> Option<&'a ID3D11DeviceContext> {
+    unsafe { ID3D11DeviceContext::from_raw_borrowed(raw) }
 }

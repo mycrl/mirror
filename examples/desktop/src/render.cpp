@@ -4,28 +4,22 @@
 SimpleRender::SimpleRender(Args& args,
                            HWND hwnd,
                            ID3D11Device* d3d_device,
-                           ID3D11DeviceContext* d3d_device_context,
-                           std::function<void()> closed_callback)
-    : _callback(closed_callback)
-    , _args(args)
+                           ID3D11DeviceContext* d3d_device_context)
+    : _args(args)
     , _hwnd(hwnd)
 {
     Size size;
     size.width = args.ArgsParams.width;
     size.height = args.ArgsParams.height;
 
-    RendererOptions options;
-    options.size = size;
-    options.hwnd = hwnd;
-    options.d3d_device = d3d_device;
-    options.d3d_device_context = d3d_device_context;
-
-    _renderer = renderer_create(options);
+    _options.size = size;
+    _options.hwnd = hwnd;
+    _options.d3d_device = d3d_device;
+    _options.d3d_device_context = d3d_device_context;
 }
 #else
-SimpleRender::SimpleRender(Args& args, std::function<void()> closed_callback)
-    : _callback(closed_callback)
-    , _args(args)
+SimpleRender::SimpleRender(Args& args)
+    : _args(args)
 {
 
     Size size;
@@ -38,8 +32,7 @@ SimpleRender::SimpleRender(Args& args, std::function<void()> closed_callback)
 
 SimpleRender::~SimpleRender()
 {
-    _runing = false;
-    renderer_destroy(_renderer);
+    Close();
 }
 
 void SimpleRender::SetTitle(std::string title)
@@ -64,10 +57,10 @@ bool SimpleRender::OnVideoFrame(VideoFrame* frame)
         return false;
     }
     
-    /*if (!IsRender)
+    if (!IsRender)
     {
         return true;
-    }*/
+    }
 
     return renderer_on_video(_renderer, frame);
 }
@@ -87,16 +80,25 @@ bool SimpleRender::OnAudioFrame(AudioFrame* frame)
     return renderer_on_audio(_renderer, frame);
 }
 
-void SimpleRender::OnClose()
+void SimpleRender::Close()
 {
-    _callback();
+    if (_renderer != nullptr)
+    {
+        renderer_destroy(_renderer);
+        _renderer = nullptr;
+    }
+
     SetTitle("");
-    Clear();
 }
 
-void SimpleRender::Clear()
+void SimpleRender::Create()
 {
+    if (_renderer != nullptr)
+    {
+        return;
+    }
 
+    _renderer = renderer_create(_options);
 }
 
 #ifdef LINUX

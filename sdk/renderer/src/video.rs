@@ -1,17 +1,13 @@
 use anyhow::{anyhow, Result};
-use frame::{Resource, VideoFormat, VideoFrame, VideoSize, VideoTransform, VideoTransformOptions};
-use utils::win32::Direct3DDevice;
-use windows::{
-    core::Interface,
-    Win32::{
-        Foundation::HWND,
-        Graphics::{
-            Direct3D11::{ID3D11RenderTargetView, ID3D11Texture2D, D3D11_VIEWPORT},
-            Dxgi::{
-                Common::DXGI_FORMAT_R8G8B8A8_UNORM, CreateDXGIFactory, IDXGIFactory,
-                IDXGISwapChain, DXGI_PRESENT, DXGI_SWAP_CHAIN_DESC,
-                DXGI_USAGE_RENDER_TARGET_OUTPUT,
-            },
+use frame::{Resource, VideoFrame, VideoSize, VideoTransform, VideoTransformOptions};
+use utils::win32::{d3d_texture_borrowed_raw, Direct3DDevice};
+use windows::Win32::{
+    Foundation::HWND,
+    Graphics::{
+        Direct3D11::{ID3D11RenderTargetView, ID3D11Texture2D, D3D11_VIEWPORT},
+        Dxgi::{
+            Common::DXGI_FORMAT_R8G8B8A8_UNORM, CreateDXGIFactory, IDXGIFactory, IDXGISwapChain,
+            DXGI_PRESENT, DXGI_SWAP_CHAIN_DESC, DXGI_USAGE_RENDER_TARGET_OUTPUT,
         },
     },
 };
@@ -29,7 +25,7 @@ pub struct VideoRenderOptions {
 }
 
 pub struct VideoRender {
-    options: VideoRenderOptions,
+    direct3d: Direct3DDevice,
     swap_chain: IDXGISwapChain,
     render_target_view: ID3D11RenderTargetView,
     video_processor: Option<VideoTransform>,
@@ -42,6 +38,7 @@ impl VideoRender {
     pub fn new(options: VideoRenderOptions) -> Result<Self> {
         log::info!("renderer: create video render, size={:?}", options.size);
 
+        let direct3d = options.direct3d;
         let swap_chain = unsafe {
             let dxgi_factory = CreateDXGIFactory::<IDXGIFactory>()?;
 
@@ -57,7 +54,7 @@ impl VideoRender {
 
             let mut swap_chain = None;
             dxgi_factory
-                .CreateSwapChain(&options.direct3d.device, &desc, &mut swap_chain)
+                .CreateSwapChain(&direct3d.device, &desc, &mut swap_chain)
                 .ok()?;
 
             swap_chain.unwrap()
@@ -66,7 +63,7 @@ impl VideoRender {
         let back_buffer = unsafe { swap_chain.GetBuffer::<ID3D11Texture2D>(0)? };
         let render_target_view = unsafe {
             let mut render_target_view = None;
-            options.direct3d.device.CreateRenderTargetView(
+            direct3d.device.CreateRenderTargetView(
                 &back_buffer,
                 None,
                 Some(&mut render_target_view),
@@ -76,8 +73,7 @@ impl VideoRender {
         };
 
         unsafe {
-            options
-                .direct3d
+            direct3d
                 .context
                 .OMSetRenderTargets(Some(&[Some(render_target_view.clone())]), None);
         }
@@ -89,14 +85,14 @@ impl VideoRender {
             vp.MinDepth = 0.0;
             vp.MaxDepth = 1.0;
 
-            options.direct3d.context.RSSetViewports(Some(&[vp]));
+            direct3d.context.RSSetViewports(Some(&[vp]));
         }
 
         Ok(Self {
             video_processor: None,
             render_target_view,
             swap_chain,
-            options,
+            direct3d,
         })
     }
 
@@ -107,58 +103,39 @@ impl VideoRender {
         }
 
         unsafe {
-            self.options
-                .direct3d
+            self.direct3d
                 .context
                 .ClearRenderTargetView(&self.render_target_view, &[0.0, 0.0, 0.0, 1.0]);
         }
 
-        let back_buffer = unsafe { self.swap_chain.GetBuffer::<ID3D11Texture2D>(0)? };
         if self.video_processor.is_none() {
             self.video_processor = Some(VideoTransform::new(VideoTransformOptions {
-                direct3d: self.options.direct3d.clone(),
-                input: if frame.hardware {
-                    let texture = frame.data[0] as *mut _;
-                    if let Some(texture) = unsafe { ID3D11Texture2D::from_raw_borrowed(&texture) } {
-                        Resource::Texture(texture.clone())
-                    } else {
-                        return Ok(());
-                    }
-                } else {
-                    Resource::Default(
-                        VideoFormat::NV12,
-                        VideoSize {
-                            width: frame.width,
-                            height: frame.height,
-                        },
-                    )
-                },
-                output: Resource::Texture(back_buffer),
+                direct3d: self.direct3d.clone(),
+                input: Resource::Default(
+                    frame.format,
+                    VideoSize {
+                        width: frame.width,
+                        height: frame.height,
+                    },
+                ),
+                output: Resource::Texture(unsafe {
+                    self.swap_chain.GetBuffer::<ID3D11Texture2D>(0)?
+                }),
             })?);
         }
 
         if let Some(processor) = &mut self.video_processor {
             let view = if frame.hardware {
                 let texture = frame.data[0] as *mut _;
-                if let Some(texture) = unsafe { ID3D11Texture2D::from_raw_borrowed(&texture) } {
-                    processor.create_input_view(texture).ok()
+                if let Some(texture) = d3d_texture_borrowed_raw(&texture) {
+                    Some(processor.create_input_view(texture, frame.data[1] as u32)?)
                 } else {
                     None
                 }
             } else {
                 processor.update_input_from_buffer(
-                    unsafe {
-                        std::slice::from_raw_parts(
-                            frame.data[0] as *const _,
-                            (frame.linesize[0] as f64 * frame.height as f64 * 1.5) as usize,
-                        )
-                    },
+                    frame.data[0] as *const _,
                     frame.linesize[0] as u32,
-                    frame.linesize[0] as u32 * frame.height,
-                    VideoSize {
-                        width: frame.width,
-                        height: frame.height,
-                    },
                 )?;
 
                 None

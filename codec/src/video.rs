@@ -29,6 +29,10 @@ extern "C" {
 
 #[repr(C)]
 pub struct RawVideoEncoderSettings {
+    #[cfg(target_os = "windows")]
+    pub d3d11_device: *const c_void,
+    #[cfg(target_os = "windows")]
+    pub d3d11_device_context: *const c_void,
     pub codec: *const c_char,
     pub frame_rate: u8,
     pub width: u32,
@@ -60,6 +64,8 @@ pub struct VideoEncoderSettings {
     pub bit_rate: u64,
     /// the number of pictures in a group of pictures, or 0 for intra_only
     pub key_frame_interval: u32,
+    #[cfg(target_os = "windows")]
+    pub direct3d: Option<Direct3DDevice>,
 }
 
 impl VideoEncoderSettings {
@@ -71,6 +77,20 @@ impl VideoEncoderSettings {
             width: self.width,
             height: self.height,
             bit_rate: self.bit_rate,
+
+            #[cfg(target_os = "windows")]
+            d3d11_device: self
+                .direct3d
+                .as_ref()
+                .map(|it| it.device.as_raw())
+                .unwrap_or_else(|| null_mut()),
+
+            #[cfg(target_os = "windows")]
+            d3d11_device_context: self
+                .direct3d
+                .as_ref()
+                .map(|it| it.context.as_raw())
+                .unwrap_or_else(|| null_mut()),
         }
     }
 }

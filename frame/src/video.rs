@@ -1,5 +1,18 @@
 use std::{ffi::c_void, ptr::null};
 
+#[derive(Debug, Clone, Copy)]
+pub struct VideoSize {
+    pub width: u32,
+    pub height: u32,
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VideoFormat {
+    RGBA,
+    NV12,
+}
+
 /// YCbCr (NV12)
 ///
 /// YCbCr, Y′CbCr, or Y Pb/Cb Pr/Cr, also written as YCBCR or Y′CBCR, is a
@@ -22,6 +35,7 @@ use std::{ffi::c_void, ptr::null};
 #[repr(C)]
 #[derive(Debug)]
 pub struct VideoFrame {
+    pub format: VideoFormat,
     pub hardware: bool,
     pub width: u32,
     pub height: u32,
@@ -40,19 +54,14 @@ impl Default for VideoFrame {
             hardware: false,
             linesize: [0, 0],
             data: [null(), null()],
+            format: VideoFormat::RGBA,
         }
     }
 }
 
-#[derive(Debug)]
-pub struct VideoSize {
-    pub width: u32,
-    pub height: u32,
-}
-
 #[cfg(target_os = "windows")]
 pub mod win32 {
-    use super::VideoSize;
+    use super::{VideoFormat, VideoSize};
 
     use std::mem::ManuallyDrop;
 
@@ -60,39 +69,30 @@ pub mod win32 {
     use windows::{
         core::{Interface, Result},
         Win32::{
-            Foundation::RECT,
+            Foundation::{HANDLE, RECT},
             Graphics::{
                 Direct3D11::{
                     ID3D11Device, ID3D11DeviceContext, ID3D11Texture2D, ID3D11VideoContext,
                     ID3D11VideoDevice, ID3D11VideoProcessor, ID3D11VideoProcessorEnumerator,
                     ID3D11VideoProcessorInputView, ID3D11VideoProcessorOutputView,
-                    D3D11_BIND_RENDER_TARGET, D3D11_BOX, D3D11_CPU_ACCESS_READ,
-                    D3D11_MAPPED_SUBRESOURCE, D3D11_MAP_READ, D3D11_TEXTURE2D_DESC,
-                    D3D11_USAGE_DEFAULT, D3D11_USAGE_STAGING, D3D11_VIDEO_FRAME_FORMAT_PROGRESSIVE,
-                    D3D11_VIDEO_PROCESSOR_COLOR_SPACE, D3D11_VIDEO_PROCESSOR_CONTENT_DESC,
-                    D3D11_VIDEO_PROCESSOR_INPUT_VIEW_DESC, D3D11_VIDEO_PROCESSOR_OUTPUT_VIEW_DESC,
-                    D3D11_VIDEO_PROCESSOR_STREAM, D3D11_VIDEO_USAGE_PLAYBACK_NORMAL,
-                    D3D11_VPIV_DIMENSION_TEXTURE2D, D3D11_VPOV_DIMENSION_TEXTURE2D,
+                    D3D11_BIND_RENDER_TARGET, D3D11_CPU_ACCESS_READ, D3D11_MAPPED_SUBRESOURCE,
+                    D3D11_MAP_READ, D3D11_TEXTURE2D_DESC, D3D11_USAGE_DEFAULT, D3D11_USAGE_STAGING,
+                    D3D11_VIDEO_FRAME_FORMAT_PROGRESSIVE, D3D11_VIDEO_PROCESSOR_COLOR_SPACE,
+                    D3D11_VIDEO_PROCESSOR_CONTENT_DESC, D3D11_VIDEO_PROCESSOR_INPUT_VIEW_DESC,
+                    D3D11_VIDEO_PROCESSOR_OUTPUT_VIEW_DESC, D3D11_VIDEO_PROCESSOR_STREAM,
+                    D3D11_VIDEO_USAGE_PLAYBACK_NORMAL, D3D11_VPIV_DIMENSION_TEXTURE2D,
+                    D3D11_VPOV_DIMENSION_TEXTURE2D,
                 },
-                Dxgi::Common::{
-                    DXGI_FORMAT, DXGI_FORMAT_NV12, DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_YUY2,
-                },
+                Dxgi::Common::{DXGI_FORMAT, DXGI_FORMAT_NV12, DXGI_FORMAT_R8G8B8A8_UNORM},
             },
         },
     };
 
-    pub enum VideoFormat {
-        RGBA,
-        NV12,
-        YUY2,
-    }
-
-    impl Into<DXGI_FORMAT> for VideoFormat {
+    impl Into<DXGI_FORMAT> for super::VideoFormat {
         fn into(self) -> DXGI_FORMAT {
             match self {
                 Self::RGBA => DXGI_FORMAT_R8G8B8A8_UNORM,
                 Self::NV12 => DXGI_FORMAT_NV12,
-                Self::YUY2 => DXGI_FORMAT_YUY2,
             }
         }
     }
@@ -288,6 +288,15 @@ pub mod win32 {
             })
         }
 
+        /// open shared texture.
+        pub fn open_shared_texture(&mut self, handle: HANDLE) -> Result<ID3D11Texture2D> {
+            Ok(unsafe {
+                let mut texture: Option<ID3D11Texture2D> = None;
+                self.d3d_device.OpenSharedResource(handle, &mut texture)?;
+                texture.unwrap()
+            })
+        }
+
         /// To update the internal texture, simply copy it to the internal
         /// texture.
         pub fn update_input(&mut self, texture: &ID3D11Texture2D) {
@@ -300,28 +309,15 @@ pub mod win32 {
         /// the internal texture, so there are restrictions on the
         /// format of the incoming texture. Because the internal one is
         /// fixed to RGBA, the external texture can only be RGBA.
-        pub fn update_input_from_buffer(
-            &mut self,
-            buf: &[u8],
-            stride: u32,
-            depth: u32,
-            size: VideoSize,
-        ) -> Result<()> {
+        pub fn update_input_from_buffer(&mut self, buf: *const u8, stride: u32) -> Result<()> {
             unsafe {
-                let mut dbox = D3D11_BOX::default();
-                dbox.left = 0;
-                dbox.top = 0;
-                dbox.front = 0;
-                dbox.back = 1;
-                dbox.right = size.width;
-                dbox.bottom = size.height;
                 self.d3d_context.UpdateSubresource(
                     &self.input_texture,
                     0,
-                    Some(&dbox),
-                    buf.as_ptr() as *const _,
+                    None,
+                    buf as *const _,
                     stride,
-                    depth,
+                    0,
                 );
             }
 
@@ -334,12 +330,14 @@ pub mod win32 {
         pub fn create_input_view(
             &mut self,
             texture: &ID3D11Texture2D,
+            index: u32,
         ) -> Result<ID3D11VideoProcessorInputView> {
             let input_view = unsafe {
                 let mut desc = D3D11_VIDEO_PROCESSOR_INPUT_VIEW_DESC::default();
                 desc.FourCC = 0;
                 desc.ViewDimension = D3D11_VPIV_DIMENSION_TEXTURE2D;
                 desc.Anonymous.Texture2D.MipSlice = 0;
+                desc.Anonymous.Texture2D.ArraySlice = index;
 
                 let mut view = None;
                 self.video_device.CreateVideoProcessorInputView(
@@ -359,8 +357,6 @@ pub mod win32 {
             &self.output_texture
         }
 
-        /// Directly convert the current internal texture and get the converted
-        /// result.
         pub fn get_output_buffer(&mut self) -> Result<TextureBuffer> {
             Ok(TextureBuffer::new(
                 &self.d3d_device,
@@ -369,9 +365,6 @@ pub mod win32 {
             )?)
         }
 
-        /// Perform the conversion. This method will not copy the passed
-        /// texture, but will use the texture directly, which can save a
-        /// copy step and improve performance.
         pub fn process(&mut self, input_view: Option<ID3D11VideoProcessorInputView>) -> Result<()> {
             unsafe {
                 let mut streams = [D3D11_VIDEO_PROCESSOR_STREAM::default()];
