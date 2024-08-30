@@ -16,6 +16,3 @@ log = "0.4.20"
 
 [target.'cfg(target_os = "windows")'.dependencies.windows]
 version = "0.58.0"
-
-[target.'cfg(not(target_os = "windows"))'.dependencies]
-sdl2 = { version = "0.37.0", features = ["bundled", "raw-window-handle"] }

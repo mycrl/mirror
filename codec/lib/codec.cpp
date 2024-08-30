@@ -21,13 +21,15 @@ static CodecDesc VideoEncoders[] = {
 };
 
 #ifdef WIN32
-
-std::optional<CodecContext> create_video_context(CodecKind kind,
-                                                 std::string& codec,
-                                                 int width,
-                                                 int height,
-                                                 ID3D11Device* d3d11_device,
-                                                 ID3D11DeviceContext* d3d11_device_context)
+std::optional<CodecContext> create_video_context(CodecKind kind, 
+												 std::string& codec, 
+												 int width,
+												 int height,
+												 ID3D11Device* d3d11_device, 
+												 ID3D11DeviceContext* d3d11_device_context)
+#else
+std::optional<CodecContext> create_video_context(CodecKind kind, std::string& codec)
+#endif // WIN32
 {
     CodecContext ctx;
 
@@ -53,6 +55,7 @@ std::optional<CodecContext> create_video_context(CodecKind kind,
         return std::nullopt;
     }
 
+#ifdef WIN32
     if (codec == "d3d11va" || codec == "h264_qsv")
     {
         AVBufferRef* hw_device_ctx = av_hwdevice_ctx_alloc(AV_HWDEVICE_TYPE_D3D11VA);
@@ -132,11 +135,10 @@ std::optional<CodecContext> create_video_context(CodecKind kind,
             ctx.context->hw_device_ctx = av_buffer_ref(hw_device_ctx);
         }
     }
+#endif // WIN32
 
     return ctx;
 }
-
-#endif // WIN32
 
 AVFrame* create_video_frame(AVCodecContext* context)
 {

@@ -1,5 +1,6 @@
 use crate::{Error, RawPacket};
 
+#[allow(unused)]
 use std::{
     ffi::{c_char, CString},
     os::raw::c_void,

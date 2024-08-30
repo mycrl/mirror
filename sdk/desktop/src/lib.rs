@@ -5,14 +5,17 @@ mod receiver;
 mod sender;
 
 use std::{
-    ffi::{c_char, c_int, c_void},
+    ffi::{c_char, c_int},
     fmt::Debug,
     ptr::null_mut,
     sync::atomic::AtomicBool,
 };
 
 #[cfg(not(target_os = "macos"))]
-use std::{ffi::CString, mem::ManuallyDrop};
+use std::{
+    ffi::{c_void, CString},
+    mem::ManuallyDrop,
+};
 
 use frame::{AudioFrame, VideoFrame};
 use utils::{atomic::EasyAtomic, strings::Strings};
@@ -339,6 +342,7 @@ pub struct VideoOptions {
     pub key_frame_interval: u32,
 }
 
+#[cfg(not(target_os = "macos"))]
 impl TryInto<crate::sender::VideoOptions> for VideoOptions {
     type Error = anyhow::Error;
 
@@ -362,6 +366,7 @@ pub struct AudioOptions {
     pub bit_rate: u64,
 }
 
+#[cfg(not(target_os = "macos"))]
 impl Into<crate::sender::AudioOptions> for AudioOptions {
     fn into(self) -> crate::sender::AudioOptions {
         crate::sender::AudioOptions {

@@ -172,6 +172,8 @@ std::optional<CodecContext> create_video_context(CodecKind kind,
 												 int height,
 												 ID3D11Device* d3d11_device, 
 												 ID3D11DeviceContext* d3d11_device_context);
+#else
+std::optional<CodecContext> create_video_context(CodecKind kind, std::string& codec);
 #endif // WIN32
 
 AVFrame* create_video_frame(AVCodecContext* context);

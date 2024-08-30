@@ -6,18 +6,22 @@ use std::{
     ptr::null_mut,
 };
 
-use anyhow::anyhow;
 use audio::AudioPlayer;
 use frame::{AudioFrame, VideoFrame};
-use utils::{
-    logger,
-    win32::{d3d_context_borrowed_raw, d3d_device_borrowed_raw, Direct3DDevice},
-};
-use video::{Size, VideoRender, VideoRenderOptions};
+use utils::logger;
+use video::Size;
+
+#[cfg(target_os = "windows")]
+use video::win32::{VideoRender, VideoRenderOptions};
+
+#[cfg(target_os = "windows")]
 use windows::Win32::Foundation::HWND;
 
+#[cfg(target_os = "windows")]
+use utils::win32::{d3d_context_borrowed_raw, d3d_device_borrowed_raw, Direct3DDevice};
+
 #[repr(C)]
-struct RawSize {
+pub struct RawSize {
     width: c_int,
     height: c_int,
 }
@@ -34,6 +38,7 @@ impl From<RawSize> for Size {
 /// Windows yes! The Windows dynamic library has an entry, so just initialize
 /// the logger and set the process priority at the entry.
 #[no_mangle]
+#[cfg(target_os = "windows")]
 extern "system" fn DllMain(_module: u32, call_reason: usize, _reserved: *const c_void) -> bool {
     match call_reason {
         1 /* DLL_PROCESS_ATTACH */ => renderer_startup(),
@@ -62,32 +67,38 @@ extern "C" fn renderer_startup() -> bool {
 #[repr(C)]
 struct RawRenderer {
     audio: AudioPlayer,
+    #[cfg(target_os = "windows")]
     video: VideoRender,
 }
 
 #[repr(C)]
 struct RawRendererOptions {
     size: RawSize,
+    #[cfg(target_os = "windows")]
     hwnd: *mut c_void,
+    #[cfg(target_os = "windows")]
     d3d_device: *mut c_void,
+    #[cfg(target_os = "windows")]
     d3d_device_context: *mut c_void,
 }
 
 /// Creating a window renderer.
 #[no_mangle]
+#[allow(unused_variables)]
 extern "C" fn renderer_create(options: RawRendererOptions) -> *mut RawRenderer {
     let func = || {
         Ok::<RawRenderer, anyhow::Error>(RawRenderer {
             audio: AudioPlayer::new()?,
+            #[cfg(target_os = "windows")]
             video: VideoRender::new(VideoRenderOptions {
                 size: options.size.into(),
                 window_handle: HWND(options.hwnd),
                 direct3d: Direct3DDevice {
                     device: d3d_device_borrowed_raw(&options.d3d_device)
-                        .ok_or_else(|| anyhow!("invalid d3d11 device"))?
+                        .ok_or_else(|| anyhow::anyhow!("invalid d3d11 device"))?
                         .clone(),
                     context: d3d_context_borrowed_raw(&options.d3d_device_context)
-                        .ok_or_else(|| anyhow!("invalid d3d11 device context"))?
+                        .ok_or_else(|| anyhow::anyhow!("invalid d3d11 device context"))?
                         .clone(),
                 },
             })?,
@@ -106,11 +117,16 @@ extern "C" fn renderer_create(options: RawRendererOptions) -> *mut RawRenderer {
 extern "C" fn renderer_on_video(render: *mut RawRenderer, frame: *const VideoFrame) -> bool {
     assert!(!render.is_null() && !frame.is_null());
 
-    unsafe { &mut *render }
-        .video
-        .send(unsafe { &*frame })
-        .map_err(|e| log::error!("{:?}", e))
-        .is_ok()
+    #[cfg(target_os = "windows")]
+    {
+        return unsafe { &mut *render }
+            .video
+            .send(unsafe { &*frame })
+            .map_err(|e| log::error!("{:?}", e))
+            .is_ok();
+    }
+
+    true
 }
 
 /// Push the audio frame into the renderer, which will append to audio queue.

@@ -22,12 +22,16 @@ VideoDecoder* codec_create_video_decoder(VideoDecoderSettings* settings)
     codec->output_frame = new VideoFrame{};
 
     std::string codec_name = std::string(settings->codec);
+#ifdef WIN32
     auto codec_ctx = create_video_context(CodecKind::Decoder, 
                                           codec_name,
                                           0,
                                           0,
                                           settings->d3d11_device, 
                                           settings->d3d11_device_context);
+#else
+    auto codec_ctx = create_video_context(CodecKind::Decoder, codec_name);
+#endif // WIN32
     if (!codec_ctx.has_value())
     {
         return nullptr;
@@ -261,12 +265,16 @@ VideoEncoder* codec_create_video_encoder(VideoEncoderSettings* settings)
     codec->output_packet = new Packet{};
 
     std::string codec_name = std::string(settings->codec);
+#ifdef WIN32
     auto codec_ctx = create_video_context(CodecKind::Encoder,
                                           codec_name,
                                           settings->width,
                                           settings->height,
                                           settings->d3d11_device,
                                           settings->d3d11_device_context);
+#else
+    auto codec_ctx = create_video_context(CodecKind::Encoder, codec_name);
+#endif // WIN32
     if (!codec_ctx.has_value())
     {
         return nullptr;

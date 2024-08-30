@@ -3,6 +3,7 @@ use crate::receiver::{Receiver, ReceiverOptions};
 #[cfg(not(target_os = "macos"))]
 use crate::sender::{Sender, SenderOptions};
 
+#[cfg(not(target_os = "macos"))]
 use std::sync::RwLock;
 
 use anyhow::Result;
