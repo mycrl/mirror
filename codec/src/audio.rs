@@ -6,10 +6,9 @@ use std::{
 };
 
 use frame::AudioFrame;
-use utils::strings::Strings;
 
 extern "C" {
-    fn codec_create_audio_decoder(codec_name: *const c_char) -> *const c_void;
+    fn codec_create_audio_decoder(settings: *const RawAudioDecoderSettings) -> *const c_void;
     fn codec_audio_decoder_send_packet(codec: *const c_void, packet: *const RawPacket) -> bool;
     fn codec_audio_decoder_read_frame(codec: *const c_void) -> *const AudioFrame;
     fn codec_release_audio_decoder(codec: *const c_void);
@@ -19,6 +18,86 @@ extern "C" {
     fn codec_audio_encoder_read_packet(codec: *const c_void) -> *const RawPacket;
     fn codec_unref_audio_encoder_packet(codec: *const c_void);
     fn codec_release_audio_encoder(codec: *const c_void);
+}
+
+#[repr(C)]
+pub struct RawAudioEncoderSettings {
+    pub codec: *const c_char,
+    pub bit_rate: u64,
+    pub sample_rate: u64,
+}
+
+impl Drop for RawAudioEncoderSettings {
+    fn drop(&mut self) {
+        drop(unsafe { CString::from_raw(self.codec as *mut _) })
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct AudioEncoderSettings {
+    pub codec: String,
+    pub bit_rate: u64,
+    pub sample_rate: u64,
+}
+
+impl AudioEncoderSettings {
+    fn as_raw(&self) -> RawAudioEncoderSettings {
+        RawAudioEncoderSettings {
+            codec: CString::new(self.codec.as_str()).unwrap().into_raw(),
+            sample_rate: self.sample_rate,
+            bit_rate: self.bit_rate,
+        }
+    }
+}
+
+#[repr(C)]
+pub struct RawAudioDecoderSettings {
+    pub codec: *const c_char,
+}
+
+impl Drop for RawAudioDecoderSettings {
+    fn drop(&mut self) {
+        drop(unsafe { CString::from_raw(self.codec as *mut _) })
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct AudioDecoderSettings {
+    pub codec: String,
+}
+
+impl AudioDecoderSettings {
+    fn as_raw(&self) -> RawAudioDecoderSettings {
+        RawAudioDecoderSettings {
+            codec: CString::new(self.codec.as_str()).unwrap().into_raw(),
+        }
+    }
+}
+
+#[repr(C)]
+pub struct AudioEncodePacket<'a> {
+    codec: *const c_void,
+    pub buffer: &'a [u8],
+    pub flags: i32,
+    pub timestamp: u64,
+}
+
+impl Drop for AudioEncodePacket<'_> {
+    fn drop(&mut self) {
+        unsafe { codec_unref_audio_encoder_packet(self.codec) }
+    }
+}
+
+impl<'a> AudioEncodePacket<'a> {
+    fn from_raw(codec: *const c_void, ptr: *const RawPacket) -> Self {
+        let raw = unsafe { &*ptr };
+        Self {
+            buffer: unsafe { std::slice::from_raw_parts(raw.buffer, raw.len) },
+            timestamp: raw.timestamp,
+            flags: raw.flags,
+            codec,
+        }
+    }
 }
 
 /// Header Packets
@@ -267,10 +346,11 @@ unsafe impl Sync for AudioDecoder {}
 
 impl AudioDecoder {
     /// Initialize the AVCodecContext to use the given AVCodec.
-    pub fn new(codec: &str) -> Result<Self, Error> {
-        log::info!("create AudioDecoder: codec name={:?}", codec);
+    pub fn new(settings: &AudioDecoderSettings) -> Result<Self, Error> {
+        log::info!("create AudioDecoder: settings={:?}", settings);
 
-        let codec = unsafe { codec_create_audio_decoder(Strings::from(codec).as_ptr()) };
+        let settings = settings.as_raw();
+        let codec = unsafe { codec_create_audio_decoder(&settings) };
         if !codec.is_null() {
             Ok(Self(codec))
         } else {
@@ -310,62 +390,6 @@ impl Drop for AudioDecoder {
         log::info!("close AudioDecoder");
 
         unsafe { codec_release_audio_decoder(self.0) }
-    }
-}
-
-#[repr(C)]
-pub struct RawAudioEncoderSettings {
-    pub codec: *const c_char,
-    pub bit_rate: u64,
-    pub sample_rate: u64,
-}
-
-impl Drop for RawAudioEncoderSettings {
-    fn drop(&mut self) {
-        drop(unsafe { CString::from_raw(self.codec as *mut _) })
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct AudioEncoderSettings {
-    pub codec: String,
-    pub bit_rate: u64,
-    pub sample_rate: u64,
-}
-
-impl AudioEncoderSettings {
-    fn as_raw(&self) -> RawAudioEncoderSettings {
-        RawAudioEncoderSettings {
-            codec: CString::new(self.codec.as_str()).unwrap().into_raw(),
-            sample_rate: self.sample_rate,
-            bit_rate: self.bit_rate,
-        }
-    }
-}
-
-#[repr(C)]
-pub struct AudioEncodePacket<'a> {
-    codec: *const c_void,
-    pub buffer: &'a [u8],
-    pub flags: i32,
-    pub timestamp: u64,
-}
-
-impl Drop for AudioEncodePacket<'_> {
-    fn drop(&mut self) {
-        unsafe { codec_unref_audio_encoder_packet(self.codec) }
-    }
-}
-
-impl<'a> AudioEncodePacket<'a> {
-    fn from_raw(codec: *const c_void, ptr: *const RawPacket) -> Self {
-        let raw = unsafe { &*ptr };
-        Self {
-            buffer: unsafe { std::slice::from_raw_parts(raw.buffer, raw.len) },
-            timestamp: raw.timestamp,
-            flags: raw.flags,
-            codec,
-        }
     }
 }
 

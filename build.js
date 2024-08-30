@@ -42,7 +42,7 @@ const Replace = (file, filters) => {
 /* async block */ void (async () =>
 {
     const Profile = Args.release ? 'Release' : 'Debug'
-    const BaseDistributions = 'https://github.com/mycrl/mirror/releases/download/distributions'
+    const BaseDistributions = 'https://github.com/mycrl/third-party/releases/download/distributions'
 
     for (const path of [
         './target',

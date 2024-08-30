@@ -236,6 +236,20 @@ EXPORT Mirror mirror_create(MirrorOptions options);
  */
 EXPORT void mirror_destroy(Mirror mirror);
 
+#ifdef WIN32
+
+/**
+ * Get direct3d device. 
+ */
+EXPORT void* mirror_get_direct3d_device(Mirror mirror);
+
+/**
+ * Get direct3d device context. 
+ */
+EXPORT void* mirror_get_direct3d_device_context(Mirror mirror);
+
+#endif // WIN32
+
 #ifndef MACOS
 
 /**

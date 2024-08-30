@@ -8,6 +8,6 @@ Cargo.lock
 /build
 /doc
 /out
-/third_party
+*/third_party/
 /node_modules
 package-lock.json

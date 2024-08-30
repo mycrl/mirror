@@ -2,49 +2,53 @@
 
 bool video_proc(void* ctx, VideoFrame* frame)
 {
-    auto render = (SimpleRender*)ctx;
-    return render->OnVideoFrame(frame);
+    auto mirror = (MirrorServiceExt*)ctx;
+    return mirror->Render->OnVideoFrame(frame);
 }
 
 bool audio_proc(void* ctx, AudioFrame* frame)
 {
-    auto render = (SimpleRender*)ctx;
-    return render->OnAudioFrame(frame);
+    auto mirror = (MirrorServiceExt*)ctx;
+    return mirror->Render->OnAudioFrame(frame);
 }
 
 void close_proc(void* ctx)
 {
-    auto render = (SimpleRender*)ctx;
-    render->OnClose();
+    auto mirror = (MirrorServiceExt*)ctx;
+    mirror->Close();
 }
 
 #ifdef WIN32
-MirrorServiceExt::MirrorServiceExt(Args& args, HWND hwnd, HINSTANCE hinstance) 
+MirrorServiceExt::MirrorServiceExt(Args& args, HWND hwnd, HINSTANCE hinstance)
     : _args(args)
 {
-    _render = new SimpleRender(args,
+    MirrorOptions mirror_options;
+    mirror_options.server = const_cast<char*>(_args.ArgsParams.server.c_str());
+    mirror_options.multicast = const_cast<char*>("239.0.0.1");
+    mirror_options.mtu = 1400;
+
+    _mirror = mirror_create(mirror_options);
+    Render = new SimpleRender(args,
                                hwnd,
-                               hinstance,
-                               [&]
-                               {
-                                   this->Close();
-                                   MessageBox(nullptr, TEXT("sender/receiver is closed!"), TEXT("Info"), 0);
-                               });
+                               (ID3D11Device*)mirror_get_direct3d_device(_mirror),
+                               (ID3D11DeviceContext*)mirror_get_direct3d_device_context(_mirror));
 }
 #else
-MirrorServiceExt::MirrorServiceExt(Args& args): _args(args)
+MirrorServiceExt::MirrorServiceExt(Args& args) : _args(args)
 {
-    _render = new SimpleRender(args,
-                               [&]
-                               {
-                                   this->Close();
-                               });
+    _render = new SimpleRender(args);
 }
 #endif
 
 MirrorServiceExt::~MirrorServiceExt()
 {
     Close();
+
+    if (_mirror != nullptr)
+    {
+        mirror_destroy(_mirror);
+        _mirror = nullptr;
+    }
 }
 
 bool MirrorServiceExt::CreateMirrorSender()
@@ -52,11 +56,6 @@ bool MirrorServiceExt::CreateMirrorSender()
     if (_sender != nullptr)
     {
         return true;
-    }
-
-    if (!_create_mirror())
-    {
-        return false;
     }
 
     auto video_sources = mirror_get_sources(SourceType::Screen);
@@ -68,7 +67,7 @@ bool MirrorServiceExt::CreateMirrorSender()
     video_options.encoder.frame_rate = _args.ArgsParams.fps;
     video_options.encoder.key_frame_interval = 21;
     video_options.encoder.bit_rate = 500 * 1024 * 8;
-    
+
     for (int i = 0; i < video_sources.size; i++)
     {
         if (video_sources.items[i].is_default)
@@ -100,16 +99,18 @@ bool MirrorServiceExt::CreateMirrorSender()
     sink.video = video_proc;
     sink.audio = audio_proc;
     sink.close = close_proc;
-    sink.ctx = _render;
+    sink.ctx = this;
 
-    _render->IsRender = false;
+    Render->IsRender = false;
     _sender = mirror_create_sender(_mirror, _args.ArgsParams.id, options, sink);
     if (_sender == nullptr)
     {
         return false;
     }
 
-    _render->SetTitle("sender");
+    Render->Create();
+    Render->SetTitle("sender");
+    _is_runing = true;
     return true;
 }
 
@@ -120,39 +121,39 @@ bool MirrorServiceExt::CreateMirrorReceiver()
         return true;
     }
 
-    if (!_create_mirror())
-    {
-        return false;
-    }
-
     FrameSink sink;
     sink.video = video_proc;
     sink.audio = audio_proc;
     sink.close = close_proc;
-    sink.ctx = _render;
+    sink.ctx = this;
 
-    _render->IsRender = true;
-    _receiver = mirror_create_receiver(_mirror, 
-                                       _args.ArgsParams.id, 
-                                       _args.ArgsParams.decoder.c_str(), 
+    Render->IsRender = true;
+    _receiver = mirror_create_receiver(_mirror,
+                                       _args.ArgsParams.id,
+                                       _args.ArgsParams.decoder.c_str(),
                                        sink);
     if (_receiver == nullptr)
     {
         return false;
     }
 
-    _render->SetTitle("receiver");
+    Render->Create();
+    Render->SetTitle("receiver");
+    _is_runing = true;
     return true;
 }
 
 void MirrorServiceExt::Close()
 {
-    if (!is_created)
+    if (_is_runing)
+    {
+        _is_runing = false;
+    }
+    else
     {
         return;
     }
 
-    is_created = false;
     if (_sender != nullptr)
     {
         mirror_sender_destroy(_sender);
@@ -165,40 +166,12 @@ void MirrorServiceExt::Close()
         _receiver = nullptr;
     }
 
-    if (_mirror != nullptr)
-    {
-        mirror_destroy(_mirror);
-        _mirror = nullptr;
-    }
-
-    _render->SetTitle("");
-    _render->Clear();
+    Render->Close();
 }
 
-bool MirrorServiceExt::_create_mirror()
-{
-    if (is_created)
-    {
-        return true;
-    }
-
-    if (_mirror != nullptr)
-    {
-        return true;
-    }
-
-    is_created = true;
-
-    MirrorOptions mirror_options;
-    mirror_options.server = const_cast<char*>(_args.ArgsParams.server.c_str());
-    mirror_options.multicast = const_cast<char*>("239.0.0.1");
-    mirror_options.mtu = 1400;
-
-    _mirror = mirror_create(mirror_options);
-    return _mirror != nullptr;
-}
-
+#ifdef LINUX
 void MirrorServiceExt::RunEventLoop(std::function<bool(SDL_Event*)> handler)
 {
     _render->RunEventLoop(handler);
 }
+#endif // LINUX

@@ -10,7 +10,7 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
-use frame::{VideoFrame, VideoSize, VideoTransform};
+use frame::{VideoFormat, VideoFrame, VideoSize, VideoTransform};
 use utils::{atomic::EasyAtomic, strings::Strings};
 use x11::xlib::{
     XAllPlanes, XCloseDisplay, XDefaultRootWindow, XDestroyImage, XGetImage, XGetWindowAttributes,
@@ -150,7 +150,7 @@ impl CaptureHandler for ScreenCapture {
 
                 while status.get() {
                     let data = display.capture().unwrap();
-                    let texture = processor.process(data.as_ref());
+                    let texture = processor.process(data.as_ref(), VideoFormat::ARGB);
 
                     frame.data[0] = texture.as_ptr();
                     frame.data[1] =

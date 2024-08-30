@@ -8,7 +8,7 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
-use frame::VideoFrame;
+use frame::{VideoFormat, VideoFrame};
 use utils::{
     atomic::EasyAtomic,
     win32::{IMFValue, MediaFoundationIMFAttributesSetHelper, MediaThreadClass},
@@ -114,8 +114,9 @@ impl<T: FrameArrived<Frame = VideoFrame>> Context<T> {
             return Err(anyhow!("failed to lock textture 2d"));
         }
 
-        self.frame.data[0] = data;
-        self.frame.data[1] = unsafe { data.add(stride as usize * self.frame.height as usize) };
+        self.frame.data[0] = data as *const _;
+        self.frame.data[1] =
+            unsafe { data.add(stride as usize * self.frame.height as usize) as *const _ };
         self.frame.linesize = [stride as usize, stride as usize];
         if !self.arrived.sink(&self.frame) {
             return Err(anyhow!("FrameArrived sink return false"));
@@ -226,6 +227,8 @@ impl CaptureHandler for CameraCapture {
         let mut frame = VideoFrame::default();
         frame.height = opt.size.height;
         frame.width = opt.size.width;
+        frame.format = VideoFormat::NV12;
+        frame.hardware = false;
 
         let mut ctx = Context {
             status: self.0.clone(),

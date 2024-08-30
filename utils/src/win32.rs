@@ -1,18 +1,57 @@
-use std::cell::Cell;
+use std::{cell::Cell, ffi::c_void};
 
 use windows::{
     core::{s, Result, GUID, HSTRING, PCSTR, PCWSTR, PWSTR},
     Win32::{
         Foundation::HANDLE,
-        Media::MediaFoundation::{IMFActivate, IMFAttributes, IMFMediaType},
-        System::Threading::{
-            AvRevertMmThreadCharacteristics, AvSetMmThreadCharacteristicsA, GetCurrentProcess,
-            SetPriorityClass, BELOW_NORMAL_PRIORITY_CLASS, HIGH_PRIORITY_CLASS,
-            NORMAL_PRIORITY_CLASS, PROCESS_CREATION_FLAGS, PROCESS_MODE_BACKGROUND_BEGIN,
-            REALTIME_PRIORITY_CLASS,
+        Graphics::{
+            Direct3D::{
+                D3D_DRIVER_TYPE_HARDWARE, D3D_FEATURE_LEVEL, D3D_FEATURE_LEVEL_11_0,
+                D3D_FEATURE_LEVEL_11_1,
+            },
+            Direct3D11::{
+                D3D11CreateDevice, ID3D11Device, ID3D11DeviceContext, ID3D11Texture2D,
+                D3D11_CREATE_DEVICE_BGRA_SUPPORT, D3D11_CREATE_DEVICE_DEBUG, D3D11_SDK_VERSION,
+            },
+        },
+        Media::MediaFoundation::{
+            IMFActivate, IMFAttributes, IMFMediaType, MFShutdown, MFStartup, MF_VERSION,
+        },
+        System::{
+            Com::{CoInitializeEx, CoUninitialize, COINIT_MULTITHREADED},
+            Threading::{
+                AvRevertMmThreadCharacteristics, AvSetMmThreadCharacteristicsA, GetCurrentProcess,
+                SetPriorityClass, BELOW_NORMAL_PRIORITY_CLASS, HIGH_PRIORITY_CLASS,
+                NORMAL_PRIORITY_CLASS, PROCESS_CREATION_FLAGS, PROCESS_MODE_BACKGROUND_BEGIN,
+                REALTIME_PRIORITY_CLASS,
+            },
         },
     },
 };
+
+pub use windows::core::Interface;
+
+/// Initializes Microsoft Media Foundation.
+pub fn startup() -> Result<()> {
+    unsafe {
+        CoInitializeEx(None, COINIT_MULTITHREADED).ok()?;
+        MFStartup(MF_VERSION, 0)?;
+    }
+
+    Ok(())
+}
+
+/// Shuts down the Microsoft Media Foundation platform. Call this function
+/// once for every call to MFStartup. Do not call this function from work
+/// queue threads.
+pub fn shutdown() -> Result<()> {
+    unsafe {
+        MFShutdown()?;
+        CoUninitialize();
+    }
+
+    Ok(())
+}
 
 #[allow(unused)]
 pub enum IMFValue {
@@ -166,4 +205,48 @@ impl MediaThreadClass {
 
         Ok(MediaThreadClassGuard)
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct Direct3DDevice {
+    pub device: ID3D11Device,
+    pub context: ID3D11DeviceContext,
+}
+
+impl Direct3DDevice {
+    pub fn new() -> Result<Direct3DDevice> {
+        unsafe {
+            let (mut d3d_device, mut d3d_context, mut feature_level) =
+                (None, None, D3D_FEATURE_LEVEL::default());
+
+            D3D11CreateDevice(
+                None,
+                D3D_DRIVER_TYPE_HARDWARE,
+                None,
+                D3D11_CREATE_DEVICE_BGRA_SUPPORT | D3D11_CREATE_DEVICE_DEBUG,
+                Some(&[D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0]),
+                D3D11_SDK_VERSION,
+                Some(&mut d3d_device),
+                Some(&mut feature_level),
+                Some(&mut d3d_context),
+            )?;
+
+            Ok(Direct3DDevice {
+                device: d3d_device.unwrap(),
+                context: d3d_context.unwrap(),
+            })
+        }
+    }
+}
+
+pub fn d3d_texture_borrowed_raw<'a>(raw: &'a *mut c_void) -> Option<&'a ID3D11Texture2D> {
+    unsafe { ID3D11Texture2D::from_raw_borrowed(raw) }
+}
+
+pub fn d3d_device_borrowed_raw<'a>(raw: &'a *mut c_void) -> Option<&'a ID3D11Device> {
+    unsafe { ID3D11Device::from_raw_borrowed(raw) }
+}
+
+pub fn d3d_context_borrowed_raw<'a>(raw: &'a *mut c_void) -> Option<&'a ID3D11DeviceContext> {
+    unsafe { ID3D11DeviceContext::from_raw_borrowed(raw) }
 }

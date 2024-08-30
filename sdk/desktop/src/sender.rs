@@ -28,6 +28,29 @@ use transport::{
 #[cfg(target_os = "windows")]
 use utils::win32::MediaThreadClass;
 
+#[derive(Debug, Clone)]
+pub struct VideoOptions {
+    pub codec: String,
+    pub frame_rate: u8,
+    pub width: u32,
+    pub height: u32,
+    pub bit_rate: u64,
+    pub key_frame_interval: u32,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct AudioOptions {
+    pub sample_rate: u64,
+    pub bit_rate: u64,
+}
+
+#[derive(Debug)]
+pub struct SenderOptions {
+    pub video: Option<(Source, VideoOptions)>,
+    pub audio: Option<(Source, AudioOptions)>,
+    pub multicast: bool,
+}
+
 struct VideoSender {
     encoder: Arc<Mutex<VideoEncoder>>,
     sink: Weak<FrameSink>,
@@ -105,7 +128,7 @@ impl FrameArrived for VideoSender {
     type Frame = VideoFrame;
 
     fn sink(&mut self, frame: &Self::Frame) -> bool {
-        // // Push the audio and video frames into the encoder.
+        // Push the audio and video frames into the encoder.
         if self.encoder.lock().unwrap().send_frame(frame) {
             self.unparker.unpark();
         } else {
@@ -246,13 +269,6 @@ impl FrameArrived for AudioSender {
     }
 }
 
-#[derive(Debug)]
-pub struct SenderOptions {
-    pub video: Option<(Source, VideoEncoderSettings)>,
-    pub audio: Option<(Source, AudioEncoderSettings)>,
-    pub multicast: bool,
-}
-
 pub struct Sender {
     pub(crate) adapter: Arc<StreamSenderAdapter>,
     sink: Arc<FrameSink>,
@@ -272,7 +288,15 @@ impl Sender {
 
         if let Some((source, options)) = options.audio {
             capture_options.audio = Some(SourceCaptureOptions {
-                arrived: AudioSender::new(&adapter, &options, &sink)?,
+                arrived: AudioSender::new(
+                    &adapter,
+                    &AudioEncoderSettings {
+                        sample_rate: options.sample_rate,
+                        bit_rate: options.bit_rate,
+                        codec: "libopus".to_string(),
+                    },
+                    &sink,
+                )?,
                 description: AudioCaptureSourceDescription {
                     sample_rate: options.sample_rate as u32,
                     source,
@@ -282,15 +306,35 @@ impl Sender {
 
         if let Some((source, options)) = options.video {
             capture_options.video = Some(SourceCaptureOptions {
-                arrived: VideoSender::new(&adapter, &options, &sink)?,
                 description: VideoCaptureSourceDescription {
+                    hardware: codec::is_hardware_codec(&options.codec),
                     fps: options.frame_rate,
-                    source,
                     size: Size {
                         width: options.width,
                         height: options.height,
                     },
+                    source,
+                    #[cfg(target_os = "windows")]
+                    direct3d: crate::factory::DIRECT_3D_DEVICE
+                        .read()
+                        .unwrap()
+                        .clone()
+                        .expect("D3D device was not initialized successfully!"),
                 },
+                arrived: VideoSender::new(
+                    &adapter,
+                    &VideoEncoderSettings {
+                        codec: options.codec,
+                        key_frame_interval: options.key_frame_interval,
+                        frame_rate: options.frame_rate,
+                        width: options.width,
+                        height: options.height,
+                        bit_rate: options.bit_rate,
+                        #[cfg(target_os = "windows")]
+                        direct3d: crate::factory::DIRECT_3D_DEVICE.read().unwrap().clone(),
+                    },
+                    &sink,
+                )?,
             });
         }
 

@@ -12,13 +12,19 @@ use std::{
 };
 
 #[cfg(not(target_os = "macos"))]
-use std::{ffi::CString, mem::ManuallyDrop};
+use std::{
+    ffi::{c_void, CString},
+    mem::ManuallyDrop,
+};
 
 use frame::{AudioFrame, VideoFrame};
 use utils::{atomic::EasyAtomic, strings::Strings};
 
 #[cfg(not(target_os = "macos"))]
 use capture::{Capture, SourceType};
+
+#[cfg(target_os = "windows")]
+use utils::win32::Interface;
 
 /// Windows yes! The Windows dynamic library has an entry, so just initialize
 /// the logger and set the process priority at the entry.
@@ -100,7 +106,6 @@ pub extern "C" fn mirror_create(options: MirrorOptions) -> *const Mirror {
     log::info!("extern api: mirror create");
 
     let func = || factory::Mirror::new(options.try_into()?);
-
     checker(func())
         .map(|mirror| Box::into_raw(Box::new(Mirror(mirror))))
         .unwrap_or_else(|_| null_mut()) as *const _
@@ -113,6 +118,32 @@ pub extern "C" fn mirror_destroy(mirror: *const Mirror) {
 
     log::info!("extern api: mirror destroy");
     drop(unsafe { Box::from_raw(mirror as *mut Mirror) });
+}
+
+/// Get direct3d device.
+#[no_mangle]
+#[cfg(target_os = "windows")]
+pub extern "C" fn mirror_get_direct3d_device(mirror: *const Mirror) -> *mut c_void {
+    assert!(!mirror.is_null());
+
+    unsafe { &*mirror }
+        .0
+        .get_direct3d_device()
+        .map(|it| it.device.as_raw())
+        .unwrap_or_else(|| null_mut())
+}
+
+/// Get direct3d device context.
+#[no_mangle]
+#[cfg(target_os = "windows")]
+pub extern "C" fn mirror_get_direct3d_device_context(mirror: *const Mirror) -> *mut c_void {
+    assert!(!mirror.is_null());
+
+    unsafe { &*mirror }
+        .0
+        .get_direct3d_device()
+        .map(|it| it.context.as_raw())
+        .unwrap_or_else(|| null_mut())
 }
 
 #[repr(C)]
@@ -311,11 +342,12 @@ pub struct VideoOptions {
     pub key_frame_interval: u32,
 }
 
-impl TryInto<codec::VideoEncoderSettings> for VideoOptions {
+#[cfg(not(target_os = "macos"))]
+impl TryInto<crate::sender::VideoOptions> for VideoOptions {
     type Error = anyhow::Error;
 
-    fn try_into(self) -> Result<codec::VideoEncoderSettings, Self::Error> {
-        Ok(codec::VideoEncoderSettings {
+    fn try_into(self) -> Result<crate::sender::VideoOptions, Self::Error> {
+        Ok(crate::sender::VideoOptions {
             codec: Strings::from(self.codec).to_string()?,
             key_frame_interval: self.key_frame_interval,
             frame_rate: self.frame_rate,
@@ -334,10 +366,10 @@ pub struct AudioOptions {
     pub bit_rate: u64,
 }
 
-impl Into<codec::AudioEncoderSettings> for AudioOptions {
-    fn into(self) -> codec::AudioEncoderSettings {
-        codec::AudioEncoderSettings {
-            codec: "libopus".to_string(),
+#[cfg(not(target_os = "macos"))]
+impl Into<crate::sender::AudioOptions> for AudioOptions {
+    fn into(self) -> crate::sender::AudioOptions {
+        crate::sender::AudioOptions {
             sample_rate: self.sample_rate,
             bit_rate: self.bit_rate,
         }
@@ -377,7 +409,7 @@ impl TryInto<sender::SenderOptions> for SenderOptions {
 
         if !self.video.is_null() {
             let video = unsafe { &*self.video };
-            let settings: codec::VideoEncoderSettings = video.options.try_into()?;
+            let settings: crate::sender::VideoOptions = video.options.try_into()?;
 
             // Check whether the external parameters are configured correctly to 
             // avoid some clowns inserting some inexplicable parameters.
@@ -518,7 +550,7 @@ fn checker<T, E: Debug>(result: Result<T, E>) -> Result<T, E> {
         log::error!("{:?}", e);
 
         if cfg!(debug_assertions) {
-            println!("{:?}", e);
+            println!("{:#?}", e);
         }
     }
 

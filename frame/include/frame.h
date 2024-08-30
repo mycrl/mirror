@@ -12,11 +12,19 @@
 #include <stddef.h>
 #include <stdint.h>
 
+typedef enum
+{
+    RGBA,
+    NV12,
+} VideoFormat;
+
 typedef struct
 {
+    VideoFormat format;
+    bool hardware;
     uint32_t width;
     uint32_t height;
-    uint8_t* data[2];
+    void* data[2];
     size_t linesize[2];
 } VideoFrame;
 

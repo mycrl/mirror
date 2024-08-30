@@ -7,13 +7,21 @@ use std::{
 };
 
 use audio::AudioPlayer;
-use utils::logger;
 use frame::{AudioFrame, VideoFrame};
-use video::{Size, VideoRender, WindowHandle};
-use sdl2::sys::SDL_Event;
+use utils::logger;
+use video::Size;
+
+#[cfg(target_os = "windows")]
+use video::win32::{VideoRender, VideoRenderOptions};
+
+#[cfg(target_os = "windows")]
+use windows::Win32::Foundation::HWND;
+
+#[cfg(target_os = "windows")]
+use utils::win32::{d3d_context_borrowed_raw, d3d_device_borrowed_raw, Direct3DDevice};
 
 #[repr(C)]
-struct RawSize {
+pub struct RawSize {
     width: c_int,
     height: c_int,
 }
@@ -30,6 +38,7 @@ impl From<RawSize> for Size {
 /// Windows yes! The Windows dynamic library has an entry, so just initialize
 /// the logger and set the process priority at the entry.
 #[no_mangle]
+#[cfg(target_os = "windows")]
 extern "system" fn DllMain(_module: u32, call_reason: usize, _reserved: *const c_void) -> bool {
     match call_reason {
         1 /* DLL_PROCESS_ATTACH */ => renderer_startup(),
@@ -40,6 +49,10 @@ extern "system" fn DllMain(_module: u32, call_reason: usize, _reserved: *const c
 /// Initialize the environment, which must be initialized before using the SDK.
 #[no_mangle]
 extern "C" fn renderer_startup() -> bool {
+    std::panic::set_hook(Box::new(|info| {
+        log::error!("{:?}", info);
+    }));
+
     logger::init(
         log::LevelFilter::Info,
         if cfg!(debug_assertions) {
@@ -51,45 +64,44 @@ extern "C" fn renderer_startup() -> bool {
     .is_ok()
 }
 
-/// Create the window handle used by the SDK through the original window handle.
-#[no_mangle]
-#[cfg(target_os = "windows")]
-extern "C" fn renderer_create_window_handle(
-    hwnd: *mut c_void,
-    _hinstance: *mut c_void,
-) -> *const WindowHandle {
-    assert!(!hwnd.is_null());
-
-    Box::into_raw(Box::new(WindowHandle::Win32(hwnd)))
-}
-
-/// Destroy the window handle without affecting external window handles.
-#[no_mangle]
-extern "C" fn renderer_window_handle_destroy(handle: *const WindowHandle) {
-    assert!(!handle.is_null());
-
-    let _ = unsafe { Box::from_raw(handle as *mut WindowHandle) };
-}
-
+#[repr(C)]
 struct RawRenderer {
     audio: AudioPlayer,
+    #[cfg(target_os = "windows")]
     video: VideoRender,
+}
+
+#[repr(C)]
+struct RawRendererOptions {
+    size: RawSize,
+    #[cfg(target_os = "windows")]
+    hwnd: *mut c_void,
+    #[cfg(target_os = "windows")]
+    d3d_device: *mut c_void,
+    #[cfg(target_os = "windows")]
+    d3d_device_context: *mut c_void,
 }
 
 /// Creating a window renderer.
 #[no_mangle]
-extern "C" fn renderer_create(size: RawSize, handle: *const WindowHandle) -> *mut RawRenderer {
+#[allow(unused_variables)]
+extern "C" fn renderer_create(options: RawRendererOptions) -> *mut RawRenderer {
     let func = || {
         Ok::<RawRenderer, anyhow::Error>(RawRenderer {
-            video: VideoRender::new(
-                size.into(),
-                if handle.is_null() {
-                    Some(unsafe { &*handle })
-                } else {
-                    None
-                },
-            )?,
             audio: AudioPlayer::new()?,
+            #[cfg(target_os = "windows")]
+            video: VideoRender::new(VideoRenderOptions {
+                size: options.size.into(),
+                window_handle: HWND(options.hwnd),
+                direct3d: Direct3DDevice {
+                    device: d3d_device_borrowed_raw(&options.d3d_device)
+                        .ok_or_else(|| anyhow::anyhow!("invalid d3d11 device"))?
+                        .clone(),
+                    context: d3d_context_borrowed_raw(&options.d3d_device_context)
+                        .ok_or_else(|| anyhow::anyhow!("invalid d3d11 device context"))?
+                        .clone(),
+                },
+            })?,
         })
     };
 
@@ -99,35 +111,22 @@ extern "C" fn renderer_create(size: RawSize, handle: *const WindowHandle) -> *mu
         .unwrap_or_else(|_| null_mut())
 }
 
-/// Wait indefinitely for the next available event.
-#[no_mangle]
-extern "C" fn renderer_event_loop(
-    render: *mut RawRenderer,
-    handle: Option<extern "C" fn(event: *const c_void, ctx: *const c_void) -> bool>,
-    ctx: *const c_void,
-) {
-    assert!(!render.is_null() && handle.is_some());
-
-    let func = handle.unwrap();
-    unsafe { &mut *render }.video.start_loop(move |event| {
-        func(
-            unsafe { std::mem::transmute::<*const SDL_Event, *const c_void>(event) },
-            ctx,
-        )
-    });
-}
-
 /// Push the video frame into the renderer, which will update the window
 /// texture.
 #[no_mangle]
 extern "C" fn renderer_on_video(render: *mut RawRenderer, frame: *const VideoFrame) -> bool {
     assert!(!render.is_null() && !frame.is_null());
 
-    unsafe { &mut *render }
-        .video
-        .send(unsafe { &*frame })
-        .map_err(|e| log::error!("{:?}", e))
-        .is_ok()
+    #[cfg(target_os = "windows")]
+    {
+        return unsafe { &mut *render }
+            .video
+            .send(unsafe { &*frame })
+            .map_err(|e| log::error!("{:?}", e))
+            .is_ok();
+    }
+
+    true
 }
 
 /// Push the audio frame into the renderer, which will append to audio queue.

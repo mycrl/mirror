@@ -3,7 +3,7 @@ use crate::factory::FrameSink;
 use std::{sync::Arc, thread};
 
 use anyhow::Result;
-use codec::{AudioDecoder, VideoDecoder};
+use codec::{audio::AudioDecoderSettings, video::VideoDecoderSettings, AudioDecoder, VideoDecoder};
 use transport::adapter::{StreamKind, StreamMultiReceiverAdapter, StreamReceiverAdapterExt};
 
 #[cfg(target_os = "windows")]
@@ -18,11 +18,11 @@ pub struct ReceiverOptions {
 fn create_video_decoder(
     adapter: &Arc<StreamMultiReceiverAdapter>,
     sink: &Arc<FrameSink>,
-    codec: &str,
+    settings: &VideoDecoderSettings,
 ) -> Result<()> {
     let sink_ = Arc::downgrade(sink);
     let adapter_ = Arc::downgrade(adapter);
-    let mut codec = VideoDecoder::new(codec)?;
+    let mut codec = VideoDecoder::new(settings)?;
 
     thread::Builder::new()
         .name("VideoDecoderThread".to_string())
@@ -63,11 +63,11 @@ fn create_video_decoder(
 fn create_audio_decoder(
     adapter: &Arc<StreamMultiReceiverAdapter>,
     sink: &Arc<FrameSink>,
-    codec: &str,
+    setings: &AudioDecoderSettings,
 ) -> Result<()> {
     let sink_ = Arc::downgrade(sink);
     let adapter_ = Arc::downgrade(adapter);
-    let mut codec = AudioDecoder::new(codec)?;
+    let mut codec = AudioDecoder::new(setings)?;
 
     thread::Builder::new()
         .name("AudioDecoderThread".to_string())
@@ -120,8 +120,24 @@ impl Receiver {
         let adapter = StreamMultiReceiverAdapter::new();
         let sink = Arc::new(sink);
 
-        create_video_decoder(&adapter, &sink, &options.video)?;
-        create_audio_decoder(&adapter, &sink, &options.audio)?;
+        create_video_decoder(
+            &adapter,
+            &sink,
+            &VideoDecoderSettings {
+                codec: options.video,
+                #[cfg(target_os = "windows")]
+                direct3d: crate::factory::DIRECT_3D_DEVICE.read().unwrap().clone(),
+            },
+        )?;
+
+        create_audio_decoder(
+            &adapter,
+            &sink,
+            &AudioDecoderSettings {
+                codec: options.audio,
+            },
+        )?;
+
         Ok(Self { adapter, sink })
     }
 }

@@ -3,45 +3,34 @@
 mod audio;
 
 #[cfg(target_os = "windows")]
-mod win32;
+mod win32 {
+    mod camera;
+    mod screen;
+
+    pub use self::{camera::CameraCapture, screen::ScreenCapture};
+}
 
 #[cfg(target_os = "linux")]
-mod unix;
+mod linux {
+    mod camera;
+    mod screen;
+
+    pub use self::{camera::CameraCapture, screen::ScreenCapture};
+}
+
+use self::audio::AudioCapture;
 
 #[cfg(target_os = "windows")]
 use win32::{CameraCapture, ScreenCapture};
 
 #[cfg(target_os = "linux")]
-use unix::ScreenCapture;
+use linux::{CameraCapture, ScreenCapture};
 
-use self::audio::AudioCapture;
+#[cfg(target_os = "windows")]
+use utils::win32::Direct3DDevice;
 
 use anyhow::Result;
 use frame::{AudioFrame, VideoFrame};
-
-/// Don't forget to initialize the environment, this is necessary for the
-/// capture module.
-pub fn startup() -> Result<()> {
-    #[cfg(target_os = "windows")]
-    {
-        log::info!("capture MediaFoundation satrtup");
-
-        self::win32::startup()?;
-    }
-
-    Ok(())
-}
-
-pub fn shutdown() -> Result<()> {
-    #[cfg(target_os = "windows")]
-    {
-        log::info!("capture MediaFoundation shutdown");
-
-        self::win32::shutdown()?;
-    }
-
-    Ok(())
-}
 
 pub trait FrameArrived: Sync + Send {
     /// The type of data captured, such as video frames.
@@ -102,6 +91,9 @@ pub struct Size {
 
 #[derive(Debug, Clone)]
 pub struct VideoCaptureSourceDescription {
+    #[cfg(target_os = "windows")]
+    pub direct3d: Direct3DDevice,
+    pub hardware: bool,
     pub source: Source,
     pub size: Size,
     pub fps: u8,
@@ -141,7 +133,7 @@ where
 }
 
 enum CaptureImplement {
-    // Camera(CameraCapture),
+    Camera(CameraCapture),
     Screen(ScreenCapture),
     Audio(AudioCapture),
 }
@@ -156,7 +148,7 @@ impl Capture {
         log::info!("capture get sources, kind={:?}", kind);
 
         Ok(match kind {
-            // SourceType::Camera => CameraCapture::get_sources()?,
+            SourceType::Camera => CameraCapture::get_sources()?,
             SourceType::Screen => ScreenCapture::get_sources()?,
             SourceType::Audio => AudioCapture::get_sources()?,
             _ => Vec::new(),
@@ -176,11 +168,11 @@ impl Capture {
         }) = video
         {
             match description.source.kind {
-                // SourceType::Camera => {
-                //     let camera = CameraCapture::default();
-                //     camera.start(description, arrived)?;
-                //     devices.push(CaptureImplement::Camera(camera));
-                // }
+                SourceType::Camera => {
+                    let camera = CameraCapture::default();
+                    camera.start(description, arrived)?;
+                    devices.push(CaptureImplement::Camera(camera));
+                }
                 SourceType::Screen => {
                     let screen = ScreenCapture::default();
                     screen.start(description, arrived)?;
@@ -204,15 +196,15 @@ impl Capture {
     }
 
     pub fn close(&self) -> Result<()> {
-        log::info!("close capture");
-
         for item in self.0.iter() {
             match item {
                 CaptureImplement::Screen(it) => it.stop(),
-                // CaptureImplement::Camera(it) => it.stop(),
+                CaptureImplement::Camera(it) => it.stop(),
                 CaptureImplement::Audio(it) => it.stop(),
             }?;
         }
+
+        log::info!("close capture");
 
         Ok(())
     }

@@ -71,8 +71,9 @@ endif()
 
 # Build header.
 if(WIN32)
-    add_compile_definitions(WIN32
-                            _WINDOWS)
+    add_compile_definitions(WIN32 _WINDOWS)
+else()
+    add_compile_definitions(LINUX)
 endif()
 
 # Introduce other runtime necessary library files.

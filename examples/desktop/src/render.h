@@ -4,6 +4,7 @@
 
 #ifdef WIN32
 #include <windows.h>
+#include <d3d11.h>
 #endif
 
 extern "C"
@@ -12,7 +13,10 @@ extern "C"
 }
 
 #include <functional>
+
+#ifdef LINUX
 #include <SDL_events.h>
+#endif // LINUX
 
 #include "./args.h"
 
@@ -22,10 +26,10 @@ public:
 #ifdef WIN32
     SimpleRender(Args& args,
                  HWND hwnd,
-                 HINSTANCE hinstance,
-                 std::function<void()> closed_callback);
+                 ID3D11Device* d3d_device,
+                 ID3D11DeviceContext* d3d_device_context);
 #else
-    SimpleRender(Args& args, std::function<void()> closed_callback);
+    SimpleRender(Args& args);
 #endif
 
     ~SimpleRender();
@@ -33,16 +37,18 @@ public:
     void SetTitle(std::string title);
     bool OnVideoFrame(VideoFrame* frame);
     bool OnAudioFrame(AudioFrame* frame);
-    void OnClose();
-    void Clear();
+    void Close();
+    void Create();
+
+#ifdef LINUX
     void RunEventLoop(std::function<bool(SDL_Event*)> handler);
+#endif // LINUX
 
     bool IsRender = true;
 private:
     Args& _args;
-    bool _runing = true;
-    std::function<void()> _callback;
     Render _renderer = nullptr;
+    RendererOptions _options = {};
 #ifdef WIN32
     WindowHandle _window_handle = nullptr;
     HWND _hwnd;

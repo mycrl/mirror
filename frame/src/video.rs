@@ -1,4 +1,17 @@
-use std::ptr::null;
+use std::{ffi::c_void, ptr::null};
+
+#[derive(Debug, Clone, Copy)]
+pub struct VideoSize {
+    pub width: u32,
+    pub height: u32,
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VideoFormat {
+    RGBA,
+    NV12,
+}
 
 /// YCbCr (NV12)
 ///
@@ -22,9 +35,11 @@ use std::ptr::null;
 #[repr(C)]
 #[derive(Debug)]
 pub struct VideoFrame {
+    pub format: VideoFormat,
+    pub hardware: bool,
     pub width: u32,
     pub height: u32,
-    pub data: [*const u8; 2],
+    pub data: [*const c_void; 2],
     pub linesize: [usize; 2],
 }
 
@@ -36,50 +51,62 @@ impl Default for VideoFrame {
         Self {
             width: 0,
             height: 0,
+            hardware: false,
             linesize: [0, 0],
             data: [null(), null()],
+            format: VideoFormat::RGBA,
         }
     }
 }
 
-#[derive(Debug)]
-pub struct VideoSize {
-    pub width: u32,
-    pub height: u32,
-}
-
 #[cfg(target_os = "windows")]
 pub mod win32 {
-    use super::VideoSize;
+    use super::{VideoFormat, VideoSize};
 
     use std::mem::ManuallyDrop;
 
+    use utils::win32::Direct3DDevice;
     use windows::{
         core::{Interface, Result},
         Win32::{
-            Foundation::RECT,
+            Foundation::{HANDLE, RECT},
             Graphics::{
-                Direct3D::{
-                    D3D_DRIVER_TYPE_HARDWARE, D3D_FEATURE_LEVEL, D3D_FEATURE_LEVEL_11_0,
-                    D3D_FEATURE_LEVEL_11_1,
-                },
                 Direct3D11::{
-                    D3D11CreateDevice, ID3D11Device, ID3D11DeviceContext, ID3D11Texture2D,
-                    ID3D11VideoContext, ID3D11VideoDevice, ID3D11VideoProcessor,
-                    ID3D11VideoProcessorEnumerator, ID3D11VideoProcessorInputView,
-                    ID3D11VideoProcessorOutputView, D3D11_BIND_RENDER_TARGET, D3D11_BOX,
-                    D3D11_CPU_ACCESS_READ, D3D11_CREATE_DEVICE_FLAG, D3D11_MAPPED_SUBRESOURCE,
-                    D3D11_MAP_READ, D3D11_SDK_VERSION, D3D11_TEXTURE2D_DESC, D3D11_USAGE_DEFAULT,
-                    D3D11_USAGE_STAGING, D3D11_VIDEO_FRAME_FORMAT_PROGRESSIVE,
-                    D3D11_VIDEO_PROCESSOR_COLOR_SPACE, D3D11_VIDEO_PROCESSOR_CONTENT_DESC,
-                    D3D11_VIDEO_PROCESSOR_INPUT_VIEW_DESC, D3D11_VIDEO_PROCESSOR_OUTPUT_VIEW_DESC,
-                    D3D11_VIDEO_PROCESSOR_STREAM, D3D11_VIDEO_USAGE_PLAYBACK_NORMAL,
-                    D3D11_VPIV_DIMENSION_TEXTURE2D, D3D11_VPOV_DIMENSION_TEXTURE2D,
+                    ID3D11Device, ID3D11DeviceContext, ID3D11Texture2D, ID3D11VideoContext,
+                    ID3D11VideoDevice, ID3D11VideoProcessor, ID3D11VideoProcessorEnumerator,
+                    ID3D11VideoProcessorInputView, ID3D11VideoProcessorOutputView,
+                    D3D11_BIND_RENDER_TARGET, D3D11_CPU_ACCESS_READ, D3D11_MAPPED_SUBRESOURCE,
+                    D3D11_MAP_READ, D3D11_TEXTURE2D_DESC, D3D11_USAGE_DEFAULT, D3D11_USAGE_STAGING,
+                    D3D11_VIDEO_FRAME_FORMAT_PROGRESSIVE, D3D11_VIDEO_PROCESSOR_COLOR_SPACE,
+                    D3D11_VIDEO_PROCESSOR_CONTENT_DESC, D3D11_VIDEO_PROCESSOR_INPUT_VIEW_DESC,
+                    D3D11_VIDEO_PROCESSOR_OUTPUT_VIEW_DESC, D3D11_VIDEO_PROCESSOR_STREAM,
+                    D3D11_VIDEO_USAGE_PLAYBACK_NORMAL, D3D11_VPIV_DIMENSION_TEXTURE2D,
+                    D3D11_VPOV_DIMENSION_TEXTURE2D,
                 },
-                Dxgi::Common::{DXGI_FORMAT_NV12, DXGI_FORMAT_R8G8B8A8_UNORM},
+                Dxgi::Common::{DXGI_FORMAT, DXGI_FORMAT_NV12, DXGI_FORMAT_R8G8B8A8_UNORM},
             },
         },
     };
+
+    impl Into<DXGI_FORMAT> for super::VideoFormat {
+        fn into(self) -> DXGI_FORMAT {
+            match self {
+                Self::RGBA => DXGI_FORMAT_R8G8B8A8_UNORM,
+                Self::NV12 => DXGI_FORMAT_NV12,
+            }
+        }
+    }
+
+    pub enum Resource {
+        Default(VideoFormat, VideoSize),
+        Texture(ID3D11Texture2D),
+    }
+
+    pub struct VideoTransformOptions {
+        pub direct3d: Direct3DDevice,
+        pub input: Resource,
+        pub output: Resource,
+    }
 
     /// Used to convert video frames using hardware accelerators, including
     /// color space conversion and scaling. Note that the output is fixed to
@@ -105,90 +132,76 @@ pub mod win32 {
     unsafe impl Sync for VideoTransform {}
 
     impl VideoTransform {
-        // Only use d3d11 implementation
-        const FEATURE_LEVELS: [D3D_FEATURE_LEVEL; 2] =
-            [D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0];
-
         /// Create `VideoTransform`, the default_device parameter is used to
         /// directly use the device when it has been created externally, so
         /// there is no need to copy across devices, which improves
         /// processing performance.
-        pub fn new(
-            input: VideoSize,
-            output: VideoSize,
-            default_device: Option<(ID3D11Device, ID3D11DeviceContext)>,
-        ) -> Result<Self> {
-            let (d3d_device, d3d_context) = if let Some(default_device) = default_device {
-                default_device
-            } else {
-                unsafe {
-                    let (mut d3d_device, mut d3d_context, mut feature_level) =
-                        (None, None, D3D_FEATURE_LEVEL::default());
-
-                    D3D11CreateDevice(
-                        None,
-                        D3D_DRIVER_TYPE_HARDWARE,
-                        None,
-                        D3D11_CREATE_DEVICE_FLAG(0),
-                        Some(&Self::FEATURE_LEVELS),
-                        D3D11_SDK_VERSION,
-                        Some(&mut d3d_device),
-                        Some(&mut feature_level),
-                        Some(&mut d3d_context),
-                    )?;
-
-                    (d3d_device.unwrap(), d3d_context.unwrap())
-                }
-            };
-
+        pub fn new(options: VideoTransformOptions) -> Result<Self> {
+            let (d3d_device, d3d_context) = (options.direct3d.device, options.direct3d.context);
             let video_device = d3d_device.cast::<ID3D11VideoDevice>()?;
             let video_context = d3d_context.cast::<ID3D11VideoContext>()?;
 
-            let input_texture = unsafe {
-                let mut desc = D3D11_TEXTURE2D_DESC::default();
-                desc.Width = input.width;
-                desc.Height = input.height;
-                desc.MipLevels = 1;
-                desc.ArraySize = 1;
-                desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-                desc.SampleDesc.Count = 1;
-                desc.SampleDesc.Quality = 0;
-                desc.Usage = D3D11_USAGE_DEFAULT;
-                desc.BindFlags = D3D11_BIND_RENDER_TARGET.0 as u32;
-                desc.CPUAccessFlags = 0;
-                desc.MiscFlags = 0;
+            let input_texture = match options.input {
+                Resource::Texture(texture) => texture,
+                Resource::Default(format, size) => unsafe {
+                    let mut desc = D3D11_TEXTURE2D_DESC::default();
+                    desc.Width = size.width;
+                    desc.Height = size.height;
+                    desc.MipLevels = 1;
+                    desc.ArraySize = 1;
+                    desc.Format = format.into();
+                    desc.SampleDesc.Count = 1;
+                    desc.SampleDesc.Quality = 0;
+                    desc.Usage = D3D11_USAGE_DEFAULT;
+                    desc.BindFlags = D3D11_BIND_RENDER_TARGET.0 as u32;
+                    desc.CPUAccessFlags = 0;
+                    desc.MiscFlags = 0;
 
-                let mut texture = None;
-                d3d_device.CreateTexture2D(&desc, None, Some(&mut texture))?;
-                texture.unwrap()
+                    let mut texture = None;
+                    d3d_device.CreateTexture2D(&desc, None, Some(&mut texture))?;
+                    texture.unwrap()
+                },
             };
 
-            let output_texture = unsafe {
-                let mut desc = D3D11_TEXTURE2D_DESC::default();
-                desc.Width = output.width;
-                desc.Height = output.height;
-                desc.MipLevels = 1;
-                desc.ArraySize = 1;
-                desc.Format = DXGI_FORMAT_NV12;
-                desc.SampleDesc.Count = 1;
-                desc.SampleDesc.Quality = 0;
-                desc.Usage = D3D11_USAGE_DEFAULT;
-                desc.BindFlags = D3D11_BIND_RENDER_TARGET.0 as u32;
-                desc.CPUAccessFlags = 0;
-                desc.MiscFlags = 0;
+            let output_texture = match options.output {
+                Resource::Texture(texture) => texture,
+                Resource::Default(format, size) => unsafe {
+                    let mut desc = D3D11_TEXTURE2D_DESC::default();
+                    desc.Width = size.width;
+                    desc.Height = size.height;
+                    desc.MipLevels = 1;
+                    desc.ArraySize = 1;
+                    desc.Format = format.into();
+                    desc.SampleDesc.Count = 1;
+                    desc.SampleDesc.Quality = 0;
+                    desc.Usage = D3D11_USAGE_DEFAULT;
+                    desc.BindFlags = D3D11_BIND_RENDER_TARGET.0 as u32;
+                    desc.CPUAccessFlags = 0;
+                    desc.MiscFlags = 0;
 
-                let mut texture = None;
-                d3d_device.CreateTexture2D(&desc, None, Some(&mut texture))?;
-                texture.unwrap()
+                    let mut texture = None;
+                    d3d_device.CreateTexture2D(&desc, None, Some(&mut texture))?;
+                    texture.unwrap()
+                },
             };
+
+            let mut input_desc = D3D11_TEXTURE2D_DESC::default();
+            unsafe {
+                input_texture.GetDesc(&mut input_desc);
+            }
+
+            let mut output_desc = D3D11_TEXTURE2D_DESC::default();
+            unsafe {
+                output_texture.GetDesc(&mut output_desc);
+            }
 
             let (video_enumerator, video_processor) = unsafe {
                 let mut desc = D3D11_VIDEO_PROCESSOR_CONTENT_DESC::default();
                 desc.InputFrameFormat = D3D11_VIDEO_FRAME_FORMAT_PROGRESSIVE;
-                desc.InputWidth = input.width;
-                desc.InputHeight = input.height;
-                desc.OutputWidth = output.width;
-                desc.OutputHeight = output.height;
+                desc.InputWidth = input_desc.Width;
+                desc.InputHeight = input_desc.Height;
+                desc.OutputWidth = output_desc.Width;
+                desc.OutputHeight = output_desc.Height;
                 desc.Usage = D3D11_VIDEO_USAGE_PLAYBACK_NORMAL;
 
                 let enumerator = video_device.CreateVideoProcessorEnumerator(&desc)?;
@@ -236,8 +249,8 @@ pub mod win32 {
                     Some(&RECT {
                         left: 0,
                         top: 0,
-                        right: input.width as i32,
-                        bottom: input.height as i32,
+                        right: input_desc.Width as i32,
+                        bottom: input_desc.Height as i32,
                     }),
                 );
             }
@@ -250,8 +263,8 @@ pub mod win32 {
                     Some(&RECT {
                         left: 0,
                         top: 0,
-                        right: output.width as i32,
-                        bottom: output.height as i32,
+                        right: output_desc.Width as i32,
+                        bottom: output_desc.Height as i32,
                     }),
                 );
             }
@@ -275,29 +288,56 @@ pub mod win32 {
             })
         }
 
+        /// open shared texture.
+        pub fn open_shared_texture(&mut self, handle: HANDLE) -> Result<ID3D11Texture2D> {
+            Ok(unsafe {
+                let mut texture: Option<ID3D11Texture2D> = None;
+                self.d3d_device.OpenSharedResource(handle, &mut texture)?;
+                texture.unwrap()
+            })
+        }
+
         /// To update the internal texture, simply copy it to the internal
         /// texture.
-        pub fn update(&mut self, texture: &ID3D11Texture2D) {
+        pub fn update_input(&mut self, texture: &ID3D11Texture2D) {
             unsafe {
                 self.d3d_context.CopyResource(&self.input_texture, texture);
             }
         }
 
-        /// Directly convert the current internal texture and get the converted
-        /// result.
-        pub fn get_output(&mut self) -> Result<Texture> {
-            self.blt(self.input_view.clone())
+        /// Perform the conversion. This method will copy the texture array to
+        /// the internal texture, so there are restrictions on the
+        /// format of the incoming texture. Because the internal one is
+        /// fixed to RGBA, the external texture can only be RGBA.
+        pub fn update_input_from_buffer(&mut self, buf: *const u8, stride: u32) -> Result<()> {
+            unsafe {
+                self.d3d_context.UpdateSubresource(
+                    &self.input_texture,
+                    0,
+                    None,
+                    buf as *const _,
+                    stride,
+                    0,
+                );
+            }
+
+            Ok(())
         }
 
         /// Perform the conversion. This method will not copy the passed
         /// texture, but will use the texture directly, which can save a
         /// copy step and improve performance.
-        pub fn process(&mut self, texture: &ID3D11Texture2D) -> Result<Texture> {
+        pub fn create_input_view(
+            &mut self,
+            texture: &ID3D11Texture2D,
+            index: u32,
+        ) -> Result<ID3D11VideoProcessorInputView> {
             let input_view = unsafe {
                 let mut desc = D3D11_VIDEO_PROCESSOR_INPUT_VIEW_DESC::default();
                 desc.FourCC = 0;
                 desc.ViewDimension = D3D11_VPIV_DIMENSION_TEXTURE2D;
                 desc.Anonymous.Texture2D.MipSlice = 0;
+                desc.Anonymous.Texture2D.ArraySlice = index;
 
                 let mut view = None;
                 self.video_device.CreateVideoProcessorInputView(
@@ -310,51 +350,30 @@ pub mod win32 {
                 view.unwrap()
             };
 
-            self.blt(input_view)
+            Ok(input_view)
         }
 
-        /// Perform the conversion. This method will copy the passed in texture,
-        /// so there are restrictions on the format of the passed in
-        /// texture. Because the internal texture is fixed to RGBA, the
-        /// external texture can only be RGBA.
-        pub fn process_with_copy(&mut self, texture: &ID3D11Texture2D) -> Result<Texture> {
-            self.update(texture);
-            self.blt(self.input_view.clone())
+        pub fn get_output(&self) -> &ID3D11Texture2D {
+            &self.output_texture
         }
 
-        /// Perform the conversion. This method will copy the texture array to
-        /// the internal texture, so there are restrictions on the
-        /// format of the incoming texture. Because the internal one is
-        /// fixed to RGBA, the external texture can only be RGBA.
-        pub fn process_buffer(&mut self, buf: &[u8], size: VideoSize) -> Result<Texture> {
-            unsafe {
-                let mut dbox = D3D11_BOX::default();
-                dbox.left = 0;
-                dbox.top = 0;
-                dbox.front = 0;
-                dbox.back = 1;
-                dbox.right = size.width;
-                dbox.bottom = size.height;
-                self.d3d_context.UpdateSubresource(
-                    &self.input_texture,
-                    0,
-                    Some(&dbox),
-                    buf.as_ptr() as *const _,
-                    size.width * 4,
-                    size.width * size.height,
-                );
-            }
-
-            self.blt(self.input_view.clone())
+        pub fn get_output_buffer(&mut self) -> Result<TextureBuffer> {
+            Ok(TextureBuffer::new(
+                &self.d3d_device,
+                &self.d3d_context,
+                &self.output_texture,
+            )?)
         }
 
-        fn blt(&mut self, input_view: ID3D11VideoProcessorInputView) -> Result<Texture> {
+        pub fn process(&mut self, input_view: Option<ID3D11VideoProcessorInputView>) -> Result<()> {
             unsafe {
                 let mut streams = [D3D11_VIDEO_PROCESSOR_STREAM::default()];
                 streams[0].Enable = true.into();
                 streams[0].OutputIndex = 0;
                 streams[0].InputFrameOrField = 0;
-                streams[0].pInputSurface = ManuallyDrop::new(Some(input_view));
+                streams[0].pInputSurface =
+                    ManuallyDrop::new(Some(input_view.unwrap_or_else(|| self.input_view.clone())));
+
                 self.video_context.VideoProcessorBlt(
                     &self.video_processor,
                     &self.output_view,
@@ -365,25 +384,21 @@ pub mod win32 {
                 ManuallyDrop::drop(&mut streams[0].pInputSurface);
             }
 
-            Ok(Texture::new(
-                &self.d3d_device,
-                &self.d3d_context,
-                &self.output_texture,
-            )?)
+            Ok(())
         }
     }
 
-    pub struct Texture<'a> {
+    pub struct TextureBuffer<'a> {
         d3d_context: &'a ID3D11DeviceContext,
         texture: ID3D11Texture2D,
         resource: D3D11_MAPPED_SUBRESOURCE,
     }
 
-    unsafe impl Send for Texture<'_> {}
-    unsafe impl Sync for Texture<'_> {}
+    unsafe impl Send for TextureBuffer<'_> {}
+    unsafe impl Sync for TextureBuffer<'_> {}
 
-    impl<'a> Texture<'a> {
-        fn new(
+    impl<'a> TextureBuffer<'a> {
+        pub fn new(
             d3d_device: &ID3D11Device,
             d3d_context: &'a ID3D11DeviceContext,
             source_texture: &ID3D11Texture2D,
@@ -431,7 +446,7 @@ pub mod win32 {
         }
     }
 
-    impl Drop for Texture<'_> {
+    impl Drop for TextureBuffer<'_> {
         fn drop(&mut self) {
             unsafe {
                 self.d3d_context.Unmap(&self.texture, 0);
@@ -443,6 +458,11 @@ pub mod win32 {
 #[cfg(target_os = "linux")]
 pub mod unix {
     use super::VideoSize;
+
+    pub enum VideoFormat {
+        ARGB,
+        YUY2,
+    }
 
     pub struct VideoTransform {
         input: VideoSize,
@@ -461,20 +481,36 @@ pub mod unix {
             }
         }
 
-        pub fn process(&mut self, texture: &[u8]) -> &[u8] {
-            unsafe {
-                libyuv::argb_to_nv12(
-                    texture.as_ptr(),
-                    self.input.width as i32 * 4,
-                    self.source.as_mut_ptr(),
-                    self.input.width as i32,
-                    self.source
-                        .as_mut_ptr()
-                        .add(self.input.width as usize * self.input.height as usize),
-                    self.input.width as i32,
-                    self.input.width as i32,
-                    self.input.height as i32,
-                );
+        pub fn process(&mut self, texture: &[u8], format: VideoFormat) -> &[u8] {
+            match format {
+                VideoFormat::ARGB => unsafe {
+                    libyuv::argb_to_nv12(
+                        texture.as_ptr(),
+                        self.input.width as i32 * 4,
+                        self.source.as_mut_ptr(),
+                        self.input.width as i32,
+                        self.source
+                            .as_mut_ptr()
+                            .add(self.input.width as usize * self.input.height as usize),
+                        self.input.width as i32,
+                        self.input.width as i32,
+                        self.input.height as i32,
+                    );
+                },
+                VideoFormat::YUY2 => unsafe {
+                    libyuv::yuy2_to_nv12(
+                        texture.as_ptr(),
+                        self.input.width as i32,
+                        self.source.as_mut_ptr(),
+                        self.input.width as i32,
+                        self.source
+                            .as_mut_ptr()
+                            .add(self.input.width as usize * self.input.height as usize),
+                        self.input.width as i32,
+                        self.input.width as i32,
+                        self.input.height as i32,
+                    );
+                },
             }
 
             unsafe {
