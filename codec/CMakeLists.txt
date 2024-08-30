@@ -1,61 +1,31 @@
 cmake_minimum_required(VERSION 3.16)
 project(codec)
 
-# Version 110 of webrtc native requires at least c++ 20 support.
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
-# Default build target is Debug.
-if (NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE "Debug")
-endif()
-
-# Used to download or initialize third-party dependent libraries.
 set(THIRD_PARTY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party")
 
-# Check whether the third-party dependent library directory is created.
 if (NOT EXISTS "${THIRD_PARTY_DIR}")
-    if (WIN32)
-        execute_process(COMMAND powershell.exe -Command "mkdir ${THIRD_PARTY_DIR}")
-    else()
-        execute_process(COMMAND mkdir "${THIRD_PARTY_DIR}")
-    endif()
+    execute_process(COMMAND mkdir "${THIRD_PARTY_DIR}")
 endif()
 
-if (WIN32)
-    set(ENV{PATH} "${THIRD_PARTY_DIR};$ENV{PATH}")
-endif()
-
-set(FFMPEG_PREFIX "${THIRD_PARTY_DIR}/ffmpeg")
-
-if (NOT EXISTS "${FFMPEG_PREFIX}")
-    if (WIN32)
-        execute_process(
-            WORKING_DIRECTORY "${THIRD_PARTY_DIR}"
-            COMMAND powershell.exe -Command "Invoke-WebRequest \
-                    -Uri https://github.com/mycrl/third-party/releases/download/distributions/ffmpeg-windows-x64-debug.zip \
-                    -OutFile ffmpeg.zip")
-
-        execute_process(
-            WORKING_DIRECTORY "${THIRD_PARTY_DIR}"
-            COMMAND powershell.exe -Command "Expand-Archive -Path ffmpeg.zip -DestinationPath ./")
-    endif()
+if (NOT EXISTS "${THIRD_PARTY_DIR}/ffmpeg")
+    execute_process(
+        WORKING_DIRECTORY "${THIRD_PARTY_DIR}"
+        COMMAND git clone --branch release/7.0 https://github.com/FFmpeg/FFmpeg ffmpeg)
 endif()
 
 if (NOT EXISTS "${THIRD_PARTY_DIR}/libyuv")
-    if (WIN32)
-        execute_process(
-            WORKING_DIRECTORY "${THIRD_PARTY_DIR}"
-            COMMAND powershell.exe -Command "git clone --branch stable https://chromium.googlesource.com/libyuv/libyuv")
-    endif()
+    execute_process(
+        WORKING_DIRECTORY "${THIRD_PARTY_DIR}"
+        COMMAND git clone --branch stable https://chromium.googlesource.com/libyuv/libyuv)
 endif()
 
 if (NOT EXISTS "${THIRD_PARTY_DIR}/media-sdk")
-    if (WIN32)
-        execute_process(
-            WORKING_DIRECTORY "${THIRD_PARTY_DIR}"
-            COMMAND powershell.exe -Command "git clone https://github.com/Intel-Media-SDK/MediaSDK media-sdk")
-    endif()
+    execute_process(
+        WORKING_DIRECTORY "${THIRD_PARTY_DIR}"
+        COMMAND git clone https://github.com/Intel-Media-SDK/MediaSDK media-sdk)
 endif()
 
 add_library(codec STATIC 
@@ -64,14 +34,10 @@ add_library(codec STATIC
             lib/codec.cpp
             lib/codec.h)
 
-include_directories("${FFMPEG_PREFIX}/include"
+include_directories("${THIRD_PARTY_DIR}/ffmpeg"
                     "${THIRD_PARTY_DIR}/libyuv/include"
                     "${THIRD_PARTY_DIR}/media-sdk/api/include"
                     "../frame/include")
-
-target_link_directories(codec PRIVATE "${FFMPEG_PREFIX}/lib")
-target_link_libraries(codec avcodec 
-                            avutil)
 
 # If it is WIN32, you need to set the runtime library.
 if(MSVC)
