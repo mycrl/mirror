@@ -457,12 +457,7 @@ pub mod win32 {
 
 #[cfg(target_os = "linux")]
 pub mod unix {
-    use super::VideoSize;
-
-    pub enum VideoFormat {
-        ARGB,
-        YUY2,
-    }
+    use super::{VideoSize, VideoFormat};
 
     pub struct VideoTransform {
         input: VideoSize,
@@ -483,7 +478,7 @@ pub mod unix {
 
         pub fn process(&mut self, texture: &[u8], format: VideoFormat) -> &[u8] {
             match format {
-                VideoFormat::ARGB => unsafe {
+                VideoFormat::RGBA => unsafe {
                     libyuv::argb_to_nv12(
                         texture.as_ptr(),
                         self.input.width as i32 * 4,
@@ -497,7 +492,7 @@ pub mod unix {
                         self.input.height as i32,
                     );
                 },
-                VideoFormat::YUY2 => unsafe {
+                VideoFormat::NV12 => unsafe {
                     libyuv::yuy2_to_nv12(
                         texture.as_ptr(),
                         self.input.width as i32,

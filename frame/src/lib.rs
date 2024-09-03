@@ -18,4 +18,4 @@ pub use self::{
 pub use self::video::win32::{Resource, TextureBuffer, VideoTransform, VideoTransformOptions};
 
 #[cfg(target_os = "linux")]
-pub use self::video::unix::{VideoFormat, VideoTransform};
+pub use self::video::unix::VideoTransform;
