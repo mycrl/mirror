@@ -10,7 +10,7 @@ use windows::{
                 D3D_FEATURE_LEVEL_11_1,
             },
             Direct3D11::{
-                D3D11CreateDevice, ID3D11Device, ID3D11DeviceContext, ID3D11Texture2D,
+                D3D11CreateDevice, ID3D11Texture2D,
                 D3D11_CREATE_DEVICE_BGRA_SUPPORT, D3D11_CREATE_DEVICE_DEBUG, D3D11_SDK_VERSION,
             },
         },
@@ -29,7 +29,7 @@ use windows::{
     },
 };
 
-pub use windows::core::Interface;
+pub use windows::{core::Interface, Win32::Graphics::Direct3D11::{ID3D11Device, ID3D11DeviceContext}};
 
 /// Initializes Microsoft Media Foundation.
 pub fn startup() -> Result<()> {
