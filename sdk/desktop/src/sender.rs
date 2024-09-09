@@ -14,8 +14,8 @@ use capture::{
 };
 
 use codec::{
-    audio::create_opus_identification_header, AudioEncoder, AudioEncoderSettings, VideoEncoder,
-    VideoEncoderSettings,
+    create_opus_identification_header, AudioEncoder, AudioEncoderSettings, VideoEncoder,
+    VideoEncoderSettings, VideoEncoderType,
 };
 
 use crossbeam::sync::{Parker, Unparker};
@@ -30,7 +30,7 @@ use utils::win32::MediaThreadClass;
 
 #[derive(Debug, Clone)]
 pub struct VideoOptions {
-    pub codec: String,
+    pub codec: VideoEncoderType,
     pub frame_rate: u8,
     pub width: u32,
     pub height: u32,
@@ -66,7 +66,7 @@ impl VideoSender {
     // the optional lock.
     fn new(
         adapter: &Arc<StreamSenderAdapter>,
-        settings: &VideoEncoderSettings,
+        settings: VideoEncoderSettings,
         sink: &Arc<FrameSink>,
     ) -> Result<Self> {
         let parker = Parker::new();
@@ -91,15 +91,17 @@ impl VideoSender {
                         // Try to get the encoded data packets. The audio and video frames do not
                         // correspond to the data packets one by one, so you need to try to get
                         // multiple packets until they are empty.
-                        if encoder.encode() {
-                            while let Some(packet) = encoder.read() {
+                        if let Err(e) = encoder.encode() {
+                            log::error!("video encode error={:?}", e);
+
+                            break;
+                        } else {
+                            while let Some((buffer, flags, timestamp)) = encoder.read() {
                                 adapter.send(
-                                    package::copy_from_slice(packet.buffer),
-                                    StreamBufferInfo::Video(packet.flags, packet.timestamp),
+                                    package::copy_from_slice(buffer),
+                                    StreamBufferInfo::Video(flags, timestamp),
                                 );
                             }
-                        } else {
-                            break;
                         }
                     } else {
                         break;
@@ -129,7 +131,7 @@ impl FrameArrived for VideoSender {
 
     fn sink(&mut self, frame: &Self::Frame) -> bool {
         // Push the audio and video frames into the encoder.
-        if self.encoder.lock().unwrap().send_frame(frame) {
+        if self.encoder.lock().unwrap().update(frame) {
             self.unparker.unpark();
         } else {
             return false;
@@ -159,7 +161,7 @@ impl AudioSender {
     // the optional lock.
     fn new(
         adapter: &Arc<StreamSenderAdapter>,
-        settings: &AudioEncoderSettings,
+        settings: AudioEncoderSettings,
         sink: &Arc<FrameSink>,
     ) -> Result<Self> {
         // Create an opus header data. The opus decoder needs this data to obtain audio
@@ -202,21 +204,23 @@ impl AudioSender {
                             sample_rate: 0,
                         };
 
-                        if encoder.send_frame(&frame) {
+                        if encoder.update(&frame) {
                             // Push the audio and video frames into the encoder.
-                            if encoder.encode() {
+                            if let Err(e) = encoder.encode() {
+                                log::error!("audio encode error={:?}", e);
+
+                                break;
+                            } else {
                                 // Try to get the encoded data packets. The audio and video frames
                                 // do not correspond to the data
                                 // packets one by one, so you need to try to get
                                 // multiple packets until they are empty.
-                                while let Some(packet) = encoder.read() {
+                                while let Some((buffer, flags, timestamp)) = encoder.read() {
                                     adapter.send(
-                                        package::copy_from_slice(packet.buffer),
-                                        StreamBufferInfo::Audio(packet.flags, packet.timestamp),
+                                        package::copy_from_slice(buffer),
+                                        StreamBufferInfo::Audio(flags, timestamp),
                                     );
                                 }
-                            } else {
-                                break;
                             }
                         } else {
                             break;
@@ -290,10 +294,9 @@ impl Sender {
             capture_options.audio = Some(SourceCaptureOptions {
                 arrived: AudioSender::new(
                     &adapter,
-                    &AudioEncoderSettings {
+                    AudioEncoderSettings {
                         sample_rate: options.sample_rate,
                         bit_rate: options.bit_rate,
-                        codec: "libopus".to_string(),
                     },
                     &sink,
                 )?,
@@ -307,7 +310,7 @@ impl Sender {
         if let Some((source, options)) = options.video {
             capture_options.video = Some(SourceCaptureOptions {
                 description: VideoCaptureSourceDescription {
-                    hardware: codec::is_hardware_codec(&options.codec),
+                    hardware: codec::is_hardware_encoder(options.codec),
                     fps: options.frame_rate,
                     size: Size {
                         width: options.width,
@@ -323,7 +326,7 @@ impl Sender {
                 },
                 arrived: VideoSender::new(
                     &adapter,
-                    &VideoEncoderSettings {
+                    VideoEncoderSettings {
                         codec: options.codec,
                         key_frame_interval: options.key_frame_interval,
                         frame_rate: options.frame_rate,

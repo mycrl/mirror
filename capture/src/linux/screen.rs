@@ -153,8 +153,9 @@ impl CaptureHandler for ScreenCapture {
                     let texture = processor.process(data.as_ref(), VideoFormat::RGBA);
 
                     frame.data[0] = texture.as_ptr() as *const _;
-                    frame.data[1] =
-                        unsafe { texture.as_ptr().add((frame.width * frame.height) as usize) as *const _ };
+                    frame.data[1] = unsafe {
+                        texture.as_ptr().add((frame.width * frame.height) as usize) as *const _
+                    };
 
                     if !arrived.sink(&frame) {
                         break;

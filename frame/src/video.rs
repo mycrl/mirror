@@ -457,7 +457,7 @@ pub mod win32 {
 
 #[cfg(target_os = "linux")]
 pub mod unix {
-    use super::{VideoSize, VideoFormat};
+    use super::{VideoFormat, VideoSize};
 
     pub struct VideoTransform {
         input: VideoSize,

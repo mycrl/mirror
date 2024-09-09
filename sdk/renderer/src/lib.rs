@@ -6,13 +6,13 @@ use std::{
     ptr::null_mut,
 };
 
-use audio::AudioPlayer;
 use frame::{AudioFrame, VideoFrame};
 use utils::logger;
-use video::Size;
+
+use self::{audio::AudioPlayer, video::Size};
 
 #[cfg(target_os = "windows")]
-use video::win32::{VideoRender, VideoRenderOptions};
+use self::video::win32::{VideoRender, VideoRenderOptions};
 
 #[cfg(target_os = "windows")]
 use windows::Win32::Foundation::HWND;
@@ -117,16 +117,11 @@ extern "C" fn renderer_create(options: RawRendererOptions) -> *mut RawRenderer {
 extern "C" fn renderer_on_video(render: *mut RawRenderer, frame: *const VideoFrame) -> bool {
     assert!(!render.is_null() && !frame.is_null());
 
-    #[cfg(target_os = "windows")]
-    {
-        return unsafe { &mut *render }
-            .video
-            .send(unsafe { &*frame })
-            .map_err(|e| log::error!("{:?}", e))
-            .is_ok();
-    }
-
-    true
+    unsafe { &mut *render }
+        .video
+        .send(unsafe { &*frame })
+        .map_err(|e| log::error!("{:?}", e))
+        .is_ok()
 }
 
 /// Push the audio frame into the renderer, which will append to audio queue.

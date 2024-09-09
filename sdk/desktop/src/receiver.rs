@@ -3,7 +3,7 @@ use crate::factory::FrameSink;
 use std::{sync::Arc, thread};
 
 use anyhow::Result;
-use codec::{audio::AudioDecoderSettings, video::VideoDecoderSettings, AudioDecoder, VideoDecoder};
+use codec::{AudioDecoder, VideoDecoder, VideoDecoderSettings, VideoDecoderType};
 use transport::adapter::{StreamKind, StreamMultiReceiverAdapter, StreamReceiverAdapterExt};
 
 #[cfg(target_os = "windows")]
@@ -11,14 +11,14 @@ use utils::win32::MediaThreadClass;
 
 #[derive(Debug, Clone)]
 pub struct ReceiverOptions {
-    pub video: String,
+    pub video: VideoDecoderType,
     pub audio: String,
 }
 
 fn create_video_decoder(
     adapter: &Arc<StreamMultiReceiverAdapter>,
     sink: &Arc<FrameSink>,
-    settings: &VideoDecoderSettings,
+    settings: VideoDecoderSettings,
 ) -> Result<()> {
     let sink_ = Arc::downgrade(sink);
     let adapter_ = Arc::downgrade(adapter);
@@ -31,15 +31,29 @@ fn create_video_decoder(
             let thread_class_guard = MediaThreadClass::Playback.join().ok();
 
             'a: while let (Some(adapter), Some(sink)) = (adapter_.upgrade(), sink_.upgrade()) {
-                if let Some((packet, flags, timestamp)) = adapter.next(StreamKind::Video) {
-                    if codec.decode(&packet, flags, timestamp) {
-                        while let Some(frame) = codec.read() {
+                if let Some((packet, _, timestamp)) = adapter.next(StreamKind::Video) {
+                    let mut count = 0;
+                    loop {
+                        count += match codec.decode(&packet[count..], timestamp) {
+                            Ok(size) => {
+                                if size > 0 {
+                                    size
+                                } else {
+                                    break;
+                                }
+                            }
+                            Err(e) => {
+                                log::error!("video decode error={:?}", e);
+
+                                break 'a;
+                            }
+                        };
+
+                        if let Some(frame) = codec.read() {
                             if !(sink.video)(frame) {
                                 break 'a;
                             }
                         }
-                    } else {
-                        break;
                     }
                 } else {
                     break;
@@ -63,11 +77,10 @@ fn create_video_decoder(
 fn create_audio_decoder(
     adapter: &Arc<StreamMultiReceiverAdapter>,
     sink: &Arc<FrameSink>,
-    setings: &AudioDecoderSettings,
 ) -> Result<()> {
     let sink_ = Arc::downgrade(sink);
     let adapter_ = Arc::downgrade(adapter);
-    let mut codec = AudioDecoder::new(setings)?;
+    let mut codec = AudioDecoder::new()?;
 
     thread::Builder::new()
         .name("AudioDecoderThread".to_string())
@@ -76,15 +89,29 @@ fn create_audio_decoder(
             let thread_class_guard = MediaThreadClass::ProAudio.join().ok();
 
             'a: while let (Some(adapter), Some(sink)) = (adapter_.upgrade(), sink_.upgrade()) {
-                if let Some((packet, flags, timestamp)) = adapter.next(StreamKind::Audio) {
-                    if codec.decode(&packet, flags, timestamp) {
-                        while let Some(frame) = codec.read() {
+                if let Some((packet, _, timestamp)) = adapter.next(StreamKind::Audio) {
+                    let mut count = 0;
+                    loop {
+                        count += match codec.decode(&packet[count..], timestamp) {
+                            Ok(size) => {
+                                if size > 0 {
+                                    size
+                                } else {
+                                    break;
+                                }
+                            }
+                            Err(e) => {
+                                log::error!("audio decode error={:?}", e);
+
+                                break 'a;
+                            }
+                        };
+
+                        if let Some(frame) = codec.read() {
                             if !(sink.audio)(frame) {
                                 break 'a;
                             }
                         }
-                    } else {
-                        break;
                     }
                 } else {
                     break;
@@ -120,21 +147,14 @@ impl Receiver {
         let adapter = StreamMultiReceiverAdapter::new();
         let sink = Arc::new(sink);
 
+        create_audio_decoder(&adapter, &sink)?;
         create_video_decoder(
             &adapter,
             &sink,
-            &VideoDecoderSettings {
+            VideoDecoderSettings {
                 codec: options.video,
                 #[cfg(target_os = "windows")]
                 direct3d: crate::factory::DIRECT_3D_DEVICE.read().unwrap().clone(),
-            },
-        )?;
-
-        create_audio_decoder(
-            &adapter,
-            &sink,
-            &AudioDecoderSettings {
-                codec: options.audio,
             },
         )?;
 

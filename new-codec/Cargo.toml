@@ -1,8 +1,0 @@
-[package]
-name = "new-codec"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-ffmpeg-sys-next = "7.0.2"
-utils = { path = "../utils" }

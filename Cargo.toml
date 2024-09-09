@@ -20,5 +20,5 @@ members = [
     "sdk/android/mirror/src/main/macro",
     "multicast",
     "srt", 
-    "frame", "new-codec",
+    "frame",
 ]

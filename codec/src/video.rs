@@ -1,50 +1,286 @@
-use crate::{Error, RawPacket};
+use std::{ffi::c_int, ptr::null_mut};
 
-#[allow(unused)]
-use std::{
-    ffi::{c_char, CString},
-    os::raw::c_void,
-    ptr::null_mut,
+use ffmpeg_sys_next::*;
+use frame::{VideoFormat, VideoFrame};
+use mfx::{mfxFrameSurface1, mfxHDLPair};
+use thiserror::Error;
+use utils::win32::Direct3DDevice;
+
+use crate::util::{
+    create_video_context, create_video_frame, set_option, set_str_option, CodecType,
+    CreateVideoContextError, CreateVideoFrameError, HardwareFrameSize,
 };
 
-use frame::VideoFrame;
-use utils::strings::Strings;
-
-#[cfg(target_os = "windows")]
-use utils::win32::{Direct3DDevice, Interface};
-
-extern "C" {
-    pub fn codec_find_video_encoder() -> *const c_char;
-    pub fn codec_find_video_decoder() -> *const c_char;
-    fn codec_create_video_encoder(settings: *const RawVideoEncoderSettings) -> *const c_void;
-    fn codec_video_encoder_copy_frame(codec: *const c_void, frame: *const VideoFrame) -> bool;
-    fn codec_video_encoder_send_frame(codec: *const c_void) -> bool;
-    fn codec_video_encoder_read_packet(codec: *const c_void) -> *const RawPacket;
-    fn codec_unref_video_encoder_packet(codec: *const c_void);
-    fn codec_release_video_encoder(codec: *const c_void);
-    fn codec_create_video_decoder(settings: *const RawVideoDecoderSettings) -> *const c_void;
-    fn codec_video_decoder_send_packet(codec: *const c_void, packet: RawPacket) -> bool;
-    fn codec_video_decoder_read_frame(codec: *const c_void) -> *const VideoFrame;
-    fn codec_release_video_decoder(codec: *const c_void);
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VideoDecoderType {
+    D3D11,
+    Qsv,
+    Cuda,
 }
 
-#[repr(C)]
-pub struct RawVideoEncoderSettings {
-    #[cfg(target_os = "windows")]
-    pub d3d11_device: *const c_void,
-    #[cfg(target_os = "windows")]
-    pub d3d11_device_context: *const c_void,
-    pub codec: *const c_char,
-    pub frame_rate: u8,
-    pub width: u32,
-    pub height: u32,
-    pub bit_rate: u64,
-    pub key_frame_interval: u32,
+impl Into<&'static str> for VideoDecoderType {
+    fn into(self) -> &'static str {
+        match self {
+            Self::D3D11 => "d3d11va",
+            Self::Qsv => "h264_qsv",
+            Self::Cuda => "h264_cuvid",
+        }
+    }
 }
 
-impl Drop for RawVideoEncoderSettings {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VideoEncoderType {
+    X264,
+    Qsv,
+    Cuda,
+}
+
+impl Into<&'static str> for VideoEncoderType {
+    fn into(self) -> &'static str {
+        match self {
+            Self::X264 => "libx264",
+            Self::Qsv => "h264_qsv",
+            Self::Cuda => "h264_nvenc",
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct VideoDecoderSettings {
+    /// Name of the codec implementation.
+    ///
+    /// The name is globally unique among encoders and among decoders (but
+    /// an encoder and a decoder can share the same name). This is
+    /// the primary way to find a codec from the user perspective.
+    pub codec: VideoDecoderType,
+    #[cfg(target_os = "windows")]
+    pub direct3d: Option<Direct3DDevice>,
+}
+
+#[derive(Error, Debug)]
+pub enum VideoDecoderError {
+    #[error(transparent)]
+    CreateVideoContextError(#[from] CreateVideoContextError),
+    #[error(transparent)]
+    CreateVideoFrameError(#[from] CreateVideoFrameError),
+    #[error("failed to open av codec")]
+    OpenAVCodecError,
+    #[error("failed to init av parser context")]
+    InitAVCodecParserContextError,
+    #[error("failed to alloc av packet")]
+    AllocAVPacketError,
+    #[error("parser parse packet failed")]
+    ParsePacketError,
+    #[error("send av packet to codec failed")]
+    SendPacketToAVCodecError,
+    #[error("failed to alloc av frame")]
+    AllocAVFrameError,
+}
+
+pub struct VideoDecoder {
+    context: *mut AVCodecContext,
+    parser: *mut AVCodecParserContext,
+    packet: *mut AVPacket,
+    av_frame: *mut AVFrame,
+    frame: VideoFrame,
+}
+
+unsafe impl Sync for VideoDecoder {}
+unsafe impl Send for VideoDecoder {}
+
+impl VideoDecoder {
+    pub fn new(options: VideoDecoderSettings) -> Result<Self, VideoDecoderError> {
+        let mut this = Self {
+            context: null_mut(),
+            parser: null_mut(),
+            packet: null_mut(),
+            av_frame: null_mut(),
+            frame: VideoFrame::default(),
+        };
+
+        let codec = create_video_context(
+            &mut this.context,
+            CodecType::Decoder(options.codec),
+            None,
+            options.direct3d,
+        )?;
+
+        let context_mut = unsafe { &mut *this.context };
+        context_mut.delay = 0;
+        context_mut.max_samples = 1;
+        context_mut.has_b_frames = 0;
+        context_mut.skip_alpha = true as i32;
+        context_mut.flags |= AV_CODEC_FLAG_LOW_DELAY as i32;
+        context_mut.flags2 |= AV_CODEC_FLAG2_FAST;
+        context_mut.hwaccel_flags |= AV_HWACCEL_FLAG_IGNORE_LEVEL | AV_HWACCEL_FLAG_UNSAFE_OUTPUT;
+
+        if options.codec == VideoDecoderType::Qsv {
+            set_option(context_mut, "async_depth", 1);
+        }
+
+        if unsafe { avcodec_open2(this.context, codec, null_mut()) } != 0 {
+            return Err(VideoDecoderError::OpenAVCodecError);
+        }
+
+        if unsafe { avcodec_is_open(this.context) } == 0 {
+            return Err(VideoDecoderError::OpenAVCodecError);
+        }
+
+        this.parser = unsafe { av_parser_init({ &*codec }.id as i32) };
+        if this.parser.is_null() {
+            return Err(VideoDecoderError::InitAVCodecParserContextError);
+        }
+
+        this.packet = unsafe { av_packet_alloc() };
+        if this.packet.is_null() {
+            return Err(VideoDecoderError::AllocAVPacketError);
+        }
+
+        Ok(this)
+    }
+
+    pub fn decode(&mut self, buf: &[u8], pts: u64) -> Result<usize, VideoDecoderError> {
+        if buf.is_empty() {
+            return Ok(0);
+        }
+
+        let packet = unsafe { &mut *self.packet };
+        let len = unsafe {
+            av_parser_parse2(
+                self.parser,
+                self.context,
+                &mut packet.data,
+                &mut packet.size,
+                buf.as_ptr(),
+                buf.len() as c_int,
+                pts as i64,
+                AV_NOPTS_VALUE,
+                0,
+            )
+        };
+
+        if len < 0 {
+            return Err(VideoDecoderError::ParsePacketError);
+        }
+
+        if packet.size > 0 {
+            if unsafe { avcodec_send_packet(self.context, self.packet) } != 0 {
+                return Err(VideoDecoderError::SendPacketToAVCodecError);
+            }
+        }
+
+        Ok(len as usize)
+    }
+
+    pub fn read<'a>(&'a mut self) -> Option<&'a VideoFrame> {
+        if !self.av_frame.is_null() {
+            unsafe {
+                av_frame_free(&mut self.av_frame);
+            }
+        }
+
+        self.av_frame = unsafe { av_frame_alloc() };
+        if self.av_frame.is_null() {
+            return None;
+        }
+
+        if unsafe { avcodec_receive_frame(self.context, self.av_frame) } != 0 {
+            return None;
+        }
+
+        let frame = unsafe { &*self.av_frame };
+        self.frame.width = frame.width as u32;
+        self.frame.height = frame.height as u32;
+        self.frame.format = VideoFormat::NV12;
+
+        if frame.format == AVPixelFormat::AV_PIX_FMT_QSV as i32 {
+            let surface = unsafe { &*(frame.data[3] as *const mfxFrameSurface1) };
+            let hdl = unsafe { &*(surface.Data.MemId as *const mfxHDLPair) };
+
+            self.frame.hardware = true;
+            self.frame.data[0] = hdl.first;
+            self.frame.data[1] = hdl.second;
+        } else if frame.format == AVPixelFormat::AV_PIX_FMT_D3D11 as i32 {
+            for i in 0..2 {
+                self.frame.data[i] = frame.data[i] as *const _;
+            }
+
+            self.frame.hardware = true;
+        } else {
+            for i in 0..2 {
+                self.frame.data[i] = frame.data[i] as *const _;
+                self.frame.linesize[i] = frame.linesize[i] as usize;
+            }
+
+            self.frame.hardware = false;
+        }
+
+        Some(&self.frame)
+    }
+}
+
+impl Drop for VideoDecoder {
     fn drop(&mut self) {
-        drop(unsafe { CString::from_raw(self.codec as *mut _) })
+        if !self.packet.is_null() {
+            unsafe {
+                av_packet_free(&mut self.packet);
+            }
+        }
+
+        if !self.parser.is_null() {
+            unsafe {
+                av_parser_close(self.parser);
+            }
+        }
+
+        if !self.context.is_null() {
+            let ctx_mut = unsafe { &mut *self.context };
+            if !ctx_mut.hw_device_ctx.is_null() {
+                unsafe {
+                    av_buffer_unref(&mut ctx_mut.hw_device_ctx);
+                }
+            }
+
+            if !ctx_mut.hw_frames_ctx.is_null() {
+                unsafe {
+                    av_buffer_unref(&mut ctx_mut.hw_frames_ctx);
+                }
+            }
+
+            unsafe {
+                avcodec_free_context(&mut self.context);
+            }
+        }
+
+        if !self.av_frame.is_null() {
+            unsafe {
+                av_frame_free(&mut self.av_frame);
+            }
+        }
+    }
+}
+
+#[allow(non_snake_case, non_camel_case_types)]
+mod mfx {
+    use std::ffi::c_void;
+
+    #[repr(C)]
+    pub struct mfxHDLPair {
+        pub first: *const c_void,
+        pub second: *const c_void,
+    }
+
+    #[repr(align(4))]
+    pub struct mfxFrameData {
+        _reserved: [u8; 64],
+        pub MemId: *const c_void,
+        _reserved1: [u8; 4],
+    }
+
+    #[repr(align(4))]
+    pub struct mfxFrameSurface1 {
+        _reserved: [u8; 70],
+        pub Data: mfxFrameData,
     }
 }
 
@@ -55,7 +291,7 @@ pub struct VideoEncoderSettings {
     /// The name is globally unique among encoders and among decoders (but an
     /// encoder and a decoder can share the same name). This is the primary way
     /// to find a codec from the user perspective.
-    pub codec: String,
+    pub codec: VideoEncoderType,
     pub frame_rate: u8,
     /// picture width / height
     pub width: u32,
@@ -69,221 +305,237 @@ pub struct VideoEncoderSettings {
     pub direct3d: Option<Direct3DDevice>,
 }
 
-impl VideoEncoderSettings {
-    fn as_raw(&self) -> RawVideoEncoderSettings {
-        RawVideoEncoderSettings {
-            codec: CString::new(self.codec.as_str()).unwrap().into_raw(),
-            key_frame_interval: self.key_frame_interval,
-            frame_rate: self.frame_rate,
-            width: self.width,
-            height: self.height,
-            bit_rate: self.bit_rate,
-
-            #[cfg(target_os = "windows")]
-            d3d11_device: self
-                .direct3d
-                .as_ref()
-                .map(|it| it.device.as_raw())
-                .unwrap_or_else(|| null_mut()),
-
-            #[cfg(target_os = "windows")]
-            d3d11_device_context: self
-                .direct3d
-                .as_ref()
-                .map(|it| it.context.as_raw())
-                .unwrap_or_else(|| null_mut()),
-        }
-    }
+#[derive(Error, Debug)]
+pub enum VideoEncoderError {
+    #[error(transparent)]
+    CreateVideoContextError(#[from] CreateVideoContextError),
+    #[error(transparent)]
+    CreateVideoFrameError(#[from] CreateVideoFrameError),
+    #[error("failed to open av codec")]
+    OpenAVCodecError,
+    #[error("failed to alloc av packet")]
+    AllocAVPacketError,
+    #[error("send frame to codec failed")]
+    EncodeFrameError,
 }
 
-#[repr(C)]
-pub struct RawVideoDecoderSettings {
-    #[cfg(target_os = "windows")]
-    pub d3d11_device: *const c_void,
-    #[cfg(target_os = "windows")]
-    pub d3d11_device_context: *const c_void,
-    pub codec: *const c_char,
+pub struct VideoEncoder {
+    context: *mut AVCodecContext,
+    packet: *mut AVPacket,
+    frame: *mut AVFrame,
+    initialized: bool,
 }
 
-impl Drop for RawVideoDecoderSettings {
-    fn drop(&mut self) {
-        drop(unsafe { CString::from_raw(self.codec as *mut _) })
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct VideoDecoderSettings {
-    /// Name of the codec implementation.
-    ///
-    /// The name is globally unique among encoders and among decoders (but an
-    /// encoder and a decoder can share the same name). This is the primary way
-    /// to find a codec from the user perspective.
-    pub codec: String,
-    #[cfg(target_os = "windows")]
-    pub direct3d: Option<Direct3DDevice>,
-}
-
-impl VideoDecoderSettings {
-    fn as_raw(&self) -> RawVideoDecoderSettings {
-        RawVideoDecoderSettings {
-            codec: CString::new(self.codec.as_str()).unwrap().into_raw(),
-
-            #[cfg(target_os = "windows")]
-            d3d11_device: self
-                .direct3d
-                .as_ref()
-                .map(|it| it.device.as_raw())
-                .unwrap_or_else(|| null_mut()),
-
-            #[cfg(target_os = "windows")]
-            d3d11_device_context: self
-                .direct3d
-                .as_ref()
-                .map(|it| it.context.as_raw())
-                .unwrap_or_else(|| null_mut()),
-        }
-    }
-}
-
-#[repr(C)]
-pub struct VideoEncodePacket<'a> {
-    codec: *const c_void,
-    pub buffer: &'a [u8],
-    pub flags: i32,
-    pub timestamp: u64,
-}
-
-impl Drop for VideoEncodePacket<'_> {
-    fn drop(&mut self) {
-        unsafe { codec_unref_video_encoder_packet(self.codec) }
-    }
-}
-
-impl<'a> VideoEncodePacket<'a> {
-    fn from_raw(codec: *const c_void, ptr: *const RawPacket) -> Self {
-        let raw = unsafe { &*ptr };
-        Self {
-            buffer: unsafe { std::slice::from_raw_parts(raw.buffer, raw.len) },
-            timestamp: raw.timestamp,
-            flags: raw.flags,
-            codec,
-        }
-    }
-}
-
-/// Automatically search for encoders, limited hardware, fallback to software
-/// implementation if hardware acceleration unit is not found.
-pub fn find_video_encoder() -> String {
-    Strings::from(unsafe { codec_find_video_encoder() })
-        .to_string()
-        .unwrap()
-}
-
-/// Automatically search for decoders, limited hardware, fallback to software
-/// implementation if hardware acceleration unit is not found.
-pub fn find_video_decoder() -> String {
-    Strings::from(unsafe { codec_find_video_decoder() })
-        .to_string()
-        .unwrap()
-}
-
-pub struct VideoEncoder(*const c_void);
-
-unsafe impl Send for VideoEncoder {}
 unsafe impl Sync for VideoEncoder {}
+unsafe impl Send for VideoEncoder {}
 
 impl VideoEncoder {
-    /// Initialize the AVCodecContext to use the given AVCodec.
-    pub fn new(settings: &VideoEncoderSettings) -> Result<Self, Error> {
-        log::info!("create VideoEncoder: settings={:?}", settings);
+    pub fn new(options: VideoEncoderSettings) -> Result<Self, VideoEncoderError> {
+        let mut this = Self {
+            context: null_mut(),
+            packet: null_mut(),
+            frame: null_mut(),
+            initialized: false,
+        };
 
-        let settings = settings.as_raw();
-        let codec = unsafe { codec_create_video_encoder(&settings) };
-        if !codec.is_null() {
-            Ok(Self(codec))
+        let codec = create_video_context(
+            &mut this.context,
+            CodecType::Encoder(options.codec),
+            Some(HardwareFrameSize {
+                width: options.width,
+                height: options.height,
+            }),
+            options.direct3d,
+        )?;
+
+        let context_mut = unsafe { &mut *this.context };
+        context_mut.delay = 0;
+        context_mut.max_samples = 1;
+        context_mut.has_b_frames = 0;
+        context_mut.max_b_frames = 0;
+        context_mut.flags2 |= AV_CODEC_FLAG2_FAST;
+        context_mut.flags |= AV_CODEC_FLAG_LOW_DELAY as i32 | AV_CODEC_FLAG_GLOBAL_HEADER as i32;
+        context_mut.profile = FF_PROFILE_H264_BASELINE;
+
+        if options.codec == VideoEncoderType::Qsv {
+            context_mut.pix_fmt = AVPixelFormat::AV_PIX_FMT_QSV;
         } else {
-            Err(Error::VideoEncoder)
+            context_mut.thread_count = 4;
+            context_mut.thread_type = FF_THREAD_SLICE;
+            context_mut.pix_fmt = AVPixelFormat::AV_PIX_FMT_NV12;
         }
+
+        let mut bit_rate = options.bit_rate as i64;
+        if options.codec == VideoEncoderType::Qsv {
+            bit_rate = bit_rate / 2;
+        }
+
+        context_mut.bit_rate = bit_rate;
+        context_mut.rc_max_rate = bit_rate;
+        context_mut.rc_buffer_size = bit_rate as i32;
+        context_mut.bit_rate_tolerance = bit_rate as i32;
+        context_mut.rc_initial_buffer_occupancy = (bit_rate * 3 / 4) as i32;
+        context_mut.framerate = unsafe { av_make_q(options.frame_rate as i32, 1) };
+        context_mut.time_base = unsafe { av_make_q(1, options.frame_rate as i32) };
+        context_mut.pkt_timebase = unsafe { av_make_q(1, options.frame_rate as i32) };
+        context_mut.gop_size = options.key_frame_interval as i32 / 2;
+        context_mut.height = options.height as i32;
+        context_mut.width = options.width as i32;
+
+        if options.codec == VideoEncoderType::Qsv {
+            set_option(context_mut, "async_depth", 1);
+            set_option(context_mut, "low_power", 1);
+            set_option(context_mut, "vcm", 1);
+        } else if options.codec == VideoEncoderType::Cuda {
+            set_option(context_mut, "zerolatency", 1);
+            set_option(context_mut, "b_adapt", 0);
+            set_option(context_mut, "rc", 2);
+            set_option(context_mut, "cbr", 1);
+            set_option(context_mut, "preset", 7);
+            set_option(context_mut, "tune", 3);
+        } else if options.codec == VideoEncoderType::X264 {
+            set_str_option(context_mut, "preset", "superfast");
+            set_str_option(context_mut, "tune", "zerolatency");
+            set_option(context_mut, "nal-hrd", 2);
+            set_option(
+                context_mut,
+                "sc_threshold",
+                options.key_frame_interval as i64,
+            );
+        }
+
+        if unsafe { avcodec_open2(this.context, codec, null_mut()) } != 0 {
+            return Err(VideoEncoderError::OpenAVCodecError);
+        }
+
+        if unsafe { avcodec_is_open(this.context) } == 0 {
+            return Err(VideoEncoderError::OpenAVCodecError);
+        }
+
+        this.packet = unsafe { av_packet_alloc() };
+        if this.packet.is_null() {
+            return Err(VideoEncoderError::AllocAVPacketError);
+        }
+
+        create_video_frame(
+            &mut this.frame,
+            this.context,
+            CodecType::Encoder(options.codec),
+        )?;
+
+        Ok(this)
     }
 
-    pub fn send_frame(&mut self, frame: &VideoFrame) -> bool {
-        unsafe { codec_video_encoder_copy_frame(self.0, frame) }
-    }
+    pub fn update(&mut self, frame: &VideoFrame) -> bool {
+        let av_frame = unsafe { &mut *self.frame };
+        if frame.hardware {
+            if av_frame.format == AVPixelFormat::AV_PIX_FMT_QSV as i32 {
+                let surface = unsafe { &mut *(av_frame.data[3] as *mut mfxFrameSurface1) };
+                let hdl = unsafe { &mut *(surface.Data.MemId as *mut mfxHDLPair) };
 
-    /// Supply a raw video or audio frame to the encoder.
-    pub fn encode(&mut self) -> bool {
-        unsafe { codec_video_encoder_send_frame(self.0) }
-    }
-
-    /// Read encoded data from the encoder.
-    pub fn read(&mut self) -> Option<VideoEncodePacket> {
-        let packet = unsafe { codec_video_encoder_read_packet(self.0) };
-        if !packet.is_null() {
-            Some(VideoEncodePacket::from_raw(self.0, packet))
+                hdl.first = frame.data[0];
+                hdl.second = frame.data[1];
+            }
         } else {
-            None
+            if unsafe { av_frame_make_writable(self.frame) } != 0 {
+                return false;
+            }
+
+            unsafe {
+                av_image_copy(
+                    av_frame.data.as_mut_ptr(),
+                    av_frame.linesize.as_mut_ptr(),
+                    frame.data.as_ptr() as *const _,
+                    frame.linesize.as_ptr() as *const _,
+                    { &*self.context }.pix_fmt,
+                    av_frame.width,
+                    av_frame.height,
+                );
+            }
         }
+
+        true
+    }
+
+    pub fn encode(&mut self) -> Result<(), VideoEncoderError> {
+        let av_frame = unsafe { &mut *self.frame };
+        av_frame.pts = unsafe {
+            let context_ref = &*self.context;
+            av_rescale_q(
+                context_ref.frame_num,
+                context_ref.pkt_timebase,
+                context_ref.time_base,
+            )
+        };
+
+        if unsafe { avcodec_send_frame(self.context, self.frame) } != 0 {
+            return Err(VideoEncoderError::EncodeFrameError);
+        }
+
+        Ok(())
+    }
+
+    pub fn read<'a>(&'a mut self) -> Option<(&'a [u8], i32, u64)> {
+        let packet_ref = unsafe { &*self.packet };
+        let context_ref = unsafe { &*self.context };
+        if !self.initialized {
+            self.initialized = true;
+
+            return Some((
+                unsafe {
+                    std::slice::from_raw_parts(
+                        context_ref.extradata,
+                        context_ref.extradata_size as usize,
+                    )
+                },
+                2,
+                packet_ref.pts as u64,
+            ));
+        }
+
+        if unsafe { avcodec_receive_packet(self.context, self.packet) } != 0 {
+            return None;
+        }
+
+        Some((
+            unsafe { std::slice::from_raw_parts(packet_ref.data, packet_ref.size as usize) },
+            packet_ref.flags,
+            packet_ref.pts as u64,
+        ))
     }
 }
 
 impl Drop for VideoEncoder {
     fn drop(&mut self) {
-        log::info!("close VideoEncoder");
-
-        unsafe { codec_release_video_encoder(self.0) }
-    }
-}
-
-pub struct VideoDecoder(*const c_void);
-
-unsafe impl Send for VideoDecoder {}
-unsafe impl Sync for VideoDecoder {}
-
-impl VideoDecoder {
-    /// Initialize the AVCodecContext to use the given AVCodec.
-    pub fn new(settings: &VideoDecoderSettings) -> Result<Self, Error> {
-        log::info!("create VideoDecoder: settings={:?}", settings);
-
-        let settings = settings.as_raw();
-        let codec = unsafe { codec_create_video_decoder(&settings) };
-        if !codec.is_null() {
-            Ok(Self(codec))
-        } else {
-            Err(Error::VideoDecoder)
+        if !self.packet.is_null() {
+            unsafe {
+                av_packet_free(&mut self.packet);
+            }
         }
-    }
 
-    /// Supply raw packet data as input to a decoder.
-    pub fn decode(&mut self, data: &[u8], flags: i32, timestamp: u64) -> bool {
-        unsafe {
-            codec_video_decoder_send_packet(
-                self.0,
-                RawPacket {
-                    buffer: data.as_ptr(),
-                    len: data.len(),
-                    timestamp,
-                    flags,
-                },
-            )
+        if !self.context.is_null() {
+            let ctx_mut = unsafe { &mut *self.context };
+            if !ctx_mut.hw_device_ctx.is_null() {
+                unsafe {
+                    av_buffer_unref(&mut ctx_mut.hw_device_ctx);
+                }
+            }
+
+            if !ctx_mut.hw_frames_ctx.is_null() {
+                unsafe {
+                    av_buffer_unref(&mut ctx_mut.hw_frames_ctx);
+                }
+            }
+
+            unsafe {
+                avcodec_free_context(&mut self.context);
+            }
         }
-    }
 
-    /// Return decoded output data from a decoder or encoder (when the
-    /// AV_CODEC_FLAG_RECON_FRAME flag is used).
-    pub fn read(&mut self) -> Option<&VideoFrame> {
-        let frame = unsafe { codec_video_decoder_read_frame(self.0) };
-        if !frame.is_null() {
-            Some(unsafe { &*frame })
-        } else {
-            None
+        if !self.frame.is_null() {
+            unsafe {
+                av_frame_free(&mut self.frame);
+            }
         }
-    }
-}
-
-impl Drop for VideoDecoder {
-    fn drop(&mut self) {
-        log::info!("close VideoDecoder");
-
-        unsafe { codec_release_video_decoder(self.0) }
     }
 }

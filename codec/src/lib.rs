@@ -1,50 +1,33 @@
-pub mod audio;
-pub mod video;
+mod audio;
+mod util;
+mod video;
 
-use std::ffi::{c_char, c_int};
+use std::ffi::{c_char, c_int, c_void};
 
-use log::{log, Level};
-use utils::strings::Strings;
+pub use self::{
+    audio::{
+        create_opus_identification_header, AudioDecoder, AudioDecoderError, AudioEncoder,
+        AudioEncoderError, AudioEncoderSettings,
+    },
+    video::{
+        VideoDecoder, VideoDecoderError, VideoDecoderSettings, VideoDecoderType, VideoEncoder,
+        VideoEncoderError, VideoEncoderSettings, VideoEncoderType,
+    },
+};
 
-pub use audio::{AudioDecoder, AudioEncodePacket, AudioEncoder, AudioEncoderSettings};
-pub use video::{VideoDecoder, VideoEncodePacket, VideoEncoder, VideoEncoderSettings};
+use ffmpeg_sys_next::*;
+use log::Level;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Error {
-    AudioEncoder,
-    VideoEncoder,
-    AudioDecoder,
-    VideoDecoder,
-}
-
-impl std::error::Error for Error {}
-
-impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                Self::AudioDecoder => "failed to create audio decoder",
-                Self::AudioEncoder => "failed to create audio encoder",
-                Self::VideoDecoder => "failed to create video decoder",
-                Self::VideoEncoder => "failed to create video encoder",
-            }
-        )
+pub fn is_hardware_encoder(kind: VideoEncoderType) -> bool {
+    match kind {
+        VideoEncoderType::Qsv => true,
+        VideoEncoderType::Cuda => true,
+        _ => false,
     }
 }
 
 #[repr(C)]
-pub struct RawPacket {
-    pub buffer: *const u8,
-    pub len: usize,
-    pub flags: c_int,
-    pub timestamp: u64,
-}
-
-#[repr(C)]
 #[derive(Debug)]
-#[allow(dead_code)]
 enum LoggerLevel {
     Panic = 0,
     Fatal = 8,
@@ -68,30 +51,18 @@ impl Into<Level> for LoggerLevel {
     }
 }
 
-extern "C" {
-    fn codec_remove_logger();
-    fn codec_set_logger(logger: extern "C" fn(level: LoggerLevel, message: *const c_char));
-}
+unsafe extern "C" fn logger_proc(_: *mut c_void, level: c_int, message: *const c_char, args: va_list) {
 
-extern "C" fn logger_proc(level: LoggerLevel, message: *const c_char) {
-    if let Ok(message) = Strings::from(message).to_string() {
-        log!(
-            target: "ffmpeg",
-            level.into(),
-            "{}",
-            message.as_str().strip_suffix("\n").unwrap_or(&message)
-        );
-    }
 }
 
 pub fn startup() {
-    unsafe { codec_set_logger(logger_proc) }
+    unsafe {
+        av_log_set_callback(Some(logger_proc));
+    }
 }
 
 pub fn shutdown() {
-    unsafe { codec_remove_logger() }
-}
-
-pub fn is_hardware_codec(codec: &str) -> bool {
-    codec == "h264_qsv" || codec == "h264_cuvid" || codec == "d3d11va" || codec == "h264_nvenc"
+    unsafe {
+        av_log_set_callback(None);
+    }
 }
