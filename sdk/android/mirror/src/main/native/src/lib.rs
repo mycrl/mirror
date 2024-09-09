@@ -389,11 +389,13 @@ impl Mirror {
             let server: String = env.get_string(&server)?.into();
             let multicast: String = env.get_string(&multicast)?.into();
 
-            Ok(Box::into_raw(Box::new(Transport::new(TransportDescriptor {
-                server: server.parse()?,
-                multicast: multicast.parse()?,
-                mtu: mtu as usize,
-            })?)))
+            Ok(Box::into_raw(Box::new(Transport::new(
+                TransportDescriptor {
+                    server: server.parse()?,
+                    multicast: multicast.parse()?,
+                    mtu: mtu as usize,
+                },
+            )?)))
         })
         .unwrap_or_else(null_mut)
     }

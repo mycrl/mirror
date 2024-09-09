@@ -17,6 +17,7 @@ use std::{
     mem::ManuallyDrop,
 };
 
+use codec::{VideoDecoderType, VideoEncoderType};
 use frame::{AudioFrame, VideoFrame};
 use utils::{atomic::EasyAtomic, strings::Strings};
 
@@ -61,20 +62,6 @@ pub extern "C" fn mirror_shutdown() {
     log::info!("extern api: mirror quit");
 
     let _ = checker(factory::shutdown());
-}
-
-/// Automatically search for encoders, limited hardware, fallback to software
-/// implementation if hardware acceleration unit is not found.
-#[no_mangle]
-pub extern "C" fn mirror_find_video_encoder() -> *const c_char {
-    unsafe { codec::video::codec_find_video_encoder() }
-}
-
-/// Automatically search for decoders, limited hardware, fallback to software
-/// implementation if hardware acceleration unit is not found.
-#[no_mangle]
-pub extern "C" fn mirror_find_video_decoder() -> *const c_char {
-    unsafe { codec::video::codec_find_video_decoder() }
 }
 
 #[repr(C)]
@@ -348,7 +335,7 @@ impl TryInto<crate::sender::VideoDescriptor> for VideoDescriptor {
 
     fn try_into(self) -> Result<crate::sender::VideoDescriptor, Self::Error> {
         Ok(crate::sender::VideoDescriptor {
-            codec: Strings::from(self.codec).to_string()?,
+            codec: VideoEncoderType::try_from(Strings::from(self.codec).to_string()?.as_str())?,
             key_frame_interval: self.key_frame_interval,
             frame_rate: self.frame_rate,
             width: self.width,
@@ -413,7 +400,6 @@ impl TryInto<sender::SenderDescriptor> for SenderDescriptor {
 
             // Check whether the external parameters are configured correctly to 
             // avoid some clowns inserting some inexplicable parameters.
-            anyhow::ensure!(settings.codec == "libx264" || settings.codec == "h264_qsv", "invalid video encoder");
             anyhow::ensure!(settings.width % 4 == 0 && settings.width <= 4096, "invalid video width");
             anyhow::ensure!(settings.height % 4 == 0 && settings.height <= 2560, "invalid video height");
             anyhow::ensure!(settings.frame_rate <= 60, "invalid video frame rate");
@@ -520,8 +506,7 @@ pub extern "C" fn mirror_create_receiver(
         unsafe { &*mirror }.0.create_receiver(
             id as u32,
             receiver::ReceiverDescriptor {
-                video: Strings::from(codec).to_string()?,
-                audio: "libopus".to_string(),
+                video: VideoDecoderType::try_from(Strings::from(codec).to_string()?.as_str())?,
             },
             sink.into(),
         )

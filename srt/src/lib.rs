@@ -740,8 +740,8 @@ extern "C" {
     /// convention, although the "level" parameter is ignored. The second
     /// version (srt_getsockflag) omits the "level" parameter completely.
     ///
-    /// Descriptor correspond to various data types (see API-socket-options.md). A
-    /// variable optval of the appropriate data type has to be passed. The
+    /// Descriptor correspond to various data types (see API-socket-options.md).
+    /// A variable optval of the appropriate data type has to be passed. The
     /// integer value of optlen should originally contain the size of the optval
     /// type provided; on return, it will be set to the size of the value
     /// returned. For most options, it will be the size of an integer. Some

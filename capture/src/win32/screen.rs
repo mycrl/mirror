@@ -7,7 +7,9 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
-use frame::{Resource, VideoFormat, VideoFrame, VideoSize, VideoTransform, VideoTransformDescriptor};
+use frame::{
+    Resource, VideoFormat, VideoFrame, VideoSize, VideoTransform, VideoTransformDescriptor,
+};
 use utils::{
     atomic::EasyAtomic,
     win32::{Interface, MediaThreadClass},

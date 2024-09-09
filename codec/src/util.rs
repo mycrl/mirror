@@ -87,10 +87,12 @@ pub struct CreateVideoContextDescriptor<'a> {
     #[cfg(target_os = "windows")]
     pub frame_size: Option<HardwareFrameSize>,
     #[cfg(target_os = "windows")]
-    pub direct3d: Option<HardwareDevice>,
+    pub direct3d: Option<Direct3DDevice>,
 }
 
-pub fn create_video_context(options: CreateVideoContextDescriptor) -> Result<*const AVCodec, CreateVideoContextError> {
+pub fn create_video_context(
+    options: CreateVideoContextDescriptor,
+) -> Result<*const AVCodec, CreateVideoContextError> {
     let codec = match options.kind {
         CodecType::Encoder(kind) => {
             let codec: &str = kind.into();
@@ -116,7 +118,7 @@ pub fn create_video_context(options: CreateVideoContextDescriptor) -> Result<*co
     }
 
     #[cfg(target_os = "windows")]
-    if kind.is_d3d() || kind.is_qsv() {
+    if options.kind.is_d3d() || options.kind.is_qsv() {
         let hw_device_ctx =
             unsafe { av_hwdevice_ctx_alloc(AVHWDeviceType::AV_HWDEVICE_TYPE_D3D11VA) };
         if hw_device_ctx.is_null() {
@@ -128,13 +130,13 @@ pub fn create_video_context(options: CreateVideoContextDescriptor) -> Result<*co
             &mut *((&mut *hwctx).hwctx as *mut AVD3D11VADeviceContext)
         };
 
-        let direct3d = if let Some(direct3d) = direct3d {
+        let direct3d = if let Some(direct3d) = options.direct3d {
             direct3d
         } else {
             return Err(CreateVideoContextError::MissingDirect3DDevice);
         };
 
-        if kind.is_qsv() {
+        if options.kind.is_qsv() {
             if let Err(e) = direct3d.set_multithread_protected(true) {
                 return Err(CreateVideoContextError::SetMultithreadProtectedError(e));
             }
@@ -147,8 +149,8 @@ pub fn create_video_context(options: CreateVideoContextDescriptor) -> Result<*co
             return Err(CreateVideoContextError::InitAVHardwareDeviceContextError);
         }
 
-        let context_mut = unsafe { &mut **context };
-        if kind.is_qsv() {
+        let context_mut = unsafe { &mut **options.context };
+        if options.kind.is_qsv() {
             let mut qsv_device_ctx = null_mut();
             if unsafe {
                 av_hwdevice_ctx_create_derived(
@@ -166,13 +168,13 @@ pub fn create_video_context(options: CreateVideoContextDescriptor) -> Result<*co
                 context_mut.hw_device_ctx = av_buffer_ref(qsv_device_ctx);
             }
 
-            if kind.is_encoder() {
+            if options.kind.is_encoder() {
                 let hw_frames_ctx = unsafe { av_hwframe_ctx_alloc(context_mut.hw_device_ctx) };
                 if hw_frames_ctx.is_null() {
                     return Err(CreateVideoContextError::AllocAVHardwareFrameContextError);
                 }
 
-                if let Some(size) = frame_size {
+                if let Some(size) = options.frame_size {
                     unsafe {
                         let frames_ctx =
                             &mut *((&mut *hw_frames_ctx).data as *mut AVHWFramesContext);

@@ -196,18 +196,6 @@ typedef struct
 } FrameSink;
 
 /**
- * Automatically search for encoders, limited hardware, fallback to software
- * implementation if hardware acceleration unit is not found.
- */
-EXPORT const char* mirror_find_video_encoder();
-
-/**
- * Automatically search for decoders, limited hardware, fallback to software
- * implementation if hardware acceleration unit is not found.
- */
-EXPORT const char* mirror_find_video_decoder();
-
-/**
  * Because Linux does not have DllMain, you need to call it manually to achieve
  * similar behavior.
  */

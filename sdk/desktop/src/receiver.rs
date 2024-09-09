@@ -12,7 +12,6 @@ use utils::win32::MediaThreadClass;
 #[derive(Debug, Clone)]
 pub struct ReceiverDescriptor {
     pub video: VideoDecoderType,
-    pub audio: String,
 }
 
 fn create_video_decoder(

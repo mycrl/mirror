@@ -8,8 +8,13 @@ use thiserror::Error;
 #[cfg(target_os = "windows")]
 use utils::win32::Direct3DDevice;
 
-use crate::util::{
-    create_video_context, create_video_frame, set_option, set_str_option, CodecType, CreateVideoContextDescriptor, CreateVideoContextError, CreateVideoFrameError, HardwareFrameSize
+use crate::{
+    util::{
+        create_video_context, create_video_frame, set_option, set_str_option, CodecType,
+        CreateVideoContextDescriptor, CreateVideoContextError, CreateVideoFrameError,
+        HardwareFrameSize,
+    },
+    CodecError,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -29,6 +34,19 @@ impl Into<&'static str> for VideoDecoderType {
     }
 }
 
+impl TryFrom<&str> for VideoDecoderType {
+    type Error = CodecError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Ok(match value {
+            "d3d11va" => Self::D3D11,
+            "h264_qsv" => Self::Qsv,
+            "h264_cuvid" => Self::Cuda,
+            _ => return Err(CodecError::NotSupportCodec),
+        })
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VideoEncoderType {
     X264,
@@ -43,6 +61,19 @@ impl Into<&'static str> for VideoEncoderType {
             Self::Qsv => "h264_qsv",
             Self::Cuda => "h264_nvenc",
         }
+    }
+}
+
+impl TryFrom<&str> for VideoEncoderType {
+    type Error = CodecError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Ok(match value {
+            "libx264" => Self::X264,
+            "h264_qsv" => Self::Qsv,
+            "h264_cuvid" => Self::Cuda,
+            _ => return Err(CodecError::NotSupportCodec),
+        })
     }
 }
 
@@ -100,12 +131,12 @@ impl VideoDecoder {
         };
 
         #[cfg(target_os = "windows")]
-        let codec = create_video_context(
-            &mut this.context,
-            CodecType::Decoder(options.codec),
-            None,
-            options.direct3d,
-        )?;
+        let codec = create_video_context(CreateVideoContextDescriptor {
+            kind: CodecType::Decoder(options.codec),
+            context: &mut this.context,
+            frame_size: None,
+            direct3d: options.direct3d,
+        })?;
 
         #[cfg(not(target_os = "windows"))]
         let codec = create_video_context(CreateVideoContextDescriptor {
@@ -360,7 +391,7 @@ impl VideoEncoder {
         #[cfg(not(target_os = "windows"))]
         let codec = create_video_context(CreateVideoContextDescriptor {
             kind: CodecType::Encoder(options.codec),
-            context: &mut this.context
+            context: &mut this.context,
         })?;
 
         let context_mut = unsafe { &mut *this.context };

@@ -31,9 +31,7 @@ use windows::{
 
 pub use windows::{
     core::Interface,
-    Win32::Graphics::Direct3D11::{
-        ID3D11Device, ID3D11DeviceContext, ID3D11VideoContext, ID3D11VideoDevice,
-    },
+    Win32::Graphics::Direct3D11::{ID3D11Device, ID3D11DeviceContext},
 };
 
 /// Initializes Microsoft Media Foundation.
