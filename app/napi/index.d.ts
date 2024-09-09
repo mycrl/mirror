@@ -1,4 +1,4 @@
-export interface MirrorOptions
+export interface MirrorDescriptor
 {
     encoder: string;
     decoder: string;
@@ -43,7 +43,7 @@ export declare class CaptureService
 export declare class MirrorService
 {
     quit();
-    init(options: MirrorOptions): boolean;
+    init(options: MirrorDescriptor): boolean;
     create_capture_service(): CaptureService;
     create_sender(id: number, callback: () => void): SenderService | null;
     create_receiver(id: number, callback: () => void): ReceiverService | null;

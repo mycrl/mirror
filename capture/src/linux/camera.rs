@@ -14,7 +14,7 @@ pub struct CameraCapture();
 impl CaptureHandler for CameraCapture {
     type Frame = VideoFrame;
     type Error = anyhow::Error;
-    type CaptureOptions = VideoCaptureSourceDescription;
+    type CaptureDescriptor = VideoCaptureSourceDescription;
 
     fn get_sources() -> Result<Vec<Source>, Self::Error> {
         Ok(PlatformContext::default()
@@ -33,7 +33,7 @@ impl CaptureHandler for CameraCapture {
 
     fn start<S: FrameArrived<Frame = Self::Frame> + 'static>(
         &self,
-        options: Self::CaptureOptions,
+        options: Self::CaptureDescriptor,
         arrived: S,
     ) -> Result<(), Self::Error> {
         todo!()

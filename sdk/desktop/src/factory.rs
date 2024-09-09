@@ -1,14 +1,14 @@
-use crate::receiver::{Receiver, ReceiverOptions};
+use crate::receiver::{Receiver, ReceiverDescriptor};
 
 #[cfg(not(target_os = "macos"))]
-use crate::sender::{Sender, SenderOptions};
+use crate::sender::{Sender, SenderDescriptor};
 
 #[cfg(not(target_os = "macos"))]
 use std::sync::RwLock;
 
 use anyhow::Result;
 use frame::{AudioFrame, VideoFrame};
-use transport::{Transport, TransportOptions};
+use transport::{Transport, TransportDescriptor};
 use utils::logger;
 
 #[cfg(target_os = "windows")]
@@ -143,7 +143,7 @@ pub struct FrameSink {
 pub struct Mirror(Transport);
 
 impl Mirror {
-    pub fn new(options: TransportOptions) -> Result<Self> {
+    pub fn new(options: TransportDescriptor) -> Result<Self> {
         log::info!("create mirror: options={:?}", options);
 
         // Check if the D3D device has been created. If not, create a global one.
@@ -173,7 +173,7 @@ impl Mirror {
     pub fn create_sender(
         &self,
         id: u32,
-        options: SenderOptions,
+        options: SenderDescriptor,
         sink: FrameSink,
     ) -> Result<Sender> {
         log::info!("create sender: id={}, options={:?}", id, options);
@@ -188,7 +188,7 @@ impl Mirror {
     pub fn create_receiver(
         &self,
         id: u32,
-        options: ReceiverOptions,
+        options: ReceiverDescriptor,
         sink: FrameSink,
     ) -> Result<Receiver> {
         log::info!("create receiver: id={}, options={:?}", id, options);

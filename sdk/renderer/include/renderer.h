@@ -37,7 +37,7 @@ typedef struct
 	void* d3d_device;
     void* d3d_device_context;
 #endif // WIN32
-} RendererOptions;
+} RendererDescriptor;
 
 typedef const void* WindowHandle;
 typedef const void* Render;
@@ -54,7 +54,7 @@ EXPORT bool renderer_startup();
 /**
  * Creating a window renderer.
  */
-EXPORT Render renderer_create(RendererOptions options);
+EXPORT Render renderer_create(RendererDescriptor options);
 
 /**
  * Push the video frame into the renderer, which will update the window texture.

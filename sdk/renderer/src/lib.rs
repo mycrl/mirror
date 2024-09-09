@@ -12,7 +12,7 @@ use utils::logger;
 use self::{audio::AudioPlayer, video::Size};
 
 #[cfg(target_os = "windows")]
-use self::video::win32::{VideoRender, VideoRenderOptions};
+use self::video::win32::{VideoRender, VideoRenderDescriptor};
 
 #[cfg(target_os = "windows")]
 use windows::Win32::Foundation::HWND;
@@ -72,7 +72,7 @@ struct RawRenderer {
 }
 
 #[repr(C)]
-struct RawRendererOptions {
+struct RawRendererDescriptor {
     size: RawSize,
     #[cfg(target_os = "windows")]
     hwnd: *mut c_void,
@@ -85,12 +85,12 @@ struct RawRendererOptions {
 /// Creating a window renderer.
 #[no_mangle]
 #[allow(unused_variables)]
-extern "C" fn renderer_create(options: RawRendererOptions) -> *mut RawRenderer {
+extern "C" fn renderer_create(options: RawRendererDescriptor) -> *mut RawRenderer {
     let func = || {
         Ok::<RawRenderer, anyhow::Error>(RawRenderer {
             audio: AudioPlayer::new()?,
             #[cfg(target_os = "windows")]
-            video: VideoRender::new(VideoRenderOptions {
+            video: VideoRender::new(VideoRenderDescriptor {
                 size: options.size.into(),
                 window_handle: HWND(options.hwnd),
                 direct3d: Direct3DDevice {

@@ -9,7 +9,7 @@ pub mod win32 {
     use super::Size;
 
     use anyhow::{anyhow, Result};
-    use frame::{Resource, VideoFrame, VideoSize, VideoTransform, VideoTransformOptions};
+    use frame::{Resource, VideoFrame, VideoSize, VideoTransform, VideoTransformDescriptor};
     use utils::win32::{d3d_texture_borrowed_raw, Direct3DDevice};
     use windows::Win32::{
         Foundation::HWND,
@@ -23,7 +23,7 @@ pub mod win32 {
         },
     };
 
-    pub struct VideoRenderOptions {
+    pub struct VideoRenderDescriptor {
         pub size: Size,
         pub window_handle: HWND,
         pub direct3d: Direct3DDevice,
@@ -40,7 +40,7 @@ pub mod win32 {
     unsafe impl Sync for VideoRender {}
 
     impl VideoRender {
-        pub fn new(options: VideoRenderOptions) -> Result<Self> {
+        pub fn new(options: VideoRenderDescriptor) -> Result<Self> {
             log::info!("renderer: create video render, size={:?}", options.size);
 
             let direct3d = options.direct3d;
@@ -114,7 +114,7 @@ pub mod win32 {
             }
 
             if self.video_processor.is_none() {
-                self.video_processor = Some(VideoTransform::new(VideoTransformOptions {
+                self.video_processor = Some(VideoTransform::new(VideoTransformDescriptor {
                     direct3d: self.direct3d.clone(),
                     input: Resource::Default(
                         frame.format,

@@ -51,7 +51,7 @@ mod socket;
 
 pub use self::{
     fragments::{FragmentDecoder, FragmentEncoder},
-    options::Options,
+    options::Descriptor,
     server::Server,
     socket::Socket,
     SRT_TRACEBSTATS as TraceStats,
@@ -719,7 +719,7 @@ extern "C" {
     /// convention, although the "level" parameter is ignored. The second
     /// version (srt_setsockflag) omits the "level" parameter completely.
     ///
-    /// Options correspond to various data types, so you need to know what
+    /// Descriptor correspond to various data types, so you need to know what
     /// data type is assigned to a particular option, and to pass a
     /// variable of the appropriate data type with the option value
     /// to be set.
@@ -740,7 +740,7 @@ extern "C" {
     /// convention, although the "level" parameter is ignored. The second
     /// version (srt_getsockflag) omits the "level" parameter completely.
     ///
-    /// Options correspond to various data types (see API-socket-options.md). A
+    /// Descriptor correspond to various data types (see API-socket-options.md). A
     /// variable optval of the appropriate data type has to be passed. The
     /// integer value of optlen should originally contain the size of the optval
     /// type provided; on return, it will be set to the size of the value

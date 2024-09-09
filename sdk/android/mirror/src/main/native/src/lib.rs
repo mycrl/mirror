@@ -16,7 +16,7 @@ use jni_macro::jni_exports;
 use logger::AndroidLogger;
 use transport::{
     adapter::{StreamReceiverAdapter, StreamReceiverAdapterExt, StreamSenderAdapter},
-    Transport, TransportOptions,
+    Transport, TransportDescriptor,
 };
 
 /// JNI_OnLoad
@@ -389,7 +389,7 @@ impl Mirror {
             let server: String = env.get_string(&server)?.into();
             let multicast: String = env.get_string(&multicast)?.into();
 
-            Ok(Box::into_raw(Box::new(Transport::new(TransportOptions {
+            Ok(Box::into_raw(Box::new(Transport::new(TransportDescriptor {
                 server: server.parse()?,
                 multicast: multicast.parse()?,
                 mtu: mtu as usize,

@@ -37,7 +37,7 @@ Napi::Value MirrorService::Init(const Napi::CallbackInfo& info)
     _decoder = std::string(object.Get("decoder").Unwrap().As<Napi::String>());
     _server = std::string(object.Get("server").Unwrap().As<Napi::String>());
 
-    MirrorOptions options;
+    MirrorDescriptor options;
     options.video.encoder = const_cast<char*>(_encoder.c_str());
     options.video.decoder = const_cast<char*>(_decoder.c_str());
     options.video.width = object.Get("width").Unwrap().As<Napi::Number>().Uint32Value();

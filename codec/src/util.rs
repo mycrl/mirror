@@ -3,10 +3,10 @@ use std::{ffi::c_void, ptr::null_mut};
 use crate::video::{VideoDecoderType, VideoEncoderType};
 
 use ffmpeg_sys_next::*;
-use utils::{
-    strings::Strings,
-    win32::{Direct3DDevice, Interface},
-};
+use utils::strings::Strings;
+
+#[cfg(target_os = "windows")]
+use utils::win32::{Direct3DDevice, Interface};
 
 use thiserror::Error;
 
@@ -68,6 +68,7 @@ pub enum CreateVideoContextError {
     AllocAVHardwareDeviceContextError,
     #[error("missing direct3d device")]
     MissingDirect3DDevice,
+    #[cfg(target_os = "windows")]
     #[error(transparent)]
     SetMultithreadProtectedError(#[from] windows_core::Error),
     #[error("failed to init av hardware device context")]
@@ -80,13 +81,17 @@ pub enum CreateVideoContextError {
     InitAVHardwareFrameContextError,
 }
 
-pub fn create_video_context(
-    context: &mut *mut AVCodecContext,
-    kind: CodecType,
-    frame_size: Option<HardwareFrameSize>,
-    direct3d: Option<Direct3DDevice>,
-) -> Result<*const AVCodec, CreateVideoContextError> {
-    let codec = match kind {
+pub struct CreateVideoContextDescriptor<'a> {
+    pub context: &'a mut *mut AVCodecContext,
+    pub kind: CodecType,
+    #[cfg(target_os = "windows")]
+    pub frame_size: Option<HardwareFrameSize>,
+    #[cfg(target_os = "windows")]
+    pub direct3d: Option<HardwareDevice>,
+}
+
+pub fn create_video_context(options: CreateVideoContextDescriptor) -> Result<*const AVCodec, CreateVideoContextError> {
+    let codec = match options.kind {
         CodecType::Encoder(kind) => {
             let codec: &str = kind.into();
             unsafe { avcodec_find_encoder_by_name(Strings::from(codec).as_ptr()) }
@@ -105,8 +110,8 @@ pub fn create_video_context(
         return Err(CreateVideoContextError::NotFoundAVCodec);
     }
 
-    *context = unsafe { avcodec_alloc_context3(codec) };
-    if context.is_null() {
+    *options.context = unsafe { avcodec_alloc_context3(codec) };
+    if options.context.is_null() {
         return Err(CreateVideoContextError::AllocAVContextError);
     }
 

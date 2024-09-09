@@ -79,17 +79,17 @@ pub extern "C" fn mirror_find_video_decoder() -> *const c_char {
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
-pub struct MirrorOptions {
+pub struct MirrorDescriptor {
     pub server: *const c_char,
     pub multicast: *const c_char,
     pub mtu: usize,
 }
 
-impl TryInto<transport::TransportOptions> for MirrorOptions {
+impl TryInto<transport::TransportDescriptor> for MirrorDescriptor {
     type Error = anyhow::Error;
 
-    fn try_into(self) -> Result<transport::TransportOptions, Self::Error> {
-        Ok(transport::TransportOptions {
+    fn try_into(self) -> Result<transport::TransportDescriptor, Self::Error> {
+        Ok(transport::TransportDescriptor {
             multicast: Strings::from(self.multicast).to_string()?.parse()?,
             server: Strings::from(self.server).to_string()?.parse()?,
             mtu: self.mtu,
@@ -102,7 +102,7 @@ pub struct Mirror(factory::Mirror);
 
 /// Create mirror.
 #[no_mangle]
-pub extern "C" fn mirror_create(options: MirrorOptions) -> *const Mirror {
+pub extern "C" fn mirror_create(options: MirrorDescriptor) -> *const Mirror {
     log::info!("extern api: mirror create");
 
     let func = || factory::Mirror::new(options.try_into()?);
@@ -333,7 +333,7 @@ impl Into<factory::FrameSink> for FrameSink {
 /// Video Codec Configuretion.
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
-pub struct VideoOptions {
+pub struct VideoDescriptor {
     pub codec: *const c_char,
     pub frame_rate: u8,
     pub width: u32,
@@ -343,11 +343,11 @@ pub struct VideoOptions {
 }
 
 #[cfg(not(target_os = "macos"))]
-impl TryInto<crate::sender::VideoOptions> for VideoOptions {
+impl TryInto<crate::sender::VideoDescriptor> for VideoDescriptor {
     type Error = anyhow::Error;
 
-    fn try_into(self) -> Result<crate::sender::VideoOptions, Self::Error> {
-        Ok(crate::sender::VideoOptions {
+    fn try_into(self) -> Result<crate::sender::VideoDescriptor, Self::Error> {
+        Ok(crate::sender::VideoDescriptor {
             codec: Strings::from(self.codec).to_string()?,
             key_frame_interval: self.key_frame_interval,
             frame_rate: self.frame_rate,
@@ -361,15 +361,15 @@ impl TryInto<crate::sender::VideoOptions> for VideoOptions {
 /// Audio Codec Configuration.
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
-pub struct AudioOptions {
+pub struct AudioDescriptor {
     pub sample_rate: u64,
     pub bit_rate: u64,
 }
 
 #[cfg(not(target_os = "macos"))]
-impl Into<crate::sender::AudioOptions> for AudioOptions {
-    fn into(self) -> crate::sender::AudioOptions {
-        crate::sender::AudioOptions {
+impl Into<crate::sender::AudioDescriptor> for AudioDescriptor {
+    fn into(self) -> crate::sender::AudioDescriptor {
+        crate::sender::AudioDescriptor {
             sample_rate: self.sample_rate,
             bit_rate: self.bit_rate,
         }
@@ -379,7 +379,7 @@ impl Into<crate::sender::AudioOptions> for AudioOptions {
 #[repr(C)]
 #[derive(Debug)]
 #[cfg(not(target_os = "macos"))]
-pub struct SenderSourceOptions<T> {
+pub struct SenderSourceDescriptor<T> {
     source: *const Source,
     options: T,
 }
@@ -387,21 +387,21 @@ pub struct SenderSourceOptions<T> {
 #[repr(C)]
 #[derive(Debug)]
 #[cfg(not(target_os = "macos"))]
-pub struct SenderOptions {
-    video: *const SenderSourceOptions<VideoOptions>,
-    audio: *const SenderSourceOptions<AudioOptions>,
+pub struct SenderDescriptor {
+    video: *const SenderSourceDescriptor<VideoDescriptor>,
+    audio: *const SenderSourceDescriptor<AudioDescriptor>,
     multicast: bool,
 }
 
 #[cfg(not(target_os = "macos"))]
-impl TryInto<sender::SenderOptions> for SenderOptions {
+impl TryInto<sender::SenderDescriptor> for SenderDescriptor {
     type Error = anyhow::Error;
 
     // Both video and audio are optional, so the type conversion here is a bit more
     // complicated.
     #[rustfmt::skip]
-    fn try_into(self) -> Result<sender::SenderOptions, Self::Error> {
-        let mut options = sender::SenderOptions {
+    fn try_into(self) -> Result<sender::SenderDescriptor, Self::Error> {
+        let mut options = sender::SenderDescriptor {
             multicast: self.multicast,
             audio: None,
             video: None,
@@ -409,7 +409,7 @@ impl TryInto<sender::SenderOptions> for SenderOptions {
 
         if !self.video.is_null() {
             let video = unsafe { &*self.video };
-            let settings: crate::sender::VideoOptions = video.options.try_into()?;
+            let settings: crate::sender::VideoDescriptor = video.options.try_into()?;
 
             // Check whether the external parameters are configured correctly to 
             // avoid some clowns inserting some inexplicable parameters.
@@ -449,7 +449,7 @@ pub struct Sender(sender::Sender);
 pub extern "C" fn mirror_create_sender(
     mirror: *const Mirror,
     id: c_int,
-    options: SenderOptions,
+    options: SenderDescriptor,
     sink: FrameSink,
 ) -> *const Sender {
     assert!(!mirror.is_null());
@@ -457,7 +457,7 @@ pub extern "C" fn mirror_create_sender(
     log::info!("extern api: mirror create sender");
 
     let func = || {
-        let options: sender::SenderOptions = options.try_into()?;
+        let options: sender::SenderDescriptor = options.try_into()?;
         log::info!("mirror create options={:?}", options);
         
         unsafe { &*mirror }
@@ -519,7 +519,7 @@ pub extern "C" fn mirror_create_receiver(
     let func = || {
         unsafe { &*mirror }.0.create_receiver(
             id as u32,
-            receiver::ReceiverOptions {
+            receiver::ReceiverDescriptor {
                 video: Strings::from(codec).to_string()?,
                 audio: "libopus".to_string(),
             },

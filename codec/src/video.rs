@@ -4,11 +4,12 @@ use ffmpeg_sys_next::*;
 use frame::{VideoFormat, VideoFrame};
 use mfx::{mfxFrameSurface1, mfxHDLPair};
 use thiserror::Error;
+
+#[cfg(target_os = "windows")]
 use utils::win32::Direct3DDevice;
 
 use crate::util::{
-    create_video_context, create_video_frame, set_option, set_str_option, CodecType,
-    CreateVideoContextError, CreateVideoFrameError, HardwareFrameSize,
+    create_video_context, create_video_frame, set_option, set_str_option, CodecType, CreateVideoContextDescriptor, CreateVideoContextError, CreateVideoFrameError, HardwareFrameSize
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -98,12 +99,19 @@ impl VideoDecoder {
             frame: VideoFrame::default(),
         };
 
+        #[cfg(target_os = "windows")]
         let codec = create_video_context(
             &mut this.context,
             CodecType::Decoder(options.codec),
             None,
             options.direct3d,
         )?;
+
+        #[cfg(not(target_os = "windows"))]
+        let codec = create_video_context(CreateVideoContextDescriptor {
+            kind: CodecType::Decoder(options.codec),
+            context: &mut this.context,
+        })?;
 
         let context_mut = unsafe { &mut *this.context };
         context_mut.delay = 0;
@@ -338,15 +346,22 @@ impl VideoEncoder {
             initialized: false,
         };
 
-        let codec = create_video_context(
-            &mut this.context,
-            CodecType::Encoder(options.codec),
-            Some(HardwareFrameSize {
+        #[cfg(target_os = "windows")]
+        let codec = create_video_context(CreateVideoContextDescriptor {
+            kind: CodecType::Encoder(options.codec),
+            context: &mut this.context,
+            direct3d: options.direct3d,
+            frame_size: Some(HardwareFrameSize {
                 width: options.width,
                 height: options.height,
             }),
-            options.direct3d,
-        )?;
+        })?;
+
+        #[cfg(not(target_os = "windows"))]
+        let codec = create_video_context(CreateVideoContextDescriptor {
+            kind: CodecType::Encoder(options.codec),
+            context: &mut this.context
+        })?;
 
         let context_mut = unsafe { &mut *this.context };
         context_mut.delay = 0;

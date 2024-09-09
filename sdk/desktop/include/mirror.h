@@ -71,7 +71,7 @@ typedef struct
      * keyframe.
      */
     uint32_t key_frame_interval;
-} VideoEncoderOptions;
+} VideoEncoderDescriptor;
 
 typedef struct
 {
@@ -83,26 +83,26 @@ typedef struct
      * The bit rate of the video encoding.
      */
     uint64_t bit_rate;
-} AudioEncoderOptions;
+} AudioEncoderDescriptor;
 
 typedef struct
 {
     Source* source;
-    VideoEncoderOptions encoder;
-} VideoOptions;
+    VideoEncoderDescriptor encoder;
+} VideoDescriptor;
 
 typedef struct
 {
     Source* source;
-    AudioEncoderOptions encoder;
-} AudioOptions;
+    AudioEncoderDescriptor encoder;
+} AudioDescriptor;
 
 typedef struct
 {
-    VideoOptions* video;
-    AudioOptions* audio;
+    VideoDescriptor* video;
+    AudioDescriptor* audio;
     bool multicast;
-} SenderOptions;
+} SenderDescriptor;
 
 typedef struct
 {
@@ -120,7 +120,7 @@ typedef struct
      * the recommended value is 1400.
      */
     size_t mtu;
-} MirrorOptions;
+} MirrorDescriptor;
 
 typedef const void* Mirror;
 typedef const void* Sender;
@@ -229,7 +229,7 @@ EXPORT void mirror_shutdown();
 /**
  * Create mirror.
  */
-EXPORT Mirror mirror_create(MirrorOptions options);
+EXPORT Mirror mirror_create(MirrorDescriptor options);
 
 /**
  * Release mirror.
@@ -268,7 +268,7 @@ EXPORT void mirror_sources_destroy(Sources* sources);
  * get the device screen or sound callback, callback can be null, if it is
  * null then it means no callback data is needed.
  */
-EXPORT Sender mirror_create_sender(Mirror mirror, int id, SenderOptions options, FrameSink sink);
+EXPORT Sender mirror_create_sender(Mirror mirror, int id, SenderDescriptor options, FrameSink sink);
 
 /**
  * Get whether the sender uses multicast transmission.

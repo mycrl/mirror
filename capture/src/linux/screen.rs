@@ -107,7 +107,7 @@ pub struct ScreenCapture(Arc<AtomicBool>);
 impl CaptureHandler for ScreenCapture {
     type Frame = VideoFrame;
     type Error = anyhow::Error;
-    type CaptureOptions = VideoCaptureSourceDescription;
+    type CaptureDescriptor = VideoCaptureSourceDescription;
 
     fn get_sources() -> Result<Vec<Source>, Self::Error> {
         Ok(vec![Source {
@@ -121,7 +121,7 @@ impl CaptureHandler for ScreenCapture {
 
     fn start<S: FrameArrived<Frame = Self::Frame> + 'static>(
         &self,
-        options: Self::CaptureOptions,
+        options: Self::CaptureDescriptor,
         mut arrived: S,
     ) -> Result<(), Self::Error> {
         let mut display = Display::new(options.size)?;

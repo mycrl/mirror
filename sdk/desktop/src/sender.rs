@@ -9,8 +9,8 @@ use std::{
 use anyhow::Result;
 use bytes::BytesMut;
 use capture::{
-    AudioCaptureSourceDescription, Capture, CaptureOptions, FrameArrived, Size, Source,
-    SourceCaptureOptions, VideoCaptureSourceDescription,
+    AudioCaptureSourceDescription, Capture, CaptureDescriptor, FrameArrived, Size, Source,
+    SourceCaptureDescriptor, VideoCaptureSourceDescription,
 };
 
 use codec::{
@@ -29,7 +29,7 @@ use transport::{
 use utils::win32::MediaThreadClass;
 
 #[derive(Debug, Clone)]
-pub struct VideoOptions {
+pub struct VideoDescriptor {
     pub codec: VideoEncoderType,
     pub frame_rate: u8,
     pub width: u32,
@@ -39,15 +39,15 @@ pub struct VideoOptions {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct AudioOptions {
+pub struct AudioDescriptor {
     pub sample_rate: u64,
     pub bit_rate: u64,
 }
 
 #[derive(Debug)]
-pub struct SenderOptions {
-    pub video: Option<(Source, VideoOptions)>,
-    pub audio: Option<(Source, AudioOptions)>,
+pub struct SenderDescriptor {
+    pub video: Option<(Source, VideoDescriptor)>,
+    pub audio: Option<(Source, AudioDescriptor)>,
     pub multicast: bool,
 }
 
@@ -283,15 +283,15 @@ impl Sender {
     // Create a sender. The capture of the sender is started following the sender,
     // but both video capture and audio capture can be empty, which means you can
     // create a sender that captures nothing.
-    pub fn new(options: SenderOptions, sink: FrameSink) -> Result<Self> {
+    pub fn new(options: SenderDescriptor, sink: FrameSink) -> Result<Self> {
         log::info!("create sender");
 
-        let mut capture_options = CaptureOptions::default();
+        let mut capture_options = CaptureDescriptor::default();
         let adapter = StreamSenderAdapter::new(options.multicast);
         let sink = Arc::new(sink);
 
         if let Some((source, options)) = options.audio {
-            capture_options.audio = Some(SourceCaptureOptions {
+            capture_options.audio = Some(SourceCaptureDescriptor {
                 arrived: AudioSender::new(
                     &adapter,
                     AudioEncoderSettings {
@@ -308,7 +308,7 @@ impl Sender {
         }
 
         if let Some((source, options)) = options.video {
-            capture_options.video = Some(SourceCaptureOptions {
+            capture_options.video = Some(SourceCaptureDescriptor {
                 description: VideoCaptureSourceDescription {
                     hardware: codec::is_hardware_encoder(options.codec),
                     fps: options.frame_rate,

@@ -10,7 +10,7 @@ use utils::strings::Strings;
 use super::{error, srt_getsockflag, srt_setsockflag, SRTSOCKET, SRT_SOCKOPT, SRT_TRANSTYPE};
 
 #[derive(Debug, Clone)]
-pub struct Options {
+pub struct Descriptor {
     pub stream_id: Option<String>,
     pub max_bandwidth: i64,
     pub latency: u32,
@@ -20,7 +20,7 @@ pub struct Options {
     pub fc: u32,
 }
 
-impl Options {
+impl Descriptor {
     pub(crate) fn apply_socket(&self, fd: i32) -> Result<(), Error> {
         set_sock_opt(fd, SRT_SOCKOPT::SRTO_TRANSTYPE, &SRT_TRANSTYPE::SRTT_LIVE)?;
         set_sock_opt(fd, SRT_SOCKOPT::SRTO_RCVSYN, &1_i32)?;
@@ -46,7 +46,7 @@ impl Options {
     }
 }
 
-impl Default for Options {
+impl Default for Descriptor {
     fn default() -> Self {
         Self {
             fec: "fec,layout:staircase,rows:5,cols:10,arq:onreq".to_string(),

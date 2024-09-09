@@ -49,7 +49,7 @@ pub trait CaptureHandler: Sync + Send {
 
     /// Start capturing configuration information, which may be different for
     /// each source.
-    type CaptureOptions;
+    type CaptureDescriptor;
 
     /// Get a list of sources, such as multiple screens in a display source.
     fn get_sources() -> Result<Vec<Source>, Self::Error>;
@@ -61,7 +61,7 @@ pub trait CaptureHandler: Sync + Send {
     /// stopped, and it maintains its own capture thread internally.
     fn start<S: FrameArrived<Frame = Self::Frame> + 'static>(
         &self,
-        options: Self::CaptureOptions,
+        options: Self::CaptureDescriptor,
         arrived: S,
     ) -> Result<(), Self::Error>;
 }
@@ -105,21 +105,21 @@ pub struct AudioCaptureSourceDescription {
     pub sample_rate: u32,
 }
 
-pub struct SourceCaptureOptions<T, P> {
+pub struct SourceCaptureDescriptor<T, P> {
     pub description: P,
     pub arrived: T,
 }
 
-pub struct CaptureOptions<V, A>
+pub struct CaptureDescriptor<V, A>
 where
     V: FrameArrived<Frame = VideoFrame>,
     A: FrameArrived<Frame = AudioFrame>,
 {
-    pub video: Option<SourceCaptureOptions<V, VideoCaptureSourceDescription>>,
-    pub audio: Option<SourceCaptureOptions<A, AudioCaptureSourceDescription>>,
+    pub video: Option<SourceCaptureDescriptor<V, VideoCaptureSourceDescription>>,
+    pub audio: Option<SourceCaptureDescriptor<A, AudioCaptureSourceDescription>>,
 }
 
-impl<V, A> Default for CaptureOptions<V, A>
+impl<V, A> Default for CaptureDescriptor<V, A>
 where
     V: FrameArrived<Frame = VideoFrame>,
     A: FrameArrived<Frame = AudioFrame>,
@@ -155,14 +155,14 @@ impl Capture {
         })
     }
 
-    pub fn new<V, A>(CaptureOptions { video, audio }: CaptureOptions<V, A>) -> Result<Self>
+    pub fn new<V, A>(CaptureDescriptor { video, audio }: CaptureDescriptor<V, A>) -> Result<Self>
     where
         V: FrameArrived<Frame = VideoFrame> + 'static,
         A: FrameArrived<Frame = AudioFrame> + 'static,
     {
         let mut devices = Vec::with_capacity(3);
 
-        if let Some(SourceCaptureOptions {
+        if let Some(SourceCaptureDescriptor {
             description,
             arrived,
         }) = video
@@ -182,7 +182,7 @@ impl Capture {
             }
         }
 
-        if let Some(SourceCaptureOptions {
+        if let Some(SourceCaptureDescriptor {
             description,
             arrived,
         }) = audio

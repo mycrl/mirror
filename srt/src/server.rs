@@ -5,7 +5,7 @@ use os_socketaddr::OsSocketAddr;
 use crate::{srt_getsockstate, SRT_SOCKSTATUS};
 
 use super::{
-    error, options::Options, socket::Socket, srt_accept, srt_bind, srt_bstats, srt_close,
+    error, options::Descriptor, socket::Socket, srt_accept, srt_bind, srt_bstats, srt_close,
     srt_create_socket, srt_getsockname, srt_listen, TraceStats, SRTSOCKET, SRT_INVALID_SOCK,
 };
 
@@ -143,7 +143,7 @@ impl Server {
     /// option must be first set explicitly to 0 or 1, otherwise the binding
     /// will fail. In all other cases this option is meaningless. See
     /// `SRTO_IPV6ONLY` option for more information.
-    pub fn bind(addr: SocketAddr, opt: Options, backlog: u32) -> Result<Self, Error> {
+    pub fn bind(addr: SocketAddr, opt: Descriptor, backlog: u32) -> Result<Self, Error> {
         let fd = unsafe { srt_create_socket() };
         if fd == SRT_INVALID_SOCK {
             return Err(error());

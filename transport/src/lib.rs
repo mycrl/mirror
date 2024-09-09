@@ -32,7 +32,7 @@ pub fn shutdown() {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct TransportOptions {
+pub struct TransportDescriptor {
     pub server: SocketAddr,
     pub multicast: Ipv4Addr,
     pub mtu: usize,
@@ -41,13 +41,13 @@ pub struct TransportOptions {
 #[derive(Debug)]
 pub struct Transport {
     index: AtomicU32,
-    options: TransportOptions,
+    options: TransportDescriptor,
     publishs: Arc<RwLock<HashMap<u32, u16>>>,
     channels: Arc<RwLock<HashMap<u32, Sender<Signal>>>>,
 }
 
 impl Transport {
-    pub fn new(options: TransportOptions) -> Result<Self, Error> {
+    pub fn new(options: TransportDescriptor) -> Result<Self, Error> {
         let channels: Arc<RwLock<HashMap<u32, Sender<Signal>>>> = Default::default();
         let publishs: Arc<RwLock<HashMap<u32, u16>>> = Default::default();
 
@@ -147,7 +147,7 @@ impl Transport {
         log::info!("create multicast sender, port={}", port);
 
         // Create an srt configuration and carry stream information
-        let mut opt = srt::Options::default();
+        let mut opt = srt::Descriptor::default();
         opt.fc = 32;
         opt.latency = 40;
         opt.mtu = self.options.mtu as u32;
@@ -299,7 +299,7 @@ impl Transport {
         };
 
         // Create an srt configuration and carry stream information
-        let mut opt = srt::Options::default();
+        let mut opt = srt::Descriptor::default();
         opt.fc = 32;
         opt.latency = 40;
         opt.mtu = self.options.mtu as u32;

@@ -10,7 +10,7 @@ use transport::adapter::{StreamKind, StreamMultiReceiverAdapter, StreamReceiverA
 use utils::win32::MediaThreadClass;
 
 #[derive(Debug, Clone)]
-pub struct ReceiverOptions {
+pub struct ReceiverDescriptor {
     pub video: VideoDecoderType,
     pub audio: String,
 }
@@ -141,7 +141,7 @@ impl Receiver {
     /// Create a receiving end. The receiving end is much simpler to implement.
     /// You only need to decode the data in the queue and call it back to the
     /// sink.
-    pub fn new(options: ReceiverOptions, sink: FrameSink) -> Result<Self> {
+    pub fn new(options: ReceiverDescriptor, sink: FrameSink) -> Result<Self> {
         log::info!("create receiver");
 
         let adapter = StreamMultiReceiverAdapter::new();
