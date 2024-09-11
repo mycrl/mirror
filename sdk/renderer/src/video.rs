@@ -1,5 +1,3 @@
-use anyhow::{anyhow, Result};
-
 #[derive(Debug, Clone, Copy)]
 pub struct Size {
     pub width: u32,
@@ -7,7 +5,8 @@ pub struct Size {
 }
 
 #[cfg(target_os = "windows")]
-mod win32 {
+pub mod win32 {
+    use anyhow::{anyhow, Result};
     use frame::{Resource, VideoFrame, VideoSize, VideoTransform, VideoTransformOptions};
     use utils::win32::{d3d_texture_borrowed_raw, Direct3DDevice};
     use windows::Win32::{
@@ -21,6 +20,8 @@ mod win32 {
             },
         },
     };
+
+    use super::Size;
 
     pub struct VideoRenderOptions {
         pub size: Size,
