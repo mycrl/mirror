@@ -259,6 +259,7 @@ impl AudioEncoder {
         context_mut.sample_rate = options.sample_rate as i32;
         context_mut.time_base = unsafe { av_make_q(1, options.sample_rate as i32) };
 
+        // Forces opus to be encoded in units of 100 milliseconds.
         set_str_option(context_mut, "frame_duration", "100");
         set_option(context_mut, "application", 2051);
 
