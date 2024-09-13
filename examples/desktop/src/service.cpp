@@ -58,10 +58,10 @@ bool MirrorServiceExt::CreateMirrorSender()
         return true;
     }
 
-    auto video_sources = mirror_get_sources(SourceType::Screen);
+    auto video_sources = mirror_get_sources(xSourceTypeScreen);
 
     VideoDescriptor video_options;
-    video_options.encoder.codec = const_cast<char*>(_args.ArgsParams.encoder.c_str());
+    video_options.encoder.codec = _args.ArgsParams.encoder;
     video_options.encoder.width = _args.ArgsParams.width;
     video_options.encoder.height = _args.ArgsParams.height;
     video_options.encoder.frame_rate = _args.ArgsParams.fps;
@@ -76,7 +76,7 @@ bool MirrorServiceExt::CreateMirrorSender()
         }
     }
 
-    auto audio_sources = mirror_get_sources(SourceType::Audio);
+    auto audio_sources = mirror_get_sources(xSourceTypeAudio);
 
     AudioDescriptor audio_options;
     audio_options.encoder.sample_rate = 48000;
@@ -130,7 +130,7 @@ bool MirrorServiceExt::CreateMirrorReceiver()
     Render->IsRender = true;
     _receiver = mirror_create_receiver(_mirror,
                                        _args.ArgsParams.id,
-                                       _args.ArgsParams.decoder.c_str(),
+                                       _args.ArgsParams.decoder,
                                        sink);
     if (_receiver == nullptr)
     {

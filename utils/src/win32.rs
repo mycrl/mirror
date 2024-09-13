@@ -243,10 +243,7 @@ impl Direct3DDevice {
 
     pub fn set_multithread_protected(&self, value: bool) -> Result<()> {
         let multithread = self.device.cast::<ID3D11Multithread>()?;
-        unsafe {
-            multithread.SetMultithreadProtected(value).ok()?;
-        }
-
+        let _ = unsafe { multithread.SetMultithreadProtected(value) };
         Ok(())
     }
 }

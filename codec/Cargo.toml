@@ -4,15 +4,11 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+ffmpeg-sys-next = { git = "https://github.com/mycrl/rust-ffmpeg-sys" }
 frame = { path = "../frame" }
 utils = { path = "../utils" }
 thiserror = "1.0.63"
 log = "0.4.20"
-
-[dependencies.ffmpeg-sys-next]
-version = "7.0.2"
-default-features = false
-features = ["avcodec", "build-lib-x264", "build-lib-opus", "build-license-gpl"]
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows-core = "0.58.0"

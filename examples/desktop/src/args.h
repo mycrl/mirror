@@ -15,8 +15,8 @@ class Args
 public:
     struct Params
     {
-        std::string encoder = mirror_find_video_encoder();
-        std::string decoder = mirror_find_video_decoder();
+        VideoEncoderType encoder = xVideoEncoderTypeQsv;
+        VideoDecoderType decoder = xVideoDecoderTypeD3D11;
         std::string server = "127.0.0.1:8080";
         int width = 1280;
         int height = 720;

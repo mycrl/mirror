@@ -22,9 +22,9 @@
 
 typedef enum
 {
-    Camera = 1,
-    Screen = 2,
-    Audio = 3,
+    xSourceTypeCamera = 1,
+    xSourceTypeScreen = 2,
+    xSourceTypeAudio = 3,
 } SourceType;
 
 typedef struct
@@ -43,13 +43,26 @@ typedef struct
     size_t size;
 } Sources;
 
+typedef enum {
+    xVideoDecoderTypeD3D11,
+    xVideoDecoderTypeQsv,
+    xVideoDecoderTypeCuda,
+} VideoDecoderType;
+
+typedef enum 
+{
+    xVideoEncoderTypeX264,
+    xVideoEncoderTypeQsv,
+    xVideoEncoderTypeCuda,
+} VideoEncoderType;
+
 typedef struct
 {
     /**
      * Video encoder settings, possible values are `h264_qsv`, `h264_nvenc`,
      * `libx264` and so on.
      */
-    const char* codec;
+    VideoEncoderType codec;
     /**
      * Frame rate setting in seconds.
      */
@@ -279,7 +292,7 @@ EXPORT void mirror_sender_destroy(Sender sender);
  * Create a receiver, specify a bound NIC address, you can pass callback to
  * get the sender's screen or sound callback, callback can not be null.
  */
-EXPORT Receiver mirror_create_receiver(Mirror mirror, int id, const char* codec, FrameSink sink);
+EXPORT Receiver mirror_create_receiver(Mirror mirror, int id, VideoDecoderType codec, FrameSink sink);
 
 /**
  * Close receiver.

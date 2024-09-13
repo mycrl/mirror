@@ -17,7 +17,6 @@ use std::{
     mem::ManuallyDrop,
 };
 
-use codec::{VideoDecoderType, VideoEncoderType};
 use frame::{AudioFrame, VideoFrame};
 use utils::{atomic::EasyAtomic, strings::Strings};
 
@@ -317,11 +316,29 @@ impl Into<factory::FrameSink> for FrameSink {
     }
 }
 
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub enum VideoEncoderType {
+    X264,
+    Qsv,
+    Cuda,
+}
+
+impl Into<codec::VideoEncoderType> for VideoEncoderType {
+    fn into(self) -> codec::VideoEncoderType {
+        match self {
+            Self::X264 => codec::VideoEncoderType::X264,
+            Self::Qsv => codec::VideoEncoderType::Qsv,
+            Self::Cuda => codec::VideoEncoderType::Cuda,
+        }
+    }
+}
+
 /// Video Codec Configuretion.
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct VideoDescriptor {
-    pub codec: *const c_char,
+    pub codec: VideoEncoderType,
     pub frame_rate: u8,
     pub width: u32,
     pub height: u32,
@@ -335,7 +352,7 @@ impl TryInto<crate::sender::VideoDescriptor> for VideoDescriptor {
 
     fn try_into(self) -> Result<crate::sender::VideoDescriptor, Self::Error> {
         Ok(crate::sender::VideoDescriptor {
-            codec: VideoEncoderType::try_from(Strings::from(self.codec).to_string()?.as_str())?,
+            codec: self.codec.into(),
             key_frame_interval: self.key_frame_interval,
             frame_rate: self.frame_rate,
             width: self.width,
@@ -489,16 +506,34 @@ pub extern "C" fn mirror_sender_destroy(sender: *const Sender) {
 #[repr(C)]
 pub struct Receiver(receiver::Receiver);
 
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub enum VideoDecoderType {
+    D3D11,
+    Qsv,
+    Cuda,
+}
+
+impl Into<codec::VideoDecoderType> for VideoDecoderType {
+    fn into(self) -> codec::VideoDecoderType {
+        match self {
+            Self::D3D11 => codec::VideoDecoderType::D3D11,
+            Self::Qsv => codec::VideoDecoderType::Qsv,
+            Self::Cuda => codec::VideoDecoderType::Cuda,
+        }
+    }
+}
+
 /// Create a receiver, specify a bound NIC address, you can pass callback to
 /// get the sender's screen or sound callback, callback can not be null.
 #[no_mangle]
 pub extern "C" fn mirror_create_receiver(
     mirror: *const Mirror,
     id: c_int,
-    codec: *const c_char,
+    codec: VideoDecoderType,
     sink: FrameSink,
 ) -> *const Receiver {
-    assert!(!mirror.is_null() && !codec.is_null());
+    assert!(!mirror.is_null());
 
     log::info!("extern api: mirror create receiver");
 
@@ -506,7 +541,7 @@ pub extern "C" fn mirror_create_receiver(
         unsafe { &*mirror }.0.create_receiver(
             id as u32,
             receiver::ReceiverDescriptor {
-                video: VideoDecoderType::try_from(Strings::from(codec).to_string()?.as_str())?,
+                video: codec.into(),
             },
             sink.into(),
         )

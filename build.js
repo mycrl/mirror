@@ -63,18 +63,18 @@ const Replace = (file, filters) => {
 
     if (!fs.existsSync('./target/ffmpeg'))
     {
-        if (!fs.existsSync('./target/ffmpeg.zip'))
-        {
-            const name = process.platform == 'win32' ? 
-                `ffmpeg-windows-x64-${Args.release ? 'release' : 'debug'}.zip` : 
-                'ffmpeg-linux-x64-release.zip'
+       if (!fs.existsSync('./target/ffmpeg.zip'))
+       {
+           const name = process.platform == 'win32' ? 
+               `ffmpeg-windows-x64-${Args.release ? 'release' : 'debug'}.zip` : 
+               'ffmpeg-linux-x64-release.zip'
 
-            console.log('Start download ffmpeg...')
-            await download(`${BaseDistributions}/${name}`,'./target')
-            fs.renameSync(`./target/${name}`, './target/ffmpeg.zip')
-        }
+           console.log('Start download ffmpeg...')
+           await download(`${BaseDistributions}/${name}`,'./target')
+           fs.renameSync(`./target/${name}`, './target/ffmpeg.zip')
+       }
         
-        await (await unzipper.Open.file('./target/ffmpeg.zip')).extract({ path: './target' })
+       await (await unzipper.Open.file('./target/ffmpeg.zip')).extract({ path: './target' })
     }
 
     await Command(`cargo build ${Args.release ? '--release' : ''} -p mirror`)
