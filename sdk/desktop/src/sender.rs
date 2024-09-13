@@ -52,9 +52,9 @@ pub struct SenderDescriptor {
 }
 
 struct VideoSender {
-    encoder: Arc<Mutex<VideoEncoder>>,
+    adapter: Weak<StreamSenderAdapter>,
+    encoder: VideoEncoder,
     sink: Weak<FrameSink>,
-    unparker: Unparker,
 }
 
 impl VideoSender {
@@ -69,59 +69,10 @@ impl VideoSender {
         settings: VideoEncoderSettings,
         sink: &Arc<FrameSink>,
     ) -> Result<Self> {
-        let parker = Parker::new();
-        let unparker = parker.unparker().clone();
-        let encoder = Arc::new(Mutex::new(VideoEncoder::new(settings)?));
-
-        let sink_ = Arc::downgrade(sink);
-        let adapter_ = Arc::downgrade(adapter);
-        let encoder_ = Arc::downgrade(&encoder);
-        thread::Builder::new()
-            .name("VideoEncoderThread".to_string())
-            .spawn(move || {
-                #[cfg(target_os = "windows")]
-                let thread_class_guard = MediaThreadClass::DisplayPostProcessing.join().ok();
-
-                loop {
-                    parker.park();
-
-                    if let (Some(adapter), Some(codec)) = (adapter_.upgrade(), encoder_.upgrade()) {
-                        let mut encoder = codec.lock().unwrap();
-
-                        // Try to get the encoded data packets. The audio and video frames do not
-                        // correspond to the data packets one by one, so you need to try to get
-                        // multiple packets until they are empty.
-                        if let Err(e) = encoder.encode() {
-                            log::error!("video encode error={:?}", e);
-
-                            break;
-                        } else {
-                            while let Some((buffer, flags, timestamp)) = encoder.read() {
-                                adapter.send(
-                                    package::copy_from_slice(buffer),
-                                    StreamBufferInfo::Video(flags, timestamp),
-                                );
-                            }
-                        }
-                    } else {
-                        break;
-                    }
-                }
-
-                if let Some(sink) = sink_.upgrade() {
-                    (sink.close)();
-                }
-
-                #[cfg(target_os = "windows")]
-                if let Some(guard) = thread_class_guard {
-                    drop(guard)
-                }
-            })?;
-
         Ok(Self {
             sink: Arc::downgrade(sink),
-            unparker,
-            encoder,
+            adapter: Arc::downgrade(adapter),
+            encoder: VideoEncoder::new(settings)?,
         })
     }
 }
@@ -131,8 +82,26 @@ impl FrameArrived for VideoSender {
 
     fn sink(&mut self, frame: &Self::Frame) -> bool {
         // Push the audio and video frames into the encoder.
-        if self.encoder.lock().unwrap().update(frame) {
-            self.unparker.unpark();
+        if self.encoder.update(frame) {
+            // Try to get the encoded data packets. The audio and video frames do not
+            // correspond to the data packets one by one, so you need to try to get
+            // multiple packets until they are empty.
+            if let Err(e) = self.encoder.encode() {
+                log::error!("video encode error={:?}", e);
+
+                return false;
+            } else {
+                while let Some((buffer, flags, timestamp)) = self.encoder.read() {
+                    if let Some(adapter) = self.adapter.upgrade() {
+                        adapter.send(
+                            package::copy_from_slice(buffer),
+                            StreamBufferInfo::Video(flags, timestamp),
+                        );
+                    } else {
+                        return false;
+                    }
+                }
+            }
         } else {
             return false;
         }

@@ -2,7 +2,6 @@ use std::{ffi::c_int, ptr::null_mut};
 
 use ffmpeg_sys_next::*;
 use frame::{VideoFormat, VideoFrame};
-use mfx::{mfxFrameSurface1, mfxHDLPair};
 use thiserror::Error;
 
 #[cfg(target_os = "windows")]
@@ -299,30 +298,6 @@ impl Drop for VideoDecoder {
     }
 }
 
-#[allow(non_snake_case, non_camel_case_types)]
-mod mfx {
-    use std::ffi::c_void;
-
-    #[repr(C)]
-    pub struct mfxHDLPair {
-        pub first: *const c_void,
-        pub second: *const c_void,
-    }
-
-    #[repr(align(4))]
-    pub struct mfxFrameData {
-        _reserved: [u8; 64],
-        pub MemId: *const c_void,
-        _reserved1: [u8; 4],
-    }
-
-    #[repr(align(4))]
-    pub struct mfxFrameSurface1 {
-        _reserved: [u8; 70],
-        pub Data: mfxFrameData,
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct VideoEncoderSettings {
     /// Name of the codec implementation.
@@ -479,8 +454,8 @@ impl VideoEncoder {
                 let surface = unsafe { &mut *(av_frame.data[3] as *mut mfxFrameSurface1) };
                 let hdl = unsafe { &mut *(surface.Data.MemId as *mut mfxHDLPair) };
 
-                hdl.first = frame.data[0];
-                hdl.second = frame.data[1];
+                hdl.first = frame.data[0] as *mut _;
+                hdl.second = frame.data[1] as *mut _;
             }
         } else {
             if unsafe { av_frame_make_writable(self.frame) } != 0 {
