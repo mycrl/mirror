@@ -197,10 +197,13 @@ impl VideoDecoder {
             )
         };
 
+        // When parsing the code stream, an abnormal return code appears and processing
+        // should not be continued.
         if len < 0 {
             return Err(VideoDecoderError::ParsePacketError);
         }
 
+        // One or more cells have been parsed.
         if packet.size > 0 {
             if unsafe { avcodec_send_packet(self.context, self.packet) } != 0 {
                 return Err(VideoDecoderError::SendPacketToAVCodecError);
@@ -211,6 +214,7 @@ impl VideoDecoder {
     }
 
     pub fn read<'a>(&'a mut self) -> Option<&'a VideoFrame> {
+        // When decoding, each video frame uses a newly created one.
         if !self.av_frame.is_null() {
             unsafe {
                 av_frame_free(&mut self.av_frame);
@@ -229,29 +233,50 @@ impl VideoDecoder {
         let frame = unsafe { &*self.av_frame };
         self.frame.width = frame.width as u32;
         self.frame.height = frame.height as u32;
-        self.frame.format = VideoFormat::NV12;
 
-        if frame.format == AVPixelFormat::AV_PIX_FMT_QSV as i32 {
-            let surface = unsafe { &*(frame.data[3] as *const mfxFrameSurface1) };
-            let hdl = unsafe { &*(surface.Data.MemId as *const mfxHDLPair) };
+        match unsafe { std::mem::transmute(frame.format) } {
+            // mfxFrameSurface1.Data.MemId contains a pointer to the mfxHDLPair structure
+            // when importing the following frames as QSV frames:
+            //
+            // VAAPI: mfxHDLPair.first contains a VASurfaceID pointer. mfxHDLPair.second is
+            // always MFX_INFINITE.
+            //
+            // DXVA2: mfxHDLPair.first contains IDirect3DSurface9 pointer. mfxHDLPair.second
+            // is always MFX_INFINITE.
+            //
+            // D3D11: mfxHDLPair.first contains a ID3D11Texture2D pointer. mfxHDLPair.second
+            // contains the texture array index of the frame if the ID3D11Texture2D is an
+            // array texture, or always MFX_INFINITE if it is a normal texture.
+            #[cfg(target_os = "windows")]
+            AVPixelFormat::AV_PIX_FMT_QSV => {
+                let surface = unsafe { &*(frame.data[3] as *const mfxFrameSurface1) };
+                let hdl = unsafe { &*(surface.Data.MemId as *const mfxHDLPair) };
 
-            self.frame.hardware = true;
-            self.frame.data[0] = hdl.first;
-            self.frame.data[1] = hdl.second;
-        } else if frame.format == AVPixelFormat::AV_PIX_FMT_D3D11 as i32 {
-            for i in 0..2 {
-                self.frame.data[i] = frame.data[i] as *const _;
+                self.frame.data[0] = hdl.first;
+                self.frame.data[1] = hdl.second;
+
+                self.frame.hardware = true;
+                self.frame.format = VideoFormat::NV12;
             }
+            // The d3d11va video frame texture has no stride.
+            AVPixelFormat::AV_PIX_FMT_D3D11 => {
+                for i in 0..2 {
+                    self.frame.data[i] = frame.data[i] as *const _;
+                }
 
-            self.frame.hardware = true;
-        } else {
-            for i in 0..2 {
-                self.frame.data[i] = frame.data[i] as *const _;
-                self.frame.linesize[i] = frame.linesize[i] as usize;
+                self.frame.hardware = true;
+                self.frame.format = VideoFormat::NV12;
             }
+            _ => {
+                for i in 0..2 {
+                    self.frame.data[i] = frame.data[i] as *const _;
+                    self.frame.linesize[i] = frame.linesize[i] as usize;
+                }
 
-            self.frame.hardware = false;
-        }
+                self.frame.hardware = false;
+                self.frame.format = VideoFormat::I420;
+            }
+        };
 
         Some(&self.frame)
     }
@@ -378,6 +403,9 @@ impl VideoEncoder {
         context_mut.flags |= AV_CODEC_FLAG_LOW_DELAY as i32 | AV_CODEC_FLAG_GLOBAL_HEADER as i32;
         context_mut.profile = FF_PROFILE_H264_BASELINE;
 
+        // The QSV encoder can only use qsv frames. Although the internal structure is a
+        // platform-specific hardware texture, you cannot directly tell qsv a specific
+        // format.
         if options.codec == VideoEncoderType::Qsv {
             context_mut.pix_fmt = AVPixelFormat::AV_PIX_FMT_QSV;
         } else {
@@ -386,6 +414,8 @@ impl VideoEncoder {
             context_mut.pix_fmt = AVPixelFormat::AV_PIX_FMT_NV12;
         }
 
+        // The bitrate of qsv is always too high, so if it is qsv, using half of the
+        // current base bitrate is enough.
         let mut bit_rate = options.bit_rate as i64;
         if options.codec == VideoEncoderType::Qsv {
             bit_rate = bit_rate / 2;
@@ -403,27 +433,32 @@ impl VideoEncoder {
         context_mut.height = options.height as i32;
         context_mut.width = options.width as i32;
 
-        if options.codec == VideoEncoderType::Qsv {
-            set_option(context_mut, "async_depth", 1);
-            set_option(context_mut, "low_power", 1);
-            set_option(context_mut, "vcm", 1);
-        } else if options.codec == VideoEncoderType::Cuda {
-            set_option(context_mut, "zerolatency", 1);
-            set_option(context_mut, "b_adapt", 0);
-            set_option(context_mut, "rc", 2);
-            set_option(context_mut, "cbr", 1);
-            set_option(context_mut, "preset", 7);
-            set_option(context_mut, "tune", 3);
-        } else if options.codec == VideoEncoderType::X264 {
-            set_str_option(context_mut, "preset", "superfast");
-            set_str_option(context_mut, "tune", "zerolatency");
-            set_option(context_mut, "nal-hrd", 2);
-            set_option(
-                context_mut,
-                "sc_threshold",
-                options.key_frame_interval as i64,
-            );
-        }
+        match options.codec {
+            VideoEncoderType::Qsv => {
+                set_option(context_mut, "async_depth", 1);
+                set_option(context_mut, "low_power", 1);
+                set_option(context_mut, "vcm", 1);
+            }
+            VideoEncoderType::Cuda => {
+                set_option(context_mut, "zerolatency", 1);
+                set_option(context_mut, "b_adapt", 0);
+                set_option(context_mut, "rc", 2);
+                set_option(context_mut, "cbr", 1);
+                set_option(context_mut, "preset", 7);
+                set_option(context_mut, "tune", 3);
+            }
+            VideoEncoderType::X264 => {
+                set_str_option(context_mut, "preset", "superfast");
+                set_str_option(context_mut, "tune", "zerolatency");
+                set_option(context_mut, "nal-hrd", 2);
+                set_option(
+                    context_mut,
+                    "sc_threshold",
+                    options.key_frame_interval as i64,
+                );
+            }
+            _ => (),
+        };
 
         if unsafe { avcodec_open2(this.context, codec, null_mut()) } != 0 {
             return Err(VideoEncoderError::OpenAVCodecError);
@@ -438,6 +473,8 @@ impl VideoEncoder {
             return Err(VideoEncoderError::AllocAVPacketError);
         }
 
+        // When encoding a video, frames can be reused. Here, a frame is created and
+        // then reused by replacing the data inside the frame.
         create_video_frame(
             &mut this.frame,
             this.context,
@@ -450,6 +487,19 @@ impl VideoEncoder {
     pub fn update(&mut self, frame: &VideoFrame) -> bool {
         let av_frame = unsafe { &mut *self.frame };
         if frame.hardware {
+            // mfxFrameSurface1.Data.MemId contains a pointer to the mfxHDLPair structure
+            // when importing the following frames as QSV frames:
+            //
+            // VAAPI: mfxHDLPair.first contains a VASurfaceID pointer. mfxHDLPair.second is
+            // always MFX_INFINITE.
+            //
+            // DXVA2: mfxHDLPair.first contains IDirect3DSurface9 pointer. mfxHDLPair.second
+            // is always MFX_INFINITE.
+            //
+            // D3D11: mfxHDLPair.first contains a ID3D11Texture2D pointer. mfxHDLPair.second
+            // contains the texture array index of the frame if the ID3D11Texture2D is an
+            // array texture, or always MFX_INFINITE if it is a normal texture.
+            #[cfg(target_os = "windows")]
             if av_frame.format == AVPixelFormat::AV_PIX_FMT_QSV as i32 {
                 let surface = unsafe { &mut *(av_frame.data[3] as *mut mfxFrameSurface1) };
                 let hdl = unsafe { &mut *(surface.Data.MemId as *mut mfxHDLPair) };
@@ -458,10 +508,14 @@ impl VideoEncoder {
                 hdl.second = frame.data[1] as *mut _;
             }
         } else {
+            // Anyway, the hardware encoder has no way to check whether the current frame is
+            // writable.
             if unsafe { av_frame_make_writable(self.frame) } != 0 {
                 return false;
             }
 
+            // Directly replacing the pointer may cause some problems with pointer access.
+            // Copying data to the frame is the safest way.
             unsafe {
                 av_image_copy(
                     av_frame.data.as_mut_ptr(),
@@ -499,6 +553,10 @@ impl VideoEncoder {
     pub fn read<'a>(&'a mut self) -> Option<(&'a [u8], i32, u64)> {
         let packet_ref = unsafe { &*self.packet };
         let context_ref = unsafe { &*self.context };
+
+        // In the global header mode, ffmpeg will not automatically add sps and pps to
+        // the bitstream. You need to manually extract the sps and pps data and add it
+        // to the header as configuration information.
         if !self.initialized {
             self.initialized = true;
 

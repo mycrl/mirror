@@ -93,6 +93,9 @@ pub struct CreateVideoContextDescriptor<'a> {
 pub fn create_video_context(
     options: CreateVideoContextDescriptor,
 ) -> Result<*const AVCodec, CreateVideoContextError> {
+    // It is not possible to directly find the d3d11va decoder, so special
+    // processing is required here. For d3d11va, the hardware context is initialized
+    // below.
     let codec = match options.kind {
         CodecType::Encoder(kind) => {
             let codec: &str = kind.into();
@@ -117,6 +120,8 @@ pub fn create_video_context(
         return Err(CreateVideoContextError::AllocAVContextError);
     }
 
+    // The hardware codec is used, and the hardware context is initialized here for
+    // the hardware codec.
     #[cfg(target_os = "windows")]
     if options.kind.is_d3d() || options.kind.is_qsv() {
         let hw_device_ctx =
@@ -125,22 +130,26 @@ pub fn create_video_context(
             return Err(CreateVideoContextError::AllocAVHardwareDeviceContextError);
         }
 
-        let d3d11_hwctx = unsafe {
-            let hwctx = (&mut *hw_device_ctx).data as *mut AVHWDeviceContext;
-            &mut *((&mut *hwctx).hwctx as *mut AVD3D11VADeviceContext)
-        };
-
         let direct3d = if let Some(direct3d) = options.direct3d {
             direct3d
         } else {
             return Err(CreateVideoContextError::MissingDirect3DDevice);
         };
 
+        // Special handling is required for qsv, which requires multithreading to be
+        // enabled for the d3d device.
         if options.kind.is_qsv() {
             if let Err(e) = direct3d.set_multithread_protected(true) {
                 return Err(CreateVideoContextError::SetMultithreadProtectedError(e));
             }
         }
+
+        // Use externally created d3d devices and do not let ffmpeg create d3d devices
+        // itself.
+        let d3d11_hwctx = unsafe {
+            let hwctx = (&mut *hw_device_ctx).data as *mut AVHWDeviceContext;
+            &mut *((&mut *hwctx).hwctx as *mut AVD3D11VADeviceContext)
+        };
 
         d3d11_hwctx.device = direct3d.device.as_raw();
         d3d11_hwctx.device_context = direct3d.context.as_raw();
@@ -149,6 +158,8 @@ pub fn create_video_context(
             return Err(CreateVideoContextError::InitAVHardwareDeviceContextError);
         }
 
+        // Creating a qsv device is a little different, the qsv hardware context needs
+        // to be derived from the platform's native hardware context.
         let context_mut = unsafe { &mut **options.context };
         if options.kind.is_qsv() {
             let mut qsv_device_ctx = null_mut();
@@ -168,6 +179,8 @@ pub fn create_video_context(
                 context_mut.hw_device_ctx = av_buffer_ref(qsv_device_ctx);
             }
 
+            // Similarly, the qsv hardware frame also needs to be created and initialized
+            // independently.
             if options.kind.is_encoder() {
                 let hw_frames_ctx = unsafe { av_hwframe_ctx_alloc(context_mut.hw_device_ctx) };
                 if hw_frames_ctx.is_null() {
@@ -231,6 +244,8 @@ pub fn create_video_frame(
     frame_mut.height = context_ref.height;
     frame_mut.format = context_ref.pix_fmt as i32;
 
+    // qsv needs to indicate the use of hardware textures, otherwise qsv will return
+    // software textures.
     if kind.is_qsv() {
         if unsafe { av_hwframe_get_buffer(context_ref.hw_frames_ctx, *frame, 0) } != 0 {
             return Err(CreateVideoFrameError::AllocHardwareAVFrameBufferError);

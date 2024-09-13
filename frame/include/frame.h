@@ -16,6 +16,7 @@ typedef enum
 {
     RGBA,
     NV12,
+    I420,
 } VideoFormat;
 
 typedef struct

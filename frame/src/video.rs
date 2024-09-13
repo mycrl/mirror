@@ -11,6 +11,7 @@ pub struct VideoSize {
 pub enum VideoFormat {
     RGBA,
     NV12,
+    I420,
 }
 
 /// YCbCr (NV12)
