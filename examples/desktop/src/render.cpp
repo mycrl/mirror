@@ -14,8 +14,6 @@ SimpleRender::SimpleRender(Args& args,
 
     _options.size = size;
     _options.hwnd = hwnd;
-    _options.d3d_device = d3d_device;
-    _options.d3d_device_context = d3d_device_context;
 }
 #else
 SimpleRender::SimpleRender(Args& args)

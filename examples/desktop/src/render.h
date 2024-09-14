@@ -9,7 +9,7 @@
 
 extern "C"
 {
-#include <renderer.h>
+#include <mirror.h>
 }
 
 #include <functional>

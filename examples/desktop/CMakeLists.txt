@@ -41,9 +41,8 @@ else()
                     src/service.cpp)
 endif()
 
-include_directories("../../sdk/desktop/include"
-                    "../../sdk/renderer/include"
-                    "../../frame/include")
+include_directories("../../ffi/mirror/include"
+                    "../../common/frame/include")
 
 if(UNIX)
     include_directories("${THIRD_PARTY_DIR}/sdl2/include")
@@ -83,12 +82,10 @@ if(WIN32)
                           userenv
                           ntdll
                           bcrypt
-                          mirror.dll.lib
-                          renderer.dll.lib)
+                          mirror.dll.lib)
 endif()
 
 if(UNIX)
     target_link_libraries(example
-                          libmirror.so
-                          librenderer.so)
+                          libmirror.so)
 endif()
