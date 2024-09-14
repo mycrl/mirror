@@ -9,16 +9,17 @@ lto = true
 [workspace]
 resolver = "2"
 members = [
-    "utils",
+    "codec",
+    "capture",
+    "mirror",
     "service",
-    "sdk/desktop",
-    "sdk/renderer",
-    "sdk/android/mirror/src/main/native",
-    "sdk/android/mirror/src/main/macro",
-    "transport/multicast",
-    "transport/srt",
     "transport",
-    "media/frame",
-    "media/codec",
-    "media/capture",
+    "common/jni-macro",
+    "common/multicast",
+    "common/srt",
+    "common/frame",
+    "common/utils",
+    "ffi/mirror",
+    # "ffi/android/mirror/src/main/native",
+    # "ffi/android/mirror/src/main/macro",
 ]

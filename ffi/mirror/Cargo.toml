@@ -1,0 +1,24 @@
+[package]
+name = "mirror-desktop"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+name = "mirror"
+
+[dependencies]
+anyhow = "1.0.82"
+bytes = "1.5"
+log = "0.4.20"
+jni = "0.21.1"
+num_cpus = "1.16.0"
+utils = { path = "../../common/utils" }
+frame = { path = "../../common/frame" }
+transport = { path = "../../transport" }
+jni-macro = { path = "../../common/jni-macro" }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+codec = { path = "../../codec" }
+capture = { path = "../../capture" }
+mirror = { path = "../../mirror" }
