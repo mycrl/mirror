@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 rubato = "0.15.0"
-utils = { path = "../utils" }
+utils = { path = "../../utils" }
 
 [target.'cfg(target_os = "windows")'.dependencies.windows]
 version = "0.58.0"

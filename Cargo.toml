@@ -10,15 +10,15 @@ lto = true
 resolver = "2"
 members = [
     "utils",
-    "codec",
     "service",
-    "capture",
-    "transport",
     "sdk/desktop",
     "sdk/renderer",
     "sdk/android/mirror/src/main/native",
     "sdk/android/mirror/src/main/macro",
-    "multicast",
-    "srt", 
-    "frame",
+    "transport/multicast",
+    "transport/srt",
+    "transport",
+    "media/frame",
+    "media/codec",
+    "media/capture",
 ]

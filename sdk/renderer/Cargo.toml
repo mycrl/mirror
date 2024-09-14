@@ -11,7 +11,7 @@ name = "renderer"
 anyhow = "1.0.86"
 cpal = "0.15.3"
 utils = { path = "../../utils" }
-frame = { path = "../../frame" }
+frame = { path = "../../media/frame" }
 log = "0.4.20"
 
 [target.'cfg(target_os = "windows")'.dependencies.windows]

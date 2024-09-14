@@ -12,10 +12,10 @@ anyhow = "1.0.82"
 bytes = "1.5"
 crossbeam = "0.8"
 utils = { path = "../../utils" }
-frame = { path = "../../frame" }
-codec = { path = "../../codec", default-features = false }
+frame = { path = "../../media/frame" }
+codec = { path = "../../media/codec", default-features = false }
 transport = { path = "../../transport" }
 log = "0.4.20"
 
 [target.'cfg(not(target_os = "macos"))'.dependencies]
-capture = { path = "../../capture" }
+capture = { path = "../../media/capture" }
