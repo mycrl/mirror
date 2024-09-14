@@ -22,7 +22,7 @@ void close_proc(void* ctx)
 MirrorServiceExt::MirrorServiceExt(Args& args, HWND hwnd, HINSTANCE hinstance)
     : _args(args)
 {
-    MirrorOptions mirror_options;
+    MirrorDescriptor mirror_options;
     mirror_options.server = const_cast<char*>(_args.ArgsParams.server.c_str());
     mirror_options.multicast = const_cast<char*>("239.0.0.1");
     mirror_options.mtu = 1400;
@@ -58,10 +58,10 @@ bool MirrorServiceExt::CreateMirrorSender()
         return true;
     }
 
-    auto video_sources = mirror_get_sources(SourceType::Screen);
+    auto video_sources = mirror_get_sources(xSourceTypeScreen);
 
-    VideoOptions video_options;
-    video_options.encoder.codec = const_cast<char*>(_args.ArgsParams.encoder.c_str());
+    VideoDescriptor video_options;
+    video_options.encoder.codec = _args.ArgsParams.encoder;
     video_options.encoder.width = _args.ArgsParams.width;
     video_options.encoder.height = _args.ArgsParams.height;
     video_options.encoder.frame_rate = _args.ArgsParams.fps;
@@ -76,9 +76,9 @@ bool MirrorServiceExt::CreateMirrorSender()
         }
     }
 
-    auto audio_sources = mirror_get_sources(SourceType::Audio);
+    auto audio_sources = mirror_get_sources(xSourceTypeAudio);
 
-    AudioOptions audio_options;
+    AudioDescriptor audio_options;
     audio_options.encoder.sample_rate = 48000;
     audio_options.encoder.bit_rate = 64000;
 
@@ -90,7 +90,7 @@ bool MirrorServiceExt::CreateMirrorSender()
         }
     }
 
-    SenderOptions options;
+    SenderDescriptor options;
     options.video = &video_options;
     options.audio = &audio_options;
     options.multicast = false;
@@ -130,7 +130,7 @@ bool MirrorServiceExt::CreateMirrorReceiver()
     Render->IsRender = true;
     _receiver = mirror_create_receiver(_mirror,
                                        _args.ArgsParams.id,
-                                       _args.ArgsParams.decoder.c_str(),
+                                       _args.ArgsParams.decoder,
                                        sink);
     if (_receiver == nullptr)
     {

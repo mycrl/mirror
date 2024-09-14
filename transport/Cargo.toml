@@ -6,9 +6,9 @@ edition = "2021"
 [dependencies]
 bytes = "1.5.0"
 log = "0.4.20"
-srt = { path = "../srt" }
-multicast = { path = "../multicast" }
-utils = { path = "../utils" }
+srt = { path = "../common/srt" }
+multicast = { path = "../common/multicast" }
+utils = { path = "../common/utils" }
 service = { path = "../service" }
 xxhash-rust = { version = "0.8.11", features = ["xxh3", "xxh64"]}
 smallvec = "1.13.2"

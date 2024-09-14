@@ -1,45 +1,50 @@
-pub mod audio;
-pub mod video;
+mod audio;
+mod util;
+mod video;
 
-use std::ffi::{c_char, c_int};
+use std::ffi::{c_char, c_int, c_void};
+use std::fmt;
 
-use log::{log, Level};
+pub use self::{
+    audio::{
+        create_opus_identification_header, AudioDecoder, AudioDecoderError, AudioEncoder,
+        AudioEncoderError, AudioEncoderSettings,
+    },
+    video::{
+        VideoDecoder, VideoDecoderError, VideoDecoderSettings, VideoDecoderType, VideoEncoder,
+        VideoEncoderError, VideoEncoderSettings, VideoEncoderType,
+    },
+};
+
+use ffmpeg_sys_next::*;
+use log::Level;
 use utils::strings::Strings;
 
-pub use audio::{AudioDecoder, AudioEncodePacket, AudioEncoder, AudioEncoderSettings};
-pub use video::{VideoDecoder, VideoEncodePacket, VideoEncoder, VideoEncoderSettings};
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Error {
-    AudioEncoder,
-    VideoEncoder,
-    AudioDecoder,
-    VideoDecoder,
+pub fn is_hardware_encoder(kind: VideoEncoderType) -> bool {
+    match kind {
+        VideoEncoderType::Qsv => true,
+        VideoEncoderType::Cuda => true,
+        _ => false,
+    }
 }
 
-impl std::error::Error for Error {}
+#[derive(Debug)]
+pub enum CodecError {
+    NotSupportCodec,
+}
 
-impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl std::error::Error for CodecError {}
+
+impl fmt::Display for CodecError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
             "{}",
             match self {
-                Self::AudioDecoder => "failed to create audio decoder",
-                Self::AudioEncoder => "failed to create audio encoder",
-                Self::VideoDecoder => "failed to create video decoder",
-                Self::VideoEncoder => "failed to create video encoder",
+                Self::NotSupportCodec => "NotSupportCodec",
             }
         )
     }
-}
-
-#[repr(C)]
-pub struct RawPacket {
-    pub buffer: *const u8,
-    pub len: usize,
-    pub flags: c_int,
-    pub timestamp: u64,
 }
 
 #[repr(C)]
@@ -69,13 +74,39 @@ impl Into<Level> for LoggerLevel {
 }
 
 extern "C" {
-    fn codec_remove_logger();
-    fn codec_set_logger(logger: extern "C" fn(level: LoggerLevel, message: *const c_char));
+    // Write formatted data from variable argument list to sized buffer
+    // Composes a string with the same text that would be printed if format was used
+    // on printf, but using the elements in the variable argument list identified by
+    // arg instead of additional function arguments and storing the resulting
+    // content as a C string in the buffer pointed by s (taking n as the maximum
+    // buffer capacity to fill).
+    //
+    // If the resulting string would be longer than n-1 characters, the remaining
+    // characters are discarded and not stored, but counted for the value returned
+    // by the function.
+    //
+    // Internally, the function retrieves arguments from the list identified by arg
+    // as if va_arg was used on it, and thus the state of arg is likely to be
+    // altered by the call.
+    //
+    // In any case, arg should have been initialized by va_start at some point
+    // before the call, and it is expected to be released by va_end at some point
+    // after the call.
+    fn vsnprintf(s: *mut c_char, n: usize, format: *const c_char, args: va_list) -> c_int;
 }
 
-extern "C" fn logger_proc(level: LoggerLevel, message: *const c_char) {
-    if let Ok(message) = Strings::from(message).to_string() {
-        log!(
+unsafe extern "C" fn logger_proc(
+    _: *mut c_void,
+    level: c_int,
+    message: *const c_char,
+    args: va_list,
+) {
+    let mut chars: [c_char; 1024] = [0; 1024];
+    vsnprintf(chars.as_mut_ptr(), 2048, message, args);
+
+    let level: LoggerLevel = std::mem::transmute(level);
+    if let Ok(message) = Strings::from(chars.as_ptr()).to_string() {
+        log::log!(
             target: "ffmpeg",
             level.into(),
             "{}",
@@ -85,13 +116,13 @@ extern "C" fn logger_proc(level: LoggerLevel, message: *const c_char) {
 }
 
 pub fn startup() {
-    unsafe { codec_set_logger(logger_proc) }
+    unsafe {
+        av_log_set_callback(Some(logger_proc));
+    }
 }
 
 pub fn shutdown() {
-    unsafe { codec_remove_logger() }
-}
-
-pub fn is_hardware_codec(codec: &str) -> bool {
-    codec == "h264_qsv" || codec == "h264_cuvid" || codec == "d3d11va" || codec == "h264_nvenc"
+    unsafe {
+        av_log_set_callback(None);
+    }
 }

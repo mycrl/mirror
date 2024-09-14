@@ -1,101 +1,363 @@
-use crate::{Error, RawPacket};
+use std::{ffi::c_int, ptr::null_mut};
 
-use std::{
-    ffi::{c_char, CString},
-    os::raw::c_void,
-};
-
+use ffmpeg_sys_next::*;
 use frame::AudioFrame;
+use thiserror::Error;
+use utils::strings::Strings;
 
-extern "C" {
-    fn codec_create_audio_decoder(settings: *const RawAudioDecoderSettings) -> *const c_void;
-    fn codec_audio_decoder_send_packet(codec: *const c_void, packet: *const RawPacket) -> bool;
-    fn codec_audio_decoder_read_frame(codec: *const c_void) -> *const AudioFrame;
-    fn codec_release_audio_decoder(codec: *const c_void);
-    fn codec_create_audio_encoder(settings: *const RawAudioEncoderSettings) -> *const c_void;
-    fn codec_audio_encoder_copy_frame(codec: *const c_void, frame: *const AudioFrame) -> bool;
-    fn codec_audio_encoder_send_frame(codec: *const c_void) -> bool;
-    fn codec_audio_encoder_read_packet(codec: *const c_void) -> *const RawPacket;
-    fn codec_unref_audio_encoder_packet(codec: *const c_void);
-    fn codec_release_audio_encoder(codec: *const c_void);
+use crate::util::{set_option, set_str_option};
+
+#[derive(Error, Debug)]
+pub enum AudioDecoderError {
+    #[error("not found audio av coec")]
+    NotFoundAVCodec,
+    #[error("failed to alloc av context")]
+    AllocAVContextError,
+    #[error("failed to open av codec")]
+    OpenAVCodecError,
+    #[error("failed to init av parser context")]
+    InitAVCodecParserContextError,
+    #[error("failed to alloc av packet")]
+    AllocAVPacketError,
+    #[error("parser parse packet failed")]
+    ParsePacketError,
+    #[error("send av packet to codec failed")]
+    SendPacketToAVCodecError,
+    #[error("failed to alloc av frame")]
+    AllocAVFrameError,
 }
 
-#[repr(C)]
-pub struct RawAudioEncoderSettings {
-    pub codec: *const c_char,
-    pub bit_rate: u64,
-    pub sample_rate: u64,
+pub struct AudioDecoder {
+    context: *mut AVCodecContext,
+    parser: *mut AVCodecParserContext,
+    packet: *mut AVPacket,
+    av_frame: *mut AVFrame,
+    frame: AudioFrame,
 }
 
-impl Drop for RawAudioEncoderSettings {
-    fn drop(&mut self) {
-        drop(unsafe { CString::from_raw(self.codec as *mut _) })
+unsafe impl Sync for AudioDecoder {}
+unsafe impl Send for AudioDecoder {}
+
+impl AudioDecoder {
+    pub fn new() -> Result<Self, AudioDecoderError> {
+        let codec = unsafe { avcodec_find_decoder_by_name(Strings::from("libopus").as_ptr()) };
+        if codec.is_null() {
+            return Err(AudioDecoderError::NotFoundAVCodec);
+        }
+
+        let mut this = Self {
+            context: null_mut(),
+            parser: null_mut(),
+            packet: null_mut(),
+            av_frame: null_mut(),
+            frame: AudioFrame::default(),
+        };
+
+        this.context = unsafe { avcodec_alloc_context3(codec) };
+        if this.context.is_null() {
+            return Err(AudioDecoderError::AllocAVContextError);
+        }
+
+        let ch_layout = AVChannelLayout {
+            order: AVChannelOrder::AV_CHANNEL_ORDER_NATIVE,
+            nb_channels: 1,
+            u: AVChannelLayout__bindgen_ty_1 {
+                mask: AV_CH_LAYOUT_MONO,
+            },
+            opaque: null_mut(),
+        };
+
+        let context_mut = unsafe { &mut *this.context };
+        context_mut.thread_count = 4;
+        context_mut.thread_type = FF_THREAD_SLICE;
+        context_mut.request_sample_fmt = AVSampleFormat::AV_SAMPLE_FMT_S16;
+        context_mut.ch_layout = ch_layout;
+        context_mut.flags |= AV_CODEC_FLAG_LOW_DELAY as i32;
+        context_mut.flags2 |= AV_CODEC_FLAG2_FAST;
+
+        if unsafe { avcodec_open2(this.context, codec, null_mut()) } != 0 {
+            return Err(AudioDecoderError::OpenAVCodecError);
+        }
+
+        if unsafe { avcodec_is_open(this.context) } == 0 {
+            return Err(AudioDecoderError::OpenAVCodecError);
+        }
+
+        this.parser = unsafe { av_parser_init({ &*codec }.id as i32) };
+        if this.parser.is_null() {
+            return Err(AudioDecoderError::InitAVCodecParserContextError);
+        }
+
+        this.packet = unsafe { av_packet_alloc() };
+        if this.packet.is_null() {
+            return Err(AudioDecoderError::AllocAVPacketError);
+        }
+
+        this.av_frame = unsafe { av_frame_alloc() };
+        if this.av_frame.is_null() {
+            return Err(AudioDecoderError::AllocAVFrameError);
+        }
+
+        Ok(this)
+    }
+
+    pub fn decode(&mut self, buf: &[u8], pts: u64) -> Result<usize, AudioDecoderError> {
+        if buf.is_empty() {
+            return Ok(0);
+        }
+
+        let packet = unsafe { &mut *self.packet };
+        let len = unsafe {
+            av_parser_parse2(
+                self.parser,
+                self.context,
+                &mut packet.data,
+                &mut packet.size,
+                buf.as_ptr(),
+                buf.len() as c_int,
+                pts as i64,
+                AV_NOPTS_VALUE,
+                0,
+            )
+        };
+
+        if len < 0 {
+            return Err(AudioDecoderError::ParsePacketError);
+        }
+
+        if packet.size > 0 {
+            if unsafe { avcodec_send_packet(self.context, self.packet) } != 0 {
+                return Err(AudioDecoderError::SendPacketToAVCodecError);
+            }
+        }
+
+        Ok(len as usize)
+    }
+
+    pub fn read<'a>(&'a mut self) -> Option<&'a AudioFrame> {
+        if !self.av_frame.is_null() {
+            unsafe {
+                av_frame_free(&mut self.av_frame);
+            }
+        }
+
+        self.av_frame = unsafe { av_frame_alloc() };
+        if self.av_frame.is_null() {
+            return None;
+        }
+
+        if unsafe { avcodec_receive_frame(self.context, self.av_frame) } != 0 {
+            return None;
+        }
+
+        let frame = unsafe { &*self.av_frame };
+        self.frame.sample_rate = frame.sample_rate as u32;
+        self.frame.frames = frame.nb_samples as u32;
+        self.frame.data = frame.data[0] as *const _;
+
+        Some(&self.frame)
     }
 }
 
-#[derive(Debug, Clone)]
+impl Drop for AudioDecoder {
+    fn drop(&mut self) {
+        if !self.packet.is_null() {
+            unsafe {
+                av_packet_free(&mut self.packet);
+            }
+        }
+
+        if !self.parser.is_null() {
+            unsafe {
+                av_parser_close(self.parser);
+            }
+        }
+
+        if !self.context.is_null() {
+            unsafe {
+                avcodec_free_context(&mut self.context);
+            }
+        }
+
+        if !self.av_frame.is_null() {
+            unsafe {
+                av_frame_free(&mut self.av_frame);
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
 pub struct AudioEncoderSettings {
-    pub codec: String,
     pub bit_rate: u64,
     pub sample_rate: u64,
 }
 
-impl AudioEncoderSettings {
-    fn as_raw(&self) -> RawAudioEncoderSettings {
-        RawAudioEncoderSettings {
-            codec: CString::new(self.codec.as_str()).unwrap().into_raw(),
-            sample_rate: self.sample_rate,
-            bit_rate: self.bit_rate,
+#[derive(Error, Debug)]
+pub enum AudioEncoderError {
+    #[error("not found audio av coec")]
+    NotFoundAVCodec,
+    #[error("failed to alloc av context")]
+    AllocAVContextError,
+    #[error("failed to open av codec")]
+    OpenAVCodecError,
+    #[error("failed to alloc av packet")]
+    AllocAVPacketError,
+    #[error("failed to alloc av frame")]
+    AllocAVFrameError,
+    #[error("send frame to codec failed")]
+    EncodeFrameError,
+}
+
+pub struct AudioEncoder {
+    context: *mut AVCodecContext,
+    packet: *mut AVPacket,
+    frame: *mut AVFrame,
+    pts: i64,
+}
+
+unsafe impl Sync for AudioEncoder {}
+unsafe impl Send for AudioEncoder {}
+
+impl AudioEncoder {
+    pub fn new(options: AudioEncoderSettings) -> Result<Self, AudioEncoderError> {
+        let codec = unsafe { avcodec_find_encoder_by_name(Strings::from("libopus").as_ptr()) };
+        if codec.is_null() {
+            return Err(AudioEncoderError::NotFoundAVCodec);
         }
-    }
-}
 
-#[repr(C)]
-pub struct RawAudioDecoderSettings {
-    pub codec: *const c_char,
-}
+        let mut this = Self {
+            context: null_mut(),
+            packet: null_mut(),
+            frame: null_mut(),
+            pts: 0,
+        };
 
-impl Drop for RawAudioDecoderSettings {
-    fn drop(&mut self) {
-        drop(unsafe { CString::from_raw(self.codec as *mut _) })
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct AudioDecoderSettings {
-    pub codec: String,
-}
-
-impl AudioDecoderSettings {
-    fn as_raw(&self) -> RawAudioDecoderSettings {
-        RawAudioDecoderSettings {
-            codec: CString::new(self.codec.as_str()).unwrap().into_raw(),
+        this.context = unsafe { avcodec_alloc_context3(codec) };
+        if this.context.is_null() {
+            return Err(AudioEncoderError::AllocAVContextError);
         }
+
+        let context_mut = unsafe { &mut *this.context };
+        let ch_layout = AVChannelLayout {
+            order: AVChannelOrder::AV_CHANNEL_ORDER_NATIVE,
+            nb_channels: 1,
+            u: AVChannelLayout__bindgen_ty_1 {
+                mask: AV_CH_LAYOUT_MONO,
+            },
+            opaque: null_mut(),
+        };
+
+        context_mut.thread_count = 4;
+        context_mut.thread_type = FF_THREAD_SLICE;
+        context_mut.sample_fmt = AVSampleFormat::AV_SAMPLE_FMT_S16;
+        context_mut.ch_layout = ch_layout;
+        context_mut.flags |= AV_CODEC_FLAG_LOW_DELAY as i32;
+        context_mut.flags2 |= AV_CODEC_FLAG2_FAST;
+
+        context_mut.bit_rate = options.bit_rate as i64;
+        context_mut.sample_rate = options.sample_rate as i32;
+        context_mut.time_base = unsafe { av_make_q(1, options.sample_rate as i32) };
+
+        // Forces opus to be encoded in units of 100 milliseconds.
+        set_str_option(context_mut, "frame_duration", "100");
+        set_option(context_mut, "application", 2051);
+
+        if unsafe { avcodec_open2(this.context, codec, null_mut()) } != 0 {
+            return Err(AudioEncoderError::OpenAVCodecError);
+        }
+
+        if unsafe { avcodec_is_open(this.context) } == 0 {
+            return Err(AudioEncoderError::OpenAVCodecError);
+        }
+
+        this.packet = unsafe { av_packet_alloc() };
+        if this.packet.is_null() {
+            return Err(AudioEncoderError::AllocAVPacketError);
+        }
+
+        this.frame = unsafe { av_frame_alloc() };
+        if this.frame.is_null() {
+            return Err(AudioEncoderError::AllocAVFrameError);
+        }
+
+        Ok(this)
+    }
+
+    pub fn update(&mut self, frame: &AudioFrame) -> bool {
+        let av_frame = unsafe { &mut *self.frame };
+        let context_ref = unsafe { &*self.context };
+
+        av_frame.nb_samples = frame.frames as i32;
+        av_frame.format = context_ref.sample_fmt as i32;
+        av_frame.ch_layout = context_ref.ch_layout;
+
+        if unsafe { av_frame_get_buffer(self.frame, 0) } != 0 {
+            return false;
+        }
+
+        unsafe {
+            av_samples_fill_arrays(
+                av_frame.data.as_mut_ptr(),
+                av_frame.linesize.as_mut_ptr(),
+                frame.data as *const _,
+                1,
+                frame.frames as i32,
+                context_ref.sample_fmt,
+                0,
+            );
+        }
+
+        av_frame.pts = self.pts;
+        self.pts += context_ref.frame_size as i64;
+
+        true
+    }
+
+    pub fn encode(&mut self) -> Result<(), AudioEncoderError> {
+        if unsafe { avcodec_send_frame(self.context, self.frame) } != 0 {
+            return Err(AudioEncoderError::EncodeFrameError);
+        }
+
+        unsafe {
+            av_frame_unref(self.frame);
+        }
+
+        Ok(())
+    }
+
+    pub fn read<'a>(&'a mut self) -> Option<(&'a [u8], i32, u64)> {
+        if unsafe { avcodec_receive_packet(self.context, self.packet) } != 0 {
+            return None;
+        }
+
+        let packet_ref = unsafe { &*self.packet };
+        Some((
+            unsafe { std::slice::from_raw_parts(packet_ref.data, packet_ref.size as usize) },
+            packet_ref.flags,
+            packet_ref.pts as u64,
+        ))
     }
 }
 
-#[repr(C)]
-pub struct AudioEncodePacket<'a> {
-    codec: *const c_void,
-    pub buffer: &'a [u8],
-    pub flags: i32,
-    pub timestamp: u64,
-}
-
-impl Drop for AudioEncodePacket<'_> {
+impl Drop for AudioEncoder {
     fn drop(&mut self) {
-        unsafe { codec_unref_audio_encoder_packet(self.codec) }
-    }
-}
+        if !self.packet.is_null() {
+            unsafe {
+                av_packet_free(&mut self.packet);
+            }
+        }
 
-impl<'a> AudioEncodePacket<'a> {
-    fn from_raw(codec: *const c_void, ptr: *const RawPacket) -> Self {
-        let raw = unsafe { &*ptr };
-        Self {
-            buffer: unsafe { std::slice::from_raw_parts(raw.buffer, raw.len) },
-            timestamp: raw.timestamp,
-            flags: raw.flags,
-            codec,
+        if !self.context.is_null() {
+            unsafe {
+                avcodec_free_context(&mut self.context);
+            }
+        }
+
+        if !self.frame.is_null() {
+            unsafe {
+                av_frame_free(&mut self.frame);
+            }
         }
     }
 }
@@ -337,105 +599,4 @@ pub fn create_opus_identification_header(channel: u8, sample_rate: u32) -> [u8; 
         0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
         0x00, 0xb4, 0xc4, 0x04, 0x00, 0x00, 0x00, 0x00,
     ]
-}
-
-pub struct AudioDecoder(*const c_void);
-
-unsafe impl Send for AudioDecoder {}
-unsafe impl Sync for AudioDecoder {}
-
-impl AudioDecoder {
-    /// Initialize the AVCodecContext to use the given AVCodec.
-    pub fn new(settings: &AudioDecoderSettings) -> Result<Self, Error> {
-        log::info!("create AudioDecoder: settings={:?}", settings);
-
-        let settings = settings.as_raw();
-        let codec = unsafe { codec_create_audio_decoder(&settings) };
-        if !codec.is_null() {
-            Ok(Self(codec))
-        } else {
-            Err(Error::AudioDecoder)
-        }
-    }
-
-    /// Supply raw packet data as input to a decoder.
-    pub fn decode(&mut self, data: &[u8], flags: i32, timestamp: u64) -> bool {
-        unsafe {
-            codec_audio_decoder_send_packet(
-                self.0,
-                &RawPacket {
-                    buffer: data.as_ptr(),
-                    len: data.len(),
-                    timestamp,
-                    flags,
-                },
-            )
-        }
-    }
-
-    /// Return decoded output data from a decoder or encoder (when the
-    /// AV_CODEC_FLAG_RECON_FRAME flag is used).
-    pub fn read(&mut self) -> Option<&AudioFrame> {
-        let frame = unsafe { codec_audio_decoder_read_frame(self.0) };
-        if !frame.is_null() {
-            Some(unsafe { &*frame })
-        } else {
-            None
-        }
-    }
-}
-
-impl Drop for AudioDecoder {
-    fn drop(&mut self) {
-        log::info!("close AudioDecoder");
-
-        unsafe { codec_release_audio_decoder(self.0) }
-    }
-}
-
-pub struct AudioEncoder(*const c_void);
-
-unsafe impl Send for AudioEncoder {}
-unsafe impl Sync for AudioEncoder {}
-
-impl AudioEncoder {
-    /// Initialize the AVCodecContext to use the given AVCodec.
-    pub fn new(settings: &AudioEncoderSettings) -> Result<Self, Error> {
-        log::info!("create AudioEncoder: settings={:?}", settings);
-
-        let settings = settings.as_raw();
-        let codec = unsafe { codec_create_audio_encoder(&settings) };
-        if !codec.is_null() {
-            Ok(Self(codec))
-        } else {
-            Err(Error::AudioEncoder)
-        }
-    }
-
-    pub fn send_frame(&mut self, frame: &AudioFrame) -> bool {
-        unsafe { codec_audio_encoder_copy_frame(self.0, frame) }
-    }
-
-    /// Supply a raw video or audio frame to the encoder.
-    pub fn encode(&mut self) -> bool {
-        unsafe { codec_audio_encoder_send_frame(self.0) }
-    }
-
-    /// Read encoded data from the encoder.
-    pub fn read(&mut self) -> Option<AudioEncodePacket> {
-        let packet = unsafe { codec_audio_encoder_read_packet(self.0) };
-        if !packet.is_null() {
-            Some(AudioEncodePacket::from_raw(self.0, packet))
-        } else {
-            None
-        }
-    }
-}
-
-impl Drop for AudioEncoder {
-    fn drop(&mut self) {
-        log::info!("close AudioEncoder");
-
-        unsafe { codec_release_audio_encoder(self.0) }
-    }
 }

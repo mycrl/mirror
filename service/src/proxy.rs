@@ -6,14 +6,14 @@ use std::{
 
 use anyhow::Result;
 use service::{route::Route, SocketKind, StreamInfo};
-use srt::{Options, Server};
+use srt::{Descriptor, Server};
 
 use crate::Configure;
 
 pub fn start_server(config: Configure, route: Arc<Route>) -> Result<()> {
     // Configuration of the srt server. Since this suite only works within the LAN,
     // the delay is set to the minimum delay without considering network factors.
-    let mut opt = Options::default();
+    let mut opt = Descriptor::default();
     opt.mtu = config.mtu as u32;
     opt.latency = 40;
     opt.fc = 32;

@@ -18,4 +18,4 @@ rootProject.name = 'simple'
 include ':app'
 include ':mirror'
 
-project(':mirror').projectDir = new File(settingsDir, '../../sdk/android/mirror')
+project(':mirror').projectDir = new File(settingsDir, '../../ffi/android/mirror')

@@ -9,7 +9,7 @@
 
 extern "C"
 {
-#include <renderer.h>
+#include <mirror.h>
 }
 
 #include <functional>
@@ -48,7 +48,7 @@ public:
 private:
     Args& _args;
     Render _renderer = nullptr;
-    RendererOptions _options = {};
+    RendererDescriptor _options = {};
 #ifdef WIN32
     WindowHandle _window_handle = nullptr;
     HWND _hwnd;

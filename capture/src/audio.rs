@@ -24,7 +24,7 @@ unsafe impl Sync for AudioCapture {}
 impl CaptureHandler for AudioCapture {
     type Frame = AudioFrame;
     type Error = anyhow::Error;
-    type CaptureOptions = AudioCaptureSourceDescription;
+    type CaptureDescriptor = AudioCaptureSourceDescription;
 
     // Get the default input device. In theory, all microphones will be listed here.
     fn get_sources() -> Result<Vec<Source>, Self::Error> {
@@ -55,7 +55,7 @@ impl CaptureHandler for AudioCapture {
 
     fn start<S: crate::FrameArrived<Frame = Self::Frame> + 'static>(
         &self,
-        options: Self::CaptureOptions,
+        options: Self::CaptureDescriptor,
         mut arrived: S,
     ) -> Result<(), Self::Error> {
         // Find devices with matching names

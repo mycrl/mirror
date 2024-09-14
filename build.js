@@ -63,23 +63,22 @@ const Replace = (file, filters) => {
 
     if (!fs.existsSync('./target/ffmpeg'))
     {
-        if (!fs.existsSync('./target/ffmpeg.zip'))
-        {
-            const name = process.platform == 'win32' ? 
-                `ffmpeg-windows-x64-${Args.release ? 'release' : 'debug'}.zip` : 
-                'ffmpeg-linux-x64-release.zip'
+       if (!fs.existsSync('./target/ffmpeg.zip'))
+       {
+           const name = process.platform == 'win32' ? 
+               `ffmpeg-windows-x64-${Args.release ? 'release' : 'debug'}.zip` : 
+               'ffmpeg-linux-x64-release.zip'
 
-            console.log('Start download ffmpeg...')
-            await download(`${BaseDistributions}/${name}`,'./target')
-            fs.renameSync(`./target/${name}`, './target/ffmpeg.zip')
-        }
+           console.log('Start download ffmpeg...')
+           await download(`${BaseDistributions}/${name}`,'./target')
+           fs.renameSync(`./target/${name}`, './target/ffmpeg.zip')
+       }
         
-        await (await unzipper.Open.file('./target/ffmpeg.zip')).extract({ path: './target' })
+       await (await unzipper.Open.file('./target/ffmpeg.zip')).extract({ path: './target' })
     }
 
-    await Command(`cargo build ${Args.release ? '--release' : ''} -p mirror`)
+    await Command(`cargo build ${Args.release ? '--release' : ''} -p mirror-desktop`)
     await Command(`cargo build ${Args.release ? '--release' : ''} -p service`)
-    await Command(`cargo build ${Args.release ? '--release' : ''} -p renderer`)
 
     if (!fs.existsSync('./examples/desktop/build'))
     {
@@ -104,9 +103,8 @@ const Replace = (file, filters) => {
         ['./examples/desktop/README.md', './build/examples/README.md'],
 
         /* inculde */
-        ['./sdk/renderer/include/renderer.h', './build/include/renderer.h'],
-        ['./sdk/desktop/include/mirror.h', './build/include/mirror.h'],
-        ['./frame/include/frame.h', './build/include/frame.h'],
+        ['./ffi/mirror/include/mirror.h', './build/include/mirror.h'],
+        ['./common/frame/include/frame.h', './build/include/frame.h'],
     ])
     {
         fs.copyFileSync(...item)
@@ -118,9 +116,7 @@ const Replace = (file, filters) => {
             [`./examples/desktop/build/${Profile}/example.exe`, './build/bin/example.exe'],
             [`./target/${Profile.toLowerCase()}/service.exe`, './build/server/mirror-service.exe'],
             [`./target/${Profile.toLowerCase()}/mirror.dll.lib`, './build/lib/mirror.dll.lib'],
-            [`./target/${Profile.toLowerCase()}/renderer.dll.lib`, './build/lib/renderer.dll.lib'],
             [`./target/${Profile.toLowerCase()}/mirror.dll`, './build/bin/mirror.dll'],
-            [`./target/${Profile.toLowerCase()}/renderer.dll`, './build/bin/renderer.dll'],
             [`./target/ffmpeg/bin/avcodec-60.dll`, './build/bin/avcodec-60.dll'],
             [`./target/ffmpeg/bin/avutil-58.dll`, './build/bin/avutil-58.dll'],
             [`./target/ffmpeg/bin/swresample-4.dll`, './build/bin/swresample-4.dll'],
@@ -149,7 +145,6 @@ const Replace = (file, filters) => {
     {
         for (const item of [
             ['./target/debug/mirror.pdb', './build/bin/mirror.pdb'],
-            ['./target/debug/renderer.pdb', './build/bin/renderer.pdb'],
             ['./target/debug/service.pdb', './build/server/service.pdb'],
         ])
         {

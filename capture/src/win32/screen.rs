@@ -7,7 +7,9 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
-use frame::{Resource, VideoFormat, VideoFrame, VideoSize, VideoTransform, VideoTransformOptions};
+use frame::{
+    Resource, VideoFormat, VideoFrame, VideoSize, VideoTransform, VideoTransformDescriptor,
+};
 use utils::{
     atomic::EasyAtomic,
     win32::{Interface, MediaThreadClass},
@@ -50,7 +52,7 @@ impl GraphicsCaptureApiHandler for WindowsCapture {
             VideoFormat::NV12
         };
 
-        let mut transform = VideoTransform::new(VideoTransformOptions {
+        let mut transform = VideoTransform::new(VideoTransformDescriptor {
             direct3d: ctx.options.direct3d,
             input: Resource::Default(
                 VideoFormat::RGBA,
@@ -174,7 +176,7 @@ pub struct ScreenCapture(Mutex<Option<CaptureControl<WindowsCapture, anyhow::Err
 impl CaptureHandler for ScreenCapture {
     type Frame = VideoFrame;
     type Error = anyhow::Error;
-    type CaptureOptions = VideoCaptureSourceDescription;
+    type CaptureDescriptor = VideoCaptureSourceDescription;
 
     fn get_sources() -> Result<Vec<Source>, Self::Error> {
         let primary_name = Monitor::primary()?.name()?;
@@ -195,7 +197,7 @@ impl CaptureHandler for ScreenCapture {
 
     fn start<S: FrameArrived<Frame = Self::Frame> + 'static>(
         &self,
-        options: Self::CaptureOptions,
+        options: Self::CaptureDescriptor,
         arrived: S,
     ) -> Result<(), Self::Error> {
         let source = Monitor::enumerate()?
