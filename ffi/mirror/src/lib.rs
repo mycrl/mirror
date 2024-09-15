@@ -14,6 +14,7 @@ pub mod desktop {
     };
 
     use frame::{AudioFrame, VideoFrame};
+    use mirror::Window;
     use utils::{atomic::EasyAtomic, strings::Strings};
 
     #[cfg(not(target_os = "macos"))]
@@ -576,42 +577,14 @@ pub mod desktop {
     }
 
     #[repr(C)]
-    pub struct RawSize {
-        width: c_int,
-        height: c_int,
-    }
-
-    impl From<RawSize> for mirror::Size {
-        fn from(val: RawSize) -> Self {
-            Self {
-                width: val.width as u32,
-                height: val.height as u32,
-            }
-        }
-    }
-
-    #[repr(C)]
     struct RawRenderer(mirror::Render);
-
-    #[repr(C)]
-    struct RawRendererDescriptor {
-        size: RawSize,
-        #[cfg(target_os = "windows")]
-        hwnd: *mut c_void,
-    }
 
     /// Creating a window renderer.
     #[no_mangle]
     #[allow(unused_variables)]
-    extern "C" fn renderer_create(options: RawRendererDescriptor) -> *mut RawRenderer {
-        let func = || {
-            Ok::<RawRenderer, anyhow::Error>(RawRenderer(mirror::Render::new(
-                mirror::RenderDescriptor {
-                    size: options.size.into(),
-                    window_handle: mirror::HWND(options.hwnd),
-                },
-            )?))
-        };
+    extern "C" fn renderer_create(hwnd: *mut c_void) -> *mut RawRenderer {
+        let func =
+            || Ok::<RawRenderer, anyhow::Error>(RawRenderer(mirror::Render::new(Window(hwnd))?));
 
         checker(func())
             .map(|ret| Box::into_raw(Box::new(ret)))

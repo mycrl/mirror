@@ -4,33 +4,34 @@ mod sender;
 mod video;
 
 pub use self::{
+    audio::AudioPlayer,
     receiver::{Receiver, ReceiverDescriptor},
-    video::{win32::VideoRenderDescriptor, Size},
+    video::VideoPlayer,
 };
 
 #[cfg(not(target_os = "macos"))]
 pub use self::sender::{AudioDescriptor, Sender, SenderDescriptor, VideoDescriptor};
 
-#[cfg(target_os = "windows")]
-use self::video::win32::VideoRender;
+use std::{ffi::c_void, num::NonZeroIsize};
 
 #[cfg(not(target_os = "macos"))]
 use std::sync::RwLock;
 
 use anyhow::Result;
-use audio::AudioPlayer;
 use frame::{AudioFrame, VideoFrame};
+use wgpu::rwh::{
+    DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, RawWindowHandle,
+    Win32WindowHandle, WindowHandle,
+};
+
 use transport::{Transport, TransportDescriptor};
 use utils::logger;
 
 #[cfg(target_os = "windows")]
 use utils::win32::{
-    set_process_priority, shutdown as win32_shutdown, startup as win32_startup, Direct3DDevice,
-    ProcessPriority,
+    get_hwnd_size, set_process_priority, shutdown as win32_shutdown, startup as win32_startup,
+    Direct3DDevice, ProcessPriority, Size, HWND,
 };
-
-#[cfg(target_os = "windows")]
-pub use windows::Win32::Foundation::HWND;
 
 #[cfg(target_os = "windows")]
 pub(crate) static DIRECT_3D_DEVICE: RwLock<Option<Direct3DDevice>> = RwLock::new(None);
@@ -214,32 +215,45 @@ impl Mirror {
     }
 }
 
-pub struct RenderDescriptor {
-    pub size: Size,
-    #[cfg(target_os = "windows")]
-    pub window_handle: HWND,
+#[derive(Clone)]
+pub struct Window(pub *const c_void);
+
+unsafe impl Send for Window {}
+unsafe impl Sync for Window {}
+
+impl Window {
+    fn size(&self) -> Result<Size> {
+        #[cfg(target_os = "windows")]
+        Ok(get_hwnd_size(HWND(self.0 as *mut _))?)
+    }
+}
+
+impl HasDisplayHandle for Window {
+    fn display_handle(&self) -> Result<DisplayHandle<'_>, HandleError> {
+        Ok(DisplayHandle::windows())
+    }
+}
+
+impl HasWindowHandle for Window {
+    fn window_handle(&self) -> Result<WindowHandle<'_>, HandleError> {
+        Ok(unsafe {
+            WindowHandle::borrow_raw(RawWindowHandle::Win32(Win32WindowHandle::new(
+                NonZeroIsize::new(self.0 as isize).unwrap(),
+            )))
+        })
+    }
 }
 
 pub struct Render {
     audio: AudioPlayer,
-    #[cfg(target_os = "windows")]
-    video: VideoRender,
+    video: VideoPlayer,
 }
 
 impl Render {
-    pub fn new(options: RenderDescriptor) -> Result<Self> {
+    pub fn new(window: Window) -> Result<Self> {
         Ok(Self {
             audio: AudioPlayer::new()?,
-            #[cfg(target_os = "windows")]
-            video: VideoRender::new(VideoRenderDescriptor {
-                size: options.size.into(),
-                window_handle: options.window_handle,
-                direct3d: DIRECT_3D_DEVICE
-                    .read()
-                    .unwrap()
-                    .clone()
-                    .expect("D3D device was not initialized successfully!"),
-            })?,
+            video: VideoPlayer::new(window)?,
         })
     }
 

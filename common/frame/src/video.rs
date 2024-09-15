@@ -70,7 +70,7 @@ pub mod win32 {
     use windows::{
         core::{Interface, Result},
         Win32::{
-            Foundation::{HANDLE, RECT},
+            Foundation::RECT,
             Graphics::{
                 Direct3D11::{
                     ID3D11Device, ID3D11DeviceContext, ID3D11Texture2D, ID3D11VideoContext,
@@ -289,15 +289,6 @@ pub mod win32 {
                 output_texture,
                 input_view,
                 output_view,
-            })
-        }
-
-        /// open shared texture.
-        pub fn open_shared_texture(&mut self, handle: HANDLE) -> Result<ID3D11Texture2D> {
-            Ok(unsafe {
-                let mut texture: Option<ID3D11Texture2D> = None;
-                self.d3d_device.OpenSharedResource(handle, &mut texture)?;
-                texture.unwrap()
             })
         }
 

@@ -7,13 +7,15 @@ edition = "2021"
 anyhow = "1.0.82"
 bytes = "1.5"
 crossbeam = "0.8"
+log = "0.4.20"
 utils = { path = "../common/utils" }
 frame = { path = "../common/frame" }
 transport = { path = "../transport" }
-log = "0.4.20"
 
-[target.'cfg(target_os = "windows")'.dependencies]
+[target.'cfg(not(target_os = "android"))'.dependencies]
 capture = { path = "../capture" }
 codec = { path = "../codec" }
 cpal = "0.15.3"
-windows = "0.58.0"
+wgpu = "22.1.0"
+pollster = "0.3.0"
+bytemuck = { version = "1.17.1",  features = ["derive"] }

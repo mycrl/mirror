@@ -3,14 +3,14 @@ use std::{cell::Cell, ffi::c_void};
 use windows::{
     core::{s, Result, GUID, HSTRING, PCSTR, PCWSTR, PWSTR},
     Win32::{
-        Foundation::HANDLE,
+        Foundation::{HANDLE, RECT},
         Graphics::{
             Direct3D::{
                 D3D_DRIVER_TYPE_HARDWARE, D3D_FEATURE_LEVEL, D3D_FEATURE_LEVEL_11_0,
                 D3D_FEATURE_LEVEL_11_1,
             },
             Direct3D11::{
-                D3D11CreateDevice, ID3D11Multithread, ID3D11Texture2D,
+                D3D11CreateDevice, ID3D11Multithread,
                 D3D11_CREATE_DEVICE_BGRA_SUPPORT, D3D11_CREATE_DEVICE_DEBUG, D3D11_SDK_VERSION,
             },
         },
@@ -26,13 +26,39 @@ use windows::{
                 REALTIME_PRIORITY_CLASS,
             },
         },
+        UI::WindowsAndMessaging::GetClientRect,
     },
 };
 
 pub use windows::{
     core::Interface,
-    Win32::Graphics::Direct3D11::{ID3D11Device, ID3D11DeviceContext},
+    Win32::{
+        Foundation::HWND,
+        Graphics::{
+            Dxgi::IDXGIResource,
+            Direct3D11::{ID3D11Device, ID3D11DeviceContext, ID3D11Texture2D},
+            Direct3D12::ID3D12Resource,
+        },
+    },
 };
+
+#[derive(Debug, Clone, Copy)]
+pub struct Size {
+    pub width: u32,
+    pub height: u32,
+}
+
+pub fn get_hwnd_size(hwnd: HWND) -> Result<Size> {
+    let mut rect = RECT::default();
+    unsafe {
+        GetClientRect(hwnd, &mut rect)?;
+    }
+
+    Ok(Size {
+        width: (rect.right - rect.left) as u32,
+        height: (rect.bottom - rect.top) as u32,
+    })
+}
 
 /// Initializes Microsoft Media Foundation.
 pub fn startup() -> Result<()> {
@@ -245,6 +271,15 @@ impl Direct3DDevice {
         let multithread = self.device.cast::<ID3D11Multithread>()?;
         let _ = unsafe { multithread.SetMultithreadProtected(value) };
         Ok(())
+    }
+
+    /// open shared texture.
+    pub fn open_shared_texture(&self, handle: HANDLE) -> Result<ID3D11Texture2D> {
+        Ok(unsafe {
+            let mut texture: Option<ID3D11Texture2D> = None;
+            self.device.OpenSharedResource(handle, &mut texture)?;
+            texture.unwrap()
+        })
     }
 }
 

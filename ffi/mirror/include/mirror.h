@@ -303,28 +303,13 @@ EXPORT Receiver mirror_create_receiver(Mirror mirror, int id, VideoDecoderType c
  */
 EXPORT void mirror_receiver_destroy(Receiver receiver);
 
-
-typedef struct
-{
-	int width;
-	int height;
-} Size;
-
-typedef struct
-{
-	Size size;
-#ifdef WIN32
-	HWND hwnd;
-#endif // WIN32
-} RendererDescriptor;
-
 typedef const void* WindowHandle;
 typedef const void* Render;
 
 /**
  * Creating a window renderer.
  */
-EXPORT Render renderer_create(RendererDescriptor options);
+EXPORT Render renderer_create(WindowHandle hwnd);
 
 /**
  * Push the video frame into the renderer, which will update the window texture.

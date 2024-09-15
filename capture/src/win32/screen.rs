@@ -10,12 +10,12 @@ use anyhow::{anyhow, Result};
 use frame::{
     Resource, VideoFormat, VideoFrame, VideoSize, VideoTransform, VideoTransformDescriptor,
 };
+
 use utils::{
     atomic::EasyAtomic,
-    win32::{Interface, MediaThreadClass},
+    win32::{ID3D11Texture2D, IDXGIResource, Interface, MediaThreadClass},
 };
 
-use windows::Win32::Graphics::{Direct3D11::ID3D11Texture2D, Dxgi::IDXGIResource};
 use windows_capture::{
     capture::{CaptureControl, GraphicsCaptureApiHandler},
     frame::Frame,
@@ -53,7 +53,7 @@ impl GraphicsCaptureApiHandler for WindowsCapture {
         };
 
         let mut transform = VideoTransform::new(VideoTransformDescriptor {
-            direct3d: ctx.options.direct3d,
+            direct3d: ctx.options.direct3d.clone(),
             input: Resource::Default(
                 VideoFormat::RGBA,
                 VideoSize {
@@ -70,6 +70,7 @@ impl GraphicsCaptureApiHandler for WindowsCapture {
             ),
         })?;
 
+        let direct3d = ctx.options.direct3d;
         let status_ = Arc::downgrade(&status);
         let shared_resource_ = Arc::downgrade(&shared_resource);
         thread::Builder::new()
@@ -80,7 +81,7 @@ impl GraphicsCaptureApiHandler for WindowsCapture {
                 let mut func = || {
                     while let Some(shared_resource) = shared_resource_.upgrade() {
                         if let Some(resource) = shared_resource.lock().unwrap().take() {
-                            let texture = transform.open_shared_texture(unsafe {
+                            let texture = direct3d.open_shared_texture(unsafe {
                                 resource.0.cast::<IDXGIResource>()?.GetSharedHandle()?
                             })?;
 

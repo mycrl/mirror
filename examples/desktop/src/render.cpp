@@ -8,12 +8,6 @@ SimpleRender::SimpleRender(Args& args,
     : _args(args)
     , _hwnd(hwnd)
 {
-    Size size;
-    size.width = args.ArgsParams.width;
-    size.height = args.ArgsParams.height;
-
-    _options.size = size;
-    _options.hwnd = hwnd;
 }
 #else
 SimpleRender::SimpleRender(Args& args)
@@ -55,10 +49,10 @@ bool SimpleRender::OnVideoFrame(VideoFrame* frame)
         return false;
     }
     
-    if (!IsRender)
+    /*if (!IsRender)
     {
         return true;
-    }
+    }*/
 
     return renderer_on_video(_renderer, frame);
 }
@@ -96,7 +90,7 @@ void SimpleRender::Create()
         return;
     }
 
-    _renderer = renderer_create(_options);
+    _renderer = renderer_create(_hwnd);
 }
 
 #ifdef LINUX

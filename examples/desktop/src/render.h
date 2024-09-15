@@ -48,7 +48,6 @@ public:
 private:
     Args& _args;
     Render _renderer = nullptr;
-    RendererDescriptor _options = {};
 #ifdef WIN32
     WindowHandle _window_handle = nullptr;
     HWND _hwnd;
