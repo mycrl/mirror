@@ -101,37 +101,47 @@ impl AudioDecoder {
         Ok(this)
     }
 
-    pub fn decode(&mut self, buf: &[u8], pts: u64) -> Result<usize, AudioDecoderError> {
+    pub fn decode(&mut self, mut buf: &[u8], pts: u64) -> Result<(), AudioDecoderError> {
         if buf.is_empty() {
-            return Ok(0);
+            return Ok(());
         }
 
-        let packet = unsafe { &mut *self.packet };
-        let len = unsafe {
-            av_parser_parse2(
-                self.parser,
-                self.context,
-                &mut packet.data,
-                &mut packet.size,
-                buf.as_ptr(),
-                buf.len() as c_int,
-                pts as i64,
-                AV_NOPTS_VALUE,
-                0,
-            )
-        };
+        let mut size = buf.len();
+        while size > 0 {
+            let packet = unsafe { &mut *self.packet };
+            let len = unsafe {
+                av_parser_parse2(
+                    self.parser,
+                    self.context,
+                    &mut packet.data,
+                    &mut packet.size,
+                    buf.as_ptr(),
+                    buf.len() as c_int,
+                    pts as i64,
+                    AV_NOPTS_VALUE,
+                    0,
+                )
+            };
 
-        if len < 0 {
-            return Err(AudioDecoderError::ParsePacketError);
-        }
+            // When parsing the code stream, an abnormal return code appears and processing
+            // should not be continued.
+            if len < 0 {
+                return Err(AudioDecoderError::ParsePacketError);
+            }
 
-        if packet.size > 0 {
-            if unsafe { avcodec_send_packet(self.context, self.packet) } != 0 {
-                return Err(AudioDecoderError::SendPacketToAVCodecError);
+            let len = len as usize;
+            buf = &buf[len..];
+            size -= len;
+
+            // One or more cells have been parsed.
+            if packet.size > 0 {
+                if unsafe { avcodec_send_packet(self.context, self.packet) } != 0 {
+                    return Err(AudioDecoderError::SendPacketToAVCodecError);
+                }
             }
         }
 
-        Ok(len as usize)
+        Ok(())
     }
 
     pub fn read<'a>(&'a mut self) -> Option<&'a AudioFrame> {

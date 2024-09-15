@@ -31,24 +31,12 @@ fn create_video_decoder(
 
             'a: while let (Some(adapter), Some(sink)) = (adapter_.upgrade(), sink_.upgrade()) {
                 if let Some((packet, _, timestamp)) = adapter.next(StreamKind::Video) {
-                    let mut count = 0;
-                    loop {
-                        count += match codec.decode(&packet[count..], timestamp) {
-                            Ok(size) => {
-                                if size > 0 {
-                                    size
-                                } else {
-                                    break;
-                                }
-                            }
-                            Err(e) => {
-                                log::error!("video decode error={:?}", e);
+                    if let Err(e) = codec.decode(&packet, timestamp) {
+                        log::error!("video decode error={:?}", e);
 
-                                break 'a;
-                            }
-                        };
-
-                        if let Some(frame) = codec.read() {
+                        break;
+                    } else {
+                        while let Some(frame) = codec.read() {
                             if !(sink.video)(frame) {
                                 break 'a;
                             }
@@ -89,24 +77,12 @@ fn create_audio_decoder(
 
             'a: while let (Some(adapter), Some(sink)) = (adapter_.upgrade(), sink_.upgrade()) {
                 if let Some((packet, _, timestamp)) = adapter.next(StreamKind::Audio) {
-                    let mut count = 0;
-                    loop {
-                        count += match codec.decode(&packet[count..], timestamp) {
-                            Ok(size) => {
-                                if size > 0 {
-                                    size
-                                } else {
-                                    break;
-                                }
-                            }
-                            Err(e) => {
-                                log::error!("audio decode error={:?}", e);
+                    if let Err(e) = codec.decode(&packet, timestamp) {
+                        log::error!("audio decode error={:?}", e);
 
-                                break 'a;
-                            }
-                        };
-
-                        if let Some(frame) = codec.read() {
+                        break;
+                    } else {
+                        while let Some(frame) = codec.read() {
                             if !(sink.audio)(frame) {
                                 break 'a;
                             }
