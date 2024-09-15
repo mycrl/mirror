@@ -38,7 +38,7 @@ pub mod desktop {
                 if reserved.is_null() {
                     mirror_shutdown();
                 }
-    
+
                 true
             },
             _ => true,
@@ -409,23 +409,23 @@ pub mod desktop {
                 audio: None,
                 video: None,
             };
-    
+
             if !self.video.is_null() {
                 let video = unsafe { &*self.video };
                 let settings: mirror::VideoDescriptor = video.options.try_into()?;
-    
+
                 // Check whether the external parameters are configured correctly to 
                 // avoid some clowns inserting some inexplicable parameters.
                 anyhow::ensure!(settings.width % 4 == 0 && settings.width <= 4096, "invalid video width");
                 anyhow::ensure!(settings.height % 4 == 0 && settings.height <= 2560, "invalid video height");
                 anyhow::ensure!(settings.frame_rate <= 60, "invalid video frame rate");
-    
+
                 options.video = Some((
                     unsafe { &*video.source }.try_into()?,
                     settings,
                 ));
             }
-    
+
             if !self.audio.is_null() {
                 let audio = unsafe { &*self.audio };
                 options.audio = Some((
@@ -433,7 +433,7 @@ pub mod desktop {
                     audio.options.try_into()?,
                 ));
             }
-    
+
             Ok(options)
         }
     }

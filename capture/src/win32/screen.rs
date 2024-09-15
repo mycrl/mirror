@@ -81,14 +81,13 @@ impl GraphicsCaptureApiHandler for WindowsCapture {
                 let mut func = || {
                     while let Some(shared_resource) = shared_resource_.upgrade() {
                         if let Some(resource) = shared_resource.lock().unwrap().take() {
-                            frame.data[0] = resource.0.as_raw();
-                            // let texture = direct3d.open_shared_texture(resource.0.get_shared()?)?;
-                            // let view = transform.create_input_view(&texture, 0)?;
-                            // transform.process(Some(view))?;
+                            let texture = direct3d.open_shared_texture(resource.0.get_shared()?)?;
+                            let view = transform.create_input_view(&texture, 0)?;
+                            transform.process(Some(view))?;
                         }
 
                         if frame.hardware {
-                            // frame.data[0] = transform.get_output().as_raw();
+                            frame.data[0] = transform.get_output().as_raw();
                             frame.data[1] = 0 as *const _;
 
                             if !ctx.arrived.sink(&frame) {

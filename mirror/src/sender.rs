@@ -81,30 +81,30 @@ impl FrameArrived for VideoSender {
     type Frame = VideoFrame;
 
     fn sink(&mut self, frame: &Self::Frame) -> bool {
-        // // Push the audio and video frames into the encoder.
-        // if self.encoder.update(frame) {
-        //     // Try to get the encoded data packets. The audio and video frames do not
-        //     // correspond to the data packets one by one, so you need to try to get
-        //     // multiple packets until they are empty.
-        //     if let Err(e) = self.encoder.encode() {
-        //         log::error!("video encode error={:?}", e);
+        // Push the audio and video frames into the encoder.
+        if self.encoder.update(frame) {
+            // Try to get the encoded data packets. The audio and video frames do not
+            // correspond to the data packets one by one, so you need to try to get
+            // multiple packets until they are empty.
+            if let Err(e) = self.encoder.encode() {
+                log::error!("video encode error={:?}", e);
 
-        //         return false;
-        //     } else {
-        //         while let Some((buffer, flags, timestamp)) = self.encoder.read() {
-        //             if let Some(adapter) = self.adapter.upgrade() {
-        //                 adapter.send(
-        //                     package::copy_from_slice(buffer),
-        //                     StreamBufferInfo::Video(flags, timestamp),
-        //                 );
-        //             } else {
-        //                 return false;
-        //             }
-        //         }
-        //     }
-        // } else {
-        //     return false;
-        // }
+                return false;
+            } else {
+                while let Some((buffer, flags, timestamp)) = self.encoder.read() {
+                    if let Some(adapter) = self.adapter.upgrade() {
+                        adapter.send(
+                            package::copy_from_slice(buffer),
+                            StreamBufferInfo::Video(flags, timestamp),
+                        );
+                    } else {
+                        return false;
+                    }
+                }
+            }
+        } else {
+            return false;
+        }
 
         if let Some(sink) = self.sink.upgrade() {
             (sink.video)(frame);

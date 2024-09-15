@@ -3,8 +3,9 @@ use bytemuck::{Pod, Zeroable};
 use frame::VideoFrame;
 use pollster::FutureExt;
 use utils::win32::{
-    d3d_texture_borrowed_raw, ID3D11Texture2D, ID3D12Resource, IDXGIResource1, Interface, SharedTexture
+    d3d_texture_borrowed_raw, ID3D11Texture2D, ID3D12Resource, Interface, SharedTexture,
 };
+
 use wgpu::{
     hal::api::Dx12,
     include_wgsl,
@@ -114,7 +115,11 @@ impl VideoPlayer {
                             depth_or_array_layers: 1,
                         },
                     },
-                );
+                )
+                .map_err(|e| {
+                    log::error!("failed to create texture_from dx11 texture, error={:?}", e)
+                })
+                .ok();
             }
         }
 
@@ -301,11 +306,11 @@ pub fn create_texture_from_dx11_texture(
     device: &Device,
     texture: &ID3D11Texture2D,
     desc: &TextureDescriptor,
-) -> Option<Texture> {
+) -> Result<Texture> {
     use std::ptr::null_mut;
 
     let resource = unsafe {
-        let handle = texture.create_shared().unwrap();
+        let handle = texture.get_shared()?;
 
         device
             .as_hal::<Dx12, _, _>(|hdevice| {
@@ -325,12 +330,12 @@ pub fn create_texture_from_dx11_texture(
                     }
                 })
             })
-            .unwrap()
-            .unwrap()
-            .unwrap()
+            .ok_or_else(|| anyhow!("wgpu hal not is dx12"))?
+            .ok_or_else(|| anyhow!("not found wgpu dx12 device"))?
+            .ok_or_else(|| anyhow!("dx12 not open shared handle"))?
     };
 
-    Some(unsafe {
+    Ok(unsafe {
         let texture = <Dx12 as wgpu::hal::Api>::Device::texture_from_raw(
             d3d12::Resource::from_raw(resource as *mut _),
             desc.format,
