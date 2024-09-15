@@ -19,3 +19,6 @@ cpal = "0.15.3"
 wgpu = "22.1.0"
 pollster = "0.3.0"
 bytemuck = { version = "1.17.1",  features = ["derive"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+d3d12 = "22.0.0"

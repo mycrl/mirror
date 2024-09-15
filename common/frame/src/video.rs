@@ -73,16 +73,7 @@ pub mod win32 {
             Foundation::RECT,
             Graphics::{
                 Direct3D11::{
-                    ID3D11Device, ID3D11DeviceContext, ID3D11Texture2D, ID3D11VideoContext,
-                    ID3D11VideoDevice, ID3D11VideoProcessor, ID3D11VideoProcessorEnumerator,
-                    ID3D11VideoProcessorInputView, ID3D11VideoProcessorOutputView,
-                    D3D11_BIND_RENDER_TARGET, D3D11_CPU_ACCESS_READ, D3D11_MAPPED_SUBRESOURCE,
-                    D3D11_MAP_READ, D3D11_TEXTURE2D_DESC, D3D11_USAGE_DEFAULT, D3D11_USAGE_STAGING,
-                    D3D11_VIDEO_FRAME_FORMAT_PROGRESSIVE, D3D11_VIDEO_PROCESSOR_COLOR_SPACE,
-                    D3D11_VIDEO_PROCESSOR_CONTENT_DESC, D3D11_VIDEO_PROCESSOR_INPUT_VIEW_DESC,
-                    D3D11_VIDEO_PROCESSOR_OUTPUT_VIEW_DESC, D3D11_VIDEO_PROCESSOR_STREAM,
-                    D3D11_VIDEO_USAGE_PLAYBACK_NORMAL, D3D11_VPIV_DIMENSION_TEXTURE2D,
-                    D3D11_VPOV_DIMENSION_TEXTURE2D,
+                    ID3D11Device, ID3D11DeviceContext, ID3D11Texture2D, ID3D11VideoContext, ID3D11VideoDevice, ID3D11VideoProcessor, ID3D11VideoProcessorEnumerator, ID3D11VideoProcessorInputView, ID3D11VideoProcessorOutputView, D3D11_BIND_RENDER_TARGET, D3D11_CPU_ACCESS_READ, D3D11_MAPPED_SUBRESOURCE, D3D11_MAP_READ, D3D11_RESOURCE_MISC_SHARED, D3D11_TEXTURE2D_DESC, D3D11_USAGE_DEFAULT, D3D11_USAGE_STAGING, D3D11_VIDEO_FRAME_FORMAT_PROGRESSIVE, D3D11_VIDEO_PROCESSOR_COLOR_SPACE, D3D11_VIDEO_PROCESSOR_CONTENT_DESC, D3D11_VIDEO_PROCESSOR_INPUT_VIEW_DESC, D3D11_VIDEO_PROCESSOR_OUTPUT_VIEW_DESC, D3D11_VIDEO_PROCESSOR_STREAM, D3D11_VIDEO_USAGE_PLAYBACK_NORMAL, D3D11_VPIV_DIMENSION_TEXTURE2D, D3D11_VPOV_DIMENSION_TEXTURE2D
                 },
                 Dxgi::Common::{
                     DXGI_FORMAT, DXGI_FORMAT_AYUV, DXGI_FORMAT_NV12, DXGI_FORMAT_R8G8B8A8_UNORM,
@@ -181,7 +172,7 @@ pub mod win32 {
                     desc.Usage = D3D11_USAGE_DEFAULT;
                     desc.BindFlags = D3D11_BIND_RENDER_TARGET.0 as u32;
                     desc.CPUAccessFlags = 0;
-                    desc.MiscFlags = 0;
+                    desc.MiscFlags = D3D11_RESOURCE_MISC_SHARED.0 as u32;
 
                     let mut texture = None;
                     d3d_device.CreateTexture2D(&desc, None, Some(&mut texture))?;

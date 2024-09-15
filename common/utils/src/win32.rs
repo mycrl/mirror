@@ -10,9 +10,10 @@ use windows::{
                 D3D_FEATURE_LEVEL_11_1,
             },
             Direct3D11::{
-                D3D11CreateDevice, ID3D11Multithread,
-                D3D11_CREATE_DEVICE_BGRA_SUPPORT, D3D11_CREATE_DEVICE_DEBUG, D3D11_SDK_VERSION,
+                D3D11CreateDevice, ID3D11Multithread, D3D11_CREATE_DEVICE_BGRA_SUPPORT,
+                D3D11_CREATE_DEVICE_DEBUG, D3D11_SDK_VERSION,
             },
+            Dxgi::DXGI_SHARED_RESOURCE_READ,
         },
         Media::MediaFoundation::{
             IMFActivate, IMFAttributes, IMFMediaType, MFShutdown, MFStartup, MF_VERSION,
@@ -35,9 +36,9 @@ pub use windows::{
     Win32::{
         Foundation::HWND,
         Graphics::{
-            Dxgi::IDXGIResource,
             Direct3D11::{ID3D11Device, ID3D11DeviceContext, ID3D11Texture2D},
             Direct3D12::ID3D12Resource,
+            Dxgi::{IDXGIResource, IDXGIResource1},
         },
     },
 };
@@ -293,4 +294,25 @@ pub fn d3d_device_borrowed_raw<'a>(raw: &'a *mut c_void) -> Option<&'a ID3D11Dev
 
 pub fn d3d_context_borrowed_raw<'a>(raw: &'a *mut c_void) -> Option<&'a ID3D11DeviceContext> {
     unsafe { ID3D11DeviceContext::from_raw_borrowed(raw) }
+}
+
+pub trait SharedTexture {
+    fn get_shared(&self) -> Result<HANDLE>;
+    fn create_shared(&self) -> Result<HANDLE>;
+}
+
+impl SharedTexture for ID3D11Texture2D {
+    fn get_shared(&self) -> Result<HANDLE> {
+        Ok(unsafe { self.cast::<IDXGIResource>()?.GetSharedHandle()? })
+    }
+
+    fn create_shared(&self) -> Result<HANDLE> {
+        Ok(unsafe {
+            self.cast::<IDXGIResource1>()?.CreateSharedHandle(
+                None,
+                DXGI_SHARED_RESOURCE_READ.0 as u32,
+                None,
+            )?
+        })
+    }
 }

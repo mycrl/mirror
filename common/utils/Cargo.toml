@@ -27,4 +27,5 @@ features = [
     "Win32_System_Threading",
     "Win32_Media", 
     "Win32_Media_MediaFoundation", 
+    "Win32_Security",
 ]

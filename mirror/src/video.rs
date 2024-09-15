@@ -2,7 +2,9 @@ use anyhow::{anyhow, Result};
 use bytemuck::{Pod, Zeroable};
 use frame::VideoFrame;
 use pollster::FutureExt;
-use utils::win32::{ID3D11Device, ID3D11Texture2D, ID3D12Resource, IDXGIResource, Interface};
+use utils::win32::{
+    d3d_texture_borrowed_raw, ID3D11Texture2D, ID3D12Resource, IDXGIResource1, Interface, SharedTexture
+};
 use wgpu::{
     hal::api::Dx12,
     include_wgsl,
@@ -93,22 +95,28 @@ impl VideoPlayer {
     }
 
     pub fn send(&mut self, frame: &VideoFrame) -> Result<()> {
-        // if self.texture.is_none() {
-        //     self.texture = Some(self.device.create_texture(&TextureDescriptor {
-        //         label: None,
-        //         mip_level_count: 1,
-        //         sample_count: 1,
-        //         format: TextureFormat::Rgba8Unorm,
-        //         dimension: TextureDimension::D2,
-        //         usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
-        //         view_formats: &[],
-        //         size: Extent3d {
-        //             width: frame.width,
-        //             height: frame.height,
-        //             depth_or_array_layers: 1,
-        //         },
-        //     }));
-        // }
+        if self.texture.is_none() {
+            if let Some(texture) = d3d_texture_borrowed_raw(&(frame.data[0] as *mut _)) {
+                self.texture = create_texture_from_dx11_texture(
+                    &self.device,
+                    texture,
+                    &TextureDescriptor {
+                        label: None,
+                        mip_level_count: 1,
+                        sample_count: 1,
+                        format: TextureFormat::Rgba8Unorm,
+                        dimension: TextureDimension::D2,
+                        usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
+                        view_formats: &[],
+                        size: Extent3d {
+                            width: frame.width,
+                            height: frame.height,
+                            depth_or_array_layers: 1,
+                        },
+                    },
+                );
+            }
+        }
 
         if self.bind_group.is_none() {
             if let Some(texture) = &self.texture {
@@ -289,31 +297,49 @@ const VERTICES: &'static [Vertex] = &[
 const INDICES: &'static [u16] = &[0, 1, 2, 2, 1, 3];
 
 #[cfg(target_os = "windows")]
-pub fn create_dx12_resource_from_d3d11_texture(device: &Device, texture: &ID3D11Texture2D) -> Option<ID3D12Resource> {
+pub fn create_texture_from_dx11_texture(
+    device: &Device,
+    texture: &ID3D11Texture2D,
+    desc: &TextureDescriptor,
+) -> Option<Texture> {
     use std::ptr::null_mut;
 
-    unsafe {
-        let handle = texture.cast::<IDXGIResource>().ok()?.GetSharedHandle().ok()?;
-        Some(device.as_hal::<Dx12, _, _>(|hdevice| {
-            hdevice.map(|hdevice| {
-                let raw_device = hdevice.raw_device();
+    let resource = unsafe {
+        let handle = texture.create_shared().unwrap();
 
-                let mut resource = null_mut();
-                if raw_device.OpenSharedHandle(handle.0, std::mem::transmute(&ID3D12Resource::IID), &mut resource) == 0 {
-                    Some(ID3D12Resource::from_raw_borrowed(&resource).unwrap().clone())
-                } else {
-                    None
-                }
+        device
+            .as_hal::<Dx12, _, _>(|hdevice| {
+                hdevice.map(|hdevice| {
+                    let raw_device = hdevice.raw_device();
+
+                    let mut resource = null_mut();
+                    if raw_device.OpenSharedHandle(
+                        handle.0,
+                        std::mem::transmute(&ID3D12Resource::IID),
+                        &mut resource,
+                    ) == 0
+                    {
+                        Some(resource)
+                    } else {
+                        None
+                    }
+                })
             })
+            .unwrap()
+            .unwrap()
+            .unwrap()
+    };
 
-        })???)
-    }
-}
+    Some(unsafe {
+        let texture = <Dx12 as wgpu::hal::Api>::Device::texture_from_raw(
+            d3d12::Resource::from_raw(resource as *mut _),
+            desc.format,
+            desc.dimension,
+            desc.size,
+            1,
+            1,
+        );
 
-#[cfg(target_os = "windows")]
-pub fn create_texture_from_dx12_resource(device: &Device, resource: ID3D12Resource, desc: &TextureDescriptor) -> Texture {
-    unsafe {
-        let texture = <Dx12 as wgpu::hal::Api>::Device::texture_from_raw(resource, desc.format, desc.dimension, desc.size, 1, 1);
         device.create_texture_from_hal::<Dx12>(texture, &desc)
-    }
+    })
 }

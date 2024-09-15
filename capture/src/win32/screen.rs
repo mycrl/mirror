@@ -13,7 +13,7 @@ use frame::{
 
 use utils::{
     atomic::EasyAtomic,
-    win32::{ID3D11Texture2D, IDXGIResource, Interface, MediaThreadClass},
+    win32::{ID3D11Texture2D, Interface, MediaThreadClass, SharedTexture},
 };
 
 use windows_capture::{
@@ -81,16 +81,14 @@ impl GraphicsCaptureApiHandler for WindowsCapture {
                 let mut func = || {
                     while let Some(shared_resource) = shared_resource_.upgrade() {
                         if let Some(resource) = shared_resource.lock().unwrap().take() {
-                            let texture = direct3d.open_shared_texture(unsafe {
-                                resource.0.cast::<IDXGIResource>()?.GetSharedHandle()?
-                            })?;
-
-                            let view = transform.create_input_view(&texture, 0)?;
-                            transform.process(Some(view))?;
+                            frame.data[0] = resource.0.as_raw();
+                            // let texture = direct3d.open_shared_texture(resource.0.get_shared()?)?;
+                            // let view = transform.create_input_view(&texture, 0)?;
+                            // transform.process(Some(view))?;
                         }
 
                         if frame.hardware {
-                            frame.data[0] = transform.get_output().as_raw();
+                            // frame.data[0] = transform.get_output().as_raw();
                             frame.data[1] = 0 as *const _;
 
                             if !ctx.arrived.sink(&frame) {
