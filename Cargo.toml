@@ -20,6 +20,4 @@ members = [
     "common/frame",
     "common/utils",
     "ffi/mirror",
-    # "ffi/android/mirror/src/main/native",
-    # "ffi/android/mirror/src/main/macro",
 ]
