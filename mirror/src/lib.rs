@@ -1,7 +1,9 @@
 mod audio;
 mod receiver;
-mod sender;
 mod video;
+
+#[cfg(not(target_os = "macos"))]
+mod sender;
 
 pub use self::{
     audio::AudioPlayer,
@@ -25,12 +27,12 @@ use wgpu::rwh::{
 };
 
 use transport::{Transport, TransportDescriptor};
-use utils::logger;
+use utils::{logger, Size};
 
 #[cfg(target_os = "windows")]
 use utils::win32::{
     get_hwnd_size, set_process_priority, shutdown as win32_shutdown, startup as win32_startup,
-    Direct3DDevice, ProcessPriority, Size, HWND,
+    Direct3DDevice, ProcessPriority, HWND,
 };
 
 #[cfg(target_os = "windows")]
@@ -222,9 +224,14 @@ unsafe impl Send for Window {}
 unsafe impl Sync for Window {}
 
 impl Window {
+    #[cfg(target_os = "windows")]
     fn size(&self) -> Result<Size> {
-        #[cfg(target_os = "windows")]
         Ok(get_hwnd_size(HWND(self.0 as *mut _))?)
+    }
+
+    #[cfg(target_os = "macos")]
+    fn size(&self) -> Result<Size> {
+        todo!()
     }
 }
 

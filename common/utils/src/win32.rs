@@ -1,5 +1,7 @@
 use std::{cell::Cell, ffi::c_void};
 
+use crate::Size;
+
 use windows::{
     core::{s, Result, GUID, HSTRING, PCSTR, PCWSTR, PWSTR},
     Win32::{
@@ -42,12 +44,6 @@ pub use windows::{
         },
     },
 };
-
-#[derive(Debug, Clone, Copy)]
-pub struct Size {
-    pub width: u32,
-    pub height: u32,
-}
 
 pub fn get_hwnd_size(hwnd: HWND) -> Result<Size> {
     let mut rect = RECT::default();

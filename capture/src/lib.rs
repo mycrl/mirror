@@ -83,12 +83,6 @@ pub struct Source {
     pub is_default: bool,
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct Size {
-    pub width: u32,
-    pub height: u32,
-}
-
 #[derive(Debug, Clone)]
 pub struct VideoCaptureSourceDescription {
     #[cfg(target_os = "windows")]

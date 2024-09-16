@@ -1,13 +1,22 @@
+#[cfg(target_os = "windows")]
+use std::ptr::null_mut;
+
+use crate::Window;
+
 use anyhow::{anyhow, Result};
 use bytemuck::{Pod, Zeroable};
 use frame::VideoFrame;
 use pollster::FutureExt;
+
+#[cfg(target_os = "windows")]
 use utils::win32::{
     d3d_texture_borrowed_raw, ID3D11Texture2D, ID3D12Resource, Interface, SharedTexture,
 };
 
+#[cfg(target_os = "windows")]
+use wgpu::hal::api::Dx12;
+
 use wgpu::{
-    hal::api::Dx12,
     include_wgsl,
     util::{BufferInitDescriptor, DeviceExt},
     BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor,
@@ -21,8 +30,6 @@ use wgpu::{
     TextureFormat, TextureSampleType, TextureUsages, TextureViewDescriptor, TextureViewDimension,
     VertexAttribute, VertexBufferLayout, VertexFormat, VertexState, VertexStepMode,
 };
-
-use crate::Window;
 
 pub struct VideoPlayer {
     surface: Surface<'static>,
@@ -97,6 +104,7 @@ impl VideoPlayer {
 
     pub fn send(&mut self, frame: &VideoFrame) -> Result<()> {
         if self.texture.is_none() {
+            #[cfg(target_os = "windows")]
             if let Some(texture) = d3d_texture_borrowed_raw(&(frame.data[0] as *mut _)) {
                 self.texture = create_texture_from_dx11_texture(
                     &self.device,
@@ -307,8 +315,6 @@ pub fn create_texture_from_dx11_texture(
     texture: &ID3D11Texture2D,
     desc: &TextureDescriptor,
 ) -> Result<Texture> {
-    use std::ptr::null_mut;
-
     let resource = unsafe {
         let handle = texture.get_shared()?;
 
