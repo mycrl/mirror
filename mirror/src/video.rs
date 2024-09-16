@@ -60,7 +60,7 @@ impl VideoPlayer {
                 &wgpu::DeviceDescriptor {
                     label: None,
                     required_features: Features::TEXTURE_COMPRESSION_BC | Features::TEXTURE_FORMAT_NV12,
-                    required_limits: Limits::default(),
+                    required_limits: Limits::downlevel_defaults(),
                     memory_hints: MemoryHints::MemoryUsage,
                 },
                 None,
@@ -114,7 +114,7 @@ impl VideoPlayer {
                         mip_level_count: 1,
                         sample_count: 1,
                         dimension: TextureDimension::D2,
-                        usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
+                        usage: TextureUsages::TEXTURE_BINDING,
                         view_formats: &[],
                         size: Extent3d {
                             width: frame.width,
@@ -124,7 +124,7 @@ impl VideoPlayer {
                         format: match frame.format {
                             VideoFormat::RGBA => TextureFormat::Rgba8Unorm,
                             VideoFormat::NV12 => TextureFormat::NV12,
-                            VideoFormat::I420 => TextureFormat::NV12,
+                            VideoFormat::I420 => todo!(),
                         },
                     },
                 )
@@ -156,6 +156,16 @@ impl VideoPlayer {
                                 binding: 1,
                                 count: None,
                                 visibility: ShaderStages::FRAGMENT,
+                                ty: BindingType::Texture {
+                                    sample_type: TextureSampleType::Float { filterable: true },
+                                    view_dimension: TextureViewDimension::D2,
+                                    multisampled: false,
+                                },
+                            },
+                            BindGroupLayoutEntry {
+                                binding: 2,
+                                count: None,
+                                visibility: ShaderStages::FRAGMENT,
                                 ty: BindingType::Sampler(SamplerBindingType::Filtering),
                             },
                         ],
@@ -169,19 +179,34 @@ impl VideoPlayer {
                             binding: 0,
                             resource: BindingResource::TextureView(&texture.create_view(
                                 &TextureViewDescriptor {
+                                    format: Some(match frame.format {
+                                        VideoFormat::RGBA => TextureFormat::Rgba8Unorm,
+                                        VideoFormat::NV12 => TextureFormat::R8Unorm,
+                                        VideoFormat::I420 => todo!(),
+                                    }),
                                     dimension: Some(TextureViewDimension::D2),
-                                    // format: Some(match frame.format {
-                                    //     VideoFormat::RGBA => TextureFormat::Rgba8Unorm,
-                                    //     VideoFormat::NV12 => TextureFormat::R32Uint,
-                                    //     VideoFormat::I420 => TextureFormat::R8Unorm,
-                                    // }),
-                                    // aspect: TextureAspect::All,
+                                    aspect: TextureAspect::Plane0,
                                     ..Default::default()
                                 },
                             )),
                         },
                         BindGroupEntry {
                             binding: 1,
+                            resource: BindingResource::TextureView(&texture.create_view(
+                                &TextureViewDescriptor {
+                                    format: Some(match frame.format {
+                                        VideoFormat::RGBA => TextureFormat::Rgba8Unorm,
+                                        VideoFormat::NV12 => TextureFormat::Rg8Unorm,
+                                        VideoFormat::I420 => todo!(),
+                                    }),
+                                    dimension: Some(TextureViewDimension::D2),
+                                    aspect: TextureAspect::Plane1,
+                                    ..Default::default()
+                                },
+                            )),
+                        },
+                        BindGroupEntry {
+                            binding: 2,
                             resource: BindingResource::Sampler(
                                 &self.device.create_sampler(&SamplerDescriptor::default()),
                             ),
@@ -214,7 +239,7 @@ impl VideoPlayer {
                             module: &self.device.create_shader_module(match frame.format {
                                 VideoFormat::RGBA => include_wgsl!("./shaders/fragment.wgsl"),
                                 VideoFormat::NV12 => include_wgsl!("./shaders/nv12_fragment.wgsl"),
-                                VideoFormat::I420 => include_wgsl!("./shaders/nv12_fragment.wgsl"),
+                                VideoFormat::I420 => todo!(),
                             }),
                             compilation_options: PipelineCompilationOptions::default(),
                             targets: &[Some(ColorTargetState {
@@ -319,6 +344,16 @@ const VERTICES: &'static [Vertex] = &[
 
 const INDICES: &'static [u16] = &[0, 1, 2, 2, 1, 3];
 
+enum InputTexture {
+    Rgba(Texture),
+    Nv12(Texture),
+    I420(Texture, Texture, Texture),
+}
+
+impl InputTexture {
+    
+}
+
 #[cfg(target_os = "windows")]
 pub fn create_texture_from_dx11_texture(
     device: &Device,
@@ -346,9 +381,9 @@ pub fn create_texture_from_dx11_texture(
                     }
                 })
             })
-            .ok_or_else(|| anyhow!("wgpu hal not is dx12"))?
+            .ok_or_else(|| anyhow!("wgpu hal backend is not dx12"))?
             .ok_or_else(|| anyhow!("not found wgpu dx12 device"))?
-            .ok_or_else(|| anyhow!("dx12 not open shared handle"))?
+            .ok_or_else(|| anyhow!("unable to open dx12 shared handle"))?
     };
 
     Ok(unsafe {
