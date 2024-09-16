@@ -13,22 +13,12 @@ use utils::win32::{
     d3d_texture_borrowed_raw, ID3D11Texture2D, ID3D12Resource, Interface, SharedTexture,
 };
 
+use utils::Size;
 #[cfg(target_os = "windows")]
 use wgpu::hal::api::Dx12;
 
 use wgpu::{
-    include_wgsl,
-    util::{BufferInitDescriptor, DeviceExt},
-    BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor,
-    BindGroupLayoutEntry, BindingResource, BindingType, BlendState, Buffer, BufferAddress,
-    BufferUsages, Color, ColorTargetState, ColorWrites, CommandEncoderDescriptor, Device, Extent3d,
-    Features, FragmentState, IndexFormat, Instance, Limits, LoadOp, MemoryHints, MultisampleState,
-    Operations, PipelineCompilationOptions, PipelineLayoutDescriptor, PresentMode, PrimitiveState,
-    PrimitiveTopology, Queue, RenderPassColorAttachment, RenderPassDescriptor, RenderPipeline,
-    RenderPipelineDescriptor, RequestAdapterOptions, SamplerBindingType, SamplerDescriptor,
-    ShaderStages, StoreOp, Surface, Texture, TextureAspect, TextureDescriptor, TextureDimension,
-    TextureFormat, TextureSampleType, TextureUsages, TextureViewDescriptor, TextureViewDimension,
-    VertexAttribute, VertexBufferLayout, VertexFormat, VertexState, VertexStepMode,
+    include_wgsl, util::{BufferInitDescriptor, DeviceExt}, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, BindingType, BlendState, Buffer, BufferAddress, BufferUsages, Color, ColorTargetState, ColorWrites, CommandEncoder, CommandEncoderDescriptor, Device, Extent3d, Features, FragmentState, ImageCopyTexture, ImageCopyTextureBase, IndexFormat, Instance, Limits, LoadOp, MemoryHints, MultisampleState, Operations, Origin3d, PipelineCompilationOptions, PipelineLayoutDescriptor, PresentMode, PrimitiveState, PrimitiveTopology, Queue, RenderPassColorAttachment, RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor, RequestAdapterOptions, SamplerBindingType, SamplerDescriptor, ShaderStages, StoreOp, Surface, Texture, TextureAspect, TextureDescriptor, TextureDimension, TextureFormat, TextureSampleType, TextureUsages, TextureViewDescriptor, TextureViewDimension, VertexAttribute, VertexBufferLayout, VertexFormat, VertexState, VertexStepMode
 };
 
 pub struct VideoPlayer {
@@ -39,7 +29,7 @@ pub struct VideoPlayer {
     index_buffer: Buffer,
     pipeline: Option<RenderPipeline>,
     bind_group: Option<BindGroup>,
-    texture: Option<Texture>,
+    texture: Option<InputTexture>,
 }
 
 impl VideoPlayer {
@@ -59,7 +49,8 @@ impl VideoPlayer {
             .request_device(
                 &wgpu::DeviceDescriptor {
                     label: None,
-                    required_features: Features::TEXTURE_COMPRESSION_BC | Features::TEXTURE_FORMAT_NV12,
+                    required_features: Features::TEXTURE_COMPRESSION_BC
+                        | Features::TEXTURE_FORMAT_NV12,
                     required_limits: Limits::downlevel_defaults(),
                     memory_hints: MemoryHints::MemoryUsage,
                 },
@@ -80,13 +71,13 @@ impl VideoPlayer {
 
         let vertex_buffer = device.create_buffer_init(&BufferInitDescriptor {
             label: None,
-            contents: bytemuck::cast_slice(VERTICES),
+            contents: bytemuck::cast_slice(Vertex::VERTICES),
             usage: BufferUsages::VERTEX,
         });
 
         let index_buffer = device.create_buffer_init(&BufferInitDescriptor {
             label: None,
-            contents: bytemuck::cast_slice(INDICES),
+            contents: bytemuck::cast_slice(Vertex::INDICES),
             usage: BufferUsages::INDEX,
         });
 
@@ -104,116 +95,20 @@ impl VideoPlayer {
 
     pub fn send(&mut self, frame: &VideoFrame) -> Result<()> {
         if self.texture.is_none() {
-            #[cfg(target_os = "windows")]
-            if let Some(texture) = d3d_texture_borrowed_raw(&(frame.data[0] as *mut _)) {
-                self.texture = create_texture_from_dx11_texture(
-                    &self.device,
-                    texture,
-                    &TextureDescriptor {
-                        label: None,
-                        mip_level_count: 1,
-                        sample_count: 1,
-                        dimension: TextureDimension::D2,
-                        usage: TextureUsages::TEXTURE_BINDING,
-                        view_formats: &[],
-                        size: Extent3d {
-                            width: frame.width,
-                            height: frame.height,
-                            depth_or_array_layers: 1,
-                        },
-                        format: match frame.format {
-                            VideoFormat::RGBA => TextureFormat::Rgba8Unorm,
-                            VideoFormat::NV12 => TextureFormat::NV12,
-                            VideoFormat::I420 => todo!(),
-                        },
-                    },
-                )
-                .map_err(|e| {
-                    log::error!("failed to create texture_from dx11 texture, error={:?}", e)
-                })
-                .ok();
-            }
+            self.texture = Some(InputTexture::new(
+                Size {
+                    width: frame.width,
+                    height: frame.height,
+                },
+                frame.format,
+                &self.device,
+            ));
         }
 
         if self.bind_group.is_none() {
             if let Some(texture) = &self.texture {
-                let layout = self
-                    .device
-                    .create_bind_group_layout(&BindGroupLayoutDescriptor {
-                        label: None,
-                        entries: &[
-                            BindGroupLayoutEntry {
-                                binding: 0,
-                                count: None,
-                                visibility: ShaderStages::FRAGMENT,
-                                ty: BindingType::Texture {
-                                    sample_type: TextureSampleType::Float { filterable: true },
-                                    view_dimension: TextureViewDimension::D2,
-                                    multisampled: false,
-                                },
-                            },
-                            BindGroupLayoutEntry {
-                                binding: 1,
-                                count: None,
-                                visibility: ShaderStages::FRAGMENT,
-                                ty: BindingType::Texture {
-                                    sample_type: TextureSampleType::Float { filterable: true },
-                                    view_dimension: TextureViewDimension::D2,
-                                    multisampled: false,
-                                },
-                            },
-                            BindGroupLayoutEntry {
-                                binding: 2,
-                                count: None,
-                                visibility: ShaderStages::FRAGMENT,
-                                ty: BindingType::Sampler(SamplerBindingType::Filtering),
-                            },
-                        ],
-                    });
-
-                self.bind_group = Some(self.device.create_bind_group(&BindGroupDescriptor {
-                    label: None,
-                    layout: &layout,
-                    entries: &[
-                        BindGroupEntry {
-                            binding: 0,
-                            resource: BindingResource::TextureView(&texture.create_view(
-                                &TextureViewDescriptor {
-                                    format: Some(match frame.format {
-                                        VideoFormat::RGBA => TextureFormat::Rgba8Unorm,
-                                        VideoFormat::NV12 => TextureFormat::R8Unorm,
-                                        VideoFormat::I420 => todo!(),
-                                    }),
-                                    dimension: Some(TextureViewDimension::D2),
-                                    aspect: TextureAspect::Plane0,
-                                    ..Default::default()
-                                },
-                            )),
-                        },
-                        BindGroupEntry {
-                            binding: 1,
-                            resource: BindingResource::TextureView(&texture.create_view(
-                                &TextureViewDescriptor {
-                                    format: Some(match frame.format {
-                                        VideoFormat::RGBA => TextureFormat::Rgba8Unorm,
-                                        VideoFormat::NV12 => TextureFormat::Rg8Unorm,
-                                        VideoFormat::I420 => todo!(),
-                                    }),
-                                    dimension: Some(TextureViewDimension::D2),
-                                    aspect: TextureAspect::Plane1,
-                                    ..Default::default()
-                                },
-                            )),
-                        },
-                        BindGroupEntry {
-                            binding: 2,
-                            resource: BindingResource::Sampler(
-                                &self.device.create_sampler(&SamplerDescriptor::default()),
-                            ),
-                        },
-                    ],
-                }));
-
+                let layout = texture.bind_group_layout(&self.device);
+                self.bind_group = Some(texture.bind_group(&layout, &self.device));
                 self.pipeline = Some(self.device.create_render_pipeline(
                     &RenderPipelineDescriptor {
                         label: None,
@@ -289,7 +184,7 @@ impl VideoPlayer {
                 render_pass.set_bind_group(0, bind_group, &[]);
                 render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
                 render_pass.set_index_buffer(self.index_buffer.slice(..), IndexFormat::Uint16);
-                render_pass.draw_indexed(0..INDICES.len() as u32, 0, 0..1);
+                render_pass.draw_indexed(0..Vertex::INDICES.len() as u32, 0, 0..1);
             }
 
             self.queue.submit(Some(encoder.finish()));
@@ -297,6 +192,10 @@ impl VideoPlayer {
         }
 
         Ok(())
+    }
+
+    fn initialize_pipeline(&mut self) {
+        
     }
 }
 
@@ -308,6 +207,15 @@ struct Vertex {
 }
 
 impl Vertex {
+    const INDICES: &'static [u16] = &[0, 1, 2, 2, 1, 3];
+
+    const VERTICES: &'static [Vertex] = &[
+        Vertex::new([-1.0, -1.0], [0.0, 0.0]),
+        Vertex::new([1.0, -1.0], [1.0, 0.0]),
+        Vertex::new([-1.0, 1.0], [0.0, 1.0]),
+        Vertex::new([1.0, 1.0], [1.0, 1.0]),
+    ];
+
     const fn new(position: [f32; 2], tex_coords: [f32; 2]) -> Self {
         Self {
             position,
@@ -333,25 +241,6 @@ impl Vertex {
             ],
         }
     }
-}
-
-const VERTICES: &'static [Vertex] = &[
-    Vertex::new([-1.0, -1.0], [0.0, 0.0]),
-    Vertex::new([1.0, -1.0], [1.0, 0.0]),
-    Vertex::new([-1.0, 1.0], [0.0, 1.0]),
-    Vertex::new([1.0, 1.0], [1.0, 1.0]),
-];
-
-const INDICES: &'static [u16] = &[0, 1, 2, 2, 1, 3];
-
-enum InputTexture {
-    Rgba(Texture),
-    Nv12(Texture),
-    I420(Texture, Texture, Texture),
-}
-
-impl InputTexture {
-    
 }
 
 #[cfg(target_os = "windows")]
@@ -398,4 +287,153 @@ pub fn create_texture_from_dx11_texture(
 
         device.create_texture_from_hal::<Dx12>(texture, &desc)
     })
+}
+
+enum InputTexture {
+    Rgba(Texture),
+    Nv12(Texture),
+    I420(Texture, Texture, Texture),
+}
+
+impl InputTexture {
+    fn new(size: Size, format: VideoFormat, device: &Device) -> Self {
+        let options = TextureDescriptor {
+            label: None,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: TextureDimension::D2,
+            usage: TextureUsages::TEXTURE_BINDING,
+            format: match format {
+                VideoFormat::RGBA => TextureFormat::Rgba8Unorm,
+                VideoFormat::I420 => TextureFormat::R8Unorm,
+                VideoFormat::NV12 => TextureFormat::NV12,
+            },
+            view_formats: &[],
+            size: Extent3d {
+                width: size.width,
+                height: size.height,
+                depth_or_array_layers: 1,
+            },
+        };
+
+        match format {
+            VideoFormat::RGBA => Self::Rgba(device.create_texture(&options)),
+            VideoFormat::NV12 => Self::Nv12(device.create_texture(&options)),
+            VideoFormat::I420 => Self::I420(
+                device.create_texture(&options),
+                device.create_texture(&TextureDescriptor {
+                    size: Extent3d {
+                        width: size.width / 2,
+                        height: size.height / 2,
+                        depth_or_array_layers: 1,
+                    },
+                    ..options
+                }),
+                device.create_texture(&TextureDescriptor {
+                    size: Extent3d {
+                        width: size.width / 2,
+                        height: size.height / 2,
+                        depth_or_array_layers: 1,
+                    },
+                    ..options
+                }),
+            ),
+        }
+    }
+
+    fn bind_group_layout(&self, device: &Device) -> BindGroupLayout {
+        let mut entries = Vec::new();
+
+        for binding in 0..match self {
+            Self::Rgba(_) => 1,
+            Self::Nv12(_) => 2,
+            Self::I420(_, _, _) => 3,
+        } {
+            entries.push(BindGroupLayoutEntry {
+                binding,
+                count: None,
+                visibility: ShaderStages::FRAGMENT,
+                ty: BindingType::Texture {
+                    sample_type: TextureSampleType::Float { filterable: true },
+                    view_dimension: TextureViewDimension::D2,
+                    multisampled: false,
+                },
+            });
+        }
+
+        entries.push(BindGroupLayoutEntry {
+            binding: entries.len() as u32,
+            visibility: ShaderStages::FRAGMENT,
+            ty: BindingType::Sampler(SamplerBindingType::Filtering),
+            count: None,
+        });
+
+        device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+            label: None,
+            entries: &entries,
+        })
+    }
+
+    fn bind_group(&self, layout: &BindGroupLayout, device: &Device) -> BindGroup {
+        let views = match self {
+            Self::Rgba(t) => vec![(t, TextureFormat::Rgba8Unorm, TextureAspect::All)],
+            Self::Nv12(t) => vec![
+                (t, TextureFormat::R8Unorm, TextureAspect::Plane0),
+                (t, TextureFormat::Rg8Unorm, TextureAspect::Plane1),
+            ],
+            Self::I420(y, u, v) => vec![
+                (y, TextureFormat::R8Unorm, TextureAspect::All),
+                (u, TextureFormat::R8Unorm, TextureAspect::All),
+                (v, TextureFormat::R8Unorm, TextureAspect::All),
+            ],
+        }
+        .iter()
+        .map(|(texture, format, aspect)| {
+            texture.create_view(&TextureViewDescriptor {
+                dimension: Some(TextureViewDimension::D2),
+                format: Some(*format),
+                aspect: *aspect,
+                ..Default::default()
+            })
+        }).collect::<Vec<_>>();
+
+        let mut entries = Vec::new();
+        for (i, view) in views.iter().enumerate() {
+            entries.push(BindGroupEntry {
+                binding: i as u32,
+                resource: BindingResource::TextureView(view),
+            });
+        }
+
+        let sampler = device.create_sampler(&SamplerDescriptor::default());
+        entries.push(BindGroupEntry {
+            binding: entries.len() as u32,
+            resource: BindingResource::Sampler(&sampler),
+        });
+
+        device.create_bind_group(&BindGroupDescriptor {
+            label: None,
+            entries: &entries,
+            layout,
+        })
+    }
+
+    fn update(&self, encoder: &mut CommandEncoder, texture: &Texture) {
+        match self {
+            Self::I420(_, _, _) => unreachable!(),
+            Self::Rgba(dest) | Self::Nv12(dest) => {
+                encoder.copy_texture_to_texture(ImageCopyTexture {
+                    texture,
+                    mip_level: 1,
+                    origin: Origin3d::ZERO,
+                    aspect: TextureAspect::All,
+                }, ImageCopyTexture {
+                    texture: dest,
+                    mip_level: 1,
+                    origin: Origin3d::ZERO,
+                    aspect: TextureAspect::All,
+                }, texture.size())
+            },
+        }
+    }
 }

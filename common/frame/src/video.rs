@@ -40,8 +40,8 @@ pub struct VideoFrame {
     pub hardware: bool,
     pub width: u32,
     pub height: u32,
-    pub data: [*const c_void; 2],
-    pub linesize: [usize; 2],
+    pub data: [*const c_void; 3],
+    pub linesize: [usize; 3],
 }
 
 unsafe impl Sync for VideoFrame {}
@@ -53,8 +53,8 @@ impl Default for VideoFrame {
             width: 0,
             height: 0,
             hardware: false,
-            linesize: [0, 0],
-            data: [null(), null()],
+            linesize: [0, 0, 0],
+            data: [null(), null(), null()],
             format: VideoFormat::RGBA,
         }
     }

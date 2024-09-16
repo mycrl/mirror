@@ -275,7 +275,7 @@ impl VideoDecoder {
                 self.frame.format = VideoFormat::NV12;
             }
             _ => {
-                for i in 0..2 {
+                for i in 0..3 {
                     self.frame.data[i] = frame.data[i] as *const _;
                     self.frame.linesize[i] = frame.linesize[i] as usize;
                 }
