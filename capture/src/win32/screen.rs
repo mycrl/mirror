@@ -46,11 +46,12 @@ impl GraphicsCaptureApiHandler for WindowsCapture {
         frame.width = ctx.options.size.width;
         frame.height = ctx.options.size.height;
         frame.hardware = ctx.options.hardware;
-        frame.format = if ctx.options.hardware {
-            VideoFormat::RGBA
-        } else {
-            VideoFormat::NV12
-        };
+        // frame.format = if ctx.options.hardware {
+        //     VideoFormat::RGBA
+        // } else {
+        //     VideoFormat::NV12
+        // };
+        frame.format = VideoFormat::NV12;
 
         let mut transform = VideoTransform::new(VideoTransformDescriptor {
             direct3d: ctx.options.direct3d.clone(),

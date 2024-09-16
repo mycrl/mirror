@@ -5,7 +5,7 @@ use crate::Window;
 
 use anyhow::{anyhow, Result};
 use bytemuck::{Pod, Zeroable};
-use frame::VideoFrame;
+use frame::{VideoFormat, VideoFrame};
 use pollster::FutureExt;
 
 #[cfg(target_os = "windows")]
@@ -59,7 +59,7 @@ impl VideoPlayer {
             .request_device(
                 &wgpu::DeviceDescriptor {
                     label: None,
-                    required_features: Features::empty(),
+                    required_features: Features::TEXTURE_COMPRESSION_BC | Features::TEXTURE_FORMAT_NV12,
                     required_limits: Limits::default(),
                     memory_hints: MemoryHints::MemoryUsage,
                 },
@@ -113,7 +113,6 @@ impl VideoPlayer {
                         label: None,
                         mip_level_count: 1,
                         sample_count: 1,
-                        format: TextureFormat::Rgba8Unorm,
                         dimension: TextureDimension::D2,
                         usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
                         view_formats: &[],
@@ -121,6 +120,11 @@ impl VideoPlayer {
                             width: frame.width,
                             height: frame.height,
                             depth_or_array_layers: 1,
+                        },
+                        format: match frame.format {
+                            VideoFormat::RGBA => TextureFormat::Rgba8Unorm,
+                            VideoFormat::NV12 => TextureFormat::NV12,
+                            VideoFormat::I420 => TextureFormat::NV12,
                         },
                     },
                 )
@@ -166,8 +170,12 @@ impl VideoPlayer {
                             resource: BindingResource::TextureView(&texture.create_view(
                                 &TextureViewDescriptor {
                                     dimension: Some(TextureViewDimension::D2),
-                                    format: Some(texture.format()),
-                                    aspect: TextureAspect::All,
+                                    // format: Some(match frame.format {
+                                    //     VideoFormat::RGBA => TextureFormat::Rgba8Unorm,
+                                    //     VideoFormat::NV12 => TextureFormat::R32Uint,
+                                    //     VideoFormat::I420 => TextureFormat::R8Unorm,
+                                    // }),
+                                    // aspect: TextureAspect::All,
                                     ..Default::default()
                                 },
                             )),
@@ -181,49 +189,51 @@ impl VideoPlayer {
                     ],
                 }));
 
-                self.pipeline =
-                    Some(
-                        self.device
-                            .create_render_pipeline(&RenderPipelineDescriptor {
+                self.pipeline = Some(self.device.create_render_pipeline(
+                    &RenderPipelineDescriptor {
+                        label: None,
+                        layout: Some(&self.device.create_pipeline_layout(
+                            &PipelineLayoutDescriptor {
                                 label: None,
-                                layout: Some(&self.device.create_pipeline_layout(
-                                    &PipelineLayoutDescriptor {
-                                        label: None,
-                                        bind_group_layouts: &[&layout],
-                                        push_constant_ranges: &[],
-                                    },
-                                )),
-                                vertex: VertexState {
-                                    entry_point: "main",
-                                    module: &self.device.create_shader_module(include_wgsl!(
+                                bind_group_layouts: &[&layout],
+                                push_constant_ranges: &[],
+                            },
+                        )),
+                        vertex:
+                            VertexState {
+                                entry_point: "main",
+                                module:
+                                    &self.device.create_shader_module(include_wgsl!(
                                         "./shaders/vertex.wgsl"
                                     )),
-                                    compilation_options: PipelineCompilationOptions::default(),
-                                    buffers: &[Vertex::desc()],
-                                },
-                                fragment: Some(FragmentState {
-                                    entry_point: "main",
-                                    module: &self.device.create_shader_module(include_wgsl!(
-                                        "./shaders/fragment.wgsl"
-                                    )),
-                                    compilation_options: PipelineCompilationOptions::default(),
-                                    targets: &[Some(ColorTargetState {
-                                        blend: Some(BlendState::REPLACE),
-                                        write_mask: ColorWrites::ALL,
-                                        format: TextureFormat::Rgba8Unorm,
-                                    })],
-                                }),
-                                primitive: PrimitiveState {
-                                    topology: PrimitiveTopology::TriangleStrip,
-                                    strip_index_format: Some(IndexFormat::Uint16),
-                                    ..Default::default()
-                                },
-                                depth_stencil: None,
-                                multisample: MultisampleState::default(),
-                                multiview: None,
-                                cache: None,
+                                compilation_options: PipelineCompilationOptions::default(),
+                                buffers: &[Vertex::desc()],
+                            },
+                        fragment: Some(FragmentState {
+                            entry_point: "main",
+                            module: &self.device.create_shader_module(match frame.format {
+                                VideoFormat::RGBA => include_wgsl!("./shaders/fragment.wgsl"),
+                                VideoFormat::NV12 => include_wgsl!("./shaders/nv12_fragment.wgsl"),
+                                VideoFormat::I420 => include_wgsl!("./shaders/nv12_fragment.wgsl"),
                             }),
-                    );
+                            compilation_options: PipelineCompilationOptions::default(),
+                            targets: &[Some(ColorTargetState {
+                                blend: Some(BlendState::REPLACE),
+                                write_mask: ColorWrites::ALL,
+                                format: TextureFormat::Rgba8Unorm,
+                            })],
+                        }),
+                        primitive: PrimitiveState {
+                            topology: PrimitiveTopology::TriangleStrip,
+                            strip_index_format: Some(IndexFormat::Uint16),
+                            ..Default::default()
+                        },
+                        depth_stencil: None,
+                        multisample: MultisampleState::default(),
+                        multiview: None,
+                        cache: None,
+                    },
+                ));
             }
         }
 

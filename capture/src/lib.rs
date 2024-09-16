@@ -20,6 +20,8 @@ mod linux {
 
 use self::audio::AudioCapture;
 
+use utils::Size;
+
 #[cfg(target_os = "windows")]
 use win32::{CameraCapture, ScreenCapture};
 
