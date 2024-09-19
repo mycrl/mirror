@@ -117,7 +117,7 @@ impl<T: FrameArrived<Frame = VideoFrame>> Context<T> {
         self.frame.data[0] = data as *const _;
         self.frame.data[1] =
             unsafe { data.add(stride as usize * self.frame.height as usize) as *const _ };
-        self.frame.linesize = [stride as usize, stride as usize];
+        self.frame.linesize = [stride as usize, stride as usize, 0];
         if !self.arrived.sink(&self.frame) {
             return Err(anyhow!("FrameArrived sink return false"));
         }

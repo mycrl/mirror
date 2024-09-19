@@ -14,6 +14,7 @@ pub mod desktop {
     };
 
     use frame::{AudioFrame, VideoFrame};
+    use mirror::Window;
     use utils::{atomic::EasyAtomic, strings::Strings};
 
     #[cfg(not(target_os = "macos"))]
@@ -25,6 +26,7 @@ pub mod desktop {
     /// Windows yes! The Windows dynamic library has an entry, so just
     /// initialize the logger and set the process priority at the entry.
     #[no_mangle]
+    #[allow(non_snake_case)]
     #[cfg(target_os = "windows")]
     extern "system" fn DllMain(
         _module: u32,
@@ -37,7 +39,7 @@ pub mod desktop {
                 if reserved.is_null() {
                     mirror_shutdown();
                 }
-    
+
                 true
             },
             _ => true,
@@ -408,23 +410,23 @@ pub mod desktop {
                 audio: None,
                 video: None,
             };
-    
+
             if !self.video.is_null() {
                 let video = unsafe { &*self.video };
                 let settings: mirror::VideoDescriptor = video.options.try_into()?;
-    
+
                 // Check whether the external parameters are configured correctly to 
                 // avoid some clowns inserting some inexplicable parameters.
                 anyhow::ensure!(settings.width % 4 == 0 && settings.width <= 4096, "invalid video width");
                 anyhow::ensure!(settings.height % 4 == 0 && settings.height <= 2560, "invalid video height");
                 anyhow::ensure!(settings.frame_rate <= 60, "invalid video frame rate");
-    
+
                 options.video = Some((
                     unsafe { &*video.source }.try_into()?,
                     settings,
                 ));
             }
-    
+
             if !self.audio.is_null() {
                 let audio = unsafe { &*self.audio };
                 options.audio = Some((
@@ -432,7 +434,7 @@ pub mod desktop {
                     audio.options.try_into()?,
                 ));
             }
-    
+
             Ok(options)
         }
     }
@@ -576,42 +578,14 @@ pub mod desktop {
     }
 
     #[repr(C)]
-    pub struct RawSize {
-        width: c_int,
-        height: c_int,
-    }
-
-    impl From<RawSize> for mirror::Size {
-        fn from(val: RawSize) -> Self {
-            Self {
-                width: val.width as u32,
-                height: val.height as u32,
-            }
-        }
-    }
-
-    #[repr(C)]
     struct RawRenderer(mirror::Render);
-
-    #[repr(C)]
-    struct RawRendererDescriptor {
-        size: RawSize,
-        #[cfg(target_os = "windows")]
-        hwnd: *mut c_void,
-    }
 
     /// Creating a window renderer.
     #[no_mangle]
     #[allow(unused_variables)]
-    extern "C" fn renderer_create(options: RawRendererDescriptor) -> *mut RawRenderer {
-        let func = || {
-            Ok::<RawRenderer, anyhow::Error>(RawRenderer(mirror::Render::new(
-                mirror::RenderDescriptor {
-                    size: options.size.into(),
-                    window_handle: mirror::HWND(options.hwnd),
-                },
-            )?))
-        };
+    extern "C" fn renderer_create(hwnd: *mut c_void) -> *mut RawRenderer {
+        let func =
+            || Ok::<RawRenderer, anyhow::Error>(RawRenderer(mirror::Render::new(Window(hwnd))?));
 
         checker(func())
             .map(|ret| Box::into_raw(Box::new(ret)))

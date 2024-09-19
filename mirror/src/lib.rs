@@ -1,36 +1,39 @@
 mod audio;
 mod receiver;
-mod sender;
 mod video;
 
+#[cfg(not(target_os = "macos"))]
+mod sender;
+
 pub use self::{
+    audio::AudioPlayer,
     receiver::{Receiver, ReceiverDescriptor},
-    video::{win32::VideoRenderDescriptor, Size},
+    video::VideoPlayer,
 };
 
 #[cfg(not(target_os = "macos"))]
 pub use self::sender::{AudioDescriptor, Sender, SenderDescriptor, VideoDescriptor};
 
-#[cfg(target_os = "windows")]
-use self::video::win32::VideoRender;
+use std::{ffi::c_void, num::NonZeroIsize};
 
 #[cfg(not(target_os = "macos"))]
 use std::sync::RwLock;
 
 use anyhow::Result;
-use audio::AudioPlayer;
 use frame::{AudioFrame, VideoFrame};
+use graphics::raw_window_handle::{
+    DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, RawWindowHandle,
+    Win32WindowHandle, WindowHandle,
+};
+
 use transport::{Transport, TransportDescriptor};
-use utils::logger;
+use utils::{logger, Size};
 
 #[cfg(target_os = "windows")]
 use utils::win32::{
-    set_process_priority, shutdown as win32_shutdown, startup as win32_startup, Direct3DDevice,
-    ProcessPriority,
+    get_hwnd_size, set_process_priority, shutdown as win32_shutdown, startup as win32_startup,
+    Direct3DDevice, ProcessPriority, HWND,
 };
-
-#[cfg(target_os = "windows")]
-pub use windows::Win32::Foundation::HWND;
 
 #[cfg(target_os = "windows")]
 pub(crate) static DIRECT_3D_DEVICE: RwLock<Option<Direct3DDevice>> = RwLock::new(None);
@@ -54,9 +57,9 @@ pub fn startup() -> Result<()> {
         win32_startup()?;
     }
 
-    std::panic::set_hook(Box::new(|info| {
-        log::error!("{:?}", info);
-    }));
+    // std::panic::set_hook(Box::new(|info| {
+    //     log::error!("{:?}", info);
+    // }));
 
     // In order to prevent other programs from affecting the delay performance of
     // the current program, set the priority of the current process to high.
@@ -214,32 +217,50 @@ impl Mirror {
     }
 }
 
-pub struct RenderDescriptor {
-    pub size: Size,
+#[derive(Clone)]
+pub struct Window(pub *const c_void);
+
+unsafe impl Send for Window {}
+unsafe impl Sync for Window {}
+
+impl Window {
     #[cfg(target_os = "windows")]
-    pub window_handle: HWND,
+    fn size(&self) -> Result<Size> {
+        Ok(get_hwnd_size(HWND(self.0 as *mut _))?)
+    }
+
+    #[cfg(target_os = "macos")]
+    fn size(&self) -> Result<Size> {
+        todo!()
+    }
+}
+
+impl HasDisplayHandle for Window {
+    fn display_handle(&self) -> Result<DisplayHandle<'_>, HandleError> {
+        Ok(DisplayHandle::windows())
+    }
+}
+
+impl HasWindowHandle for Window {
+    fn window_handle(&self) -> Result<WindowHandle<'_>, HandleError> {
+        Ok(unsafe {
+            WindowHandle::borrow_raw(RawWindowHandle::Win32(Win32WindowHandle::new(
+                NonZeroIsize::new(self.0 as isize).unwrap(),
+            )))
+        })
+    }
 }
 
 pub struct Render {
     audio: AudioPlayer,
-    #[cfg(target_os = "windows")]
-    video: VideoRender,
+    video: VideoPlayer,
 }
 
 impl Render {
-    pub fn new(options: RenderDescriptor) -> Result<Self> {
+    pub fn new(window: Window) -> Result<Self> {
         Ok(Self {
             audio: AudioPlayer::new()?,
-            #[cfg(target_os = "windows")]
-            video: VideoRender::new(VideoRenderDescriptor {
-                size: options.size.into(),
-                window_handle: options.window_handle,
-                direct3d: DIRECT_3D_DEVICE
-                    .read()
-                    .unwrap()
-                    .clone()
-                    .expect("D3D device was not initialized successfully!"),
-            })?,
+            video: VideoPlayer::new(window)?,
         })
     }
 

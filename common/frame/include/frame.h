@@ -25,8 +25,8 @@ typedef struct
     bool hardware;
     uint32_t width;
     uint32_t height;
-    void* data[2];
-    size_t linesize[2];
+    void* data[3];
+    size_t linesize[3];
 } VideoFrame;
 
 typedef struct

@@ -9,7 +9,7 @@ use std::{
 use anyhow::Result;
 use bytes::BytesMut;
 use capture::{
-    AudioCaptureSourceDescription, Capture, CaptureDescriptor, FrameArrived, Size, Source,
+    AudioCaptureSourceDescription, Capture, CaptureDescriptor, FrameArrived, Source,
     SourceCaptureDescriptor, VideoCaptureSourceDescription,
 };
 
@@ -27,6 +27,8 @@ use transport::{
 
 #[cfg(target_os = "windows")]
 use utils::win32::MediaThreadClass;
+
+use utils::Size;
 
 #[derive(Debug, Clone)]
 pub struct VideoDescriptor {
