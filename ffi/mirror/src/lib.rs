@@ -26,6 +26,7 @@ pub mod desktop {
     /// Windows yes! The Windows dynamic library has an entry, so just
     /// initialize the logger and set the process priority at the entry.
     #[no_mangle]
+    #[allow(non_snake_case)]
     #[cfg(target_os = "windows")]
     extern "system" fn DllMain(
         _module: u32,

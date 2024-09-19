@@ -519,7 +519,12 @@ impl VideoEncoder {
                     av_frame.data.as_mut_ptr(),
                     av_frame.linesize.as_mut_ptr(),
                     frame.data.as_ptr() as *const _,
-                    frame.linesize.as_ptr() as *const _,
+                    [
+                        frame.linesize[0] as i32,
+                        frame.linesize[1] as i32,
+                        frame.linesize[2] as i32,
+                    ]
+                    .as_ptr(),
                     { &*self.context }.pix_fmt,
                     av_frame.width,
                     av_frame.height,

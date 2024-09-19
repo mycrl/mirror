@@ -99,7 +99,7 @@ trait Texture2DSample {
                     mip_level_count: 1,
                     sample_count: 1,
                     dimension: TextureDimension::D2,
-                    usage: TextureUsages::TEXTURE_BINDING,
+                    usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
                     view_formats: &[],
                     size: Extent3d {
                         depth_or_array_layers: 1,
@@ -192,11 +192,7 @@ trait Texture2DSample {
                     bytes_per_row: Some(size.width),
                     rows_per_image: Some(size.height),
                 },
-                Extent3d {
-                    width: size.width,
-                    height: size.height,
-                    depth_or_array_layers: 1,
-                },
+                texture.size(),
             );
         }
     }
@@ -236,35 +232,51 @@ impl Texture2DSample for Rgba {
             &self.0,
             TextureAspect::All,
             Size {
-                width: size.width,
+                width: size.width * 4,
                 height: size.height,
             },
         )]
     }
 }
 
-struct Nv12(WGPUTexture);
+struct Nv12(WGPUTexture, WGPUTexture);
 
 impl Nv12 {
     fn new(device: &Device, size: Size) -> Self {
-        Self(Self::create(device, size).next().unwrap())
+        let mut textures = Self::create(device, size);
+        Self(textures.next().unwrap(), textures.next().unwrap())
     }
 }
 
 impl Texture2DSample for Nv12 {
     fn create_texture_descriptor(size: Size) -> impl IntoIterator<Item = (Size, TextureFormat)> {
-        [(size, TextureFormat::NV12)]
+        [
+            (size, TextureFormat::R8Unorm),
+            (
+                Size {
+                    width: size.width / 2,
+                    height: size.height / 2,
+                },
+                TextureFormat::Rg8Unorm,
+            ),
+        ]
     }
 
     fn views_descriptors<'a>(
         &'a self,
         texture: Option<&'a WGPUTexture>,
     ) -> impl IntoIterator<Item = (&'a WGPUTexture, TextureFormat, TextureAspect)> {
-        let texture = texture.unwrap_or_else(|| &self.0);
-        [
-            (texture, TextureFormat::R8Unorm, TextureAspect::Plane0),
-            (texture, TextureFormat::Rg8Unorm, TextureAspect::Plane1),
-        ]
+        if let Some(texture) = texture {
+            [
+                (texture, TextureFormat::R8Unorm, TextureAspect::Plane0),
+                (texture, TextureFormat::Rg8Unorm, TextureAspect::Plane1),
+            ]
+        } else {
+            [
+                (&self.0, TextureFormat::R8Unorm, TextureAspect::All),
+                (&self.1, TextureFormat::Rg8Unorm, TextureAspect::All),
+            ]
+        }
     }
 
     fn copy_buffer_descriptors<'a>(
@@ -280,8 +292,8 @@ impl Texture2DSample for Nv12 {
         };
 
         [
-            (buffers[0], &self.0, TextureAspect::Plane0, size),
-            (buffers[1], &self.0, TextureAspect::Plane1, size),
+            (buffers[0], &self.0, TextureAspect::All, size),
+            (buffers[1], &self.1, TextureAspect::All, size),
         ]
     }
 }
