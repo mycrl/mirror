@@ -43,6 +43,8 @@ pub enum TextureResource<'a> {
 }
 
 impl<'a> TextureResource<'a> {
+    /// Get the hardware texture, here does not deal with software texture, so
+    /// if it is software texture directly return None.
     fn texture(&self, device: &Device) -> Result<Option<WGPUTexture>, FromDxgiResourceError> {
         Ok(match self {
             TextureResource::Texture(texture) => texture.texture(device).ok(),
@@ -99,6 +101,8 @@ trait Texture2DSample {
                     mip_level_count: 1,
                     sample_count: 1,
                     dimension: TextureDimension::D2,
+                    // The textures created here are all needed to allow external writing of data,
+                    // and all need the COPY_DST flag.
                     usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
                     view_formats: &[],
                     size: Extent3d {
@@ -111,6 +115,13 @@ trait Texture2DSample {
             })
     }
 
+    /// Creates a new BindGroupLayout.
+    ///
+    /// A BindGroupLayout is a handle to the GPU-side layout of a binding group.
+    /// It can be used to create a BindGroupDescriptor object, which in turn can
+    /// be used to create a BindGroup object with Device::create_bind_group. A
+    /// series of BindGroupLayouts can also be used to create a
+    /// PipelineLayoutDescriptor, which can be used to create a PipelineLayout.
     fn bind_group_layout(&self, device: &Device) -> BindGroupLayout {
         let mut entries: SmallVec<[BindGroupLayoutEntry; 5]> = SmallVec::with_capacity(5);
         for (i, _) in self.views_descriptors(None).into_iter().enumerate() {
@@ -139,6 +150,13 @@ trait Texture2DSample {
         })
     }
 
+    /// Creates a new BindGroup.
+    ///
+    /// A BindGroup represents the set of resources bound to the bindings
+    /// described by a BindGroupLayout. It can be created with
+    /// Device::create_bind_group. A BindGroup can be bound to a particular
+    /// RenderPass with RenderPass::set_bind_group, or to a ComputePass with
+    /// ComputePass::set_bind_group.
     fn bind_group(
         &self,
         device: &Device,
@@ -177,6 +195,7 @@ trait Texture2DSample {
         })
     }
 
+    /// Schedule a write of some data into a texture.
     fn update(&self, queue: &Queue, resource: &SoftwareTexture) {
         for (buffer, texture, aspect, size) in self.copy_buffer_descriptors(resource.buffers) {
             queue.write_texture(
@@ -189,6 +208,9 @@ trait Texture2DSample {
                 buffer,
                 ImageDataLayout {
                     offset: 0,
+                    // Bytes per “row” in an image.
+                    //
+                    // A row is one row of pixels or of compressed blocks in the x direction.
                     bytes_per_row: Some(size.width),
                     rows_per_image: Some(size.height),
                 },
@@ -198,6 +220,22 @@ trait Texture2DSample {
     }
 }
 
+/// RGBA stands for red green blue alpha. While it is sometimes described as a
+/// color space, it is actually a three-channel RGB color model supplemented
+/// with a fourth alpha channel. Alpha indicates how opaque each pixel is and
+/// allows an image to be combined over others using alpha compositing, with
+/// transparent areas and anti-aliasing of the edges of opaque regions. Each
+/// pixel is a 4D vector.
+///
+/// The term does not define what RGB color space is being used. It also does
+/// not state whether or not the colors are premultiplied by the alpha value,
+/// and if they are it does not state what color space that premultiplication
+/// was done in. This means more information than just "RGBA" is needed to
+/// determine how to handle an image.
+///
+/// In some contexts the abbreviation "RGBA" means a specific memory layout
+/// (called RGBA8888 below), with other terms such as "BGRA" used for
+/// alternatives. In other contexts "RGBA" means any layout.
 struct Rgba(WGPUTexture);
 
 impl Rgba {
@@ -239,6 +277,27 @@ impl Texture2DSample for Rgba {
     }
 }
 
+/// YCbCr, Y′CbCr, or Y Pb/Cb Pr/Cr, also written as YCBCR or Y′CBCR, is a
+/// family of color spaces used as a part of the color image pipeline in video
+/// and digital photography systems. Y′ is the luma component and CB and CR are
+/// the blue-difference and red-difference chroma components. Y′ (with prime) is
+/// distinguished from Y, which is luminance, meaning that light intensity is
+/// nonlinearly encoded based on gamma corrected RGB primaries.
+///
+/// Y′CbCr color spaces are defined by a mathematical coordinate transformation
+/// from an associated RGB primaries and white point. If the underlying RGB
+/// color space is absolute, the Y′CbCr color space is an absolute color space
+/// as well; conversely, if the RGB space is ill-defined, so is Y′CbCr. The
+/// transformation is defined in equations 32, 33 in ITU-T H.273. Nevertheless
+/// that rule does not apply to P3-D65 primaries used by Netflix with
+/// BT.2020-NCL matrix, so that means matrix was not derived from primaries, but
+/// now Netflix allows BT.2020 primaries (since 2021).[1] The same happens with
+/// JPEG: it has BT.601 matrix derived from System M primaries, yet the
+/// primaries of most images are BT.709.
+///
+/// NV12 is possibly the most commonly-used 8-bit 4:2:0 format. It is the
+/// default for Android camera preview.[19] The entire image in Y is written
+/// out, followed by interleaved lines that go U0, V0, U1, V1, etc.
 struct Nv12(WGPUTexture, WGPUTexture);
 
 impl Nv12 {
@@ -266,6 +325,9 @@ impl Texture2DSample for Nv12 {
         &'a self,
         texture: Option<&'a WGPUTexture>,
     ) -> impl IntoIterator<Item = (&'a WGPUTexture, TextureFormat, TextureAspect)> {
+        // When you create a view directly for a texture, the external texture is a
+        // single texture, and you need to create different planes of views on top of
+        // the single texture.
         if let Some(texture) = texture {
             [
                 (texture, TextureFormat::R8Unorm, TextureAspect::Plane0),
@@ -322,10 +384,16 @@ impl Texture2DSource {
         }
     }
 
+    /// If it is a hardware texture, it will directly create view for the
+    /// current texture, if it is a software texture, it will write the data to
+    /// the internal texture first, and then create the view for the internal
+    /// texture, so it is a more time-consuming operation to use the software
+    /// texture.
     pub fn get_view(
         &mut self,
         texture: Texture,
     ) -> Result<Option<(&RenderPipeline, BindGroup)>, FromDxgiResourceError> {
+        // Not yet initialized, initialize the environment first.
         if self.sample.is_none() {
             let sample = match &texture {
                 Texture::Rgba(texture) => Texture2DSourceSample::Rgba(Rgba::new(
@@ -365,6 +433,8 @@ impl Texture2DSource {
                         fragment: Some(FragmentState {
                             entry_point: "main",
                             module: &self.device.create_shader_module(match &sample {
+                                // Because the output surface is RGBA, RGBA is a generic texture
+                                // format.
                                 Texture2DSourceSample::Rgba(_) => {
                                     include_wgsl!("./shaders/fragment/any.wgsl")
                                 }
@@ -395,6 +465,7 @@ impl Texture2DSource {
             self.bind_group_layout = Some(bind_group_layout);
         }
 
+        // Only software textures need to be updated to the sample via update.
         if let Some(sample) = &self.sample {
             match &texture {
                 Texture::Rgba(TextureResource::Buffer(buffer)) => {

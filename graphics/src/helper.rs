@@ -22,6 +22,10 @@ pub mod win32 {
         NotOpenDxSharedHandle,
     }
 
+    /// see: https://learn.microsoft.com/en-us/windows/win32/api/d3d11/nn-d3d11-id3d11texture2d
+    ///
+    /// Get d3d's shared resources and convert them directly to wgpu's texture
+    /// type, this interface is meant to use external textures directly.
     pub fn create_texture_from_dx11_texture(
         device: &Device,
         texture: &ID3D11Texture2D,

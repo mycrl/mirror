@@ -4,6 +4,10 @@ mod vertex;
 
 use std::sync::Arc;
 
+use self::{helper::win32::FromDxgiResourceError, vertex::Vertex};
+
+pub use self::samples::{HardwareTexture, SoftwareTexture, Texture, TextureResource};
+
 use pollster::FutureExt;
 use samples::Texture2DSource;
 use thiserror::Error;
@@ -17,12 +21,6 @@ use wgpu::{
 };
 
 pub use wgpu::rwh as raw_window_handle;
-
-pub use self::{
-    helper::win32::FromDxgiResourceError,
-    samples::{HardwareTexture, SoftwareTexture, Texture, TextureResource},
-    vertex::Vertex,
-};
 
 #[derive(Debug, Error)]
 pub enum GraphicsError {
@@ -40,7 +38,15 @@ pub enum GraphicsError {
     FromDxgiResourceError(#[from] FromDxgiResourceError),
 }
 
-pub struct Graphics<'a> {
+/// Window Renderer.
+///
+/// Supports rendering RGBA or NV12 hardware or software textures to system
+/// native windows.
+///
+/// Note that the renderer uses a hardware implementation by default, i.e. it
+/// uses the underlying GPU device, and the use of software devices is not
+/// currently supported.
+pub struct Renderer<'a> {
     surface: Surface<'a>,
     device: Arc<Device>,
     queue: Arc<Queue>,
@@ -49,7 +55,7 @@ pub struct Graphics<'a> {
     source: Texture2DSource,
 }
 
-impl<'a> Graphics<'a> {
+impl<'a> Renderer<'a> {
     pub fn new(window: impl Into<SurfaceTarget<'a>>, size: Size) -> Result<Self, GraphicsError> {
         let instance = Instance::default();
         let surface = instance.create_surface(window)?;
@@ -65,10 +71,9 @@ impl<'a> Graphics<'a> {
             .request_device(
                 &wgpu::DeviceDescriptor {
                     label: None,
-                    required_features: Features::TEXTURE_COMPRESSION_BC
-                        | Features::TEXTURE_FORMAT_NV12,
-                    required_limits: Limits::downlevel_defaults(),
+                    required_features: Features::TEXTURE_FORMAT_NV12,
                     memory_hints: MemoryHints::MemoryUsage,
+                    required_limits: Limits::default(),
                 },
                 None,
             )
@@ -77,6 +82,8 @@ impl<'a> Graphics<'a> {
         let device = Arc::new(device);
         let queue = Arc::new(queue);
 
+        // Configure surface as RGBA, RGBA this format compatibility is the best, in
+        // order to unnecessary trouble, directly fixed to RGBA is the best.
         {
             let mut config = surface
                 .get_default_config(&adapter, size.width, size.height)
@@ -110,6 +117,10 @@ impl<'a> Graphics<'a> {
         })
     }
 
+    // Submit the texture to the renderer, it should be noted that the renderer will
+    // not render this texture immediately, the processing flow will enter the
+    // render queue and wait for the queue to automatically schedule the rendering
+    // to the surface.
     pub fn submit(&mut self, texture: Texture) -> Result<(), GraphicsError> {
         if let Some((pipeline, bind_group)) = self.source.get_view(texture)? {
             let output = self.surface.get_current_texture()?;

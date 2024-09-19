@@ -2,15 +2,15 @@ use crate::Window;
 
 use anyhow::{anyhow, Result};
 use frame::{VideoFormat, VideoFrame};
-use graphics::{Graphics, HardwareTexture, SoftwareTexture, Texture, TextureResource};
+use graphics::{HardwareTexture, Renderer, SoftwareTexture, Texture, TextureResource};
 use utils::{win32::d3d_texture_borrowed_raw, Size};
 
-pub struct VideoPlayer(Graphics<'static>);
+pub struct VideoPlayer(Renderer<'static>);
 
 impl VideoPlayer {
     pub fn new(window: Window) -> Result<Self> {
         let size = window.size()?;
-        Ok(Self(Graphics::new(window, size)?))
+        Ok(Self(Renderer::new(window, size)?))
     }
 
     pub fn send(&mut self, frame: &VideoFrame) -> Result<()> {
