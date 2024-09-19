@@ -11,6 +11,7 @@ resolver = "2"
 members = [
     "codec",
     "capture",
+    "graphics",
     "mirror",
     "service",
     "transport",
@@ -19,5 +20,5 @@ members = [
     "common/srt",
     "common/frame",
     "common/utils",
-    "ffi/mirror", 
+    "ffi/mirror",  
 ]

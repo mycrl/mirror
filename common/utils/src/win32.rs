@@ -13,7 +13,7 @@ use windows::{
             },
             Direct3D11::{
                 D3D11CreateDevice, ID3D11Multithread, D3D11_CREATE_DEVICE_BGRA_SUPPORT,
-                D3D11_CREATE_DEVICE_DEBUG, D3D11_SDK_VERSION,
+                D3D11_CREATE_DEVICE_DEBUG, D3D11_SDK_VERSION, D3D11_TEXTURE2D_DESC,
             },
             Dxgi::DXGI_SHARED_RESOURCE_READ,
         },
@@ -34,13 +34,16 @@ use windows::{
 };
 
 pub use windows::{
-    core::Interface,
+    core::{Error, Interface},
     Win32::{
         Foundation::HWND,
         Graphics::{
             Direct3D11::{ID3D11Device, ID3D11DeviceContext, ID3D11Texture2D},
             Direct3D12::ID3D12Resource,
-            Dxgi::{IDXGIResource, IDXGIResource1},
+            Dxgi::{
+                Common::{DXGI_FORMAT_NV12, DXGI_FORMAT_R8G8B8A8_UNORM},
+                IDXGIResource, IDXGIResource1,
+            },
         },
     },
 };
@@ -292,12 +295,14 @@ pub fn d3d_context_borrowed_raw<'a>(raw: &'a *mut c_void) -> Option<&'a ID3D11De
     unsafe { ID3D11DeviceContext::from_raw_borrowed(raw) }
 }
 
-pub trait SharedTexture {
+pub trait EasyTexture {
     fn get_shared(&self) -> Result<HANDLE>;
     fn create_shared(&self) -> Result<HANDLE>;
+    fn desc(&self) -> D3D11_TEXTURE2D_DESC;
+    fn size(&self) -> Size;
 }
 
-impl SharedTexture for ID3D11Texture2D {
+impl EasyTexture for ID3D11Texture2D {
     fn get_shared(&self) -> Result<HANDLE> {
         Ok(unsafe { self.cast::<IDXGIResource>()?.GetSharedHandle()? })
     }
@@ -310,5 +315,22 @@ impl SharedTexture for ID3D11Texture2D {
                 None,
             )?
         })
+    }
+
+    fn size(&self) -> Size {
+        let desc = self.desc();
+        Size {
+            width: desc.Width,
+            height: desc.Height,
+        }
+    }
+
+    fn desc(&self) -> D3D11_TEXTURE2D_DESC {
+        let mut desc = D3D11_TEXTURE2D_DESC::default();
+        unsafe {
+            self.GetDesc(&mut desc);
+        }
+
+        desc
     }
 }

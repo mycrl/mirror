@@ -11,7 +11,6 @@ pub struct VideoSize {
 pub enum VideoFormat {
     RGBA,
     NV12,
-    I420,
 }
 
 /// YCbCr (NV12)
@@ -94,7 +93,6 @@ pub mod win32 {
             match self {
                 Self::RGBA => DXGI_FORMAT_R8G8B8A8_UNORM,
                 Self::NV12 => DXGI_FORMAT_NV12,
-                Self::I420 => DXGI_FORMAT_NV12,
             }
         }
     }

@@ -11,14 +11,9 @@ log = "0.4.20"
 utils = { path = "../common/utils" }
 frame = { path = "../common/frame" }
 transport = { path = "../transport" }
+graphics = { path = "../graphics" }
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
 capture = { path = "../capture" }
 codec = { path = "../codec" }
 cpal = "0.15.3"
-wgpu = "22.1.0"
-pollster = "0.3.0"
-bytemuck = { version = "1.17.1",  features = ["derive"] }
-
-[target.'cfg(target_os = "windows")'.dependencies]
-d3d12 = "22.0.0"

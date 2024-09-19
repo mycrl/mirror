@@ -13,7 +13,7 @@ use frame::{
 
 use utils::{
     atomic::EasyAtomic,
-    win32::{ID3D11Texture2D, Interface, MediaThreadClass, SharedTexture},
+    win32::{EasyTexture, ID3D11Texture2D, Interface, MediaThreadClass},
 };
 
 use windows_capture::{
@@ -46,12 +46,11 @@ impl GraphicsCaptureApiHandler for WindowsCapture {
         frame.width = ctx.options.size.width;
         frame.height = ctx.options.size.height;
         frame.hardware = ctx.options.hardware;
-        // frame.format = if ctx.options.hardware {
-        //     VideoFormat::RGBA
-        // } else {
-        //     VideoFormat::NV12
-        // };
-        frame.format = VideoFormat::NV12;
+        frame.format = if ctx.options.hardware {
+            VideoFormat::RGBA
+        } else {
+            VideoFormat::NV12
+        };
 
         let mut transform = VideoTransform::new(VideoTransformDescriptor {
             direct3d: ctx.options.direct3d.clone(),

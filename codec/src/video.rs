@@ -274,15 +274,7 @@ impl VideoDecoder {
                 self.frame.hardware = true;
                 self.frame.format = VideoFormat::NV12;
             }
-            _ => {
-                for i in 0..3 {
-                    self.frame.data[i] = frame.data[i] as *const _;
-                    self.frame.linesize[i] = frame.linesize[i] as usize;
-                }
-
-                self.frame.hardware = false;
-                self.frame.format = VideoFormat::I420;
-            }
+            _ => unimplemented!("only supports RGBA or NV12 video frames!"),
         };
 
         Some(&self.frame)

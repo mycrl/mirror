@@ -21,7 +21,7 @@ use std::sync::RwLock;
 
 use anyhow::Result;
 use frame::{AudioFrame, VideoFrame};
-use wgpu::rwh::{
+use graphics::raw_window_handle::{
     DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, RawWindowHandle,
     Win32WindowHandle, WindowHandle,
 };
@@ -57,9 +57,9 @@ pub fn startup() -> Result<()> {
         win32_startup()?;
     }
 
-    std::panic::set_hook(Box::new(|info| {
-        log::error!("{:?}", info);
-    }));
+    // std::panic::set_hook(Box::new(|info| {
+    //     log::error!("{:?}", info);
+    // }));
 
     // In order to prevent other programs from affecting the delay performance of
     // the current program, set the priority of the current process to high.
