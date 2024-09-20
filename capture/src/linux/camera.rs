@@ -1,11 +1,6 @@
 use crate::{CaptureHandler, FrameArrived, Source, SourceType, VideoCaptureSourceDescription};
 
 use anyhow::anyhow;
-use eye_hal::{
-    format::PixelFormat,
-    traits::{Context, Device},
-    PlatformContext,
-};
 use frame::VideoFrame;
 
 #[derive(Default)]

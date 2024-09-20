@@ -22,5 +22,4 @@ features = [
 ]
 
 [target.'cfg(target_os = "linux")'.dependencies]
-eye-hal = { git = "https://github.com/raymanfx/eye-rs" }
-x11 = "2.21.0"
+ash = "0.38.0"
