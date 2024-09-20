@@ -27,7 +27,7 @@ use graphics::raw_window_handle::{
 };
 
 use transport::{Transport, TransportDescriptor};
-use utils::{logger, Size};
+use utils::Size;
 
 #[cfg(target_os = "windows")]
 use utils::win32::{
@@ -41,15 +41,6 @@ pub(crate) static DIRECT_3D_DEVICE: RwLock<Option<Direct3DDevice>> = RwLock::new
 /// Initialize the environment, which must be initialized before using the SDK.
 #[rustfmt::skip]
 pub fn startup() -> Result<()> {
-    logger::init(
-        log::LevelFilter::Info,
-        if cfg!(debug_assertions) {
-            Some("mirror.log")
-        } else {
-            None
-        },
-    )?;
-
     log::info!("mirror startup");
 
     #[cfg(target_os = "windows")]

@@ -3,6 +3,8 @@ pub mod desktop {
     use std::{
         ffi::{c_char, c_int},
         fmt::Debug,
+        fs::{create_dir, metadata},
+        io::stdout,
         ptr::null_mut,
         sync::atomic::AtomicBool,
     };
@@ -13,7 +15,14 @@ pub mod desktop {
         mem::ManuallyDrop,
     };
 
+    use chrono::Local;
+    use fern::{
+        colors::{Color, ColoredLevelConfig},
+        DateBased, Dispatch as LogDispatch,
+    };
+
     use frame::{AudioFrame, VideoFrame};
+    use log::LevelFilter;
     use mirror::Window;
     use utils::{atomic::EasyAtomic, strings::Strings};
 
@@ -50,7 +59,69 @@ pub mod desktop {
     /// SDK.
     #[no_mangle]
     pub extern "C" fn mirror_startup() -> bool {
-        checker(mirror::startup()).is_ok()
+        let func = || {
+            let mut logger = LogDispatch::new()
+                .level(LevelFilter::Info)
+                .level_for("wgpu", LevelFilter::Warn)
+                .level_for("wgpu_core", LevelFilter::Warn)
+                .level_for("wgpu_hal", LevelFilter::Warn)
+                .level_for("wgpu_hal::auxil::dxgi::exception", LevelFilter::Error);
+
+            if cfg!(debug_assertions) {
+                let colors = ColoredLevelConfig::new()
+                    .info(Color::Blue)
+                    .warn(Color::Yellow)
+                    .error(Color::Red);
+
+                logger = logger
+                    .format(move |out, message, record| {
+                        out.finish(format_args!(
+                            "[{}] - ({}) - {}",
+                            colors.color(record.level()),
+                            record.file_static().unwrap_or("*"),
+                            message
+                        ))
+                    })
+                    .chain(stdout());
+            } else {
+                logger = logger.format(move |out, message, record| {
+                    out.finish(format_args!(
+                        "{} - [{}] - ({}) - {}",
+                        Local::now().format("%m-%d %H:%M:%S"),
+                        record.level(),
+                        record.file_static().unwrap_or("*"),
+                        message
+                    ))
+                });
+
+                #[cfg(target_os = "windows")]
+                {
+                    if metadata("./logs").is_err() {
+                        create_dir("./logs")?;
+                    }
+
+                    logger = logger.chain(DateBased::new("logs/", "%Y-%m-%d-mirror.log"));
+                }
+
+                #[cfg(target_os = "linux")]
+                {
+                    use fern::syslog;
+
+                    logger = logger.chain(syslog::unix(syslog::Formatter3164 {
+                        facility: syslog::Facility::LOG_USER,
+                        process: "mirror".to_owned(),
+                        hostname: None,
+                        pid: 0,
+                    })?);
+                }
+            }
+
+            logger.apply()?;
+            mirror::startup()?;
+            Ok::<_, anyhow::Error>(())
+        };
+
+        checker(func()).is_ok()
     }
 
     /// Cleans up the environment when the SDK exits, and is recommended to be

@@ -129,18 +129,12 @@ impl VideoDecoder {
             frame: VideoFrame::default(),
         };
 
-        #[cfg(target_os = "windows")]
         let codec = create_video_context(CreateVideoContextDescriptor {
             kind: CodecType::Decoder(options.codec),
             context: &mut this.context,
             frame_size: None,
+            #[cfg(target_os = "windows")]
             direct3d: options.direct3d,
-        })?;
-
-        #[cfg(not(target_os = "windows"))]
-        let codec = create_video_context(CreateVideoContextDescriptor {
-            kind: CodecType::Decoder(options.codec),
-            context: &mut this.context,
         })?;
 
         let context_mut = unsafe { &mut *this.context };
@@ -376,21 +370,15 @@ impl VideoEncoder {
             initialized: false,
         };
 
-        #[cfg(target_os = "windows")]
         let codec = create_video_context(CreateVideoContextDescriptor {
             kind: CodecType::Encoder(options.codec),
             context: &mut this.context,
-            direct3d: options.direct3d,
             frame_size: Some(HardwareFrameSize {
                 width: options.width,
                 height: options.height,
             }),
-        })?;
-
-        #[cfg(not(target_os = "windows"))]
-        let codec = create_video_context(CreateVideoContextDescriptor {
-            kind: CodecType::Encoder(options.codec),
-            context: &mut this.context,
+            #[cfg(target_os = "windows")]
+            direct3d: options.direct3d,
         })?;
 
         let context_mut = unsafe { &mut *this.context };

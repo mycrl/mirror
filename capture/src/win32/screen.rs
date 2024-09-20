@@ -58,7 +58,7 @@ impl GraphicsCaptureApiHandler for WindowsCapture {
                 },
             ),
             output: Resource::Default(
-                VideoFormat::NV12,
+                frame.format,
                 VideoSize {
                     width: ctx.options.size.width,
                     height: ctx.options.size.height,

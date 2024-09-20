@@ -7,9 +7,9 @@
     let u = textureSample(uv_texture, sampler_, coords).r - 0.5;
     let v = textureSample(uv_texture, sampler_, coords).g - 0.5;
 
-    let r = y + 1.402 * v;
-    let g = y - 0.344136 * u - 0.714136 * v;
-    let b = y + 1.772 * u;
+    let r = y + 1.5748 * v;
+    let g = y - 0.187324 * u - 0.468124 * v;
+    let b = y + 1.8556 * u;
 
     return vec4<f32>(r, g, b, 1.0);
 }

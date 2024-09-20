@@ -10,9 +10,11 @@ name = "mirror"
 [dependencies]
 anyhow = "1.0.82"
 bytes = "1.5"
+fern = { version = "0.6.2", features = ["date-based", "colored", "syslog-6"]}
 log = "0.4.20"
 jni = "0.21.1"
 num_cpus = "1.16.0"
+chrono = { version = "0.4", features = ["clock", "alloc"] }
 utils = { path = "../../common/utils" }
 frame = { path = "../../common/frame" }
 transport = { path = "../../transport" }

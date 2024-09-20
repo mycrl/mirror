@@ -15,7 +15,6 @@
 /// assert!(opt.is_some());
 /// ```
 pub mod atomic;
-pub mod logger;
 pub mod strings;
 
 #[cfg(target_os = "windows")]

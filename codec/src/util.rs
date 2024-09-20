@@ -84,7 +84,6 @@ pub enum CreateVideoContextError {
 pub struct CreateVideoContextDescriptor<'a> {
     pub context: &'a mut *mut AVCodecContext,
     pub kind: CodecType,
-    #[cfg(target_os = "windows")]
     pub frame_size: Option<HardwareFrameSize>,
     #[cfg(target_os = "windows")]
     pub direct3d: Option<Direct3DDevice>,
@@ -122,7 +121,6 @@ pub fn create_video_context(
 
     // The hardware codec is used, and the hardware context is initialized here for
     // the hardware codec.
-    #[cfg(target_os = "windows")]
     if options.kind.is_d3d() || options.kind.is_qsv() {
         let hw_device_ctx =
             unsafe { av_hwdevice_ctx_alloc(AVHWDeviceType::AV_HWDEVICE_TYPE_D3D11VA) };
@@ -130,29 +128,32 @@ pub fn create_video_context(
             return Err(CreateVideoContextError::AllocAVHardwareDeviceContextError);
         }
 
-        let direct3d = if let Some(direct3d) = options.direct3d {
-            direct3d
-        } else {
-            return Err(CreateVideoContextError::MissingDirect3DDevice);
-        };
-
-        // Special handling is required for qsv, which requires multithreading to be
-        // enabled for the d3d device.
-        if options.kind.is_qsv() {
-            if let Err(e) = direct3d.set_multithread_protected(true) {
-                return Err(CreateVideoContextError::SetMultithreadProtectedError(e));
-            }
-        }
-
         // Use externally created d3d devices and do not let ffmpeg create d3d devices
         // itself.
-        let d3d11_hwctx = unsafe {
-            let hwctx = (&mut *hw_device_ctx).data as *mut AVHWDeviceContext;
-            &mut *((&mut *hwctx).hwctx as *mut AVD3D11VADeviceContext)
-        };
+        #[cfg(target_os = "windows")]
+        {
+            let direct3d = if let Some(direct3d) = options.direct3d {
+                direct3d
+            } else {
+                return Err(CreateVideoContextError::MissingDirect3DDevice);
+            };
 
-        d3d11_hwctx.device = direct3d.device.as_raw();
-        d3d11_hwctx.device_context = direct3d.context.as_raw();
+            // Special handling is required for qsv, which requires multithreading to be
+            // enabled for the d3d device.
+            if options.kind.is_qsv() {
+                if let Err(e) = direct3d.set_multithread_protected(true) {
+                    return Err(CreateVideoContextError::SetMultithreadProtectedError(e));
+                }
+            }
+
+            let d3d11_hwctx = unsafe {
+                let hwctx = (&mut *hw_device_ctx).data as *mut AVHWDeviceContext;
+                &mut *((&mut *hwctx).hwctx as *mut AVD3D11VADeviceContext)
+            };
+
+            d3d11_hwctx.device = direct3d.device.as_raw();
+            d3d11_hwctx.device_context = direct3d.context.as_raw();
+        }
 
         if unsafe { av_hwdevice_ctx_init(hw_device_ctx) } != 0 {
             return Err(CreateVideoContextError::InitAVHardwareDeviceContextError);

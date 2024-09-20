@@ -4,7 +4,7 @@ mod vertex;
 
 use std::sync::Arc;
 
-use self::{vertex::Vertex, samples::FromNativeResourceError};
+use self::{samples::FromNativeResourceError, vertex::Vertex};
 
 pub use self::samples::{HardwareTexture, SoftwareTexture, Texture, TextureResource};
 

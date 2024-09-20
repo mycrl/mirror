@@ -13,9 +13,9 @@ use utils::Size;
 use utils::win32::ID3D11Texture2D;
 
 use wgpu::{
-    include_wgsl, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout,
+    include_wgsl, AddressMode, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout,
     BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, BindingType, BlendState,
-    ColorTargetState, ColorWrites, Device, Extent3d, FragmentState, ImageCopyTexture,
+    ColorTargetState, ColorWrites, Device, Extent3d, FilterMode, FragmentState, ImageCopyTexture,
     ImageDataLayout, IndexFormat, MultisampleState, Origin3d, PipelineCompilationOptions,
     PipelineLayoutDescriptor, PrimitiveState, PrimitiveTopology, Queue, RenderPipeline,
     RenderPipelineDescriptor, SamplerBindingType, SamplerDescriptor, ShaderStages,
@@ -28,7 +28,7 @@ use wgpu::{
 pub enum FromNativeResourceError {
     #[cfg(target_os = "windows")]
     #[error(transparent)]
-    FromDxgiResourceError(#[from] FromDxgiResourceError)
+    FromDxgiResourceError(#[from] FromDxgiResourceError),
 }
 
 pub enum HardwareTexture<'a> {
@@ -41,11 +41,11 @@ pub enum HardwareTexture<'a> {
 impl<'a> HardwareTexture<'a> {
     #[allow(unused)]
     fn texture(&self, device: &Device) -> Result<WGPUTexture, FromNativeResourceError> {
-        match self {
+        Ok(match self {
             #[cfg(target_os = "windows")]
-            HardwareTexture::Dx11(dx11) => create_texture_from_dx11_texture(device, dx11),
+            HardwareTexture::Dx11(dx11) => create_texture_from_dx11_texture(device, dx11)?,
             _ => unimplemented!("not supports native texture"),
-        }
+        })
     }
 }
 
@@ -180,7 +180,15 @@ trait Texture2DSample {
         layout: &BindGroupLayout,
         texture: Option<&WGPUTexture>,
     ) -> BindGroup {
-        let sampler = device.create_sampler(&SamplerDescriptor::default());
+        let sampler = device.create_sampler(&SamplerDescriptor {
+            address_mode_u: AddressMode::ClampToEdge,
+            address_mode_v: AddressMode::ClampToEdge,
+            address_mode_w: AddressMode::ClampToEdge,
+            mipmap_filter: FilterMode::Nearest,
+            mag_filter: FilterMode::Nearest,
+            min_filter: FilterMode::Nearest,
+            ..Default::default()
+        });
 
         let mut views: SmallVec<[TextureView; 5]> = SmallVec::with_capacity(5);
         for (texture, format, aspect) in self.views_descriptors(texture) {
