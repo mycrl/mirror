@@ -2,7 +2,7 @@ mod audio;
 mod receiver;
 mod video;
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(any(target_os = "windows", target_os = "linux"))]
 mod sender;
 
 pub use self::{
@@ -11,12 +11,12 @@ pub use self::{
     video::VideoPlayer,
 };
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(any(target_os = "windows", target_os = "linux"))]
 pub use self::sender::{AudioDescriptor, Sender, SenderDescriptor, VideoDescriptor};
 
 use std::{ffi::c_void, num::NonZeroIsize};
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(any(target_os = "windows", target_os = "linux"))]
 use std::sync::RwLock;
 
 use anyhow::Result;
@@ -187,7 +187,7 @@ impl Mirror {
     /// Create a sender, specify a bound NIC address, you can pass callback to
     /// get the device screen or sound callback, callback can be null, if it is
     /// null then it means no callback data is needed.
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
     pub fn create_sender(
         &self,
         id: u32,
@@ -229,9 +229,9 @@ impl Window {
         Ok(get_hwnd_size(HWND(self.0 as *mut _))?)
     }
 
-    #[cfg(target_os = "macos")]
+    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
     fn size(&self) -> Result<Size> {
-        todo!()
+        unimplemented!()
     }
 }
 

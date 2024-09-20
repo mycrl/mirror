@@ -1,7 +1,16 @@
 use std::sync::Arc;
 
+use crate::Vertex;
+
+#[cfg(target_os = "windows")]
+use crate::helper::win32::{create_texture_from_dx11_texture, FromDxgiResourceError};
+
 use smallvec::SmallVec;
-use utils::{win32::ID3D11Texture2D, Size};
+use thiserror::Error;
+use utils::Size;
+
+#[cfg(target_os = "windows")]
+use utils::win32::ID3D11Texture2D;
 
 use wgpu::{
     include_wgsl, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout,
@@ -15,19 +24,27 @@ use wgpu::{
     VertexState,
 };
 
-use crate::{
-    helper::win32::{create_texture_from_dx11_texture, FromDxgiResourceError},
-    Vertex,
-};
+#[derive(Debug, Error)]
+pub enum FromNativeResourceError {
+    #[cfg(target_os = "windows")]
+    #[error(transparent)]
+    FromDxgiResourceError(#[from] FromDxgiResourceError)
+}
 
 pub enum HardwareTexture<'a> {
+    #[cfg(target_os = "windows")]
     Dx11(&'a ID3D11Texture2D),
+    #[cfg(any(target_os = "linux"))]
+    Vulkan(&'a usize),
 }
 
 impl<'a> HardwareTexture<'a> {
-    fn texture(&self, device: &Device) -> Result<WGPUTexture, FromDxgiResourceError> {
+    #[allow(unused)]
+    fn texture(&self, device: &Device) -> Result<WGPUTexture, FromNativeResourceError> {
         match self {
+            #[cfg(target_os = "windows")]
             HardwareTexture::Dx11(dx11) => create_texture_from_dx11_texture(device, dx11),
+            _ => unimplemented!("not supports native texture"),
         }
     }
 }
@@ -45,14 +62,14 @@ pub enum TextureResource<'a> {
 impl<'a> TextureResource<'a> {
     /// Get the hardware texture, here does not deal with software texture, so
     /// if it is software texture directly return None.
-    fn texture(&self, device: &Device) -> Result<Option<WGPUTexture>, FromDxgiResourceError> {
+    fn texture(&self, device: &Device) -> Result<Option<WGPUTexture>, FromNativeResourceError> {
         Ok(match self {
             TextureResource::Texture(texture) => texture.texture(device).ok(),
             _ => None,
         })
     }
 
-    fn size(&self, device: &Device) -> Result<Size, FromDxgiResourceError> {
+    fn size(&self, device: &Device) -> Result<Size, FromNativeResourceError> {
         Ok(match self {
             TextureResource::Texture(texture) => {
                 let size = texture.texture(device)?.size();
@@ -72,7 +89,7 @@ pub enum Texture<'a> {
 }
 
 impl<'a> Texture<'a> {
-    fn texture(&self, device: &Device) -> Result<Option<WGPUTexture>, FromDxgiResourceError> {
+    fn texture(&self, device: &Device) -> Result<Option<WGPUTexture>, FromNativeResourceError> {
         Ok(match self {
             Texture::Rgba(texture) | Texture::Nv12(texture) => texture.texture(device)?,
         })
@@ -392,7 +409,7 @@ impl Texture2DSource {
     pub fn get_view(
         &mut self,
         texture: Texture,
-    ) -> Result<Option<(&RenderPipeline, BindGroup)>, FromDxgiResourceError> {
+    ) -> Result<Option<(&RenderPipeline, BindGroup)>, FromNativeResourceError> {
         // Not yet initialized, initialize the environment first.
         if self.sample.is_none() {
             let sample = match &texture {

@@ -18,7 +18,7 @@ frame = { path = "../../common/frame" }
 transport = { path = "../../transport" }
 jni-macro = { path = "../../common/jni-macro" }
 
-[target.'cfg(target_os = "windows")'.dependencies]
+[target.'cfg(any(target_os = "windows", target_os = "linux"))'.dependencies]
 codec = { path = "../../codec" }
 capture = { path = "../../capture" }
 mirror = { path = "../../mirror" }

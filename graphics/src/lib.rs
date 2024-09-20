@@ -4,7 +4,7 @@ mod vertex;
 
 use std::sync::Arc;
 
-use self::{helper::win32::FromDxgiResourceError, vertex::Vertex};
+use self::{vertex::Vertex, samples::FromNativeResourceError};
 
 pub use self::samples::{HardwareTexture, SoftwareTexture, Texture, TextureResource};
 
@@ -35,7 +35,7 @@ pub enum GraphicsError {
     #[error(transparent)]
     CreateSurfaceError(#[from] wgpu::CreateSurfaceError),
     #[error(transparent)]
-    FromDxgiResourceError(#[from] FromDxgiResourceError),
+    FromNativeResourceError(#[from] FromNativeResourceError),
 }
 
 /// Window Renderer.

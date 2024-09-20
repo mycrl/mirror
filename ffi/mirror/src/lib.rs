@@ -7,7 +7,7 @@ pub mod desktop {
         sync::atomic::AtomicBool,
     };
 
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
     use std::{
         ffi::{c_void, CString},
         mem::ManuallyDrop,
@@ -17,7 +17,7 @@ pub mod desktop {
     use mirror::Window;
     use utils::{atomic::EasyAtomic, strings::Strings};
 
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
     use capture::{Capture, SourceType};
 
     #[cfg(target_os = "windows")]
@@ -133,7 +133,7 @@ pub mod desktop {
 
     #[repr(C)]
     #[derive(Debug)]
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
     pub struct Source {
         index: usize,
         kind: SourceType,
@@ -142,7 +142,7 @@ pub mod desktop {
         is_default: bool,
     }
 
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
     impl TryInto<capture::Source> for &Source {
         type Error = anyhow::Error;
 
@@ -159,7 +159,7 @@ pub mod desktop {
 
     #[repr(C)]
     #[derive(Debug)]
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
     pub struct Sources {
         items: *mut Source,
         capacity: usize,
@@ -168,7 +168,7 @@ pub mod desktop {
 
     /// Get capture sources from sender.
     #[no_mangle]
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
     pub extern "C" fn mirror_get_sources(kind: SourceType) -> Sources {
         log::info!("extern api: mirror get sources: kind={:?}", kind);
 
@@ -200,7 +200,7 @@ pub mod desktop {
     /// Because `Sources` are allocated internally, they also need to be
     /// released internally.
     #[no_mangle]
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
     pub extern "C" fn mirror_sources_destroy(sources: *const Sources) {
         assert!(!sources.is_null());
 
@@ -346,7 +346,7 @@ pub mod desktop {
         pub key_frame_interval: u32,
     }
 
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
     impl TryInto<mirror::VideoDescriptor> for VideoDescriptor {
         type Error = anyhow::Error;
 
@@ -370,7 +370,7 @@ pub mod desktop {
         pub bit_rate: u64,
     }
 
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
     impl Into<mirror::AudioDescriptor> for AudioDescriptor {
         fn into(self) -> mirror::AudioDescriptor {
             mirror::AudioDescriptor {
@@ -382,7 +382,7 @@ pub mod desktop {
 
     #[repr(C)]
     #[derive(Debug)]
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
     pub struct SenderSourceDescriptor<T> {
         source: *const Source,
         options: T,
@@ -390,14 +390,14 @@ pub mod desktop {
 
     #[repr(C)]
     #[derive(Debug)]
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
     pub struct SenderDescriptor {
         video: *const SenderSourceDescriptor<VideoDescriptor>,
         audio: *const SenderSourceDescriptor<AudioDescriptor>,
         multicast: bool,
     }
 
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
     impl TryInto<mirror::SenderDescriptor> for SenderDescriptor {
         type Error = anyhow::Error;
 
@@ -440,7 +440,7 @@ pub mod desktop {
     }
 
     #[repr(C)]
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
     pub struct Sender(mirror::Sender);
 
     /// Create a sender, specify a bound NIC address, you can pass callback to
@@ -448,7 +448,7 @@ pub mod desktop {
     /// null then it means no callback data is needed.
     #[no_mangle]
     #[rustfmt::skip]
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
     pub extern "C" fn mirror_create_sender(
         mirror: *const Mirror,
         id: c_int,
@@ -475,7 +475,7 @@ pub mod desktop {
 
     /// Set whether the sender uses multicast transmission.
     #[no_mangle]
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
     pub extern "C" fn mirror_sender_set_multicast(sender: *const Sender, is_multicast: bool) {
         assert!(!sender.is_null());
 
@@ -485,7 +485,7 @@ pub mod desktop {
 
     /// Get whether the sender uses multicast transmission.
     #[no_mangle]
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
     pub extern "C" fn mirror_sender_get_multicast(sender: *const Sender) -> bool {
         assert!(!sender.is_null());
 
@@ -495,7 +495,7 @@ pub mod desktop {
 
     /// Close sender.
     #[no_mangle]
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
     pub extern "C" fn mirror_sender_destroy(sender: *const Sender) {
         assert!(!sender.is_null());
 
