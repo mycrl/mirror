@@ -11,6 +11,7 @@ pub struct VideoSize {
 pub enum VideoFormat {
     RGBA,
     NV12,
+    I420,
 }
 
 /// YCbCr (NV12)
@@ -91,8 +92,9 @@ pub mod win32 {
     impl Into<DXGI_FORMAT> for super::VideoFormat {
         fn into(self) -> DXGI_FORMAT {
             match self {
-                Self::RGBA => DXGI_FORMAT_R8G8B8A8_UNORM,
                 Self::NV12 => DXGI_FORMAT_NV12,
+                Self::RGBA => DXGI_FORMAT_R8G8B8A8_UNORM,
+                Self::I420 => unimplemented!("not supports i32o hardware texture"),
             }
         }
     }

@@ -91,6 +91,26 @@ pub mod general {
                         },
                         &[],
                     ],
+                    VideoFormat::I420 => [
+                        unsafe {
+                            std::slice::from_raw_parts(
+                                frame.data[0] as *const _,
+                                frame.linesize[0] as usize * frame.height as usize,
+                            )
+                        },
+                        unsafe {
+                            std::slice::from_raw_parts(
+                                frame.data[1] as *const _,
+                                frame.linesize[1] as usize * frame.height as usize,
+                            )
+                        },
+                        unsafe {
+                            std::slice::from_raw_parts(
+                                frame.data[2] as *const _,
+                                frame.linesize[2] as usize * frame.height as usize,
+                            )
+                        },
+                    ]
                 };
 
                 let texture = SoftwareTexture {
