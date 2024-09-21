@@ -92,14 +92,14 @@ extern "C" {
     // In any case, arg should have been initialized by va_start at some point
     // before the call, and it is expected to be released by va_end at some point
     // after the call.
-    fn vsnprintf(s: *mut c_char, n: usize, format: *const c_char, args: va_list) -> c_int;
+    fn vsnprintf(s: *mut c_char, n: usize, format: *const c_char, args: *mut __va_list_tag) -> c_int;
 }
 
 unsafe extern "C" fn logger_proc(
     _: *mut c_void,
     level: c_int,
     message: *const c_char,
-    args: va_list,
+    args: *mut __va_list_tag,
 ) {
     let mut chars: [c_char; 1024] = [0; 1024];
     vsnprintf(chars.as_mut_ptr(), 2048, message, args);

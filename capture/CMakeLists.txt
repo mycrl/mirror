@@ -11,3 +11,7 @@ include_directories("/usr/include/libdrm"
                     "/usr/include")
 
 add_compile_definitions(DEBUG)
+
+target_link_directories(capture PRIVATE "/usr/lib/x86_64-linux-gnu")
+
+target_link_libraries(capture drm gbm vulkan)

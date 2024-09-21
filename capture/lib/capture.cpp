@@ -3,13 +3,28 @@
 #include <gbm.h>
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_core.h>
-#include <vulkan/vulkan_xlib.h>
 
 int main()
 {
+    int width = 2560;
+    int height = 1440;
+
     int drm_fd = open("/dev/dri/card0", O_RDWR | O_CLOEXEC);
     drmModeRes *resources = drmModeGetResources(drm_fd);
-    drmModeConnector *connector = drmModeGetConnector(drm_fd, resources->connectors[0]);
+    drmModeConnector *connector = nullptr;
+    for (int i = 0; i < resources->count_connectors; i++) {
+        connector = drmModeGetConnector(drm_fd, resources->connectors[i]);
+        if (connector->connection == DRM_MODE_CONNECTED) {
+            break;
+        }
+
+        drmModeFreeConnector(connector);
+    }
+
+    if (connector == nullptr) {
+        return -1;
+    }
+
     drmModeEncoder *encoder = drmModeGetEncoder(drm_fd, connector->encoder_id);
     drmModeCrtc *crtc = drmModeGetCrtc(drm_fd, encoder->crtc_id);
 
@@ -17,20 +32,41 @@ int main()
     struct gbm_surface *surface = gbm_surface_create(gbm, width, height, GBM_FORMAT_XRGB8888,
                                                 GBM_BO_USE_SCANOUT | GBM_BO_USE_RENDERING);
 
-                                                // 创建 Vulkan 实例
+    struct gbm_bo *bo = gbm_surface_lock_front_buffer(surface);
+    int fd = gbm_bo_get_fd(bo);
+
     VkInstance instance;
     VkInstanceCreateInfo createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
     vkCreateInstance(&createInfo, nullptr, &instance);
 
-    VkPhysicalDevice physicalDevice;
-    vkEnumeratePhysicalDevices(instance, &physicalDeviceCount, &physicalDevice);
-    VkDevice device;
-    VkDeviceCreateInfo deviceCreateInfo = {};
-    vkCreateDevice(physicalDevice, &deviceCreateInfo, nullptr, &device);
+    uint32_t physicalDeviceCount = 0;
+    vkEnumeratePhysicalDevices(instance, &physicalDeviceCount, nullptr);
+    if (physicalDeviceCount == 0) {
+        return -2;
+    }
 
-    struct gbm_bo *bo = gbm_surface_lock_front_buffer(surface);
-    int fd = gbm_bo_get_fd(bo);
+    VkPhysicalDevice physicalDevices[5];
+    vkEnumeratePhysicalDevices(instance, &physicalDeviceCount, physicalDevices);
+
+    float queue_priority = 1.0f;
+    VkDeviceQueueCreateInfo queue_create_info = {
+        .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+        .queueFamilyIndex = 0,
+        .queueCount = 1,
+        .pQueuePriorities = &queue_priority,
+    };
+
+    VkDeviceCreateInfo deviceCreateInfo = {
+        .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
+        .queueCreateInfoCount = 1,
+        .pQueueCreateInfos = &queue_create_info,
+        .enabledExtensionCount = 0,
+        .ppEnabledExtensionNames = NULL,
+    };
+
+    VkDevice device;
+    vkCreateDevice(physicalDevices[0], &deviceCreateInfo, nullptr, &device);
 
     VkImportMemoryFdInfoKHR importInfo = {};
     importInfo.sType = VK_STRUCTURE_TYPE_IMPORT_MEMORY_FD_INFO_KHR;
