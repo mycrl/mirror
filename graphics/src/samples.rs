@@ -7,10 +7,10 @@ use crate::helper::win32::{create_texture_from_dx11_texture, FromDxgiResourceErr
 
 use smallvec::SmallVec;
 use thiserror::Error;
-use utils::{
-    win32::windows::Win32::Graphics::Direct3D11::{ID3D11Texture2D, D3D11_TEXTURE2D_DESC},
-    Size,
-};
+use utils::Size;
+
+#[cfg(target_os = "windows")]
+use utils::win32::windows::Win32::Graphics::Direct3D11::{ID3D11Texture2D, D3D11_TEXTURE2D_DESC};
 
 use wgpu::{
     include_wgsl, AddressMode, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout,
