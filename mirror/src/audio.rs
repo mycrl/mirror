@@ -68,6 +68,7 @@ impl AudioPlayer {
         }
 
         if self.sampler.is_none() {
+            println!("{:#?}", self.config);
             self.sampler = Some(AudioResampler::new(
                 frame.sample_rate as f64,
                 self.config.sample_rate.0 as f64,
