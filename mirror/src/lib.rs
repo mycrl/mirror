@@ -9,10 +9,10 @@ pub use self::receiver::{Receiver, ReceiverDescriptor};
 
 use self::audio::AudioPlayer;
 
-#[cfg(feature = "wgpu")]
+#[cfg(any(feature = "wgpu", target_os = "linux"))]
 use self::video::general::VideoPlayer;
 
-#[cfg(not(feature = "wgpu"))]
+#[cfg(all(not(feature = "wgpu"), target_os = "windows"))]
 use self::video::win32::VideoPlayer;
 
 #[cfg(any(target_os = "windows", target_os = "linux"))]
@@ -228,7 +228,7 @@ impl Window {
         Ok(get_hwnd_size(HWND(self.0 as *mut _))?)
     }
 
-    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
+    #[cfg(target_os = "linux")]
     fn size(&self) -> Result<Size> {
         unimplemented!()
     }

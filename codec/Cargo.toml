@@ -9,6 +9,3 @@ frame = { path = "../common/frame" }
 utils = { path = "../common/utils" }
 thiserror = "1.0.63"
 log = "0.4.20"
-
-[target.'cfg(target_os = "windows")'.dependencies]
-windows-core = "0.58.0"

@@ -1,20 +1,21 @@
-#[cfg(feature = "wgpu")]
+#[cfg(any(feature = "wgpu", target_os = "linux"))]
 pub mod general {
     use crate::Window;
 
     use anyhow::{anyhow, Result};
     use frame::{VideoFormat, VideoFrame};
     use graphics::{HardwareTexture, Renderer, SoftwareTexture, Texture, TextureResource};
-    use utils::{
-        win32::{
-            d3d_texture_borrowed_raw,
-            windows::Win32::Graphics::Direct3D11::D3D11_RESOURCE_MISC_SHARED, Direct3DDevice,
-            EasyTexture,
-        },
-        Size,
+    use utils::Size;
+
+    #[cfg(target_os = "windows")]
+    use utils:: win32::{
+        d3d_texture_borrowed_raw,
+        windows::Win32::Graphics::Direct3D11::D3D11_RESOURCE_MISC_SHARED, Direct3DDevice,
+        EasyTexture,
     };
 
     pub struct VideoPlayer {
+        #[cfg(target_os = "windows")]
         direct3d: Option<Direct3DDevice>,
         renderer: Renderer<'static>,
     }
@@ -24,46 +25,51 @@ pub mod general {
             let size = window.size()?;
             Ok(Self {
                 renderer: Renderer::new(window, size)?,
+                #[cfg(target_os = "windows")]
                 direct3d: crate::DIRECT_3D_DEVICE.read().unwrap().clone(),
             })
         }
 
         pub fn send(&mut self, frame: &VideoFrame) -> Result<()> {
             if frame.hardware {
-                let mut dx_tex = d3d_texture_borrowed_raw(&(frame.data[0] as *mut _))
-                    .cloned()
-                    .ok_or_else(|| anyhow!("not found a texture"))?;
+                #[cfg(target_os = "windows")]
+                {
+                    let mut dx_tex = d3d_texture_borrowed_raw(&(frame.data[0] as *mut _))
+                        .cloned()
+                        .ok_or_else(|| anyhow!("not found a texture"))?;
 
-                let mut desc = dx_tex.desc();
+                    let mut desc = dx_tex.desc();
 
-                // Check if the texture supports creating shared resources, if not create a new
-                // shared texture and copy it to the shared texture.
-                if let Some(direct3d) = &self.direct3d {
-                    if desc.MiscFlags & D3D11_RESOURCE_MISC_SHARED.0 as u32 == 0 {
-                        desc.MiscFlags = D3D11_RESOURCE_MISC_SHARED.0 as u32;
-                        desc.CPUAccessFlags = 0;
-                        desc.BindFlags = 0;
-                        desc.ArraySize = 1;
-                        desc.MipLevels = 1;
+                    // Check if the texture supports creating shared resources, if not create a new
+                    // shared texture and copy it to the shared texture.
+                    if let Some(direct3d) = &self.direct3d {
+                        if desc.MiscFlags & D3D11_RESOURCE_MISC_SHARED.0 as u32 == 0 {
+                            desc.MiscFlags = D3D11_RESOURCE_MISC_SHARED.0 as u32;
+                            desc.CPUAccessFlags = 0;
+                            desc.BindFlags = 0;
+                            desc.ArraySize = 1;
+                            desc.MipLevels = 1;
 
-                        dx_tex = unsafe {
-                            let mut tex = None;
-                            direct3d
-                                .device
-                                .CreateTexture2D(&desc, None, Some(&mut tex))?;
-                            let tex = tex.unwrap();
+                            dx_tex = unsafe {
+                                let mut tex = None;
+                                direct3d
+                                    .device
+                                    .CreateTexture2D(&desc, None, Some(&mut tex))?;
+                                let tex = tex.unwrap();
 
-                            direct3d.context.CopyResource(&tex, &dx_tex);
-                            tex
-                        };
+                                direct3d.context.CopyResource(&tex, &dx_tex);
+                                tex
+                            };
+                        }
                     }
-                }
 
-                let texture = TextureResource::Texture(HardwareTexture::Dx11(&dx_tex, &desc));
-                self.renderer.submit(match frame.format {
-                    VideoFormat::RGBA => Texture::Rgba(texture),
-                    VideoFormat::NV12 => Texture::Nv12(texture),
-                })?;
+                    let texture = TextureResource::Texture(HardwareTexture::Dx11(&dx_tex, &desc));
+                    self.renderer.submit(match frame.format {
+                        VideoFormat::RGBA => Texture::Rgba(texture),
+                        VideoFormat::NV12 => Texture::Nv12(texture),
+                        VideoFormat::I420 => unimplemented!(),
+                    })?;
+                }
             } else {
                 let buffers = match frame.format {
                     VideoFormat::RGBA => [
@@ -121,10 +127,10 @@ pub mod general {
                     },
                 };
 
-                self.renderer.submit(match frame.format {
-                    VideoFormat::RGBA => Texture::Rgba(TextureResource::Buffer(texture)),
-                    VideoFormat::NV12 => Texture::Nv12(TextureResource::Buffer(texture)),
-                })?;
+                // self.renderer.submit(match frame.format {
+                //     VideoFormat::RGBA => Texture::Rgba(TextureResource::Buffer(texture)),
+                //     VideoFormat::NV12 => Texture::Nv12(TextureResource::Buffer(texture)),
+                // })?;
             };
 
             Ok(())
@@ -132,8 +138,7 @@ pub mod general {
     }
 }
 
-#[cfg(not(feature = "wgpu"))]
-#[cfg(target_os = "windows")]
+#[cfg(all(not(feature = "wgpu"), target_os = "windows"))]
 pub mod win32 {
     use anyhow::{anyhow, Result};
     use frame::{Resource, VideoFrame, VideoSize, VideoTransform, VideoTransformDescriptor};

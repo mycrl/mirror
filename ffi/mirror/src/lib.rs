@@ -3,7 +3,6 @@ pub mod desktop {
     use std::{
         ffi::{c_char, c_int},
         fmt::Debug,
-        fs::{create_dir, metadata},
         io::stdout,
         ptr::null_mut,
         sync::atomic::AtomicBool,
@@ -15,10 +14,11 @@ pub mod desktop {
         mem::ManuallyDrop,
     };
 
+    use anyhow::anyhow;
     use chrono::Local;
     use fern::{
         colors::{Color, ColoredLevelConfig},
-        DateBased, Dispatch as LogDispatch,
+        Dispatch as LogDispatch,
     };
 
     use frame::{AudioFrame, VideoFrame};
@@ -112,23 +112,21 @@ pub mod desktop {
 
                 #[cfg(target_os = "windows")]
                 {
-                    if metadata("./logs").is_err() {
-                        create_dir("./logs")?;
+                    if std::fs::metadata("./logs").is_err() {
+                        std::fs::create_dir("./logs")?;
                     }
 
-                    logger = logger.chain(DateBased::new("logs/", "%Y-%m-%d-mirror.log"));
+                    logger = logger.chain(fern::DateBased::new("logs/", "%Y-%m-%d-mirror.log"));
                 }
 
                 #[cfg(target_os = "linux")]
                 {
-                    use fern::syslog;
-
                     logger = logger.chain(syslog::unix(syslog::Formatter3164 {
                         facility: syslog::Facility::LOG_USER,
                         process: "mirror".to_owned(),
                         hostname: None,
                         pid: 0,
-                    })?);
+                    }).map_err(|e| anyhow!("{:?}", e))?);
                 }
             }
 
