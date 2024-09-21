@@ -6,9 +6,10 @@ use ffmpeg_sys_next::*;
 use utils::strings::Strings;
 
 #[cfg(target_os = "windows")]
-use utils::win32::{Direct3DDevice, Interface};
+use utils::win32::Direct3DDevice;
 
 use thiserror::Error;
+use windows_core::Interface;
 
 #[derive(Clone, Copy)]
 pub enum CodecType {

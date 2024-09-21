@@ -5,11 +5,15 @@ mod video;
 #[cfg(any(target_os = "windows", target_os = "linux"))]
 mod sender;
 
-pub use self::{
-    audio::AudioPlayer,
-    receiver::{Receiver, ReceiverDescriptor},
-    video::VideoPlayer,
-};
+pub use self::receiver::{Receiver, ReceiverDescriptor};
+
+use self::audio::AudioPlayer;
+
+#[cfg(feature = "wgpu")]
+use self::video::general::VideoPlayer;
+
+#[cfg(not(feature = "wgpu"))]
+use self::video::win32::VideoPlayer;
 
 #[cfg(any(target_os = "windows", target_os = "linux"))]
 pub use self::sender::{AudioDescriptor, Sender, SenderDescriptor, VideoDescriptor};
@@ -32,7 +36,7 @@ use utils::Size;
 #[cfg(target_os = "windows")]
 use utils::win32::{
     get_hwnd_size, set_process_priority, shutdown as win32_shutdown, startup as win32_startup,
-    Direct3DDevice, ProcessPriority, HWND,
+    windows::Win32::Foundation::HWND, Direct3DDevice, ProcessPriority,
 };
 
 #[cfg(target_os = "windows")]
@@ -48,9 +52,13 @@ pub fn startup() -> Result<()> {
         win32_startup()?;
     }
 
-    // std::panic::set_hook(Box::new(|info| {
-    //     log::error!("{:?}", info);
-    // }));
+    std::panic::set_hook(Box::new(|info| {
+        log::error!("{:?}", info);
+
+        if cfg!(debug_assertions) {
+            println!("{:#?}", info);
+        }
+    }));
 
     // In order to prevent other programs from affecting the delay performance of
     // the current program, set the priority of the current process to high.

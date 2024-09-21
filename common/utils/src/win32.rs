@@ -2,20 +2,23 @@ use std::{cell::Cell, ffi::c_void};
 
 use crate::Size;
 
+pub use windows;
+
 use windows::{
-    core::{s, Result, GUID, HSTRING, PCSTR, PCWSTR, PWSTR},
+    core::{s, Interface, Result, GUID, HSTRING, PCSTR, PCWSTR, PWSTR},
     Win32::{
-        Foundation::{HANDLE, RECT},
+        Foundation::{HANDLE, HWND, RECT},
         Graphics::{
             Direct3D::{
                 D3D_DRIVER_TYPE_HARDWARE, D3D_FEATURE_LEVEL, D3D_FEATURE_LEVEL_11_0,
                 D3D_FEATURE_LEVEL_11_1,
             },
             Direct3D11::{
-                D3D11CreateDevice, ID3D11Multithread, D3D11_CREATE_DEVICE_BGRA_SUPPORT,
-                D3D11_CREATE_DEVICE_DEBUG, D3D11_SDK_VERSION, D3D11_TEXTURE2D_DESC,
+                D3D11CreateDevice, ID3D11Device, ID3D11DeviceContext, ID3D11Multithread,
+                ID3D11Texture2D, D3D11_CREATE_DEVICE_BGRA_SUPPORT, D3D11_CREATE_DEVICE_DEBUG,
+                D3D11_SDK_VERSION, D3D11_TEXTURE2D_DESC,
             },
-            Dxgi::DXGI_SHARED_RESOURCE_READ,
+            Dxgi::IDXGIResource,
         },
         Media::MediaFoundation::{
             IMFActivate, IMFAttributes, IMFMediaType, MFShutdown, MFStartup, MF_VERSION,
@@ -30,21 +33,6 @@ use windows::{
             },
         },
         UI::WindowsAndMessaging::GetClientRect,
-    },
-};
-
-pub use windows::{
-    core::{Error, Interface},
-    Win32::{
-        Foundation::HWND,
-        Graphics::{
-            Direct3D11::{ID3D11Device, ID3D11DeviceContext, ID3D11Texture2D},
-            Direct3D12::ID3D12Resource,
-            Dxgi::{
-                Common::{DXGI_FORMAT_NV12, DXGI_FORMAT_R8G8B8A8_UNORM},
-                IDXGIResource, IDXGIResource1,
-            },
-        },
     },
 };
 
@@ -283,40 +271,34 @@ impl Direct3DDevice {
     }
 }
 
+#[inline]
 pub fn d3d_texture_borrowed_raw<'a>(raw: &'a *mut c_void) -> Option<&'a ID3D11Texture2D> {
     unsafe { ID3D11Texture2D::from_raw_borrowed(raw) }
 }
 
+#[inline]
 pub fn d3d_device_borrowed_raw<'a>(raw: &'a *mut c_void) -> Option<&'a ID3D11Device> {
     unsafe { ID3D11Device::from_raw_borrowed(raw) }
 }
 
+#[inline]
 pub fn d3d_context_borrowed_raw<'a>(raw: &'a *mut c_void) -> Option<&'a ID3D11DeviceContext> {
     unsafe { ID3D11DeviceContext::from_raw_borrowed(raw) }
 }
 
 pub trait EasyTexture {
     fn get_shared(&self) -> Result<HANDLE>;
-    fn create_shared(&self) -> Result<HANDLE>;
     fn desc(&self) -> D3D11_TEXTURE2D_DESC;
     fn size(&self) -> Size;
 }
 
 impl EasyTexture for ID3D11Texture2D {
+    #[inline]
     fn get_shared(&self) -> Result<HANDLE> {
         Ok(unsafe { self.cast::<IDXGIResource>()?.GetSharedHandle()? })
     }
 
-    fn create_shared(&self) -> Result<HANDLE> {
-        Ok(unsafe {
-            self.cast::<IDXGIResource1>()?.CreateSharedHandle(
-                None,
-                DXGI_SHARED_RESOURCE_READ.0 as u32,
-                None,
-            )?
-        })
-    }
-
+    #[inline]
     fn size(&self) -> Size {
         let desc = self.desc();
         Size {
@@ -325,6 +307,7 @@ impl EasyTexture for ID3D11Texture2D {
         }
     }
 
+    #[inline]
     fn desc(&self) -> D3D11_TEXTURE2D_DESC {
         let mut desc = D3D11_TEXTURE2D_DESC::default();
         unsafe {

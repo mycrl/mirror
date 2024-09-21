@@ -38,11 +38,15 @@ fn create_video_decoder(
                     } else {
                         while let Some(frame) = codec.read() {
                             if !(sink.video)(frame) {
+                                log::warn!("video sink return false!");
+
                                 break 'a;
                             }
                         }
                     }
                 } else {
+                    log::warn!("video adapter next is none!");
+
                     break;
                 }
             }
@@ -84,11 +88,15 @@ fn create_audio_decoder(
                     } else {
                         while let Some(frame) = codec.read() {
                             if !(sink.audio)(frame) {
+                                log::warn!("audio sink return false!");
+
                                 break 'a;
                             }
                         }
                     }
                 } else {
+                    log::warn!("audio adapter next is none!");
+
                     break;
                 }
             }

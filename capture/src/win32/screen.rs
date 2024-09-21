@@ -13,9 +13,10 @@ use frame::{
 
 use utils::{
     atomic::EasyAtomic,
-    win32::{EasyTexture, ID3D11Texture2D, Interface, MediaThreadClass},
+    win32::{EasyTexture, MediaThreadClass},
 };
 
+use windows::{core::Interface, Win32::Graphics::Direct3D11::ID3D11Texture2D};
 use windows_capture::{
     capture::{CaptureControl, GraphicsCaptureApiHandler},
     frame::Frame,

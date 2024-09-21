@@ -30,7 +30,23 @@ pub mod desktop {
     use capture::{Capture, SourceType};
 
     #[cfg(target_os = "windows")]
-    use utils::win32::Interface;
+    use utils::win32::windows::core::Interface;
+
+    // In fact, this is a package that is convenient for recording errors. If the
+    // result is an error message, it is output to the log. This function does not
+    // make any changes to the result.
+    #[inline]
+    fn checker<T, E: Debug>(result: Result<T, E>) -> Result<T, E> {
+        if let Err(e) = &result {
+            log::error!("{:?}", e);
+
+            if cfg!(debug_assertions) {
+                println!("{:#?}", e);
+            }
+        }
+
+        result
+    }
 
     /// Windows yes! The Windows dynamic library has an entry, so just
     /// initialize the logger and set the process priority at the entry.
@@ -632,22 +648,6 @@ pub mod desktop {
         drop(unsafe { Box::from_raw(receiver as *mut Receiver) })
     }
 
-    // In fact, this is a package that is convenient for recording errors. If the
-    // result is an error message, it is output to the log. This function does not
-    // make any changes to the result.
-    #[inline]
-    fn checker<T, E: Debug>(result: Result<T, E>) -> Result<T, E> {
-        if let Err(e) = &result {
-            log::error!("{:?}", e);
-
-            if cfg!(debug_assertions) {
-                println!("{:#?}", e);
-            }
-        }
-
-        result
-    }
-
     #[repr(C)]
     struct RawRenderer(mirror::Render);
 
@@ -669,7 +669,10 @@ pub mod desktop {
     extern "C" fn renderer_on_video(render: *mut RawRenderer, frame: *const VideoFrame) -> bool {
         assert!(!render.is_null() && !frame.is_null());
 
-        checker(unsafe { &mut *render }.0.on_video(unsafe { &*frame })).is_ok()
+        checker(checker(
+            unsafe { &mut *render }.0.on_video(unsafe { &*frame }),
+        ))
+        .is_ok()
     }
 
     /// Push the audio frame into the renderer, which will append to audio
@@ -678,7 +681,10 @@ pub mod desktop {
     extern "C" fn renderer_on_audio(render: *mut RawRenderer, frame: *const AudioFrame) -> bool {
         assert!(!render.is_null() && !frame.is_null());
 
-        checker(unsafe { &mut *render }.0.on_audio(unsafe { &*frame })).is_ok()
+        checker(checker(
+            unsafe { &mut *render }.0.on_audio(unsafe { &*frame }),
+        ))
+        .is_ok()
     }
 
     /// Destroy the window renderer.

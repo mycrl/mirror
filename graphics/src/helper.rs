@@ -4,8 +4,15 @@ pub mod win32 {
 
     use thiserror::Error;
     use utils::win32::{
-        EasyTexture, ID3D11Texture2D, ID3D12Resource, Interface, DXGI_FORMAT_NV12,
-        DXGI_FORMAT_R8G8B8A8_UNORM,
+        windows::{
+            core::Interface,
+            Win32::Graphics::{
+                Direct3D11::{ID3D11Texture2D, D3D11_TEXTURE2D_DESC},
+                Direct3D12::ID3D12Resource,
+                Dxgi::Common::{DXGI_FORMAT_NV12, DXGI_FORMAT_R8G8B8A8_UNORM},
+            },
+        },
+        EasyTexture,
     };
     use wgpu::{
         hal::api::Dx12, Device, Extent3d, Texture, TextureDescriptor, TextureDimension,
@@ -15,7 +22,7 @@ pub mod win32 {
     #[derive(Debug, Error)]
     pub enum FromDxgiResourceError {
         #[error(transparent)]
-        GetSharedError(#[from] utils::win32::Error),
+        GetSharedError(#[from] utils::win32::windows::core::Error),
         #[error("not found wgpu dx12 device")]
         NotFoundDxBackend,
         #[error("unable to open dx12 shared handle")]
@@ -29,32 +36,34 @@ pub mod win32 {
     pub fn create_texture_from_dx11_texture(
         device: &Device,
         texture: &ID3D11Texture2D,
+        desc: &D3D11_TEXTURE2D_DESC,
     ) -> Result<Texture, FromDxgiResourceError> {
-        let desc = texture.desc();
         let resource = unsafe {
             let handle = texture.get_shared()?;
+            if handle.is_invalid() {
+                return Err(FromDxgiResourceError::NotOpenDxSharedHandle);
+            }
 
             device
                 .as_hal::<Dx12, _, _>(|hdevice| {
-                    hdevice.map(|hdevice| {
-                        let raw_device = hdevice.raw_device();
+                    let hdevice =
+                        hdevice.ok_or_else(|| FromDxgiResourceError::NotFoundDxBackend)?;
 
-                        let mut resource = null_mut();
-                        if raw_device.OpenSharedHandle(
-                            handle.0,
-                            std::mem::transmute(&ID3D12Resource::IID),
-                            &mut resource,
-                        ) == 0
-                        {
-                            Some(resource)
-                        } else {
-                            None
-                        }
-                    })
+                    let raw_device = hdevice.raw_device();
+                    let mut resource = null_mut();
+                    let ret = raw_device.OpenSharedHandle(
+                        handle.0,
+                        std::mem::transmute(&ID3D12Resource::IID),
+                        &mut resource,
+                    );
+
+                    if ret == 0 {
+                        Ok(resource)
+                    } else {
+                        Err(FromDxgiResourceError::NotOpenDxSharedHandle)
+                    }
                 })
-                .ok_or_else(|| FromDxgiResourceError::NotFoundDxBackend)?
-                .ok_or_else(|| FromDxgiResourceError::NotFoundDxBackend)?
-                .ok_or_else(|| FromDxgiResourceError::NotOpenDxSharedHandle)?
+                .ok_or_else(|| FromDxgiResourceError::NotFoundDxBackend)??
         };
 
         let desc = TextureDescriptor {

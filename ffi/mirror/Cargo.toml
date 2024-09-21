@@ -24,3 +24,6 @@ jni-macro = { path = "../../common/jni-macro" }
 codec = { path = "../../codec" }
 capture = { path = "../../capture" }
 mirror = { path = "../../mirror" }
+
+[features]
+wgpu = ["mirror/wgpu"]

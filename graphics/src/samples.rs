@@ -7,10 +7,10 @@ use crate::helper::win32::{create_texture_from_dx11_texture, FromDxgiResourceErr
 
 use smallvec::SmallVec;
 use thiserror::Error;
-use utils::Size;
-
-#[cfg(target_os = "windows")]
-use utils::win32::ID3D11Texture2D;
+use utils::{
+    win32::windows::Win32::Graphics::Direct3D11::{ID3D11Texture2D, D3D11_TEXTURE2D_DESC},
+    Size,
+};
 
 use wgpu::{
     include_wgsl, AddressMode, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout,
@@ -33,7 +33,7 @@ pub enum FromNativeResourceError {
 
 pub enum HardwareTexture<'a> {
     #[cfg(target_os = "windows")]
-    Dx11(&'a ID3D11Texture2D),
+    Dx11(&'a ID3D11Texture2D, &'a D3D11_TEXTURE2D_DESC),
     #[cfg(any(target_os = "linux"))]
     Vulkan(&'a usize),
 }
@@ -43,7 +43,9 @@ impl<'a> HardwareTexture<'a> {
     fn texture(&self, device: &Device) -> Result<WGPUTexture, FromNativeResourceError> {
         Ok(match self {
             #[cfg(target_os = "windows")]
-            HardwareTexture::Dx11(dx11) => create_texture_from_dx11_texture(device, dx11)?,
+            HardwareTexture::Dx11(dx11, desc) => {
+                create_texture_from_dx11_texture(device, dx11, desc)?
+            }
             _ => unimplemented!("not supports native texture"),
         })
     }

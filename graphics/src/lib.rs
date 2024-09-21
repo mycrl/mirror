@@ -14,10 +14,10 @@ use thiserror::Error;
 use utils::Size;
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
-    Buffer, BufferUsages, Color, CommandEncoderDescriptor, Device, Features, IndexFormat, Instance,
-    Limits, LoadOp, MemoryHints, Operations, PresentMode, Queue, RenderPassColorAttachment,
-    RenderPassDescriptor, RequestAdapterOptions, StoreOp, Surface, SurfaceTarget, TextureFormat,
-    TextureUsages,
+    Backends, Buffer, BufferUsages, Color, CommandEncoderDescriptor, Device, Features, IndexFormat,
+    Instance, InstanceDescriptor, LoadOp, MemoryHints, Operations, PresentMode, Queue,
+    RenderPassColorAttachment, RenderPassDescriptor, RequestAdapterOptions, StoreOp, Surface,
+    SurfaceTarget, TextureFormat, TextureUsages,
 };
 
 pub use wgpu::rwh as raw_window_handle;
@@ -57,7 +57,15 @@ pub struct Renderer<'a> {
 
 impl<'a> Renderer<'a> {
     pub fn new(window: impl Into<SurfaceTarget<'a>>, size: Size) -> Result<Self, GraphicsError> {
-        let instance = Instance::default();
+        let instance = Instance::new(InstanceDescriptor {
+            backends: if cfg!(target_os = "windows") {
+                Backends::DX12
+            } else {
+                Backends::VULKAN
+            },
+            ..Default::default()
+        });
+
         let surface = instance.create_surface(window)?;
         let adapter = instance
             .request_adapter(&RequestAdapterOptions {
@@ -71,9 +79,9 @@ impl<'a> Renderer<'a> {
             .request_device(
                 &wgpu::DeviceDescriptor {
                     label: None,
-                    required_features: Features::TEXTURE_FORMAT_NV12,
                     memory_hints: MemoryHints::MemoryUsage,
-                    required_limits: Limits::default(),
+                    required_features: adapter.features() | Features::TEXTURE_FORMAT_NV12,
+                    required_limits: adapter.limits(),
                 },
                 None,
             )

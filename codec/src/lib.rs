@@ -73,6 +73,12 @@ impl Into<Level> for LoggerLevel {
     }
 }
 
+#[cfg(target_os = "windows")]
+type VaList = va_list;
+
+#[cfg(target_os = "linux")]
+type VaList = *mut __va_list_tag;
+
 extern "C" {
     // Write formatted data from variable argument list to sized buffer
     // Composes a string with the same text that would be printed if format was used
@@ -92,14 +98,14 @@ extern "C" {
     // In any case, arg should have been initialized by va_start at some point
     // before the call, and it is expected to be released by va_end at some point
     // after the call.
-    fn vsnprintf(s: *mut c_char, n: usize, format: *const c_char, args: *mut __va_list_tag) -> c_int;
+    fn vsnprintf(s: *mut c_char, n: usize, format: *const c_char, args: VaList) -> c_int;
 }
 
 unsafe extern "C" fn logger_proc(
     _: *mut c_void,
     level: c_int,
     message: *const c_char,
-    args: *mut __va_list_tag,
+    args: VaList,
 ) {
     let mut chars: [c_char; 1024] = [0; 1024];
     vsnprintf(chars.as_mut_ptr(), 2048, message, args);

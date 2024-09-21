@@ -17,3 +17,6 @@ graphics = { path = "../graphics" }
 capture = { path = "../capture" }
 codec = { path = "../codec" }
 cpal = "0.15.3"
+
+[features]
+wgpu = []
