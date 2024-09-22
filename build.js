@@ -103,8 +103,7 @@ const Replace = (file, filters) => {
         ['./examples/desktop/README.md', './build/examples/README.md'],
 
         /* inculde */
-        ['./ffi/mirror/include/mirror.h', './build/include/mirror.h'],
-        ['./common/frame/include/frame.h', './build/include/frame.h'],
+        ['./ffi/include/mirror.h', './build/include/mirror.h'],
     ])
     {
         fs.copyFileSync(...item)

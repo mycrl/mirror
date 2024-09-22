@@ -15,18 +15,17 @@ log = "0.4.20"
 jni = "0.21.1"
 num_cpus = "1.16.0"
 chrono = { version = "0.4", features = ["clock", "alloc"] }
-utils = { path = "../../common/utils" }
-frame = { path = "../../common/frame" }
-transport = { path = "../../transport" }
-jni-macro = { path = "../../common/jni-macro" }
+utils = { path = "../common/utils" }
+transport = { path = "../transport" }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 syslog = "6"
 
 [target.'cfg(any(target_os = "windows", target_os = "linux"))'.dependencies]
-codec = { path = "../../codec" }
-capture = { path = "../../capture" }
-mirror = { path = "../../mirror" }
+codec = { path = "../codec" }
+capture = { path = "../capture" }
+mirror = { path = "../mirror" }
+frame = { path = "../common/frame" }
 
 [features]
 dx11 = ["mirror/dx11"]

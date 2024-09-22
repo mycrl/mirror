@@ -21,8 +21,32 @@
 #include <windows.h>
 #endif
 
-#include <frame.h>
 #include <stdint.h>
+#include <stddef.h>
+
+typedef enum
+{
+    RGBA,
+    NV12,
+    I420,
+} VideoFormat;
+
+typedef struct
+{
+    VideoFormat format;
+    bool hardware;
+    uint32_t width;
+    uint32_t height;
+    void* data[3];
+    size_t linesize[3];
+} VideoFrame;
+
+typedef struct
+{
+    int sample_rate;
+    uint32_t frames;
+    int16_t* data;
+} AudioFrame;
 
 typedef enum
 {
