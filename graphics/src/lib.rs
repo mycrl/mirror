@@ -2,6 +2,9 @@ mod helper;
 mod samples;
 mod vertex;
 
+#[cfg(target_os = "windows")]
+pub mod dx11;
+
 use std::sync::Arc;
 
 use self::{samples::FromNativeResourceError, vertex::Vertex};

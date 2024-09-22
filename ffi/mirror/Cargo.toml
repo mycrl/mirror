@@ -29,4 +29,4 @@ capture = { path = "../../capture" }
 mirror = { path = "../../mirror" }
 
 [features]
-wgpu = ["mirror/wgpu"]
+dx11 = ["mirror/dx11"]

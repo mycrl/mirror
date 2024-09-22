@@ -33,17 +33,17 @@ pub enum FromNativeResourceError {
 
 pub enum HardwareTexture<'a> {
     #[cfg(target_os = "windows")]
-    Dx11(&'a ID3D11Texture2D, &'a D3D11_TEXTURE2D_DESC),
+    Dx11(&'a ID3D11Texture2D, &'a D3D11_TEXTURE2D_DESC, u32),
     #[cfg(any(target_os = "linux"))]
     Vulkan(&'a usize),
 }
 
 impl<'a> HardwareTexture<'a> {
     #[allow(unused)]
-    fn texture(&self, device: &Device) -> Result<WGPUTexture, FromNativeResourceError> {
+    pub(crate) fn texture(&self, device: &Device) -> Result<WGPUTexture, FromNativeResourceError> {
         Ok(match self {
             #[cfg(target_os = "windows")]
-            HardwareTexture::Dx11(dx11, desc) => {
+            HardwareTexture::Dx11(dx11, desc, _) => {
                 create_texture_from_dx11_texture(device, dx11, desc)?
             }
             _ => unimplemented!("not supports native texture"),
@@ -64,37 +64,51 @@ pub enum TextureResource<'a> {
 impl<'a> TextureResource<'a> {
     /// Get the hardware texture, here does not deal with software texture, so
     /// if it is software texture directly return None.
-    fn texture(&self, device: &Device) -> Result<Option<WGPUTexture>, FromNativeResourceError> {
+    pub(crate) fn texture(
+        &self,
+        device: &Device,
+    ) -> Result<Option<WGPUTexture>, FromNativeResourceError> {
         Ok(match self {
             TextureResource::Texture(texture) => texture.texture(device).ok(),
             _ => None,
         })
     }
 
-    fn size(&self, device: &Device) -> Result<Size, FromNativeResourceError> {
-        Ok(match self {
-            TextureResource::Texture(texture) => {
-                let size = texture.texture(device)?.size();
-                Size {
-                    width: size.width,
-                    height: size.height,
-                }
-            }
+    pub(crate) fn size(&self) -> Size {
+        match self {
+            TextureResource::Texture(texture) => match texture {
+                HardwareTexture::Dx11(_, desc, _) => Size {
+                    width: desc.Width,
+                    height: desc.Height,
+                },
+            },
             TextureResource::Buffer(resource) => resource.size,
-        })
+        }
     }
 }
 
 pub enum Texture<'a> {
     Rgba(TextureResource<'a>),
     Nv12(TextureResource<'a>),
+    I420(SoftwareTexture<'a>),
 }
 
 impl<'a> Texture<'a> {
-    fn texture(&self, device: &Device) -> Result<Option<WGPUTexture>, FromNativeResourceError> {
+    pub(crate) fn texture(
+        &self,
+        device: &Device,
+    ) -> Result<Option<WGPUTexture>, FromNativeResourceError> {
         Ok(match self {
             Texture::Rgba(texture) | Texture::Nv12(texture) => texture.texture(device)?,
+            _ => None,
         })
+    }
+
+    pub(crate) fn size(&self) -> Size {
+        match self {
+            Texture::Rgba(texture) | Texture::Nv12(texture) => texture.size(),
+            Texture::I420(texture) => texture.size,
+        }
     }
 }
 
@@ -387,9 +401,108 @@ impl Texture2DSample for Nv12 {
     }
 }
 
+/// YCbCr, Y′CbCr, or Y Pb/Cb Pr/Cr, also written as YCBCR or Y′CBCR, is a
+/// family of color spaces used as a part of the color image pipeline in video
+/// and digital photography systems. Y′ is the luma component and CB and CR are
+/// the blue-difference and red-difference chroma components. Y′ (with prime) is
+/// distinguished from Y, which is luminance, meaning that light intensity is
+/// nonlinearly encoded based on gamma corrected RGB primaries.
+///
+/// Y′CbCr color spaces are defined by a mathematical coordinate transformation
+/// from an associated RGB primaries and white point. If the underlying RGB
+/// color space is absolute, the Y′CbCr color space is an absolute color space
+/// as well; conversely, if the RGB space is ill-defined, so is Y′CbCr. The
+/// transformation is defined in equations 32, 33 in ITU-T H.273. Nevertheless
+/// that rule does not apply to P3-D65 primaries used by Netflix with
+/// BT.2020-NCL matrix, so that means matrix was not derived from primaries, but
+/// now Netflix allows BT.2020 primaries (since 2021).[1] The same happens with
+/// JPEG: it has BT.601 matrix derived from System M primaries, yet the
+/// primaries of most images are BT.709.
+struct I420(WGPUTexture, WGPUTexture, WGPUTexture);
+
+impl I420 {
+    fn new(device: &Device, size: Size) -> Self {
+        let mut textures = Self::create(device, size);
+        Self(
+            textures.next().unwrap(),
+            textures.next().unwrap(),
+            textures.next().unwrap(),
+        )
+    }
+}
+
+impl Texture2DSample for I420 {
+    fn create_texture_descriptor(size: Size) -> impl IntoIterator<Item = (Size, TextureFormat)> {
+        [
+            (size, TextureFormat::R8Unorm),
+            (
+                Size {
+                    width: size.width / 2,
+                    height: size.height / 2,
+                },
+                TextureFormat::R8Unorm,
+            ),
+            (
+                Size {
+                    width: size.width / 2,
+                    height: size.height / 2,
+                },
+                TextureFormat::R8Unorm,
+            ),
+        ]
+    }
+
+    fn views_descriptors<'a>(
+        &'a self,
+        _: Option<&'a WGPUTexture>,
+    ) -> impl IntoIterator<Item = (&'a WGPUTexture, TextureFormat, TextureAspect)> {
+        [
+            (&self.0, TextureFormat::R8Unorm, TextureAspect::All),
+            (&self.1, TextureFormat::R8Unorm, TextureAspect::All),
+            (&self.2, TextureFormat::R8Unorm, TextureAspect::All),
+        ]
+    }
+
+    fn copy_buffer_descriptors<'a>(
+        &self,
+        buffers: &'a [&'a [u8]],
+    ) -> impl IntoIterator<Item = (&'a [u8], &WGPUTexture, TextureAspect, Size)> {
+        let size = {
+            let size = self.0.size();
+            Size {
+                width: size.width,
+                height: size.height,
+            }
+        };
+
+        [
+            (buffers[0], &self.0, TextureAspect::All, size),
+            (
+                buffers[1],
+                &self.1,
+                TextureAspect::All,
+                Size {
+                    width: size.width / 2,
+                    height: size.height / 2,
+                },
+            ),
+            (
+                buffers[2],
+                &self.2,
+                TextureAspect::All,
+                Size {
+                    width: size.width / 2,
+                    height: size.height / 2,
+                },
+            ),
+        ]
+    }
+}
+
 enum Texture2DSourceSample {
     Rgba(Rgba),
     Nv12(Nv12),
+    I420(I420),
 }
 
 pub struct Texture2DSource {
@@ -423,19 +536,21 @@ impl Texture2DSource {
         // Not yet initialized, initialize the environment first.
         if self.sample.is_none() {
             let sample = match &texture {
-                Texture::Rgba(texture) => Texture2DSourceSample::Rgba(Rgba::new(
-                    &self.device,
-                    texture.size(&self.device)?,
-                )),
-                Texture::Nv12(texture) => Texture2DSourceSample::Nv12(Nv12::new(
-                    &self.device,
-                    texture.size(&self.device)?,
-                )),
+                Texture::Rgba(texture) => {
+                    Texture2DSourceSample::Rgba(Rgba::new(&self.device, texture.size()))
+                }
+                Texture::Nv12(texture) => {
+                    Texture2DSourceSample::Nv12(Nv12::new(&self.device, texture.size()))
+                }
+                Texture::I420(texture) => {
+                    Texture2DSourceSample::I420(I420::new(&self.device, texture.size))
+                }
             };
 
             let bind_group_layout = match &sample {
                 Texture2DSourceSample::Rgba(texture) => texture.bind_group_layout(&self.device),
                 Texture2DSourceSample::Nv12(texture) => texture.bind_group_layout(&self.device),
+                Texture2DSourceSample::I420(texture) => texture.bind_group_layout(&self.device),
             };
 
             let pipeline =
@@ -467,6 +582,9 @@ impl Texture2DSource {
                                 }
                                 Texture2DSourceSample::Nv12(_) => {
                                     include_wgsl!("./shaders/fragment/nv12.wgsl")
+                                }
+                                Texture2DSourceSample::I420(_) => {
+                                    include_wgsl!("./shaders/fragment/i420.wgsl")
                                 }
                             }),
                             compilation_options: PipelineCompilationOptions::default(),
@@ -505,6 +623,11 @@ impl Texture2DSource {
                         nv12.update(&self.queue, buffer);
                     }
                 }
+                Texture::I420(texture) => {
+                    if let Texture2DSourceSample::I420(i420) = sample {
+                        i420.update(&self.queue, texture);
+                    }
+                }
                 _ => (),
             }
         }
@@ -521,6 +644,9 @@ impl Texture2DSource {
                             sample.bind_group(&self.device, layout, texture.as_ref())
                         }
                         Texture2DSourceSample::Nv12(sample) => {
+                            sample.bind_group(&self.device, layout, texture.as_ref())
+                        }
+                        Texture2DSourceSample::I420(sample) => {
                             sample.bind_group(&self.device, layout, texture.as_ref())
                         }
                     },

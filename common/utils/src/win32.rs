@@ -289,22 +289,12 @@ pub fn d3d_context_borrowed_raw<'a>(raw: &'a *mut c_void) -> Option<&'a ID3D11De
 pub trait EasyTexture {
     fn get_shared(&self) -> Result<HANDLE>;
     fn desc(&self) -> D3D11_TEXTURE2D_DESC;
-    fn size(&self) -> Size;
 }
 
 impl EasyTexture for ID3D11Texture2D {
     #[inline]
     fn get_shared(&self) -> Result<HANDLE> {
         Ok(unsafe { self.cast::<IDXGIResource>()?.GetSharedHandle()? })
-    }
-
-    #[inline]
-    fn size(&self) -> Size {
-        let desc = self.desc();
-        Size {
-            width: desc.Width,
-            height: desc.Height,
-        }
     }
 
     #[inline]

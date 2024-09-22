@@ -14,7 +14,6 @@ pub mod desktop {
         mem::ManuallyDrop,
     };
 
-    use anyhow::anyhow;
     use chrono::Local;
     use fern::{
         colors::{Color, ColoredLevelConfig},
@@ -121,12 +120,15 @@ pub mod desktop {
 
                 #[cfg(target_os = "linux")]
                 {
-                    logger = logger.chain(syslog::unix(syslog::Formatter3164 {
-                        facility: syslog::Facility::LOG_USER,
-                        process: "mirror".to_owned(),
-                        hostname: None,
-                        pid: 0,
-                    }).map_err(|e| anyhow!("{:?}", e))?);
+                    logger = logger.chain(
+                        syslog::unix(syslog::Formatter3164 {
+                            facility: syslog::Facility::LOG_USER,
+                            process: "mirror".to_owned(),
+                            hostname: None,
+                            pid: 0,
+                        })
+                        .map_err(|e| anyhow::anyhow!("{:?}", e))?,
+                    );
                 }
             }
 

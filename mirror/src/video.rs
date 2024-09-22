@@ -1,292 +1,174 @@
-#[cfg(any(feature = "wgpu", target_os = "linux"))]
-pub mod general {
-    use crate::Window;
+use crate::Window;
 
-    use anyhow::{anyhow, Result};
-    use frame::{VideoFormat, VideoFrame};
-    use graphics::{HardwareTexture, Renderer, SoftwareTexture, Texture, TextureResource};
-    use utils::Size;
+use anyhow::{anyhow, Result};
+use frame::{VideoFormat, VideoFrame};
+use graphics::{HardwareTexture, Renderer, SoftwareTexture, Texture, TextureResource};
+use utils::Size;
 
+#[cfg(target_os = "windows")]
+use utils::win32::{
+    d3d_texture_borrowed_raw, windows::Win32::Graphics::Direct3D11::D3D11_RESOURCE_MISC_SHARED,
+    Direct3DDevice, EasyTexture,
+};
+
+pub struct VideoPlayer {
     #[cfg(target_os = "windows")]
-    use utils:: win32::{
-        d3d_texture_borrowed_raw,
-        windows::Win32::Graphics::Direct3D11::D3D11_RESOURCE_MISC_SHARED, Direct3DDevice,
-        EasyTexture,
-    };
-
-    pub struct VideoPlayer {
-        #[cfg(target_os = "windows")]
-        direct3d: Option<Direct3DDevice>,
-        renderer: Renderer<'static>,
-    }
-
-    impl VideoPlayer {
-        pub fn new(window: Window) -> Result<Self> {
-            let size = window.size()?;
-            Ok(Self {
-                renderer: Renderer::new(window, size)?,
-                #[cfg(target_os = "windows")]
-                direct3d: crate::DIRECT_3D_DEVICE.read().unwrap().clone(),
-            })
-        }
-
-        pub fn send(&mut self, frame: &VideoFrame) -> Result<()> {
-            if frame.hardware {
-                #[cfg(target_os = "windows")]
-                {
-                    let mut dx_tex = d3d_texture_borrowed_raw(&(frame.data[0] as *mut _))
-                        .cloned()
-                        .ok_or_else(|| anyhow!("not found a texture"))?;
-
-                    let mut desc = dx_tex.desc();
-
-                    // Check if the texture supports creating shared resources, if not create a new
-                    // shared texture and copy it to the shared texture.
-                    if let Some(direct3d) = &self.direct3d {
-                        if desc.MiscFlags & D3D11_RESOURCE_MISC_SHARED.0 as u32 == 0 {
-                            desc.MiscFlags = D3D11_RESOURCE_MISC_SHARED.0 as u32;
-                            desc.CPUAccessFlags = 0;
-                            desc.BindFlags = 0;
-                            desc.ArraySize = 1;
-                            desc.MipLevels = 1;
-
-                            dx_tex = unsafe {
-                                let mut tex = None;
-                                direct3d
-                                    .device
-                                    .CreateTexture2D(&desc, None, Some(&mut tex))?;
-                                let tex = tex.unwrap();
-
-                                direct3d.context.CopyResource(&tex, &dx_tex);
-                                tex
-                            };
-                        }
-                    }
-
-                    let texture = TextureResource::Texture(HardwareTexture::Dx11(&dx_tex, &desc));
-                    self.renderer.submit(match frame.format {
-                        VideoFormat::RGBA => Texture::Rgba(texture),
-                        VideoFormat::NV12 => Texture::Nv12(texture),
-                        VideoFormat::I420 => unimplemented!(),
-                    })?;
-                }
-            } else {
-                let buffers = match frame.format {
-                    VideoFormat::RGBA => [
-                        unsafe {
-                            std::slice::from_raw_parts(
-                                frame.data[0] as *const _,
-                                frame.linesize[0] as usize * frame.height as usize * 4,
-                            )
-                        },
-                        &[],
-                        &[],
-                    ],
-                    VideoFormat::NV12 => [
-                        unsafe {
-                            std::slice::from_raw_parts(
-                                frame.data[0] as *const _,
-                                frame.linesize[0] as usize * frame.height as usize,
-                            )
-                        },
-                        unsafe {
-                            std::slice::from_raw_parts(
-                                frame.data[1] as *const _,
-                                frame.linesize[1] as usize * frame.height as usize,
-                            )
-                        },
-                        &[],
-                    ],
-                    VideoFormat::I420 => [
-                        unsafe {
-                            std::slice::from_raw_parts(
-                                frame.data[0] as *const _,
-                                frame.linesize[0] as usize * frame.height as usize,
-                            )
-                        },
-                        unsafe {
-                            std::slice::from_raw_parts(
-                                frame.data[1] as *const _,
-                                frame.linesize[1] as usize * frame.height as usize,
-                            )
-                        },
-                        unsafe {
-                            std::slice::from_raw_parts(
-                                frame.data[2] as *const _,
-                                frame.linesize[2] as usize * frame.height as usize,
-                            )
-                        },
-                    ]
-                };
-
-                let texture = SoftwareTexture {
-                    buffers: &buffers,
-                    size: Size {
-                        width: frame.width,
-                        height: frame.height,
-                    },
-                };
-
-                // self.renderer.submit(match frame.format {
-                //     VideoFormat::RGBA => Texture::Rgba(TextureResource::Buffer(texture)),
-                //     VideoFormat::NV12 => Texture::Nv12(TextureResource::Buffer(texture)),
-                // })?;
-            };
-
-            Ok(())
-        }
-    }
+    direct3d: Option<Direct3DDevice>,
+    renderer: Renderer<'static>,
 }
 
-#[cfg(all(not(feature = "wgpu"), target_os = "windows"))]
-pub mod win32 {
-    use anyhow::{anyhow, Result};
-    use frame::{Resource, VideoFrame, VideoSize, VideoTransform, VideoTransformDescriptor};
-    use utils::win32::windows::Win32::{
-        Foundation::HWND,
-        Graphics::{
-            Direct3D11::{ID3D11RenderTargetView, ID3D11Texture2D, D3D11_VIEWPORT},
-            Dxgi::{
-                Common::DXGI_FORMAT_R8G8B8A8_UNORM, CreateDXGIFactory, IDXGIFactory,
-                IDXGISwapChain, DXGI_PRESENT, DXGI_SWAP_CHAIN_DESC,
-                DXGI_USAGE_RENDER_TARGET_OUTPUT,
-            },
-        },
-    };
-    use utils::win32::{d3d_texture_borrowed_raw, Direct3DDevice};
-
-    use crate::Window;
-
-    pub struct VideoPlayer {
-        direct3d: Direct3DDevice,
-        swap_chain: IDXGISwapChain,
-        render_target_view: ID3D11RenderTargetView,
-        video_processor: Option<VideoTransform>,
+impl VideoPlayer {
+    pub fn new(window: Window) -> Result<Self> {
+        let size = window.size()?;
+        Ok(Self {
+            renderer: Renderer::new(window, size)?,
+            #[cfg(target_os = "windows")]
+            direct3d: crate::DIRECT_3D_DEVICE.read().unwrap().clone(),
+        })
     }
 
-    unsafe impl Send for VideoPlayer {}
-    unsafe impl Sync for VideoPlayer {}
+    pub fn send(&mut self, frame: &VideoFrame) -> Result<()> {
+        if frame.hardware {
+            #[cfg(target_os = "windows")]
+            {
+                let mut dx_tex = d3d_texture_borrowed_raw(&(frame.data[0] as *mut _))
+                    .cloned()
+                    .ok_or_else(|| anyhow!("not found a texture"))?;
 
-    impl VideoPlayer {
-        pub fn new(window: Window) -> Result<Self> {
-            let size = window.size()?;
-            log::info!("renderer: create video render, size={:?}", size);
+                let mut desc = dx_tex.desc();
 
-            let direct3d = crate::DIRECT_3D_DEVICE
-                .read()
-                .unwrap()
-                .clone()
-                .ok_or_else(|| anyhow!("not found a direct3d device"))?;
-            let swap_chain = unsafe {
-                let dxgi_factory = CreateDXGIFactory::<IDXGIFactory>()?;
+                // Check if the texture supports creating shared resources, if not create a new
+                // shared texture and copy it to the shared texture.
+                if let Some(direct3d) = &self.direct3d {
+                    if desc.MiscFlags & D3D11_RESOURCE_MISC_SHARED.0 as u32 == 0 {
+                        desc.MiscFlags = D3D11_RESOURCE_MISC_SHARED.0 as u32;
+                        desc.CPUAccessFlags = 0;
+                        desc.BindFlags = 0;
+                        desc.ArraySize = 1;
+                        desc.MipLevels = 1;
 
-                let mut desc = DXGI_SWAP_CHAIN_DESC::default();
-                desc.BufferCount = 1;
-                desc.BufferDesc.Width = size.width;
-                desc.BufferDesc.Height = size.height;
-                desc.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-                desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-                desc.OutputWindow = HWND(window.0 as *mut _);
-                desc.SampleDesc.Count = 1;
-                desc.Windowed = true.into();
+                        dx_tex = unsafe {
+                            let mut tex = None;
+                            direct3d
+                                .device
+                                .CreateTexture2D(&desc, None, Some(&mut tex))?;
+                            let tex = tex.unwrap();
 
-                let mut swap_chain = None;
-                dxgi_factory
-                    .CreateSwapChain(&direct3d.device, &desc, &mut swap_chain)
-                    .ok()?;
-
-                swap_chain.unwrap()
-            };
-
-            let back_buffer = unsafe { swap_chain.GetBuffer::<ID3D11Texture2D>(0)? };
-            let render_target_view = unsafe {
-                let mut render_target_view = None;
-                direct3d.device.CreateRenderTargetView(
-                    &back_buffer,
-                    None,
-                    Some(&mut render_target_view),
-                )?;
-
-                render_target_view.unwrap()
-            };
-
-            unsafe {
-                direct3d
-                    .context
-                    .OMSetRenderTargets(Some(&[Some(render_target_view.clone())]), None);
-            }
-
-            unsafe {
-                let mut vp = D3D11_VIEWPORT::default();
-                vp.Width = size.width as f32;
-                vp.Height = size.height as f32;
-                vp.MinDepth = 0.0;
-                vp.MaxDepth = 1.0;
-
-                direct3d.context.RSSetViewports(Some(&[vp]));
-            }
-
-            Ok(Self {
-                video_processor: None,
-                render_target_view,
-                swap_chain,
-                direct3d,
-            })
-        }
-
-        /// Draw this pixel buffer to the configured [`SurfaceTexture`].
-        pub fn send(&mut self, frame: &VideoFrame) -> Result<()> {
-            if frame.data[0].is_null() {
-                return Err(anyhow!("frame texture is null"));
-            }
-
-            unsafe {
-                self.direct3d
-                    .context
-                    .ClearRenderTargetView(&self.render_target_view, &[0.0, 0.0, 0.0, 1.0]);
-            }
-
-            if self.video_processor.is_none() {
-                self.video_processor = Some(VideoTransform::new(VideoTransformDescriptor {
-                    direct3d: self.direct3d.clone(),
-                    input: Resource::Default(
-                        frame.format,
-                        VideoSize {
-                            width: frame.width,
-                            height: frame.height,
-                        },
-                    ),
-                    output: Resource::Texture(unsafe {
-                        self.swap_chain.GetBuffer::<ID3D11Texture2D>(0)?
-                    }),
-                })?);
-            }
-
-            if let Some(processor) = &mut self.video_processor {
-                let view = if frame.hardware {
-                    let texture = frame.data[0] as *mut _;
-                    if let Some(texture) = d3d_texture_borrowed_raw(&texture) {
-                        Some(processor.create_input_view(texture, frame.data[1] as u32)?)
-                    } else {
-                        None
+                            direct3d.context.CopyResource(&tex, &dx_tex);
+                            tex
+                        };
                     }
-                } else {
-                    processor.update_input_from_buffer(
-                        frame.data[0] as *const _,
-                        frame.linesize[0] as u32,
-                    )?;
+                }
 
-                    None
-                };
+                let texture = TextureResource::Texture(HardwareTexture::Dx11(
+                    &dx_tex,
+                    &desc,
+                    frame.data[1] as u32,
+                ));
 
-                processor.process(view)?;
+                self.renderer.submit(match frame.format {
+                    VideoFormat::RGBA => Texture::Rgba(texture),
+                    VideoFormat::NV12 => Texture::Nv12(texture),
+                    VideoFormat::I420 => unimplemented!("no hardware texture for I420"),
+                })?;
             }
+        } else {
+            let buffers = match frame.format {
+                // RGBA stands for red green blue alpha. While it is sometimes described as a
+                // color space, it is actually a three-channel RGB color model supplemented
+                // with a fourth alpha channel. Alpha indicates how opaque each pixel is and
+                // allows an image to be combined over others using alpha compositing, with
+                // transparent areas and anti-aliasing of the edges of opaque regions. Each
+                // pixel is a 4D vector.
+                //
+                // The term does not define what RGB color space is being used. It also does
+                // not state whether or not the colors are premultiplied by the alpha value,
+                // and if they are it does not state what color space that premultiplication
+                // was done in. This means more information than just "RGBA" is needed to
+                // determine how to handle an image.
+                //
+                // In some contexts the abbreviation "RGBA" means a specific memory layout
+                // (called RGBA8888 below), with other terms such as "BGRA" used for
+                // alternatives. In other contexts "RGBA" means any layout.
+                VideoFormat::RGBA => [
+                    unsafe {
+                        std::slice::from_raw_parts(
+                            frame.data[0] as *const _,
+                            frame.linesize[0] as usize * frame.height as usize * 4,
+                        )
+                    },
+                    &[],
+                    &[],
+                ],
+                VideoFormat::NV12 => [
+                    unsafe {
+                        std::slice::from_raw_parts(
+                            frame.data[0] as *const _,
+                            frame.linesize[0] as usize * frame.height as usize,
+                        )
+                    },
+                    unsafe {
+                        std::slice::from_raw_parts(
+                            frame.data[1] as *const _,
+                            frame.linesize[1] as usize * frame.height as usize,
+                        )
+                    },
+                    &[],
+                ],
+                // YCbCr, Y′CbCr, or Y Pb/Cb Pr/Cr, also written as YCBCR or Y′CBCR, is a
+                // family of color spaces used as a part of the color image pipeline in video
+                // and digital photography systems. Y′ is the luma component and CB and CR are
+                // the blue-difference and red-difference chroma components. Y′ (with prime) is
+                // distinguished from Y, which is luminance, meaning that light intensity is
+                // nonlinearly encoded based on gamma corrected RGB primaries.
+                //
+                // Y′CbCr color spaces are defined by a mathematical coordinate transformation
+                // from an associated RGB primaries and white point. If the underlying RGB
+                // color space is absolute, the Y′CbCr color space is an absolute color space
+                // as well; conversely, if the RGB space is ill-defined, so is Y′CbCr. The
+                // transformation is defined in equations 32, 33 in ITU-T H.273. Nevertheless
+                // that rule does not apply to P3-D65 primaries used by Netflix with
+                // BT.2020-NCL matrix, so that means matrix was not derived from primaries, but
+                // now Netflix allows BT.2020 primaries (since 2021).[1] The same happens with
+                // JPEG: it has BT.601 matrix derived from System M primaries, yet the
+                // primaries of most images are BT.709.
+                VideoFormat::I420 => [
+                    unsafe {
+                        std::slice::from_raw_parts(
+                            frame.data[0] as *const _,
+                            frame.linesize[0] as usize * frame.height as usize,
+                        )
+                    },
+                    unsafe {
+                        std::slice::from_raw_parts(
+                            frame.data[1] as *const _,
+                            frame.linesize[1] as usize * frame.height as usize,
+                        )
+                    },
+                    unsafe {
+                        std::slice::from_raw_parts(
+                            frame.data[2] as *const _,
+                            frame.linesize[2] as usize * frame.height as usize,
+                        )
+                    },
+                ],
+            };
 
-            unsafe {
-                self.swap_chain.Present(0, DXGI_PRESENT(0)).ok()?;
-            }
+            let texture = SoftwareTexture {
+                buffers: &buffers,
+                size: Size {
+                    width: frame.width,
+                    height: frame.height,
+                },
+            };
 
-            Ok(())
-        }
+            self.renderer.submit(match frame.format {
+                VideoFormat::RGBA => Texture::Rgba(TextureResource::Buffer(texture)),
+                VideoFormat::NV12 => Texture::Nv12(TextureResource::Buffer(texture)),
+                VideoFormat::I420 => Texture::I420(texture),
+            })?;
+        };
+
+        Ok(())
     }
 }

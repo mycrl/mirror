@@ -7,11 +7,13 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
+use audio::AudioResampler;
 use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
     Stream, StreamConfig, StreamError,
 };
-use frame::{AudioFrame, AudioResampler};
+
+use frame::AudioFrame;
 
 pub struct AudioPlayer {
     stream: Stream,

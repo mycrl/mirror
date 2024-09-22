@@ -1,49 +1,6 @@
-use std::ptr::null;
-
 use rubato::{
     FastFixedIn, PolynomialDegree, ResampleResult, Resampler, ResamplerConstructionError,
 };
-
-/// Pulse-code modulation
-///
-/// Pulse-code modulation (PCM) is a method used to digitally represent analog
-/// signals. It is the standard form of digital audio in computers, compact
-/// discs, digital telephony and other digital audio applications. In a PCM
-/// stream, the amplitude of the analog signal is sampled at uniform intervals,
-/// and each sample is quantized to the nearest value within a range of digital
-/// steps.
-///
-/// Linear pulse-code modulation (LPCM) is a specific type of PCM in which the
-/// quantization levels are linearly uniform. This is in contrast to PCM
-/// encodings in which quantization levels vary as a function of amplitude (as
-/// with the A-law algorithm or the μ-law algorithm). Though PCM is a more
-/// general term, it is often used to describe data encoded as LPCM.
-///
-/// A PCM stream has two basic properties that determine the stream's fidelity
-/// to the original analog signal: the sampling rate, which is the number of
-/// times per second that samples are taken; and the bit depth, which determines
-/// the number of possible digital values that can be used to represent each
-/// sample.
-#[repr(C)]
-#[derive(Debug)]
-pub struct AudioFrame {
-    pub sample_rate: u32,
-    pub frames: u32,
-    pub data: *const i16,
-}
-
-unsafe impl Sync for AudioFrame {}
-unsafe impl Send for AudioFrame {}
-
-impl Default for AudioFrame {
-    fn default() -> Self {
-        Self {
-            frames: 0,
-            data: null(),
-            sample_rate: 0,
-        }
-    }
-}
 
 /// Audio resampler, quickly resample input to a single channel count and
 /// different sampling rates.

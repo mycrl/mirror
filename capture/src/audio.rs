@@ -3,8 +3,9 @@ use crate::{AudioCaptureSourceDescription, CaptureHandler, Source, SourceType};
 use std::sync::Mutex;
 
 use anyhow::{anyhow, Result};
+use audio::AudioResampler;
 use cpal::{traits::*, Host, Stream, StreamConfig};
-use frame::{AudioFrame, AudioResampler};
+use frame::AudioFrame;
 use once_cell::sync::Lazy;
 
 // Just use a default audio port globally.

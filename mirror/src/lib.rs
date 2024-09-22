@@ -7,13 +7,7 @@ mod sender;
 
 pub use self::receiver::{Receiver, ReceiverDescriptor};
 
-use self::audio::AudioPlayer;
-
-#[cfg(any(feature = "wgpu", target_os = "linux"))]
-use self::video::general::VideoPlayer;
-
-#[cfg(all(not(feature = "wgpu"), target_os = "windows"))]
-use self::video::win32::VideoPlayer;
+use self::{audio::AudioPlayer, video::VideoPlayer};
 
 #[cfg(any(target_os = "windows", target_os = "linux"))]
 pub use self::sender::{AudioDescriptor, Sender, SenderDescriptor, VideoDescriptor};

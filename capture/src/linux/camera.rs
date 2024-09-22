@@ -11,7 +11,7 @@ impl CaptureHandler for CameraCapture {
     type CaptureDescriptor = VideoCaptureSourceDescription;
 
     fn get_sources() -> Result<Vec<Source>, Self::Error> {
-       todo!()
+        todo!()
     }
 
     fn start<S: FrameArrived<Frame = Self::Frame> + 'static>(
