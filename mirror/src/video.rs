@@ -2,28 +2,37 @@ use crate::Window;
 
 use anyhow::{anyhow, Result};
 use frame::{VideoFormat, VideoFrame};
-use graphics::{HardwareTexture, Renderer, SoftwareTexture, Texture, TextureResource};
+use graphics::{HardwareTexture, SoftwareTexture, Texture, TextureResource};
 use utils::Size;
 
 #[cfg(target_os = "windows")]
-use utils::win32::{
-    d3d_texture_borrowed_raw, windows::Win32::Graphics::Direct3D11::D3D11_RESOURCE_MISC_SHARED,
-    Direct3DDevice, EasyTexture,
-};
+use utils::win32::{d3d_texture_borrowed_raw, EasyTexture};
+
+#[cfg(all(feature = "dx11", target_os = "windows"))]
+use graphics::dx11::Dx11Renderer;
+
+#[cfg(not(feature = "dx11"))]
+use graphics::Renderer;
 
 pub struct VideoPlayer {
-    #[cfg(target_os = "windows")]
-    direct3d: Option<Direct3DDevice>,
+    #[cfg(not(feature = "dx11"))]
     renderer: Renderer<'static>,
+    #[cfg(all(feature = "dx11", target_os = "windows"))]
+    renderer: Dx11Renderer,
 }
 
 impl VideoPlayer {
     pub fn new(window: Window) -> Result<Self> {
         let size = window.size()?;
         Ok(Self {
+            #[cfg(not(feature = "dx11"))]
             renderer: Renderer::new(window, size)?,
-            #[cfg(target_os = "windows")]
-            direct3d: crate::DIRECT_3D_DEVICE.read().unwrap().clone(),
+            #[cfg(all(feature = "dx11", target_os = "windows"))]
+            renderer: Dx11Renderer::new(
+                window.raw(),
+                size,
+                crate::DIRECT_3D_DEVICE.read().unwrap().clone().unwrap(),
+            )?,
         })
     }
 
@@ -31,35 +40,11 @@ impl VideoPlayer {
         if frame.hardware {
             #[cfg(target_os = "windows")]
             {
-                let mut dx_tex = d3d_texture_borrowed_raw(&(frame.data[0] as *mut _))
+                let dx_tex = d3d_texture_borrowed_raw(&(frame.data[0] as *mut _))
                     .cloned()
                     .ok_or_else(|| anyhow!("not found a texture"))?;
 
-                let mut desc = dx_tex.desc();
-
-                // Check if the texture supports creating shared resources, if not create a new
-                // shared texture and copy it to the shared texture.
-                if let Some(direct3d) = &self.direct3d {
-                    if desc.MiscFlags & D3D11_RESOURCE_MISC_SHARED.0 as u32 == 0 {
-                        desc.MiscFlags = D3D11_RESOURCE_MISC_SHARED.0 as u32;
-                        desc.CPUAccessFlags = 0;
-                        desc.BindFlags = 0;
-                        desc.ArraySize = 1;
-                        desc.MipLevels = 1;
-
-                        dx_tex = unsafe {
-                            let mut tex = None;
-                            direct3d
-                                .device
-                                .CreateTexture2D(&desc, None, Some(&mut tex))?;
-                            let tex = tex.unwrap();
-
-                            direct3d.context.CopyResource(&tex, &dx_tex);
-                            tex
-                        };
-                    }
-                }
-
+                let desc = dx_tex.desc();
                 let texture = TextureResource::Texture(HardwareTexture::Dx11(
                     &dx_tex,
                     &desc,

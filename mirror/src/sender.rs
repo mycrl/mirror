@@ -1,4 +1,4 @@
-use crate::FrameSink;
+use crate::FrameSinker;
 
 use std::{
     mem::size_of,
@@ -56,7 +56,7 @@ pub struct SenderDescriptor {
 struct VideoSender {
     adapter: Weak<StreamSenderAdapter>,
     encoder: VideoEncoder,
-    sink: Weak<FrameSink>,
+    sink: Weak<dyn FrameSinker>,
 }
 
 impl VideoSender {
@@ -69,7 +69,7 @@ impl VideoSender {
     fn new(
         adapter: &Arc<StreamSenderAdapter>,
         settings: VideoEncoderSettings,
-        sink: &Arc<FrameSink>,
+        sink: &Arc<dyn FrameSinker>,
     ) -> Result<Self> {
         Ok(Self {
             sink: Arc::downgrade(sink),
@@ -109,7 +109,7 @@ impl FrameArrived for VideoSender {
         }
 
         if let Some(sink) = self.sink.upgrade() {
-            (sink.video)(frame);
+            sink.video(frame);
         }
 
         true
@@ -118,7 +118,7 @@ impl FrameArrived for VideoSender {
 
 struct AudioSender {
     buffer: Arc<Mutex<BytesMut>>,
-    sink: Weak<FrameSink>,
+    sink: Weak<dyn FrameSinker>,
     unparker: Unparker,
     chunk_count: usize,
 }
@@ -133,7 +133,7 @@ impl AudioSender {
     fn new(
         adapter: &Arc<StreamSenderAdapter>,
         settings: AudioEncoderSettings,
-        sink: &Arc<FrameSink>,
+        sink: &Arc<dyn FrameSinker>,
     ) -> Result<Self> {
         // Create an opus header data. The opus decoder needs this data to obtain audio
         // information. Here, actively add an opus header information to the queue, and
@@ -202,7 +202,7 @@ impl AudioSender {
                 }
 
                 if let Some(sink) = sink_.upgrade() {
-                    (sink.close)();
+                    sink.close();
                 }
 
                 #[cfg(target_os = "windows")]
@@ -237,7 +237,7 @@ impl FrameArrived for AudioSender {
         }
 
         if let Some(sink) = self.sink.upgrade() {
-            (sink.audio)(frame);
+            sink.audio(frame);
         }
 
         true
@@ -246,7 +246,7 @@ impl FrameArrived for AudioSender {
 
 pub struct Sender {
     pub(crate) adapter: Arc<StreamSenderAdapter>,
-    sink: Arc<FrameSink>,
+    sink: Arc<dyn FrameSinker>,
     capture: Capture,
 }
 
@@ -254,12 +254,12 @@ impl Sender {
     // Create a sender. The capture of the sender is started following the sender,
     // but both video capture and audio capture can be empty, which means you can
     // create a sender that captures nothing.
-    pub fn new(options: SenderDescriptor, sink: FrameSink) -> Result<Self> {
+    pub fn new<T: FrameSinker + 'static>(options: SenderDescriptor, sink: T) -> Result<Self> {
         log::info!("create sender");
 
         let mut capture_options = CaptureDescriptor::default();
         let adapter = StreamSenderAdapter::new(options.multicast);
-        let sink = Arc::new(sink);
+        let sink: Arc<dyn FrameSinker> = Arc::new(sink);
 
         if let Some((source, options)) = options.audio {
             capture_options.audio = Some(SourceCaptureDescriptor {
@@ -342,6 +342,6 @@ impl Drop for Sender {
         }
 
         self.adapter.close();
-        (self.sink.close)()
+        self.sink.close()
     }
 }

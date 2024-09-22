@@ -10,13 +10,15 @@ name = "mirror"
 [dependencies]
 anyhow = "1.0.82"
 bytes = "1.5"
-fern = { version = "0.6.2", features = ["date-based", "colored", "syslog-6"]}
 log = "0.4.20"
-jni = "0.21.1"
-num_cpus = "1.16.0"
+fern = { version = "0.6.2", features = ["date-based", "colored", "syslog-6"]}
 chrono = { version = "0.4", features = ["clock", "alloc"] }
 utils = { path = "../common/utils" }
 transport = { path = "../transport" }
+
+[target.'cfg(target_os = "android")'.dependencies]
+jni = "0.21.1"
+num_cpus = "1.16.0"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 syslog = "6"

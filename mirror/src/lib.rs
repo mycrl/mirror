@@ -90,7 +90,7 @@ pub fn shutdown() -> Result<()> {
     Ok(())
 }
 
-pub struct FrameSink {
+pub trait FrameSinker: Sync + Send {
     /// Callback occurs when the video frame is updated. The video frame format
     /// is fixed to NV12. Be careful not to call blocking methods inside the
     /// callback, which will seriously slow down the encoding and decoding
@@ -117,7 +117,7 @@ pub struct FrameSink {
     /// allows BT.2020 primaries (since 2021). The same happens with
     /// JPEG: it has BT.601 matrix derived from System M primaries, yet the
     /// primaries of most images are BT.709.
-    pub video: Box<dyn Fn(&VideoFrame) -> bool + Send + Sync>,
+    fn video(&self, frame: &VideoFrame) -> bool;
     /// Callback is called when the audio frame is updated. The audio frame
     /// format is fixed to PCM. Be careful not to call blocking methods inside
     /// the callback, which will seriously slow down the encoding and decoding
@@ -144,11 +144,11 @@ pub struct FrameSink {
     /// the number of times per second that samples are taken; and the bit
     /// depth, which determines the number of possible digital values that
     /// can be used to represent each sample.
-    pub audio: Box<dyn Fn(&AudioFrame) -> bool + Send + Sync>,
+    fn audio(&self, frame: &AudioFrame) -> bool;
     /// Callback when the sender is closed. This may be because the external
     /// side actively calls the close, or the audio and video packets cannot be
     /// sent (the network is disconnected), etc.
-    pub close: Box<dyn Fn() + Send + Sync>,
+    fn close(&self);
 }
 
 pub struct Mirror(Transport);
@@ -181,11 +181,11 @@ impl Mirror {
     /// get the device screen or sound callback, callback can be null, if it is
     /// null then it means no callback data is needed.
     #[cfg(any(target_os = "windows", target_os = "linux"))]
-    pub fn create_sender(
+    pub fn create_sender<T: FrameSinker + 'static>(
         &self,
         id: u32,
         options: SenderDescriptor,
-        sink: FrameSink,
+        sink: T,
     ) -> Result<Sender> {
         log::info!("create sender: id={}, options={:?}", id, options);
 
@@ -196,11 +196,11 @@ impl Mirror {
 
     /// Create a receiver, specify a bound NIC address, you can pass callback to
     /// get the sender's screen or sound callback, callback can not be null.
-    pub fn create_receiver(
+    pub fn create_receiver<T: FrameSinker + 'static>(
         &self,
         id: u32,
         options: ReceiverDescriptor,
-        sink: FrameSink,
+        sink: T,
     ) -> Result<Receiver> {
         log::info!("create receiver: id={}, options={:?}", id, options);
 
@@ -218,8 +218,13 @@ unsafe impl Sync for Window {}
 
 impl Window {
     #[cfg(target_os = "windows")]
+    fn raw(&self) -> HWND {
+        HWND(self.0 as *mut _)
+    }
+
+    #[cfg(target_os = "windows")]
     fn size(&self) -> Result<Size> {
-        Ok(get_hwnd_size(HWND(self.0 as *mut _))?)
+        Ok(get_hwnd_size(self.raw())?)
     }
 
     #[cfg(target_os = "linux")]

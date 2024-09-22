@@ -115,7 +115,7 @@ impl Dx11Renderer {
     }
 
     /// Draw this pixel buffer to the configured [`SurfaceTexture`].
-    pub fn send(&mut self, texture: Texture) -> Result<(), Dx11GraphicsError> {
+    pub fn submit(&mut self, texture: Texture) -> Result<(), Dx11GraphicsError> {
         unsafe {
             self.direct3d
                 .context

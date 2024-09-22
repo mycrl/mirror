@@ -8,7 +8,6 @@ use std::{
 
 use anyhow::{anyhow, Result};
 use frame::{VideoFormat, VideoFrame};
-
 use graphics::dx11::{Resource, VideoTransform, VideoTransformDescriptor};
 use utils::{
     atomic::EasyAtomic,
@@ -18,8 +17,12 @@ use utils::{
 
 use windows::{
     core::Interface,
-    Win32::Graphics::{Direct3D11::ID3D11Texture2D, Dxgi::Common::DXGI_FORMAT_NV12},
+    Win32::Graphics::{
+        Direct3D11::ID3D11Texture2D,
+        Dxgi::Common::{DXGI_FORMAT_NV12, DXGI_FORMAT_R8G8B8A8_UNORM},
+    },
 };
+
 use windows_capture::{
     capture::{CaptureControl, GraphicsCaptureApiHandler},
     frame::Frame,
@@ -55,7 +58,7 @@ impl GraphicsCaptureApiHandler for WindowsCapture {
         let mut transform = VideoTransform::new(VideoTransformDescriptor {
             direct3d: ctx.options.direct3d.clone(),
             input: Resource::Default(
-                DXGI_FORMAT_NV12,
+                DXGI_FORMAT_R8G8B8A8_UNORM,
                 Size {
                     width: ctx.source.width()?,
                     height: ctx.source.height()?,

@@ -5,8 +5,8 @@
 
 @fragment fn main(@location(0) coords: vec2<f32>) -> @location(0) vec4<f32> {
     let y = textureSample(y_texture, sampler_, coords).r;
-    let u = textureSample(u_texture, sampler_, coords).r;
-    let v = textureSample(v_texture, sampler_, coords).r;
+    let u = textureSample(u_texture, sampler_, coords).r - 0.5;
+    let v = textureSample(v_texture, sampler_, coords).r - 0.5;
 
     let r = y + 1.5748 * v;
     let g = y - 0.187324 * u - 0.468124 * v;

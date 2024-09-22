@@ -328,7 +328,7 @@ pub mod desktop {
         /// allows BT.2020 primaries (since 2021). The same happens with
         /// JPEG: it has BT.601 matrix derived from System M primaries, yet the
         /// primaries of most images are BT.709.
-        pub video: Option<extern "C" fn(ctx: usize, frame: *const VideoFrame) -> bool>,
+        pub video: Option<extern "C" fn(ctx: *const c_void, frame: *const VideoFrame) -> bool>,
         /// Callback is called when the audio frame is updated. The audio frame
         /// format is fixed to PCM. Be careful not to call blocking methods
         /// inside the callback, which will seriously slow down the
@@ -355,50 +355,62 @@ pub mod desktop {
         /// the number of times per second that samples are taken; and the bit
         /// depth, which determines the number of possible digital values that
         /// can be used to represent each sample.
-        pub audio: Option<extern "C" fn(ctx: usize, frame: *const AudioFrame) -> bool>,
+        pub audio: Option<extern "C" fn(ctx: *const c_void, frame: *const AudioFrame) -> bool>,
         /// Callback when the sender is closed. This may be because the external
         /// side actively calls the close, or the audio and video packets cannot
         /// be sent (the network is disconnected), etc.
-        pub close: Option<extern "C" fn(ctx: usize)>,
-        pub ctx: usize,
+        pub close: Option<extern "C" fn(ctx: *const c_void)>,
+        pub ctx: *const c_void,
     }
 
-    impl Into<mirror::FrameSink> for FrameSink {
-        fn into(self) -> mirror::FrameSink {
-            // Record whether it is closed
-            let is_closed = AtomicBool::new(false);
+    struct EventDelegation {
+        sink: FrameSink,
+        is_closed: AtomicBool,
+    }
 
-            mirror::FrameSink {
-                video: Box::new(move |frame: &VideoFrame| {
-                    if let Some(callback) = &self.video {
-                        callback(self.ctx, frame)
-                    } else {
-                        true
-                    }
-                }),
-                audio: Box::new(move |frame: &AudioFrame| {
-                    if let Some(callback) = &self.audio {
-                        callback(self.ctx, frame)
-                    } else {
-                        true
-                    }
-                }),
-                close: Box::new(move || {
-                    // I thought about it carefully. The closing hand should only trigger the
-                    // callback once. There are too many places in the system that will trigger the
-                    // closing callback. It is not easy to manage the status between components.
-                    // Here, the closing status is directly recorded. If it has been closed, it will
-                    // not be processed anymore.
-                    if !is_closed.get() {
-                        is_closed.update(true);
+    unsafe impl Send for EventDelegation {}
+    unsafe impl Sync for EventDelegation {}
 
-                        if let Some(callback) = &self.close {
-                            callback(self.ctx);
+    impl From<FrameSink> for EventDelegation {
+        fn from(sink: FrameSink) -> Self {
+            Self {
+                is_closed: AtomicBool::new(false),
+                sink,
+            }
+        }
+    }
 
-                            log::info!("extern api: call close callback");
-                        }
-                    }
-                }),
+    impl mirror::FrameSinker for EventDelegation {
+        fn audio(&self, frame: &AudioFrame) -> bool {
+            if let Some(callback) = &self.sink.audio {
+                callback(self.sink.ctx, frame)
+            } else {
+                true
+            }
+        }
+
+        fn video(&self, frame: &VideoFrame) -> bool {
+            if let Some(callback) = &self.sink.video {
+                callback(self.sink.ctx, frame)
+            } else {
+                true
+            }
+        }
+
+        fn close(&self) {
+            // I thought about it carefully. The closing hand should only trigger the
+            // callback once. There are too many places in the system that will trigger the
+            // closing callback. It is not easy to manage the status between components.
+            // Here, the closing status is directly recorded. If it has been closed, it will
+            // not be processed anymore.
+            if !self.is_closed.get() {
+                self.is_closed.update(true);
+
+                if let Some(callback) = &self.sink.close {
+                    callback(self.sink.ctx);
+
+                    log::info!("extern api: call close callback");
+                }
             }
         }
     }
@@ -552,7 +564,7 @@ pub mod desktop {
             
             unsafe { &*mirror }
                 .0
-                .create_sender(id as u32, options, sink.into())
+                .create_sender(id as u32, options, EventDelegation::from(sink))
         };
     
         checker(func())
@@ -630,7 +642,7 @@ pub mod desktop {
                 mirror::ReceiverDescriptor {
                     video: codec.into(),
                 },
-                sink.into(),
+                EventDelegation::from(sink),
             )
         };
 

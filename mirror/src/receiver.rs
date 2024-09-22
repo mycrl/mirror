@@ -1,4 +1,4 @@
-use crate::FrameSink;
+use crate::FrameSinker;
 
 use std::{sync::Arc, thread};
 
@@ -16,7 +16,7 @@ pub struct ReceiverDescriptor {
 
 fn create_video_decoder(
     adapter: &Arc<StreamMultiReceiverAdapter>,
-    sink: &Arc<FrameSink>,
+    sink: &Arc<dyn FrameSinker>,
     settings: VideoDecoderSettings,
 ) -> Result<()> {
     let sink_ = Arc::downgrade(sink);
@@ -37,7 +37,7 @@ fn create_video_decoder(
                         break;
                     } else {
                         while let Some(frame) = codec.read() {
-                            if !(sink.video)(frame) {
+                            if !sink.video(frame) {
                                 log::warn!("video sink return false!");
 
                                 break 'a;
@@ -53,7 +53,7 @@ fn create_video_decoder(
 
             log::warn!("video decoder thread is closed!");
             if let Some(sink) = sink_.upgrade() {
-                (sink.close)()
+                sink.close()
             }
 
             #[cfg(target_os = "windows")]
@@ -67,7 +67,7 @@ fn create_video_decoder(
 
 fn create_audio_decoder(
     adapter: &Arc<StreamMultiReceiverAdapter>,
-    sink: &Arc<FrameSink>,
+    sink: &Arc<dyn FrameSinker>,
 ) -> Result<()> {
     let sink_ = Arc::downgrade(sink);
     let adapter_ = Arc::downgrade(adapter);
@@ -87,7 +87,7 @@ fn create_audio_decoder(
                         break;
                     } else {
                         while let Some(frame) = codec.read() {
-                            if !(sink.audio)(frame) {
+                            if !sink.audio(frame) {
                                 log::warn!("audio sink return false!");
 
                                 break 'a;
@@ -103,7 +103,7 @@ fn create_audio_decoder(
 
             log::warn!("audio decoder thread is closed!");
             if let Some(sink) = sink_.upgrade() {
-                (sink.close)()
+                sink.close()
             }
 
             #[cfg(target_os = "windows")]
@@ -117,18 +117,18 @@ fn create_audio_decoder(
 
 pub struct Receiver {
     pub(crate) adapter: Arc<StreamMultiReceiverAdapter>,
-    sink: Arc<FrameSink>,
+    sink: Arc<dyn FrameSinker>,
 }
 
 impl Receiver {
     /// Create a receiving end. The receiving end is much simpler to implement.
     /// You only need to decode the data in the queue and call it back to the
     /// sink.
-    pub fn new(options: ReceiverDescriptor, sink: FrameSink) -> Result<Self> {
+    pub fn new<T: FrameSinker + 'static>(options: ReceiverDescriptor, sink: T) -> Result<Self> {
         log::info!("create receiver");
 
         let adapter = StreamMultiReceiverAdapter::new();
-        let sink = Arc::new(sink);
+        let sink: Arc<dyn FrameSinker> = Arc::new(sink);
 
         create_audio_decoder(&adapter, &sink)?;
         create_video_decoder(
@@ -150,6 +150,6 @@ impl Drop for Receiver {
         log::info!("receiver drop");
 
         self.adapter.close();
-        (self.sink.close)()
+        self.sink.close()
     }
 }
