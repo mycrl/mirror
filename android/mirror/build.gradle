@@ -77,13 +77,13 @@ cargo {
     rustupChannel = 'stable'
     prebuiltToolchains = true
     pythonCommand = 'python3'
-    module = '../../../ffi/mirror'
+    module = '../../ffi'
     libname = 'mirror'
     targets = ['arm64']
-    targetDirectory = '../../../target'
+    targetDirectory = '../../target'
     targetIncludes = ['libmirror.so']
     exec { spec, toolchain ->
-        def absolutePath = project.file("../../../target").absolutePath
+        def absolutePath = project.file("../../target").absolutePath
         spec.environment("CARGO_TARGET_DIR", "$absolutePath")
     }
 }
