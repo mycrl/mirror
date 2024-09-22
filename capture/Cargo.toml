@@ -8,9 +8,9 @@ anyhow = "1.0.82"
 cpal = "0.15.3"
 once_cell = "1.19.0"
 log = "0.4.20"
-audio = { path = "../common/audio" }
-utils = { path = "../common/utils" }
-frame = { path = "../common/frame" }
+audio = { path = "../audio" }
+utils = { path = "../utils" }
+frame = { path = "../frame" }
 graphics = { path = "../graphics" }
 
 [target.'cfg(target_os = "windows")'.dependencies]
