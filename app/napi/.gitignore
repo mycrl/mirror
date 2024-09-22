@@ -1,0 +1,5 @@
+/node_modules/
+napi.*.node
+*.d.ts
+index.js
+package-lock.json

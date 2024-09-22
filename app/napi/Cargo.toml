@@ -1,11 +1,10 @@
 [package]
-name = "app-napi"
+name = "mirror-napi"
 version = "0.1.0"
 edition = "2021"
 
 [lib]
 crate-type = ["cdylib"]
-name = "napi"
 
 [dependencies]
 anyhow = "1.0.82"

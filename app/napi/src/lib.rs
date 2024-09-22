@@ -1,5 +1,6 @@
 use mirror::{
-    AudioFrame, FrameSinker, Mirror, Render, SenderDescriptor, TransportDescriptor, VideoFrame,
+    AudioFrame, FrameSinker, Mirror, Render, Sender, SenderDescriptor, TransportDescriptor,
+    VideoFrame,
 };
 
 use napi::{
@@ -173,21 +174,13 @@ impl Into<SenderDescriptor> for MirrorSenderServiceDescriptor {
 }
 
 #[napi]
-pub struct MirrorService {
-    mirror: Mirror,
-    renderer: Render,
-}
+pub struct MirrorService(Option<Mirror>);
 
 #[napi]
 impl MirrorService {
     #[napi(constructor)]
     pub fn new(options: MirrorServiceDescriptor) -> napi::Result<Self> {
-        let func = || {
-            Ok::<_, anyhow::Error>(Self {
-                mirror: Mirror::new(options.try_into()?)?,
-                renderer: Render::new(window)?,
-            })
-        };
+        let func = || Ok::<_, anyhow::Error>(Self(Some(Mirror::new(options.try_into()?)?)));
 
         func().map_err(|e| napi::Error::from_reason(e.to_string()))
     }
@@ -198,36 +191,67 @@ impl MirrorService {
         id: u32,
         options: MirrorSenderServiceDescriptor,
         callback: Function,
-    ) {
+    ) -> napi::Result<MirrorSenderService> {
         let func = || {
-            let func = callback
-                .build_threadsafe_function::<()>()
-                .build_callback(|_| Ok(()))?;
-
-            self.mirror
-                .create_sender(id, options.into(), SilenceSinker(func));
-
-            Ok::<_, anyhow::Error>(())
+            Ok::<_, anyhow::Error>(MirrorSenderService(Some(
+                self.0
+                    .as_ref()
+                    .ok_or_else(|| napi::Error::from_reason("mirror is destroy"))?
+                    .create_sender(
+                        id,
+                        options.into(),
+                        SilenceSinker(
+                            callback
+                                .build_threadsafe_function::<()>()
+                                .build_callback(|_| Ok(()))?,
+                        ),
+                    )?,
+            )))
         };
 
-        func().map_err(|e| napi::Error::from_reason(e.to_string()));
+        func().map_err(|e| napi::Error::from_reason(e.to_string()))
+    }
+
+    #[napi]
+    pub fn destroy(&mut self) {
+        drop(self.0.take());
     }
 }
 
 struct SilenceSinker(ThreadsafeFunction<(), JsUnknown, (), false>);
 
 impl FrameSinker for SilenceSinker {
-    fn audio(&self, _frame: &AudioFrame) -> bool {
-        true
-    }
-
-    fn video(&self, _frame: &VideoFrame) -> bool {
-        true
-    }
-
     fn close(&self) {
         self.0.call((), ThreadsafeFunctionCallMode::NonBlocking);
     }
 }
 
-struct Viewer {}
+#[napi]
+pub struct MirrorSenderService(Option<Sender>);
+
+#[napi]
+impl MirrorSenderService {
+    #[napi(getter, js_name = "multicast")]
+    pub fn get_multicast(&self) -> napi::Result<bool> {
+        Ok(self
+            .0
+            .as_ref()
+            .ok_or_else(|| napi::Error::from_reason("sender is destroy"))?
+            .get_multicast())
+    }
+
+    #[napi(setter, js_name = "multicast")]
+    pub fn set_multicast(&self, value: bool) -> napi::Result<()> {
+        self.0
+            .as_ref()
+            .ok_or_else(|| napi::Error::from_reason("sender is destroy"))?
+            .set_multicast(value);
+
+        Ok(())
+    }
+
+    #[napi]
+    pub fn destroy(&mut self) {
+        drop(self.0.take());
+    }
+}

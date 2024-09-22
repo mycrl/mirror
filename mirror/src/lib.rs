@@ -120,7 +120,11 @@ pub trait FrameSinker: Sync + Send {
     /// allows BT.2020 primaries (since 2021). The same happens with
     /// JPEG: it has BT.601 matrix derived from System M primaries, yet the
     /// primaries of most images are BT.709.
-    fn video(&self, frame: &VideoFrame) -> bool;
+    #[allow(unused_variables)]
+    fn video(&self, frame: &VideoFrame) -> bool {
+        true
+    }
+
     /// Callback is called when the audio frame is updated. The audio frame
     /// format is fixed to PCM. Be careful not to call blocking methods inside
     /// the callback, which will seriously slow down the encoding and decoding
@@ -147,7 +151,11 @@ pub trait FrameSinker: Sync + Send {
     /// the number of times per second that samples are taken; and the bit
     /// depth, which determines the number of possible digital values that
     /// can be used to represent each sample.
-    fn audio(&self, frame: &AudioFrame) -> bool;
+    #[allow(unused_variables)]
+    fn audio(&self, frame: &AudioFrame) -> bool {
+        true
+    }
+
     /// Callback when the sender is closed. This may be because the external
     /// side actively calls the close, or the audio and video packets cannot be
     /// sent (the network is disconnected), etc.
