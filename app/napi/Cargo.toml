@@ -1,0 +1,19 @@
+[package]
+name = "app-napi"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+name = "napi"
+
+[dependencies]
+anyhow = "1.0.82"
+napi = { version = "3.0.0-alpha.11", features = ["napi4"]}
+napi-derive = "3.0.0-alpha.11"
+mirror = { path = "../../mirror" }
+utils = { path = "../../common/utils" }
+winit = "0.30.5"
+
+[build-dependencies]
+napi-build = "1"

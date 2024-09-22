@@ -7,10 +7,10 @@ mod sender;
 
 pub use self::receiver::{Receiver, ReceiverDescriptor};
 
-use self::{audio::AudioPlayer, video::VideoPlayer};
-
 #[cfg(any(target_os = "windows", target_os = "linux"))]
 pub use self::sender::{AudioDescriptor, Sender, SenderDescriptor, VideoDescriptor};
+
+use self::{audio::AudioPlayer, video::VideoPlayer};
 
 use std::{ffi::c_void, num::NonZeroIsize};
 
@@ -18,14 +18,18 @@ use std::{ffi::c_void, num::NonZeroIsize};
 use std::sync::RwLock;
 
 use anyhow::Result;
-use frame::{AudioFrame, VideoFrame};
 use graphics::raw_window_handle::{
     DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, RawWindowHandle,
     Win32WindowHandle, WindowHandle,
 };
 
-use transport::{Transport, TransportDescriptor};
+use transport::Transport;
 use utils::Size;
+
+pub use capture::{Capture, Source, SourceType};
+pub use codec::{VideoDecoderType, VideoEncoderType};
+pub use frame::{AudioFrame, VideoFormat, VideoFrame};
+pub use transport::TransportDescriptor;
 
 #[cfg(target_os = "windows")]
 use utils::win32::{
@@ -37,7 +41,6 @@ use utils::win32::{
 pub(crate) static DIRECT_3D_DEVICE: RwLock<Option<Direct3DDevice>> = RwLock::new(None);
 
 /// Initialize the environment, which must be initialized before using the SDK.
-#[rustfmt::skip]
 pub fn startup() -> Result<()> {
     log::info!("mirror startup");
 
@@ -171,12 +174,6 @@ impl Mirror {
         Ok(Self(Transport::new(options)?))
     }
 
-    /// get direct3d device
-    #[cfg(target_os = "windows")]
-    pub fn get_direct3d_device(&self) -> Option<Direct3DDevice> {
-        DIRECT_3D_DEVICE.read().unwrap().clone()
-    }
-
     /// Create a sender, specify a bound NIC address, you can pass callback to
     /// get the device screen or sound callback, callback can be null, if it is
     /// null then it means no callback data is needed.
@@ -210,6 +207,11 @@ impl Mirror {
     }
 }
 
+/// A window handle for a particular windowing system.
+///
+/// Each variant contains a struct with fields specific to that windowing system
+/// (e.g. Win32WindowHandle will include a HWND, WaylandWindowHandle uses
+/// wl_surface, etc.)
 #[derive(Clone)]
 pub struct Window(pub *const c_void);
 
@@ -217,11 +219,19 @@ unsafe impl Send for Window {}
 unsafe impl Sync for Window {}
 
 impl Window {
+    /// A raw window handle for Win32.
+    ///
+    /// This variant is used on Windows systems.
     #[cfg(target_os = "windows")]
     fn raw(&self) -> HWND {
         HWND(self.0 as *mut _)
     }
 
+    /// Retrieves the coordinates of a window's client area. The client
+    /// coordinates specify the upper-left and lower-right corners of the client
+    /// area. Because client coordinates are relative to the upper-left corner
+    /// of a window's client area, the coordinates of the upper-left corner are
+    /// (0,0).
     #[cfg(target_os = "windows")]
     fn size(&self) -> Result<Size> {
         Ok(get_hwnd_size(self.raw())?)
@@ -249,6 +259,14 @@ impl HasWindowHandle for Window {
     }
 }
 
+/// Renderer for video frames and audio frames.
+///
+/// Typically, the player underpinnings for audio and video are implemented in
+/// hardware, but not always, the underpinnings automatically select the adapter
+/// and fall back to the software adapter if the hardware adapter is
+/// unavailable, for video this can be done by enabling the dx11 feature to be
+/// implemented with Direct3D 11 Graphics, which works fine on some very old
+/// devices.
 pub struct Render {
     audio: AudioPlayer,
     video: VideoPlayer,
@@ -262,10 +280,16 @@ impl Render {
         })
     }
 
+    /// Renders video frames and can automatically handle rendering of hardware
+    /// textures and rendering textures.
     pub fn on_video(&mut self, frame: &VideoFrame) -> Result<()> {
         self.video.send(frame)
     }
 
+    /// Renders the audio frame, note that a queue is maintained internally,
+    /// here it just pushes the audio to the playback queue, and if the queue is
+    /// empty, it fills the mute data to the player by default, so you need to
+    /// pay attention to the push rate.
     pub fn on_audio(&mut self, frame: &AudioFrame) -> Result<()> {
         self.audio.send(frame)
     }

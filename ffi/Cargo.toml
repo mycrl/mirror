@@ -14,7 +14,6 @@ log = "0.4.20"
 fern = { version = "0.6.2", features = ["date-based", "colored", "syslog-6"]}
 chrono = { version = "0.4", features = ["clock", "alloc"] }
 utils = { path = "../common/utils" }
-transport = { path = "../transport" }
 
 [target.'cfg(target_os = "android")'.dependencies]
 jni = "0.21.1"
@@ -24,10 +23,7 @@ num_cpus = "1.16.0"
 syslog = "6"
 
 [target.'cfg(any(target_os = "windows", target_os = "linux"))'.dependencies]
-codec = { path = "../codec" }
-capture = { path = "../capture" }
 mirror = { path = "../mirror" }
-frame = { path = "../common/frame" }
 
 [features]
 dx11 = ["mirror/dx11"]

@@ -1,11 +1,15 @@
 use crate::FrameSinker;
 
-use std::{sync::Arc, thread};
+use std::{
+    sync::{atomic::AtomicBool, Arc},
+    thread,
+};
 
 use anyhow::Result;
 use codec::{AudioDecoder, VideoDecoder, VideoDecoderSettings, VideoDecoderType};
 use transport::adapter::{StreamKind, StreamMultiReceiverAdapter, StreamReceiverAdapterExt};
 
+use utils::atomic::EasyAtomic;
 #[cfg(target_os = "windows")]
 use utils::win32::MediaThreadClass;
 
@@ -15,11 +19,13 @@ pub struct ReceiverDescriptor {
 }
 
 fn create_video_decoder(
+    status: &Arc<AtomicBool>,
     adapter: &Arc<StreamMultiReceiverAdapter>,
     sink: &Arc<dyn FrameSinker>,
     settings: VideoDecoderSettings,
 ) -> Result<()> {
     let sink_ = Arc::downgrade(sink);
+    let status_ = Arc::downgrade(status);
     let adapter_ = Arc::downgrade(adapter);
     let mut codec = VideoDecoder::new(settings)?;
 
@@ -52,8 +58,11 @@ fn create_video_decoder(
             }
 
             log::warn!("video decoder thread is closed!");
-            if let Some(sink) = sink_.upgrade() {
-                sink.close()
+            if let (Some(sink), Some(status)) = (sink_.upgrade(), status_.upgrade()) {
+                if !status.get() {
+                    status.update(true);
+                    sink.close();
+                }
             }
 
             #[cfg(target_os = "windows")]
@@ -66,10 +75,12 @@ fn create_video_decoder(
 }
 
 fn create_audio_decoder(
+    status: &Arc<AtomicBool>,
     adapter: &Arc<StreamMultiReceiverAdapter>,
     sink: &Arc<dyn FrameSinker>,
 ) -> Result<()> {
     let sink_ = Arc::downgrade(sink);
+    let status_ = Arc::downgrade(status);
     let adapter_ = Arc::downgrade(adapter);
     let mut codec = AudioDecoder::new()?;
 
@@ -102,8 +113,11 @@ fn create_audio_decoder(
             }
 
             log::warn!("audio decoder thread is closed!");
-            if let Some(sink) = sink_.upgrade() {
-                sink.close()
+            if let (Some(sink), Some(status)) = (sink_.upgrade(), status_.upgrade()) {
+                if !status.get() {
+                    status.update(true);
+                    sink.close();
+                }
             }
 
             #[cfg(target_os = "windows")]
@@ -117,6 +131,7 @@ fn create_audio_decoder(
 
 pub struct Receiver {
     pub(crate) adapter: Arc<StreamMultiReceiverAdapter>,
+    status: Arc<AtomicBool>,
     sink: Arc<dyn FrameSinker>,
 }
 
@@ -128,10 +143,12 @@ impl Receiver {
         log::info!("create receiver");
 
         let adapter = StreamMultiReceiverAdapter::new();
+        let status = Arc::new(AtomicBool::new(false));
         let sink: Arc<dyn FrameSinker> = Arc::new(sink);
 
-        create_audio_decoder(&adapter, &sink)?;
+        create_audio_decoder(&status, &adapter, &sink)?;
         create_video_decoder(
+            &status,
             &adapter,
             &sink,
             VideoDecoderSettings {
@@ -141,7 +158,11 @@ impl Receiver {
             },
         )?;
 
-        Ok(Self { adapter, sink })
+        Ok(Self {
+            adapter,
+            status,
+            sink,
+        })
     }
 }
 
@@ -150,6 +171,9 @@ impl Drop for Receiver {
         log::info!("receiver drop");
 
         self.adapter.close();
-        self.sink.close()
+        if !self.status.get() {
+            self.status.update(true);
+            self.sink.close();
+        }
     }
 }

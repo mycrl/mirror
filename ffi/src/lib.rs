@@ -5,7 +5,6 @@ pub mod desktop {
         fmt::Debug,
         io::stdout,
         ptr::null_mut,
-        sync::atomic::AtomicBool,
     };
 
     #[cfg(any(target_os = "windows", target_os = "linux"))]
@@ -20,16 +19,12 @@ pub mod desktop {
         Dispatch as LogDispatch,
     };
 
-    use frame::{AudioFrame, VideoFrame};
     use log::LevelFilter;
-    use mirror::Window;
-    use utils::{atomic::EasyAtomic, strings::Strings};
+    use mirror::{AudioFrame, VideoFrame, Window};
+    use utils::strings::Strings;
 
     #[cfg(any(target_os = "windows", target_os = "linux"))]
-    use capture::{Capture, SourceType};
-
-    #[cfg(target_os = "windows")]
-    use utils::win32::windows::core::Interface;
+    use mirror::{Capture, SourceType};
 
     // In fact, this is a package that is convenient for recording errors. If the
     // result is an error message, it is output to the log. This function does not
@@ -157,11 +152,11 @@ pub mod desktop {
         pub mtu: usize,
     }
 
-    impl TryInto<transport::TransportDescriptor> for MirrorDescriptor {
+    impl TryInto<mirror::TransportDescriptor> for MirrorDescriptor {
         type Error = anyhow::Error;
 
-        fn try_into(self) -> Result<transport::TransportDescriptor, Self::Error> {
-            Ok(transport::TransportDescriptor {
+        fn try_into(self) -> Result<mirror::TransportDescriptor, Self::Error> {
+            Ok(mirror::TransportDescriptor {
                 multicast: Strings::from(self.multicast).to_string()?.parse()?,
                 server: Strings::from(self.server).to_string()?.parse()?,
                 mtu: self.mtu,
@@ -192,32 +187,6 @@ pub mod desktop {
         drop(unsafe { Box::from_raw(mirror as *mut Mirror) });
     }
 
-    /// Get direct3d device.
-    #[no_mangle]
-    #[cfg(target_os = "windows")]
-    pub extern "C" fn mirror_get_direct3d_device(mirror: *const Mirror) -> *mut c_void {
-        assert!(!mirror.is_null());
-
-        unsafe { &*mirror }
-            .0
-            .get_direct3d_device()
-            .map(|it| it.device.as_raw())
-            .unwrap_or_else(|| null_mut())
-    }
-
-    /// Get direct3d device context.
-    #[no_mangle]
-    #[cfg(target_os = "windows")]
-    pub extern "C" fn mirror_get_direct3d_device_context(mirror: *const Mirror) -> *mut c_void {
-        assert!(!mirror.is_null());
-
-        unsafe { &*mirror }
-            .0
-            .get_direct3d_device()
-            .map(|it| it.context.as_raw())
-            .unwrap_or_else(|| null_mut())
-    }
-
     #[repr(C)]
     #[derive(Debug)]
     #[cfg(any(target_os = "windows", target_os = "linux"))]
@@ -230,11 +199,11 @@ pub mod desktop {
     }
 
     #[cfg(any(target_os = "windows", target_os = "linux"))]
-    impl TryInto<capture::Source> for &Source {
+    impl TryInto<mirror::Source> for &Source {
         type Error = anyhow::Error;
 
-        fn try_into(self) -> Result<capture::Source, Self::Error> {
-            Ok(capture::Source {
+        fn try_into(self) -> Result<mirror::Source, Self::Error> {
+            Ok(mirror::Source {
                 name: Strings::from(self.name).to_string()?,
                 id: Strings::from(self.id).to_string()?,
                 is_default: self.is_default,
@@ -300,7 +269,7 @@ pub mod desktop {
 
     #[repr(C)]
     #[derive(Clone, Copy)]
-    pub struct FrameSink {
+    pub struct FrameSinker {
         /// Callback occurs when the video frame is updated. The video frame
         /// format is fixed to NV12. Be careful not to call blocking
         /// methods inside the callback, which will seriously slow down
@@ -363,54 +332,31 @@ pub mod desktop {
         pub ctx: *const c_void,
     }
 
-    struct EventDelegation {
-        sink: FrameSink,
-        is_closed: AtomicBool,
-    }
+    unsafe impl Send for FrameSinker {}
+    unsafe impl Sync for FrameSinker {}
 
-    unsafe impl Send for EventDelegation {}
-    unsafe impl Sync for EventDelegation {}
-
-    impl From<FrameSink> for EventDelegation {
-        fn from(sink: FrameSink) -> Self {
-            Self {
-                is_closed: AtomicBool::new(false),
-                sink,
-            }
-        }
-    }
-
-    impl mirror::FrameSinker for EventDelegation {
+    impl mirror::FrameSinker for FrameSinker {
         fn audio(&self, frame: &AudioFrame) -> bool {
-            if let Some(callback) = &self.sink.audio {
-                callback(self.sink.ctx, frame)
+            if let Some(callback) = &self.audio {
+                callback(self.ctx, frame)
             } else {
                 true
             }
         }
 
         fn video(&self, frame: &VideoFrame) -> bool {
-            if let Some(callback) = &self.sink.video {
-                callback(self.sink.ctx, frame)
+            if let Some(callback) = &self.video {
+                callback(self.ctx, frame)
             } else {
                 true
             }
         }
 
         fn close(&self) {
-            // I thought about it carefully. The closing hand should only trigger the
-            // callback once. There are too many places in the system that will trigger the
-            // closing callback. It is not easy to manage the status between components.
-            // Here, the closing status is directly recorded. If it has been closed, it will
-            // not be processed anymore.
-            if !self.is_closed.get() {
-                self.is_closed.update(true);
+            if let Some(callback) = &self.close {
+                callback(self.ctx);
 
-                if let Some(callback) = &self.sink.close {
-                    callback(self.sink.ctx);
-
-                    log::info!("extern api: call close callback");
-                }
+                log::info!("extern api: call close callback");
             }
         }
     }
@@ -423,12 +369,12 @@ pub mod desktop {
         Cuda,
     }
 
-    impl Into<codec::VideoEncoderType> for VideoEncoderType {
-        fn into(self) -> codec::VideoEncoderType {
+    impl Into<mirror::VideoEncoderType> for VideoEncoderType {
+        fn into(self) -> mirror::VideoEncoderType {
             match self {
-                Self::X264 => codec::VideoEncoderType::X264,
-                Self::Qsv => codec::VideoEncoderType::Qsv,
-                Self::Cuda => codec::VideoEncoderType::Cuda,
+                Self::X264 => mirror::VideoEncoderType::X264,
+                Self::Qsv => mirror::VideoEncoderType::Qsv,
+                Self::Cuda => mirror::VideoEncoderType::Cuda,
             }
         }
     }
@@ -552,7 +498,7 @@ pub mod desktop {
         mirror: *const Mirror,
         id: c_int,
         options: SenderDescriptor,
-        sink: FrameSink,
+        sink: FrameSinker,
     ) -> *const Sender {
         assert!(!mirror.is_null());
     
@@ -564,7 +510,7 @@ pub mod desktop {
             
             unsafe { &*mirror }
                 .0
-                .create_sender(id as u32, options, EventDelegation::from(sink))
+                .create_sender(id as u32, options, sink)
         };
     
         checker(func())
@@ -613,12 +559,12 @@ pub mod desktop {
         Cuda,
     }
 
-    impl Into<codec::VideoDecoderType> for VideoDecoderType {
-        fn into(self) -> codec::VideoDecoderType {
+    impl Into<mirror::VideoDecoderType> for VideoDecoderType {
+        fn into(self) -> mirror::VideoDecoderType {
             match self {
-                Self::D3D11 => codec::VideoDecoderType::D3D11,
-                Self::Qsv => codec::VideoDecoderType::Qsv,
-                Self::Cuda => codec::VideoDecoderType::Cuda,
+                Self::D3D11 => mirror::VideoDecoderType::D3D11,
+                Self::Qsv => mirror::VideoDecoderType::Qsv,
+                Self::Cuda => mirror::VideoDecoderType::Cuda,
             }
         }
     }
@@ -630,7 +576,7 @@ pub mod desktop {
         mirror: *const Mirror,
         id: c_int,
         codec: VideoDecoderType,
-        sink: FrameSink,
+        sink: FrameSinker,
     ) -> *const Receiver {
         assert!(!mirror.is_null());
 
@@ -642,7 +588,7 @@ pub mod desktop {
                 mirror::ReceiverDescriptor {
                     video: codec.into(),
                 },
-                EventDelegation::from(sink),
+                sink,
             )
         };
 

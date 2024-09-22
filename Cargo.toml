@@ -20,5 +20,6 @@ members = [
     "common/srt",
     "common/frame",
     "common/utils",
-    "common/audio",  
+    "common/audio", 
+    "app/napi",  
 ]
