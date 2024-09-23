@@ -443,14 +443,14 @@ pub mod desktop {
     }
 
     #[cfg(any(target_os = "windows", target_os = "linux"))]
-    impl TryInto<mirror::SenderDescriptor> for SenderDescriptor {
+    impl TryInto<mirror::MirrorSenderDescriptor> for SenderDescriptor {
         type Error = anyhow::Error;
 
         // Both video and audio are optional, so the type conversion here is a bit more
         // complicated.
         #[rustfmt::skip]
-        fn try_into(self) -> Result<mirror::SenderDescriptor, Self::Error> {
-            let mut options = mirror::SenderDescriptor {
+        fn try_into(self) -> Result<mirror::MirrorSenderDescriptor, Self::Error> {
+            let mut options = mirror::MirrorSenderDescriptor {
                 multicast: self.multicast,
                 audio: None,
                 video: None,
@@ -486,7 +486,7 @@ pub mod desktop {
 
     #[repr(C)]
     #[cfg(any(target_os = "windows", target_os = "linux"))]
-    pub struct Sender(mirror::Sender);
+    pub struct Sender(mirror::MirrorSender);
 
     /// Create a sender, specify a bound NIC address, you can pass callback to
     /// get the device screen or sound callback, callback can be null, if it is
@@ -505,7 +505,7 @@ pub mod desktop {
         log::info!("extern api: mirror create sender");
     
         let func = || {
-            let options: mirror::SenderDescriptor = options.try_into()?;
+            let options: mirror::MirrorSenderDescriptor = options.try_into()?;
             log::info!("mirror create options={:?}", options);
             
             unsafe { &*mirror }
@@ -549,7 +549,7 @@ pub mod desktop {
     }
 
     #[repr(C)]
-    pub struct Receiver(mirror::Receiver);
+    pub struct Receiver(mirror::MirrorReceiver);
 
     #[repr(C)]
     #[derive(Debug, Clone, Copy)]
@@ -585,7 +585,7 @@ pub mod desktop {
         let func = || {
             unsafe { &*mirror }.0.create_receiver(
                 id as u32,
-                mirror::ReceiverDescriptor {
+                mirror::MirrorReceiverDescriptor {
                     video: codec.into(),
                 },
                 sink,
@@ -627,10 +627,7 @@ pub mod desktop {
     extern "C" fn renderer_on_video(render: *mut RawRenderer, frame: *const VideoFrame) -> bool {
         assert!(!render.is_null() && !frame.is_null());
 
-        checker(checker(
-            unsafe { &mut *render }.0.on_video(unsafe { &*frame }),
-        ))
-        .is_ok()
+        checker(checker(unsafe { &*render }.0.on_video(unsafe { &*frame }))).is_ok()
     }
 
     /// Push the audio frame into the renderer, which will append to audio
@@ -639,10 +636,7 @@ pub mod desktop {
     extern "C" fn renderer_on_audio(render: *mut RawRenderer, frame: *const AudioFrame) -> bool {
         assert!(!render.is_null() && !frame.is_null());
 
-        checker(checker(
-            unsafe { &mut *render }.0.on_audio(unsafe { &*frame }),
-        ))
-        .is_ok()
+        checker(checker(unsafe { &*render }.0.on_audio(unsafe { &*frame }))).is_ok()
     }
 
     /// Destroy the window renderer.

@@ -14,7 +14,7 @@ use utils::atomic::EasyAtomic;
 use utils::win32::MediaThreadClass;
 
 #[derive(Debug, Clone)]
-pub struct ReceiverDescriptor {
+pub struct MirrorReceiverDescriptor {
     pub video: VideoDecoderType,
 }
 
@@ -129,17 +129,20 @@ fn create_audio_decoder(
     Ok(())
 }
 
-pub struct Receiver {
+pub struct MirrorReceiver {
     pub(crate) adapter: Arc<StreamMultiReceiverAdapter>,
     status: Arc<AtomicBool>,
     sink: Arc<dyn FrameSinker>,
 }
 
-impl Receiver {
+impl MirrorReceiver {
     /// Create a receiving end. The receiving end is much simpler to implement.
     /// You only need to decode the data in the queue and call it back to the
     /// sink.
-    pub fn new<T: FrameSinker + 'static>(options: ReceiverDescriptor, sink: T) -> Result<Self> {
+    pub fn new<T: FrameSinker + 'static>(
+        options: MirrorReceiverDescriptor,
+        sink: T,
+    ) -> Result<Self> {
         log::info!("create receiver");
 
         let adapter = StreamMultiReceiverAdapter::new();
@@ -166,7 +169,7 @@ impl Receiver {
     }
 }
 
-impl Drop for Receiver {
+impl Drop for MirrorReceiver {
     fn drop(&mut self) {
         log::info!("receiver drop");
 

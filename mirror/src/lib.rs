@@ -5,17 +5,17 @@ mod video;
 #[cfg(any(target_os = "windows", target_os = "linux"))]
 mod sender;
 
-pub use self::receiver::{Receiver, ReceiverDescriptor};
-
-#[cfg(any(target_os = "windows", target_os = "linux"))]
-pub use self::sender::{AudioDescriptor, Sender, SenderDescriptor, VideoDescriptor};
-
-use self::{audio::AudioPlayer, video::VideoPlayer};
-
-use std::{ffi::c_void, num::NonZeroIsize};
+use std::{ffi::c_void, num::NonZeroIsize, sync::Mutex};
 
 #[cfg(any(target_os = "windows", target_os = "linux"))]
 use std::sync::RwLock;
+
+pub use self::receiver::{MirrorReceiver, MirrorReceiverDescriptor};
+
+#[cfg(any(target_os = "windows", target_os = "linux"))]
+pub use self::sender::{AudioDescriptor, MirrorSender, MirrorSenderDescriptor, VideoDescriptor};
+
+use self::{audio::AudioPlayer, video::VideoPlayer};
 
 use anyhow::Result;
 use graphics::raw_window_handle::{
@@ -91,6 +91,58 @@ pub fn shutdown() -> Result<()> {
     transport::shutdown();
 
     Ok(())
+}
+
+/// A window handle for a particular windowing system.
+///
+/// Each variant contains a struct with fields specific to that windowing system
+/// (e.g. Win32WindowHandle will include a HWND, WaylandWindowHandle uses
+/// wl_surface, etc.)
+#[derive(Debug, Clone)]
+pub struct Window(pub *const c_void);
+
+unsafe impl Send for Window {}
+unsafe impl Sync for Window {}
+
+impl Window {
+    /// A raw window handle for Win32.
+    ///
+    /// This variant is used on Windows systems.
+    #[cfg(target_os = "windows")]
+    fn raw(&self) -> HWND {
+        HWND(self.0 as *mut _)
+    }
+
+    /// Retrieves the coordinates of a window's client area. The client
+    /// coordinates specify the upper-left and lower-right corners of the client
+    /// area. Because client coordinates are relative to the upper-left corner
+    /// of a window's client area, the coordinates of the upper-left corner are
+    /// (0,0).
+    #[cfg(target_os = "windows")]
+    fn size(&self) -> Result<Size> {
+        Ok(get_hwnd_size(self.raw())?)
+    }
+
+    #[cfg(target_os = "linux")]
+    fn size(&self) -> Result<Size> {
+        unimplemented!()
+    }
+}
+
+impl HasDisplayHandle for Window {
+    fn display_handle(&self) -> Result<DisplayHandle<'_>, HandleError> {
+        Ok(DisplayHandle::windows())
+    }
+}
+
+impl HasWindowHandle for Window {
+    fn window_handle(&self) -> Result<WindowHandle<'_>, HandleError> {
+        Ok(unsafe {
+            WindowHandle::borrow_raw(RawWindowHandle::Win32(Win32WindowHandle::new(
+                NonZeroIsize::new(self.0 as isize).unwrap(),
+            )))
+        })
+    }
 }
 
 pub trait FrameSinker: Sync + Send {
@@ -189,12 +241,12 @@ impl Mirror {
     pub fn create_sender<T: FrameSinker + 'static>(
         &self,
         id: u32,
-        options: SenderDescriptor,
+        options: MirrorSenderDescriptor,
         sink: T,
-    ) -> Result<Sender> {
+    ) -> Result<MirrorSender> {
         log::info!("create sender: id={}, options={:?}", id, options);
 
-        let sender = Sender::new(options, sink)?;
+        let sender = MirrorSender::new(options, sink)?;
         self.0.create_sender(id, &sender.adapter)?;
         Ok(sender)
     }
@@ -204,101 +256,49 @@ impl Mirror {
     pub fn create_receiver<T: FrameSinker + 'static>(
         &self,
         id: u32,
-        options: ReceiverDescriptor,
+        options: MirrorReceiverDescriptor,
         sink: T,
-    ) -> Result<Receiver> {
+    ) -> Result<MirrorReceiver> {
         log::info!("create receiver: id={}, options={:?}", id, options);
 
-        let receiver = Receiver::new(options, sink)?;
+        let receiver = MirrorReceiver::new(options, sink)?;
         self.0.create_receiver(id, &receiver.adapter)?;
         Ok(receiver)
     }
 }
 
-/// A window handle for a particular windowing system.
-///
-/// Each variant contains a struct with fields specific to that windowing system
-/// (e.g. Win32WindowHandle will include a HWND, WaylandWindowHandle uses
-/// wl_surface, etc.)
-#[derive(Clone)]
-pub struct Window(pub *const c_void);
-
-unsafe impl Send for Window {}
-unsafe impl Sync for Window {}
-
-impl Window {
-    /// A raw window handle for Win32.
-    ///
-    /// This variant is used on Windows systems.
-    #[cfg(target_os = "windows")]
-    fn raw(&self) -> HWND {
-        HWND(self.0 as *mut _)
-    }
-
-    /// Retrieves the coordinates of a window's client area. The client
-    /// coordinates specify the upper-left and lower-right corners of the client
-    /// area. Because client coordinates are relative to the upper-left corner
-    /// of a window's client area, the coordinates of the upper-left corner are
-    /// (0,0).
-    #[cfg(target_os = "windows")]
-    fn size(&self) -> Result<Size> {
-        Ok(get_hwnd_size(self.raw())?)
-    }
-
-    #[cfg(target_os = "linux")]
-    fn size(&self) -> Result<Size> {
-        unimplemented!()
-    }
-}
-
-impl HasDisplayHandle for Window {
-    fn display_handle(&self) -> Result<DisplayHandle<'_>, HandleError> {
-        Ok(DisplayHandle::windows())
-    }
-}
-
-impl HasWindowHandle for Window {
-    fn window_handle(&self) -> Result<WindowHandle<'_>, HandleError> {
-        Ok(unsafe {
-            WindowHandle::borrow_raw(RawWindowHandle::Win32(Win32WindowHandle::new(
-                NonZeroIsize::new(self.0 as isize).unwrap(),
-            )))
-        })
-    }
-}
-
 /// Renderer for video frames and audio frames.
 ///
-/// Typically, the player underpinnings for audio and video are implemented in
+/// Typically, the player underpinnings for audio and video are implementedin
 /// hardware, but not always, the underpinnings automatically select the adapter
 /// and fall back to the software adapter if the hardware adapter is
-/// unavailable, for video this can be done by enabling the dx11 feature to be
+/// unavailable, for video this can be done by enabling the dx11 feature tobe
 /// implemented with Direct3D 11 Graphics, which works fine on some very old
 /// devices.
 pub struct Render {
-    audio: AudioPlayer,
-    video: VideoPlayer,
+    audio: Mutex<AudioPlayer>,
+    video: Mutex<VideoPlayer>,
 }
 
 impl Render {
     pub fn new(window: Window) -> Result<Self> {
         Ok(Self {
-            audio: AudioPlayer::new()?,
-            video: VideoPlayer::new(window)?,
+            audio: Mutex::new(AudioPlayer::new()?),
+            video: Mutex::new(VideoPlayer::new(window)?),
         })
     }
 
     /// Renders video frames and can automatically handle rendering of hardware
     /// textures and rendering textures.
-    pub fn on_video(&mut self, frame: &VideoFrame) -> Result<()> {
-        self.video.send(frame)
+    pub fn on_video(&self, frame: &VideoFrame) -> Result<()> {
+        self.video.lock().unwrap().send(frame)
     }
 
     /// Renders the audio frame, note that a queue is maintained internally,
     /// here it just pushes the audio to the playback queue, and if the queue is
     /// empty, it fills the mute data to the player by default, so you need to
     /// pay attention to the push rate.
-    pub fn on_audio(&mut self, frame: &AudioFrame) -> Result<()> {
-        self.audio.send(frame)
+    pub fn on_audio(&self, frame: &AudioFrame) -> Result<()> {
+        self.audio.lock().unwrap().send(frame)
     }
 }

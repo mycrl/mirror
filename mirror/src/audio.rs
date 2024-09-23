@@ -23,6 +23,9 @@ pub struct AudioPlayer {
     current_error: Arc<RwLock<Option<StreamError>>>,
 }
 
+unsafe impl Send for AudioPlayer {}
+unsafe impl Sync for AudioPlayer {}
+
 impl AudioPlayer {
     pub fn new() -> Result<Self> {
         let host = cpal::default_host();

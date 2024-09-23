@@ -1,7 +1,7 @@
-const { app, screen, BrowserWindow, Tray, nativeImage, ipcMain, Menu } = require('electron')
-const { MirrorService } = require('mirror-napi')
-const { join } = require('node:path')
-const fs = require('node:fs')
+import { app, screen, BrowserWindow, Tray, nativeImage, ipcMain, Menu } from 'electron'
+import { MirrorService } from 'mirror-napi'
+import { join } from 'node:path'
+import * as fs from 'node:fs'
 
 const Config = {
     path: './settings.json',
@@ -46,7 +46,7 @@ window.loadFile(join(__dirname, './view/index.html'))
 
 tray.setTitle('mirror')
 tray.setToolTip('service is running')
-tray.setContextMenu(new Menu.buildFromTemplate([
+tray.setContextMenu(Menu.buildFromTemplate([
     {
         label: 'Open DevTools',
         click: () =>
@@ -65,7 +65,7 @@ tray.setContextMenu(new Menu.buildFromTemplate([
     },
 ]))
 
-const Notify = (info) =>
+const Notify = (info: string) =>
 {
     tray.displayBalloon({
         iconType: 'info',
@@ -79,7 +79,7 @@ const Notify = (info) =>
     }, 3000)
 }
 
-const Log = (level, message) => 
+const Log = (level: string, message: string) => 
 {
     console.log(`-> ELECTRON: [${level}] - ${message}`)
 }
