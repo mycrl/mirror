@@ -445,8 +445,6 @@ impl ApplicationHandler<UserEvent> for Views {
         attr.resizable = false;
         attr.maximized = false;
         attr.decorations = false;
-        attr.content_protected = true;
-        attr.active = false;
 
         let window = Arc::new(event_loop.create_window(attr).unwrap());
 
