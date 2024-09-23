@@ -1,20 +1,21 @@
 use std::{
-    sync::{mpsc::channel, Arc},
+    sync::{atomic::AtomicBool, mpsc::channel, Arc},
     thread,
 };
 
 use mirror::{
-    AudioFrame, FrameSinker, Mirror, MirrorReceiver, MirrorReceiverDescriptor, MirrorSender,
-    MirrorSenderDescriptor, Render, TransportDescriptor, VideoFrame,
+    AudioFrame, Capture, FrameSinker, Mirror, MirrorReceiver, MirrorReceiverDescriptor,
+    MirrorSender, MirrorSenderDescriptor, Render, TransportDescriptor, VideoFrame,
 };
 
 use napi::{
     bindgen_prelude::Function,
     threadsafe_function::{ThreadsafeFunction, ThreadsafeFunctionCallMode},
-    JsUnknown,
+    JsString, JsUnknown,
 };
 
 use napi_derive::napi;
+use utils::atomic::EasyAtomic;
 use winit::{
     application::ApplicationHandler,
     event::WindowEvent,
@@ -22,6 +23,68 @@ use winit::{
     raw_window_handle::{HasWindowHandle, RawWindowHandle},
     window::{Fullscreen, Window, WindowId},
 };
+
+struct Logger(ThreadsafeFunction<String, JsUnknown, JsString, false>);
+
+#[napi]
+#[repr(usize)]
+pub enum LogLevel {
+    Error = 1,
+    Warn = 2,
+    Info = 3,
+    Debug = 4,
+    Trace = 5,
+}
+
+impl log::Log for Logger {
+    fn flush(&self) {}
+    fn enabled(&self, _: &log::Metadata) -> bool {
+        true
+    }
+
+    #[allow(unused_variables)]
+    fn log(&self, record: &log::Record) {
+        self.0.call(
+            format!(
+                "[{}] - ({}) - {}",
+                record.level(),
+                record.target(),
+                record.args(),
+            ),
+            ThreadsafeFunctionCallMode::NonBlocking,
+        );
+    }
+}
+
+#[napi(ts_args_type = "callback: (message: string) => void")]
+pub fn startup(callback: Function) -> napi::Result<()> {
+    let func = || {
+        let callback = callback
+            .build_threadsafe_function::<String>()
+            .build_callback(|ctx| ctx.env.create_string(&ctx.value))?;
+
+        log::set_boxed_logger(Box::new(Logger(callback)))?;
+        log::set_max_level(log::LevelFilter::Info);
+
+        std::panic::set_hook(Box::new(|info| {
+            log::error!("{:?}", info);
+
+            if cfg!(debug_assertions) {
+                println!("{:#?}", info);
+            }
+        }));
+
+        mirror::startup()?;
+        Ok::<_, anyhow::Error>(())
+    };
+
+    func().map_err(|e| napi::Error::from_reason(e.to_string()))
+}
+
+#[napi]
+pub fn shutdown() -> napi::Result<()> {
+    mirror::shutdown().map_err(|e| napi::Error::from_reason(e.to_string()))
+}
 
 #[napi(object)]
 pub struct MirrorServiceDescriptor {
@@ -120,6 +183,16 @@ impl Into<mirror::SourceType> for SourceType {
     }
 }
 
+impl From<mirror::SourceType> for SourceType {
+    fn from(value: mirror::SourceType) -> Self {
+        match value {
+            mirror::SourceType::Camera => Self::Camera,
+            mirror::SourceType::Screen => Self::Screen,
+            mirror::SourceType::Audio => Self::Audio,
+        }
+    }
+}
+
 #[napi(object)]
 pub struct SourceDescriptor {
     pub id: String,
@@ -203,6 +276,21 @@ pub struct MirrorService(Option<Mirror>);
 
 #[napi]
 impl MirrorService {
+    #[napi]
+    pub fn get_sources(kind: SourceType) -> Vec<SourceDescriptor> {
+        Capture::get_sources(kind.into())
+            .unwrap_or_else(|_| Vec::new())
+            .into_iter()
+            .map(|source| SourceDescriptor {
+                id: source.id,
+                name: source.name,
+                index: source.index as f64,
+                kind: SourceType::from(source.kind),
+                is_default: source.is_default,
+            })
+            .collect()
+    }
+
     #[napi(constructor)]
     pub fn new(options: MirrorServiceDescriptor) -> napi::Result<Self> {
         let func = || Ok::<_, anyhow::Error>(Self(Some(Mirror::new(options.try_into()?)?)));
@@ -210,7 +298,9 @@ impl MirrorService {
         func().map_err(|e| napi::Error::from_reason(e.to_string()))
     }
 
-    #[napi]
+    #[napi(
+        ts_args_type = "id: number, options: MirrorSenderServiceDescriptor, callback: () => void"
+    )]
     pub fn create_sender(
         &self,
         id: u32,
@@ -237,7 +327,9 @@ impl MirrorService {
         func().map_err(|e| napi::Error::from_reason(e.to_string()))
     }
 
-    #[napi]
+    #[napi(
+        ts_args_type = "id: number, options: MirrorReceiverServiceDescriptor, callback: () => void"
+    )]
     pub fn create_receiver(
         &self,
         id: u32,
@@ -321,6 +413,7 @@ impl MirrorReceiverService {
 
 enum UserEvent {
     CloseRequested,
+    Show,
 }
 
 struct Events(EventLoop<UserEvent>);
@@ -348,6 +441,12 @@ impl ApplicationHandler<UserEvent> for Views {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         let mut attr = Window::default_attributes();
         attr.fullscreen = Some(Fullscreen::Borderless(None));
+        attr.visible = false;
+        attr.resizable = false;
+        attr.maximized = false;
+        attr.decorations = false;
+        attr.content_protected = true;
+        attr.active = false;
 
         let window = Arc::new(event_loop.create_window(attr).unwrap());
 
@@ -374,6 +473,11 @@ impl ApplicationHandler<UserEvent> for Views {
             UserEvent::CloseRequested => {
                 event_loop.exit();
             }
+            UserEvent::Show => {
+                if let Some(window) = self.window.as_ref() {
+                    window.set_visible(true);
+                }
+            }
         }
     }
 }
@@ -381,11 +485,20 @@ impl ApplicationHandler<UserEvent> for Views {
 struct FullDisplaySinker {
     callback: ThreadsafeFunction<(), JsUnknown, (), false>,
     event_loop_proxy: EventLoopProxy<UserEvent>,
+    initialized: AtomicBool,
     render: Render,
 }
 
 impl FrameSinker for FullDisplaySinker {
     fn video(&self, frame: &VideoFrame) -> bool {
+        if !self.initialized.get() {
+            self.initialized.update(true);
+
+            if let Err(_) = self.event_loop_proxy.send_event(UserEvent::Show) {
+                log::warn!("winit event loop is closed");
+            }
+        }
+
         if let Err(e) = self.render.on_video(frame) {
             log::error!("{:?}", e);
 
@@ -427,14 +540,16 @@ impl FullDisplaySinker {
         thread::Builder::new()
             .name("FullDisplayWindowThread".to_string())
             .spawn(move || {
-                event_loop.run(&mut Views {
-                    window: None,
-                    callback: Box::new(move |window| {
-                        if let Err(e) = tx.send(window) {
-                            log::warn!("{:?}", e);
-                        }
-                    }),
-                }).unwrap();
+                event_loop
+                    .run(&mut Views {
+                        window: None,
+                        callback: Box::new(move |window| {
+                            if let Err(e) = tx.send(window) {
+                                log::warn!("{:?}", e);
+                            }
+                        }),
+                    })
+                    .unwrap();
             })?;
 
         let window = rx.recv()??;
@@ -444,6 +559,7 @@ impl FullDisplaySinker {
         })?;
 
         Ok(Self {
+            initialized: AtomicBool::new(false),
             event_loop_proxy,
             callback,
             render,

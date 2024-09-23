@@ -4,7 +4,7 @@
     "description": "Cross-platform screen projection",
     "main": "launch.js",
     "scripts": {
-        "dev": "tsc && electron .",
+        "dev": "chcp 65001 && tsc && electron .",
         "package": "tsc && electron-builder build"
     },
     "repository": {
@@ -35,6 +35,11 @@
                 "from": "./napi",
                 "to": "./",
                 "filter": "*.node"
+            },
+            {
+                "from": "./",
+                "to": "./",
+                "filter": "*.dll"
             }
         ],
         "win": {

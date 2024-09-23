@@ -31,7 +31,7 @@
                     <div id="ring"
                          :style="ring.style">
                     </div>
-                    <button @click="switch_sender">
+                    <button @click="switchSender">
                         <img src="./icon/cast.svg"
                              v-show="!working" />
                         <img src="./icon/power-off.svg"
@@ -46,35 +46,35 @@
             <div id="devices">
                 <div id="kinds">
                     <div class="kind"
-                         :class="devices.kind == 'screen' ? 'kind-selected' : null">
+                         :class="sources.kind == 'screen' ? 'kind-selected' : null">
                         <img src="./icon/screen.svg"
                              width="20px"
-                             @click="kind_select('screen')" />
+                             @click="kindSelect(SourceType.Screen)" />
                         <p style="top: -5px;">·</p>
                     </div>
                     <div class="kind"
-                         :class="devices.kind == 'window' ? 'kind-selected' : null">
+                         :class="sources.kind == 'window' ? 'kind-selected' : null">
                         <img src="./icon/window.svg"
                              width="17px"
                              style="top: 1px;"
-                             @click="kind_select('window')" />
+                             @click="kindSelect(SourceType.Audio)" />
                         <p style="top: -2px;">·</p>
                     </div>
                     <div class="kind"
-                         :class="devices.kind == 'video' ? 'kind-selected' : null">
+                         :class="sources.kind == 'video' ? 'kind-selected' : null">
                         <img src="./icon/camera.svg"
                              width="21px"
                              style="top: -1px;"
-                             @click="kind_select('video')" />
+                             @click="kindSelect(SourceType.Camera)" />
                         <p style="top: -7px;">·</p>
                     </div>
                 </div>
                 <div id="values">
-                    <select v-model="devices.index"
-                            :title="devices.values[devices.index]?.id">
-                        <option v-for="(item, index) of devices.values"
+                    <select v-model="sources.index"
+                            :title="sources.values[sources.index]?.id">
+                        <option v-for="(item, index) of sources.values"
                                 :value="index">
-                            {{ item.id }}
+                            {{ item.name }}
                         </option>
                     </select>
                 </div>
@@ -85,7 +85,7 @@
             -->
             <div id="id">
                 <p>channel:</p>
-                <span>#{{ settings.value.id }}</span>
+                <span>#{{ settings.value.channel }}</span>
             </div>
 
             <!--
@@ -99,7 +99,7 @@
                     -->
                     <div id="settings-switch">
                         <img :src="settings.status ? './icon/down.svg' : './icon/settings.svg'"
-                             @click="settings_switch" />
+                             @click="settingsSwitch" />
                     </div>
 
                     <!--
@@ -116,7 +116,7 @@
                             </div>
                             <div class="value">
                                 <input type="number"
-                                       v-model="settings.value.id" />
+                                       v-model="settings.value.channel" />
                             </div>
                         </div>
 
@@ -142,9 +142,9 @@
                             </div>
                             <div class="value">
                                 <select v-model="settings.value.encoder">
-                                    <option value="libx264">x264</option>
-                                    <option value="h264_qsv">qsv</option>
-                                    <option value="h264_nvenc">nvenc</option>
+                                    <option :value="VideoEncoderType.X264">x264</option>
+                                    <option :value="VideoEncoderType.Qsv">qsv</option>
+                                    <option :value="VideoEncoderType.Cuda">nvenc</option>
                                 </select>
                             </div>
                         </div>
@@ -158,9 +158,9 @@
                             </div>
                             <div class="value">
                                 <select v-model="settings.value.decoder">
-                                    <option value="h264">h264</option>
-                                    <option value="h264_qsv">qsv</option>
-                                    <option value="h264_cuvid">cuvid</option>
+                                    <option :value="VideoDecoderType.D3D11">d3d11</option>
+                                    <option :value="VideoDecoderType.Qsv">qsv</option>
+                                    <option :value="VideoDecoderType.Cuda">cuvid</option>
                                 </select>
                             </div>
                         </div>
@@ -174,9 +174,9 @@
                             </div>
                             <div class="value">
                                 <input type="text"
-                                       v-model="settings.value.size.width" />
+                                       v-model="settings.value.width" />
                                 <input type="text"
-                                       v-model="settings.value.size.height" />
+                                       v-model="settings.value.height" />
                             </div>
                         </div>
 
@@ -189,7 +189,7 @@
                             </div>
                             <div class="value">
                                 <input type="text"
-                                       v-model="settings.value.fps" />
+                                       v-model="settings.value.frameRate" />
                             </div>
                         </div>
 
@@ -202,7 +202,7 @@
                             </div>
                             <div class="value">
                                 <input type="text"
-                                       v-model="settings.value.bitrate" />
+                                       v-model="settings.value.bitRate" />
                             </div>
                         </div>
 

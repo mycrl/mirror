@@ -127,6 +127,14 @@ pub mod desktop {
                 }
             }
 
+            std::panic::set_hook(Box::new(|info| {
+                log::error!("{:?}", info);
+
+                if cfg!(debug_assertions) {
+                    println!("{:#?}", info);
+                }
+            }));
+
             logger.apply()?;
             mirror::startup()?;
             Ok::<_, anyhow::Error>(())

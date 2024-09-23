@@ -46,16 +46,10 @@ pub fn startup() -> Result<()> {
 
     #[cfg(target_os = "windows")]
     {
-        win32_startup()?;
-    }
-
-    std::panic::set_hook(Box::new(|info| {
-        log::error!("{:?}", info);
-
-        if cfg!(debug_assertions) {
-            println!("{:#?}", info);
+        if let Err(e) = win32_startup() {
+            log::warn!("{:?}", e);
         }
-    }));
+    }
 
     // In order to prevent other programs from affecting the delay performance of
     // the current program, set the priority of the current process to high.
