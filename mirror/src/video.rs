@@ -2,30 +2,36 @@ use crate::Window;
 
 use anyhow::{anyhow, Result};
 use frame::{VideoFormat, VideoFrame};
-use graphics::{HardwareTexture, SoftwareTexture, Texture, TextureResource};
+use graphics::{
+    dx11::Dx11Renderer, HardwareTexture, Renderer, RendererOptions, SoftwareTexture, Texture,
+    TextureResource,
+};
+
 use utils::Size;
 
 #[cfg(target_os = "windows")]
 use utils::win32::d3d_texture_borrowed_raw;
 
-#[cfg(all(feature = "dx11", target_os = "windows"))]
-use graphics::dx11::Dx11Renderer;
-
-#[cfg(not(feature = "dx11"))]
-use graphics::{Renderer, RendererOptions};
-
-pub struct VideoPlayer {
-    #[cfg(not(feature = "dx11"))]
-    renderer: Renderer<'static>,
-    #[cfg(all(feature = "dx11", target_os = "windows"))]
-    renderer: Dx11Renderer,
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Backend {
+    Dx11,
+    Wgpu,
 }
 
-impl VideoPlayer {
-    pub fn new(window: Window) -> Result<Self> {
-        let size = window.size()?;
+pub enum VideoRender {
+    Wgpu(Renderer<'static>),
+    Dx11(Dx11Renderer),
+}
 
-        log::info!("create video player, size={:?}", size);
+impl VideoRender {
+    pub fn new(backend: Backend, window: Window) -> Result<Self> {
+        let size = window.size()?;
+        log::info!(
+            "create video player, backend={:?}, size={:?}",
+            backend,
+            size
+        );
+
         let direct3d = crate::DIRECT_3D_DEVICE
             .read()
             .unwrap()
@@ -33,15 +39,13 @@ impl VideoPlayer {
             .unwrap()
             .clone();
 
-        Ok(Self {
-            #[cfg(all(feature = "dx11", target_os = "windows"))]
-            renderer: Dx11Renderer::new(window.raw(), size, direct3d)?,
-            #[cfg(not(feature = "dx11"))]
-            renderer: Renderer::new(RendererOptions {
+        Ok(match backend {
+            Backend::Dx11 => Self::Dx11(Dx11Renderer::new(window.raw(), size, direct3d)?),
+            Backend::Wgpu => Self::Wgpu(Renderer::new(RendererOptions {
                 direct3d,
                 window,
                 size,
-            })?,
+            })?),
         })
     }
 
@@ -56,11 +60,16 @@ impl VideoPlayer {
                 let texture =
                     TextureResource::Texture(HardwareTexture::Dx11(&dx_tex, frame.data[1] as u32));
 
-                self.renderer.submit(match frame.format {
+                let texture = match frame.format {
                     VideoFormat::RGBA => Texture::Rgba(texture),
                     VideoFormat::NV12 => Texture::Nv12(texture),
                     VideoFormat::I420 => unimplemented!("no hardware texture for I420"),
-                })?;
+                };
+
+                match self {
+                    Self::Dx11(render) => render.submit(texture)?,
+                    Self::Wgpu(render) => render.submit(texture)?,
+                }
             }
         } else {
             let buffers = match frame.format {
@@ -152,11 +161,16 @@ impl VideoPlayer {
                 },
             };
 
-            self.renderer.submit(match frame.format {
+            let texture = match frame.format {
                 VideoFormat::RGBA => Texture::Rgba(TextureResource::Buffer(texture)),
                 VideoFormat::NV12 => Texture::Nv12(TextureResource::Buffer(texture)),
                 VideoFormat::I420 => Texture::I420(texture),
-            })?;
+            };
+
+            match self {
+                Self::Dx11(render) => render.submit(texture)?,
+                Self::Wgpu(render) => render.submit(texture)?,
+            }
         };
 
         Ok(())

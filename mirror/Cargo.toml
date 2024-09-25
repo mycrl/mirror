@@ -17,6 +17,3 @@ audio = { path = "../audio" }
 capture = { path = "../capture" }
 codec = { path = "../codec" }
 cpal = "0.15.3"
-
-[features]
-dx11 = []

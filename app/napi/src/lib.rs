@@ -6,6 +6,7 @@ use std::{
 use mirror::{
     AudioFrame, Capture, FrameSinker, Mirror, MirrorReceiver, MirrorReceiverDescriptor,
     MirrorSender, MirrorSenderDescriptor, Render, TransportDescriptor, VideoFrame,
+    VideoRenderBackend,
 };
 
 use napi::{
@@ -86,6 +87,22 @@ pub fn shutdown() -> napi::Result<()> {
     mirror::shutdown().map_err(|e| napi::Error::from_reason(e.to_string()))
 }
 
+#[napi]
+#[derive(Debug, Clone, Copy)]
+pub enum Backend {
+    Dx11,
+    Wgpu,
+}
+
+impl Into<VideoRenderBackend> for Backend {
+    fn into(self) -> VideoRenderBackend {
+        match self {
+            Self::Dx11 => VideoRenderBackend::Dx11,
+            Self::Wgpu => VideoRenderBackend::Wgpu,
+        }
+    }
+}
+
 #[napi(object)]
 pub struct MirrorServiceDescriptor {
     pub server: String,
@@ -110,6 +127,7 @@ impl TryInto<TransportDescriptor> for MirrorServiceDescriptor {
 }
 
 #[napi]
+#[derive(Debug, Clone, Copy)]
 pub enum VideoDecoderType {
     D3D11,
     Qsv,
@@ -127,6 +145,7 @@ impl Into<mirror::VideoDecoderType> for VideoDecoderType {
 }
 
 #[napi]
+#[derive(Debug, Clone, Copy)]
 pub enum VideoEncoderType {
     X264,
     Qsv,
@@ -144,6 +163,7 @@ impl Into<mirror::VideoEncoderType> for VideoEncoderType {
 }
 
 #[napi(object)]
+#[derive(Debug, Clone, Copy)]
 pub struct VideoDescriptor {
     pub codec: VideoEncoderType,
     pub frame_rate: u8,
@@ -167,6 +187,7 @@ impl Into<mirror::VideoDescriptor> for VideoDescriptor {
 }
 
 #[napi]
+#[derive(Debug, Clone, Copy)]
 pub enum SourceType {
     Camera,
     Screen,
@@ -194,6 +215,7 @@ impl From<mirror::SourceType> for SourceType {
 }
 
 #[napi(object)]
+#[derive(Debug, Clone)]
 pub struct SourceDescriptor {
     pub id: String,
     pub name: String,
@@ -215,6 +237,7 @@ impl Into<mirror::Source> for SourceDescriptor {
 }
 
 #[napi(object)]
+#[derive(Debug, Clone, Copy)]
 pub struct AudioDescriptor {
     pub sample_rate: f64,
     pub bit_rate: f64,
@@ -230,18 +253,21 @@ impl Into<mirror::AudioDescriptor> for AudioDescriptor {
 }
 
 #[napi(object)]
+#[derive(Debug, Clone)]
 pub struct MirrorSenderVideoDescriptor {
     pub source: SourceDescriptor,
     pub settings: VideoDescriptor,
 }
 
 #[napi(object)]
+#[derive(Debug, Clone)]
 pub struct MirrorSenderAudioDescriptor {
     pub source: SourceDescriptor,
     pub settings: AudioDescriptor,
 }
 
 #[napi(object)]
+#[derive(Debug, Clone)]
 pub struct MirrorSenderServiceDescriptor {
     pub video: Option<MirrorSenderVideoDescriptor>,
     pub audio: Option<MirrorSenderAudioDescriptor>,
@@ -259,8 +285,10 @@ impl Into<MirrorSenderDescriptor> for MirrorSenderServiceDescriptor {
 }
 
 #[napi(object)]
+#[derive(Debug, Clone, Copy)]
 pub struct MirrorReceiverServiceDescriptor {
     pub video: VideoDecoderType,
+    pub backend: Backend,
 }
 
 impl Into<MirrorReceiverDescriptor> for MirrorReceiverServiceDescriptor {
@@ -337,6 +365,7 @@ impl MirrorService {
         callback: Function,
     ) -> napi::Result<MirrorReceiverService> {
         let func = || {
+            let backend = options.backend;
             Ok::<_, anyhow::Error>(MirrorReceiverService(Some(
                 self.0
                     .as_ref()
@@ -345,6 +374,7 @@ impl MirrorService {
                         id,
                         options.into(),
                         FullDisplaySinker::new(
+                            backend,
                             callback
                                 .build_threadsafe_function::<()>()
                                 .build_callback(|_| Ok(()))?,
@@ -536,7 +566,10 @@ impl FrameSinker for FullDisplaySinker {
 }
 
 impl FullDisplaySinker {
-    fn new(callback: ThreadsafeFunction<(), JsUnknown, (), false>) -> anyhow::Result<Self> {
+    fn new(
+        backend: Backend,
+        callback: ThreadsafeFunction<(), JsUnknown, (), false>,
+    ) -> anyhow::Result<Self> {
         let event_loop = EventLoop::<UserEvent>::with_user_event().build()?;
         event_loop.set_control_flow(ControlFlow::Wait);
 
@@ -560,10 +593,13 @@ impl FullDisplaySinker {
             })?;
 
         let window = rx.recv()??;
-        let render = Render::new(match window.window_handle()?.as_raw() {
-            RawWindowHandle::Win32(handle) => mirror::Window(handle.hwnd.get() as *const _),
-            _ => unimplemented!("not supports the window handle"),
-        })?;
+        let render = Render::new(
+            backend.into(),
+            match window.window_handle()?.as_raw() {
+                RawWindowHandle::Win32(handle) => mirror::Window(handle.hwnd.get() as *const _),
+                _ => unimplemented!("not supports the window handle"),
+            },
+        )?;
 
         Ok(Self {
             initialized: AtomicBool::new(false),

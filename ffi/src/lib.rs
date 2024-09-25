@@ -615,14 +615,36 @@ pub mod desktop {
     }
 
     #[repr(C)]
+    pub enum VideoRenderBackend {
+        Dx11,
+        Wgpu,
+    }
+
+    impl Into<mirror::VideoRenderBackend> for VideoRenderBackend {
+        fn into(self) -> mirror::VideoRenderBackend {
+            match self {
+                Self::Dx11 => mirror::VideoRenderBackend::Dx11,
+                Self::Wgpu => mirror::VideoRenderBackend::Wgpu,
+            }
+        }
+    }
+
+    #[repr(C)]
     struct RawRenderer(mirror::Render);
 
     /// Creating a window renderer.
     #[no_mangle]
     #[allow(unused_variables)]
-    extern "C" fn renderer_create(hwnd: *mut c_void) -> *mut RawRenderer {
-        let func =
-            || Ok::<RawRenderer, anyhow::Error>(RawRenderer(mirror::Render::new(Window(hwnd))?));
+    extern "C" fn renderer_create(
+        hwnd: *mut c_void,
+        backend: VideoRenderBackend,
+    ) -> *mut RawRenderer {
+        let func = || {
+            Ok::<RawRenderer, anyhow::Error>(RawRenderer(mirror::Render::new(
+                backend.into(),
+                Window(hwnd),
+            )?))
+        };
 
         checker(func())
             .map(|ret| Box::into_raw(Box::new(ret)))

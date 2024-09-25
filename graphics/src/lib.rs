@@ -109,11 +109,11 @@ impl<'a> Renderer<'a> {
                 .get_default_config(&adapter, options.size.width, options.size.height)
                 .ok_or_else(|| GraphicsError::NotFoundSurfaceDefaultConfig)?;
 
+            config.desired_maximum_frame_latency = 1;
             config.present_mode = PresentMode::Fifo;
             config.format = TextureFormat::Rgba8Unorm;
-            config.usage = TextureUsages::RENDER_ATTACHMENT;
             config.alpha_mode = CompositeAlphaMode::Opaque;
-            config.desired_maximum_frame_latency = 1;
+            config.usage = TextureUsages::RENDER_ATTACHMENT;
             surface.configure(&device, &config);
         };
 
