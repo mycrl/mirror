@@ -84,6 +84,12 @@ typedef enum
     xVideoEncoderTypeCuda,
 } VideoEncoderType;
 
+typedef enum 
+{
+    xVideoRenderBackendDx11,
+    xVideoRenderBackendWgpu,
+} VideoRenderBackend;
+
 typedef struct
 {
     /**
@@ -319,7 +325,7 @@ typedef const void* Render;
 /**
  * Creating a window renderer.
  */
-EXPORT Render renderer_create(WindowHandle hwnd);
+EXPORT Render renderer_create(WindowHandle hwnd, VideoRenderBackend backend);
 
 /**
  * Push the video frame into the renderer, which will update the window texture.

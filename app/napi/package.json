@@ -4,7 +4,7 @@
     "main": "index.js",
     "types": "index.d.ts",
     "napi": {
-        "name": "napi",
+        "name": "mirror",
         "triples": {
             "defaults": false,
             "additional": [
@@ -23,6 +23,7 @@
         "artifacts": "napi artifacts",
         "build": "napi build --platform --release",
         "build:debug": "napi build --platform",
+        "prepare": "napi build --platform --release",
         "prepublishOnly": "napi prepublish -t npm",
         "universal": "napi universal",
         "version": "napi version"

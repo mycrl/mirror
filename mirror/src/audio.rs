@@ -15,7 +15,7 @@ use cpal::{
 
 use frame::AudioFrame;
 
-pub struct AudioPlayer {
+pub struct AudioRender {
     stream: Stream,
     config: StreamConfig,
     queue: Sender<Vec<i16>>,
@@ -23,10 +23,10 @@ pub struct AudioPlayer {
     current_error: Arc<RwLock<Option<StreamError>>>,
 }
 
-unsafe impl Send for AudioPlayer {}
-unsafe impl Sync for AudioPlayer {}
+unsafe impl Send for AudioRender {}
+unsafe impl Sync for AudioRender {}
 
-impl AudioPlayer {
+impl AudioRender {
     pub fn new() -> Result<Self> {
         let host = cpal::default_host();
         let device = host
@@ -98,7 +98,7 @@ impl AudioPlayer {
     }
 }
 
-impl Drop for AudioPlayer {
+impl Drop for AudioRender {
     fn drop(&mut self) {
         let _ = self.stream.pause();
     }

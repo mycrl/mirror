@@ -11,7 +11,7 @@ name = "mirror"
 anyhow = "1.0.82"
 bytes = "1.5"
 log = "0.4.20"
-fern = { version = "0.6.2", features = ["date-based", "colored", "syslog-6"]}
+fern = { version = "0.6.2", features = ["date-based", "colored", "syslog-6"] }
 chrono = { version = "0.4", features = ["clock", "alloc"] }
 utils = { path = "../utils" }
 
@@ -24,6 +24,3 @@ syslog = "6"
 
 [target.'cfg(any(target_os = "windows", target_os = "linux"))'.dependencies]
 mirror = { path = "../mirror" }
-
-[features]
-dx11 = ["mirror/dx11"]

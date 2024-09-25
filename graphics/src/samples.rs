@@ -44,10 +44,10 @@ pub enum HardwareTexture<'a> {
 
 impl<'a> HardwareTexture<'a> {
     #[allow(unused)]
-    pub(crate) fn texture(
+    pub(crate) fn texture<'b>(
         &self,
-        layer: &mut Dx11OnWgpuCompatibilityLayer,
-    ) -> Result<WGPUTexture, FromNativeResourceError> {
+        layer: &'b mut Dx11OnWgpuCompatibilityLayer,
+    ) -> Result<&'b WGPUTexture, FromNativeResourceError> {
         Ok(match self {
             #[cfg(target_os = "windows")]
             HardwareTexture::Dx11(dx11, index) => layer.texture_from_dx11(dx11, *index)?,
@@ -84,10 +84,10 @@ pub enum TextureResource<'a> {
 impl<'a> TextureResource<'a> {
     /// Get the hardware texture, here does not deal with software texture, so
     /// if it is software texture directly return None.
-    pub(crate) fn texture(
+    pub(crate) fn texture<'b>(
         &self,
-        layer: &mut Dx11OnWgpuCompatibilityLayer,
-    ) -> Result<Option<WGPUTexture>, FromNativeResourceError> {
+        layer: &'b mut Dx11OnWgpuCompatibilityLayer,
+    ) -> Result<Option<&'b WGPUTexture>, FromNativeResourceError> {
         Ok(match self {
             TextureResource::Texture(texture) => Some(texture.texture(layer)?),
             TextureResource::Buffer(_) => None,
@@ -109,10 +109,10 @@ pub enum Texture<'a> {
 }
 
 impl<'a> Texture<'a> {
-    pub(crate) fn texture(
+    pub(crate) fn texture<'b>(
         &self,
-        layer: &mut Dx11OnWgpuCompatibilityLayer,
-    ) -> Result<Option<WGPUTexture>, FromNativeResourceError> {
+        layer: &'b mut Dx11OnWgpuCompatibilityLayer,
+    ) -> Result<Option<&'b WGPUTexture>, FromNativeResourceError> {
         Ok(match self {
             Texture::Rgba(texture) | Texture::Nv12(texture) => texture.texture(layer)?,
             Texture::I420(_) => None,
@@ -662,13 +662,13 @@ impl Texture2DSource {
                     pipeline,
                     match sample {
                         Texture2DSourceSample::Rgba(sample) => {
-                            sample.bind_group(&self.device, layout, texture.as_ref())
+                            sample.bind_group(&self.device, layout, texture)
                         }
                         Texture2DSourceSample::Nv12(sample) => {
-                            sample.bind_group(&self.device, layout, texture.as_ref())
+                            sample.bind_group(&self.device, layout, texture)
                         }
                         Texture2DSourceSample::I420(sample) => {
-                            sample.bind_group(&self.device, layout, texture.as_ref())
+                            sample.bind_group(&self.device, layout, texture)
                         }
                     },
                 ))

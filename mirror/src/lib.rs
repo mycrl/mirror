@@ -11,11 +11,12 @@ use std::{ffi::c_void, num::NonZeroIsize, sync::Mutex};
 use std::sync::RwLock;
 
 pub use self::receiver::{MirrorReceiver, MirrorReceiverDescriptor};
+pub use self::video::Backend as VideoRenderBackend;
 
 #[cfg(any(target_os = "windows", target_os = "linux"))]
 pub use self::sender::{AudioDescriptor, MirrorSender, MirrorSenderDescriptor, VideoDescriptor};
 
-use self::{audio::AudioPlayer, video::VideoPlayer};
+use self::{audio::AudioRender, video::VideoRender};
 
 use anyhow::Result;
 use graphics::raw_window_handle::{
@@ -268,15 +269,15 @@ impl Mirror {
 /// implemented with Direct3D 11 Graphics, which works fine on some very old
 /// devices.
 pub struct Render {
-    audio: Mutex<AudioPlayer>,
-    video: Mutex<VideoPlayer>,
+    audio: Mutex<AudioRender>,
+    video: Mutex<VideoRender>,
 }
 
 impl Render {
-    pub fn new(window: Window) -> Result<Self> {
+    pub fn new(backend: VideoRenderBackend, window: Window) -> Result<Self> {
         Ok(Self {
-            audio: Mutex::new(AudioPlayer::new()?),
-            video: Mutex::new(VideoPlayer::new(window)?),
+            video: Mutex::new(VideoRender::new(backend, window)?),
+            audio: Mutex::new(AudioRender::new()?),
         })
     }
 

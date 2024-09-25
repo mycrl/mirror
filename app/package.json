@@ -35,11 +35,6 @@
                 "from": "./napi",
                 "to": "./",
                 "filter": "*.node"
-            },
-            {
-                "from": "./",
-                "to": "./",
-                "filter": "*.dll"
             }
         ],
         "win": {

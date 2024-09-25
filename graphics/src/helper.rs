@@ -33,7 +33,8 @@ pub mod win32 {
     pub struct Dx11OnWgpuCompatibilityLayer {
         device: Arc<Device>,
         direct3d: Direct3DDevice,
-        texture: Option<ID3D11Texture2D>,
+        dx_texture: Option<ID3D11Texture2D>,
+        texture: Option<Texture>,
     }
 
     unsafe impl Sync for Dx11OnWgpuCompatibilityLayer {}
@@ -42,6 +43,7 @@ pub mod win32 {
     impl Dx11OnWgpuCompatibilityLayer {
         pub fn new(device: Arc<Device>, direct3d: Direct3DDevice) -> Self {
             Self {
+                dx_texture: None,
                 texture: None,
                 direct3d,
                 device,
@@ -52,12 +54,14 @@ pub mod win32 {
             &mut self,
             texture: &ID3D11Texture2D,
             index: u32,
-        ) -> Result<Texture, Dx11OnWgpuCompatibilityLayerError> {
-            let mut desc = texture.desc();
-
-            let handle = if desc.MiscFlags & D3D11_RESOURCE_MISC_SHARED.0 as u32 == 0 || index != 0
-            {
-                desc = D3D11_TEXTURE2D_DESC {
+        ) -> Result<&Texture, Dx11OnWgpuCompatibilityLayerError> {
+            // The first texture received, the texture is not initialized yet, initialize
+            // the texture here.
+            if self.dx_texture.is_none() {
+                // Gets the incoming texture properties, the new texture contains only an array
+                // of textures and is a shareable texture resource.
+                let desc = texture.desc();
+                let desc = D3D11_TEXTURE2D_DESC {
                     Width: desc.Width,
                     Height: desc.Height,
                     MipLevels: 1,
@@ -73,80 +77,88 @@ pub mod win32 {
                     MiscFlags: D3D11_RESOURCE_MISC_SHARED.0 as u32,
                 };
 
-                if self.texture.is_none() {
-                    self.texture = Some(unsafe {
-                        let mut tex = None;
-                        self.direct3d
-                            .device
-                            .CreateTexture2D(&desc, None, Some(&mut tex))?;
-                        tex.unwrap()
-                    })
+                // Creates a new texture, which serves as the current texture to be used, and to
+                // which external input textures are updated.
+                let mut tex = None;
+                unsafe {
+                    self.direct3d
+                        .device
+                        .CreateTexture2D(&desc, None, Some(&mut tex))?;
                 }
 
-                let dest_tex = self.texture.as_ref().unwrap();
+                // Get the texture's shared resources. dx11 textures need to be shared resources
+                // if they are to be used by dx12 devices.
+                let tex = tex.unwrap();
+                let handle = tex.get_shared()?;
+                if handle.is_invalid() {
+                    return Err(Dx11OnWgpuCompatibilityLayerError::InvalidDxSharedHandle);
+                } else {
+                    self.dx_texture = Some(tex);
+                }
+
+                // dx12 device opens dx11 shared resource handle
+                let resource = unsafe {
+                    self.device
+                        .as_hal::<Dx12, _, _>(|hdevice| {
+                            let hdevice = hdevice.ok_or_else(|| {
+                                Dx11OnWgpuCompatibilityLayerError::NotFoundDxBackend
+                            })?;
+
+                            let raw_device = hdevice.raw_device();
+
+                            let mut resource = None::<ID3D12Resource>;
+                            raw_device
+                                .OpenSharedHandle(handle, &mut resource)
+                                .map(|_| resource.unwrap())
+                                .map_err(|e| Dx11OnWgpuCompatibilityLayerError::DxError(e))
+                        })
+                        .ok_or_else(|| Dx11OnWgpuCompatibilityLayerError::NotFoundDxBackend)??
+                };
+
+                let desc = TextureDescriptor {
+                    label: None,
+                    mip_level_count: desc.MipLevels,
+                    sample_count: desc.SampleDesc.Count,
+                    dimension: TextureDimension::D2,
+                    usage: TextureUsages::TEXTURE_BINDING,
+                    format: match desc.Format {
+                        DXGI_FORMAT_NV12 => TextureFormat::NV12,
+                        DXGI_FORMAT_R8G8B8A8_UNORM => TextureFormat::Rgba8Unorm,
+                        _ => unimplemented!("not supports texture format"),
+                    },
+                    view_formats: &[],
+                    size: Extent3d {
+                        depth_or_array_layers: desc.ArraySize,
+                        width: desc.Width,
+                        height: desc.Height,
+                    },
+                };
+
+                // Converts dx12 resources to textures that wgpu can use.
+                self.texture = Some(unsafe {
+                    let texture = <Dx12 as wgpu::hal::Api>::Device::texture_from_raw(
+                        resource,
+                        desc.format,
+                        desc.dimension,
+                        desc.size,
+                        desc.mip_level_count,
+                        desc.sample_count,
+                    );
+
+                    self.device.create_texture_from_hal::<Dx12>(texture, &desc)
+                });
+            }
+
+            // Copies the input texture to the internal texture.
+            if let Some(dest_tex) = self.dx_texture.as_ref() {
                 unsafe {
                     self.direct3d
                         .context
                         .CopySubresourceRegion(dest_tex, 0, 0, 0, 0, texture, index, None);
                 }
-
-                dest_tex.get_shared()?
-            } else {
-                texture.get_shared()?
-            };
-
-            if handle.is_invalid() {
-                return Err(Dx11OnWgpuCompatibilityLayerError::InvalidDxSharedHandle);
             }
 
-            let resource = unsafe {
-                self.device
-                    .as_hal::<Dx12, _, _>(|hdevice| {
-                        let hdevice = hdevice
-                            .ok_or_else(|| Dx11OnWgpuCompatibilityLayerError::NotFoundDxBackend)?;
-
-                        let raw_device = hdevice.raw_device();
-
-                        let mut resource = None::<ID3D12Resource>;
-                        raw_device
-                            .OpenSharedHandle(handle, &mut resource)
-                            .map(|_| resource.unwrap())
-                            .map_err(|e| Dx11OnWgpuCompatibilityLayerError::DxError(e))
-                    })
-                    .ok_or_else(|| Dx11OnWgpuCompatibilityLayerError::NotFoundDxBackend)??
-            };
-
-            let desc = TextureDescriptor {
-                label: None,
-                mip_level_count: desc.MipLevels,
-                sample_count: desc.SampleDesc.Count,
-                dimension: TextureDimension::D2,
-                usage: TextureUsages::TEXTURE_BINDING,
-                format: match desc.Format {
-                    DXGI_FORMAT_NV12 => TextureFormat::NV12,
-                    DXGI_FORMAT_R8G8B8A8_UNORM => TextureFormat::Rgba8Unorm,
-                    _ => unimplemented!("not supports texture format"),
-                },
-                view_formats: &[],
-                size: Extent3d {
-                    depth_or_array_layers: desc.ArraySize,
-                    width: desc.Width,
-                    height: desc.Height,
-                },
-            };
-
-            Ok(unsafe {
-                let texture = <Dx12 as wgpu::hal::Api>::Device::texture_from_raw(
-                    resource,
-                    desc.format,
-                    desc.dimension,
-                    desc.size,
-                    desc.mip_level_count,
-                    desc.sample_count,
-                );
-
-                self.device.create_texture_from_hal::<Dx12>(texture, &desc)
-            })
+            Ok(self.texture.as_ref().unwrap())
         }
     }
 }

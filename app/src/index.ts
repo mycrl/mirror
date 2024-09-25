@@ -1,5 +1,6 @@
 import { app, screen, BrowserWindow, Tray, nativeImage, ipcMain, Menu } from "electron";
 import {
+    Backend,
     MirrorReceiverService,
     MirrorSenderService,
     MirrorService,
@@ -142,7 +143,7 @@ let receiver: MirrorReceiverService | null = null;
 
 ipcMain.handle(
     "create-sender",
-    (_event, sources: { video: SourceDescriptor; audio: SourceDescriptor }) => {
+    (_event, sources: { video?: SourceDescriptor; audio?: SourceDescriptor }) => {
         Log("info", "ipc create sender event");
 
         if (receiver != null) {
@@ -160,24 +161,28 @@ ipcMain.handle(
                     Config.channel,
                     {
                         multicast: false,
-                        video: {
-                            source: sources.video,
-                            settings: {
-                                codec: Config.encoder,
-                                frameRate: Config.frameRate,
-                                width: Config.width,
-                                height: Config.height,
-                                bitRate: Config.bitRate,
-                                keyFrameInterval: Config.keyFrameInterval,
-                            },
-                        },
-                        audio: {
-                            source: sources.audio,
-                            settings: {
-                                sampleRate: 48000,
-                                bitRate: 64000,
-                            },
-                        },
+                        video: sources.video
+                            ? {
+                                  source: sources.video,
+                                  settings: {
+                                      codec: Config.encoder,
+                                      frameRate: Config.frameRate,
+                                      width: Config.width,
+                                      height: Config.height,
+                                      bitRate: Config.bitRate,
+                                      keyFrameInterval: Config.keyFrameInterval,
+                                  },
+                              }
+                            : undefined,
+                        audio: sources.audio
+                            ? {
+                                  source: sources.audio,
+                                  settings: {
+                                      sampleRate: 48000,
+                                      bitRate: 64000,
+                                  },
+                              }
+                            : undefined,
                     },
                     () => {
                         Log("info", "sender close callback");
@@ -217,6 +222,7 @@ ipcMain.handle("close-sender", async (_event) => {
                 Config.channel,
                 {
                     video: Config.decoder,
+                    backend: Backend.Wgpu,
                 },
                 () => {
                     Log("info", "receiver close callback");
@@ -272,6 +278,7 @@ ipcMain.handle("set-settings", (_event, settings: typeof Config) => {
                 Config.channel,
                 {
                     video: Config.decoder,
+                    backend: Backend.Wgpu,
                 },
                 () => {
                     Log("info", "receiver close callback");
