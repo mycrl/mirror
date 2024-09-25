@@ -89,7 +89,7 @@ void SimpleRender::Create()
         return;
     }
 
-    _renderer = renderer_create(_hwnd);
+    _renderer = renderer_create(_hwnd, xVideoRenderBackendWgpu);
 }
 
 #ifdef LINUX

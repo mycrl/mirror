@@ -18,9 +18,10 @@ use utils::{win32::Direct3DDevice, Size};
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
     Backends, Buffer, BufferUsages, Color, CommandEncoderDescriptor, CompositeAlphaMode, Device,
-    Features, IndexFormat, Instance, InstanceDescriptor, LoadOp, MemoryHints, Operations,
-    PresentMode, Queue, RenderPassColorAttachment, RenderPassDescriptor, RequestAdapterOptions,
-    StoreOp, Surface, SurfaceTarget, TextureFormat, TextureUsages,
+    DeviceDescriptor, Features, IndexFormat, Instance, InstanceDescriptor, LoadOp, MemoryHints,
+    Operations, PowerPreference, PresentMode, Queue, RenderPassColorAttachment,
+    RenderPassDescriptor, RequestAdapterOptions, StoreOp, Surface, SurfaceTarget, TextureFormat,
+    TextureUsages, TextureViewDescriptor,
 };
 
 pub use wgpu::rwh as raw_window_handle;
@@ -81,6 +82,8 @@ impl<'a> Renderer<'a> {
         let surface = instance.create_surface(options.window)?;
         let adapter = instance
             .request_adapter(&RequestAdapterOptions {
+                power_preference: PowerPreference::LowPower,
+                force_fallback_adapter: false,
                 compatible_surface: Some(&surface),
                 ..Default::default()
             })
@@ -89,9 +92,9 @@ impl<'a> Renderer<'a> {
 
         let (device, queue) = adapter
             .request_device(
-                &wgpu::DeviceDescriptor {
+                &DeviceDescriptor {
                     label: None,
-                    memory_hints: MemoryHints::MemoryUsage,
+                    memory_hints: MemoryHints::Performance,
                     required_features: adapter.features() | Features::TEXTURE_FORMAT_NV12,
                     required_limits: adapter.limits(),
                 },
@@ -109,8 +112,7 @@ impl<'a> Renderer<'a> {
                 .get_default_config(&adapter, options.size.width, options.size.height)
                 .ok_or_else(|| GraphicsError::NotFoundSurfaceDefaultConfig)?;
 
-            config.desired_maximum_frame_latency = 1;
-            config.present_mode = PresentMode::Fifo;
+            config.present_mode = PresentMode::Mailbox;
             config.format = TextureFormat::Rgba8Unorm;
             config.alpha_mode = CompositeAlphaMode::Opaque;
             config.usage = TextureUsages::RENDER_ATTACHMENT;
@@ -152,7 +154,7 @@ impl<'a> Renderer<'a> {
             let output = self.surface.get_current_texture()?;
             let view = output
                 .texture
-                .create_view(&wgpu::TextureViewDescriptor::default());
+                .create_view(&TextureViewDescriptor::default());
 
             let mut encoder = self
                 .device
