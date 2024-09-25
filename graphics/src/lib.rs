@@ -17,10 +17,10 @@ use thiserror::Error;
 use utils::{win32::Direct3DDevice, Size};
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
-    Backends, Buffer, BufferUsages, Color, CommandEncoderDescriptor, Device, Features, IndexFormat,
-    Instance, InstanceDescriptor, LoadOp, MemoryHints, Operations, PresentMode, Queue,
-    RenderPassColorAttachment, RenderPassDescriptor, RequestAdapterOptions, StoreOp, Surface,
-    SurfaceTarget, TextureFormat, TextureUsages,
+    Backends, Buffer, BufferUsages, Color, CommandEncoderDescriptor, CompositeAlphaMode, Device,
+    Features, IndexFormat, Instance, InstanceDescriptor, LoadOp, MemoryHints, Operations,
+    PresentMode, Queue, RenderPassColorAttachment, RenderPassDescriptor, RequestAdapterOptions,
+    StoreOp, Surface, SurfaceTarget, TextureFormat, TextureUsages,
 };
 
 pub use wgpu::rwh as raw_window_handle;
@@ -112,6 +112,8 @@ impl<'a> Renderer<'a> {
             config.present_mode = PresentMode::Fifo;
             config.format = TextureFormat::Rgba8Unorm;
             config.usage = TextureUsages::RENDER_ATTACHMENT;
+            config.alpha_mode = CompositeAlphaMode::Opaque;
+            config.desired_maximum_frame_latency = 1;
             surface.configure(&device, &config);
         };
 

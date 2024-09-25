@@ -2,7 +2,7 @@ use crate::Window;
 
 use anyhow::{anyhow, Result};
 use frame::{VideoFormat, VideoFrame};
-use graphics::{HardwareTexture, RendererOptions, SoftwareTexture, Texture, TextureResource};
+use graphics::{HardwareTexture, SoftwareTexture, Texture, TextureResource};
 use utils::Size;
 
 #[cfg(target_os = "windows")]
@@ -12,7 +12,7 @@ use utils::win32::d3d_texture_borrowed_raw;
 use graphics::dx11::Dx11Renderer;
 
 #[cfg(not(feature = "dx11"))]
-use graphics::Renderer;
+use graphics::{Renderer, RendererOptions};
 
 pub struct VideoPlayer {
     #[cfg(not(feature = "dx11"))]

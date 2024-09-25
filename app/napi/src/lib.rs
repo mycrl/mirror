@@ -65,14 +65,13 @@ pub fn startup(callback: Function) -> napi::Result<()> {
                 .build_callback(|ctx| ctx.env.create_string(&ctx.value))?,
         )))?;
 
-        // log::set_max_level(log::LevelFilter::Info);
-
+        log::set_max_level(log::LevelFilter::Info);
         std::panic::set_hook(Box::new(|info| {
-            log::error!("{:?}", info);
-
-            if cfg!(debug_assertions) {
-                println!("{:#?}", info);
-            }
+            log::error!(
+                "pnaic: location={:?}, message={:?}",
+                info.location(),
+                info.payload().downcast_ref::<String>(),
+            );
         }));
 
         mirror::startup()?;
@@ -472,9 +471,6 @@ impl ApplicationHandler<UserEvent> for Views {
             WindowEvent::CloseRequested => {
                 event_loop.exit();
             }
-            WindowEvent::RedrawRequested => {
-                println!("==================================");
-            }
             _ => (),
         }
     }
@@ -564,9 +560,6 @@ impl FullDisplaySinker {
             })?;
 
         let window = rx.recv()??;
-
-        println!("================== {:?}", window.inner_size());
-
         let render = Render::new(match window.window_handle()?.as_raw() {
             RawWindowHandle::Win32(handle) => mirror::Window(handle.hwnd.get() as *const _),
             _ => unimplemented!("not supports the window handle"),
