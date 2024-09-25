@@ -57,8 +57,10 @@ window.onload = () => new Vue({
         },
         sources: {
             kind: SourceType.Screen,
-            index: 0,
-            values: [],
+            videoIndex: 0,
+            audioIndex: 0,
+            videos: [],
+            audios: [],
         },
         settings: {
             status: false,
@@ -109,10 +111,10 @@ window.onload = () => new Vue({
             this.working = !this.working
             if (this.working)
             {
-                if (this.sources.values[this.sources.index])
-                {
-                    await electronAPI.createSender(this.sources.values[this.sources.index])
-                }
+                await electronAPI.createSender({
+                    video: this.sources.videos[this.sources.videoIndex],
+                    audio: this.sources.audios[this.sources.audioIndex],
+                })
             }
             else
             {
@@ -125,8 +127,14 @@ window.onload = () => new Vue({
             if (!this.working)
             {
                 this.sources.kind = kind
-                this.sources.values = await electronAPI.getSources(kind) || []
-                this.sources.index = 0
+
+                if (kind == SourceType.Audio) {
+                    this.sources.audios = await electronAPI.getSources(kind) || []
+                    this.sources.audioIndex = 0
+                } else {
+                    this.sources.videos = await electronAPI.getSources(kind) || []
+                    this.sources.videoIndex = 0
+                }
             }
         },
         async updateSettings()

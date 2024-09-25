@@ -1,5 +1,5 @@
 /node_modules/
-napi.*.node
+*.node
 *.d.ts
 index.js
 package-lock.json

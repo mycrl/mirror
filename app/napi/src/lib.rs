@@ -57,6 +57,8 @@ impl log::Log for Logger {
     }
 }
 
+/// To initialize the environment, you can pass a callback that is an output
+/// callback for sdk's internal logging.
 #[napi(ts_args_type = "callback: (message: string) => void")]
 pub fn startup(callback: Function) -> napi::Result<()> {
     let func = || {
@@ -82,6 +84,7 @@ pub fn startup(callback: Function) -> napi::Result<()> {
     func().map_err(|e| napi::Error::from_reason(e.to_string()))
 }
 
+/// Roll out the sdk environment and clean up resources.
 #[napi]
 pub fn shutdown() -> napi::Result<()> {
     mirror::shutdown().map_err(|e| napi::Error::from_reason(e.to_string()))
@@ -90,7 +93,12 @@ pub fn shutdown() -> napi::Result<()> {
 #[napi]
 #[derive(Debug, Clone, Copy)]
 pub enum Backend {
+    /// Use Direct3D 11.x as a rendering backend, this is not a cross-platform
+    /// option and is only available on windows, on some Direct3D 11 only
+    /// devices.
     Dx11,
+    /// This is a new cross-platform backend, and on windows the latency may be
+    /// a bit higher than the Direct3D 11 backend.
     Wgpu,
 }
 
@@ -105,8 +113,12 @@ impl Into<VideoRenderBackend> for Backend {
 
 #[napi(object)]
 pub struct MirrorServiceDescriptor {
+    /// The IP address and port of the server, in this case the service refers
+    /// to the mirror service.
     pub server: String,
+    /// The multicast address used for multicasting, which is an IP address.
     pub multicast: String,
+    /// see: https://en.wikipedia.org/wiki/Maximum_transmission_unit
     pub mtu: u32,
 }
 
@@ -129,8 +141,11 @@ impl TryInto<TransportDescriptor> for MirrorServiceDescriptor {
 #[napi]
 #[derive(Debug, Clone, Copy)]
 pub enum VideoDecoderType {
+    /// d3d11va
     D3D11,
+    /// h264_qsv
     Qsv,
+    /// h264_cvuid
     Cuda,
 }
 
@@ -147,8 +162,11 @@ impl Into<mirror::VideoDecoderType> for VideoDecoderType {
 #[napi]
 #[derive(Debug, Clone, Copy)]
 pub enum VideoEncoderType {
+    /// libx264
     X264,
+    /// h264_qsv
     Qsv,
+    /// h264_nvenc
     Cuda,
 }
 
@@ -166,10 +184,15 @@ impl Into<mirror::VideoEncoderType> for VideoEncoderType {
 #[derive(Debug, Clone, Copy)]
 pub struct VideoDescriptor {
     pub codec: VideoEncoderType,
+    ///  For codecs that store a framerate value in the compressed bitstream,
+    /// the decoder may export it here.
     pub frame_rate: u8,
+    /// picture width / height.
     pub width: u32,
+    /// picture width / height.
     pub height: u32,
     pub bit_rate: f64,
+    /// the number of pictures in a group of pictures, or 0 for intra_only.
     pub key_frame_interval: u32,
 }
 
@@ -271,6 +294,7 @@ pub struct MirrorSenderAudioDescriptor {
 pub struct MirrorSenderServiceDescriptor {
     pub video: Option<MirrorSenderVideoDescriptor>,
     pub audio: Option<MirrorSenderAudioDescriptor>,
+    /// Whether to use multicast.
     pub multicast: bool,
 }
 
@@ -469,6 +493,8 @@ struct Views {
 
 impl ApplicationHandler<UserEvent> for Views {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        // The default window created is invisible, and the window is made visible by
+        // receiving external requests.
         let mut func = || {
             let mut attr = Window::default_attributes();
             attr.fullscreen = Some(Fullscreen::Borderless(None));

@@ -46,22 +46,22 @@
             <div id="devices">
                 <div id="kinds">
                     <div class="kind"
-                         :class="sources.kind == 'screen' ? 'kind-selected' : null">
+                         :class="sources.kind == SourceType.Screen ? 'kind-selected' : null">
                         <img src="./icon/screen.svg"
                              width="20px"
                              @click="kindSelect(SourceType.Screen)" />
                         <p style="top: -5px;">·</p>
                     </div>
                     <div class="kind"
-                         :class="sources.kind == 'window' ? 'kind-selected' : null">
-                        <img src="./icon/window.svg"
+                         :class="sources.kind == SourceType.Audio ? 'kind-selected' : null">
+                        <img src="./icon/audio.svg"
                              width="17px"
                              style="top: 1px;"
                              @click="kindSelect(SourceType.Audio)" />
                         <p style="top: -2px;">·</p>
                     </div>
                     <div class="kind"
-                         :class="sources.kind == 'video' ? 'kind-selected' : null">
+                         :class="sources.kind == SourceType.Camera ? 'kind-selected' : null">
                         <img src="./icon/camera.svg"
                              width="21px"
                              style="top: -1px;"
@@ -70,9 +70,18 @@
                     </div>
                 </div>
                 <div id="values">
-                    <select v-model="sources.index"
-                            :title="sources.values[sources.index]?.id">
-                        <option v-for="(item, index) of sources.values"
+                    <select v-if="sources.kind == SourceType.Audio" 
+                            v-model="sources.audioIndex"
+                            :title="sources.audios[sources.audioIndex]?.name">
+                        <option v-for="(item, index) of sources.audios"
+                                :value="index">
+                            {{ item.name }}
+                        </option>
+                    </select>
+                    <select v-else
+                            v-model="sources.videoIndex"
+                            :title="sources.videos[sources.videoIndex]?.name">
+                        <option v-for="(item, index) of sources.videos"
                                 :value="index">
                             {{ item.name }}
                         </option>
