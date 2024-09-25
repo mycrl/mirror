@@ -28,10 +28,7 @@ MirrorServiceExt::MirrorServiceExt(Args& args, HWND hwnd, HINSTANCE hinstance)
     mirror_options.mtu = 1400;
 
     _mirror = mirror_create(mirror_options);
-    Render = new SimpleRender(args,
-                               hwnd,
-                               (ID3D11Device*)mirror_get_direct3d_device(_mirror),
-                               (ID3D11DeviceContext*)mirror_get_direct3d_device_context(_mirror));
+    Render = new SimpleRender(args, hwnd);
 }
 #else
 MirrorServiceExt::MirrorServiceExt(Args& args) : _args(args)
@@ -101,15 +98,16 @@ bool MirrorServiceExt::CreateMirrorSender()
     sink.close = close_proc;
     sink.ctx = this;
 
+    Render->Create();
+    Render->SetTitle("sender");
     Render->IsRender = false;
+
     _sender = mirror_create_sender(_mirror, _args.ArgsParams.id, options, sink);
     if (_sender == nullptr)
     {
         return false;
     }
 
-    Render->Create();
-    Render->SetTitle("sender");
     _is_runing = true;
     return true;
 }
@@ -127,7 +125,10 @@ bool MirrorServiceExt::CreateMirrorReceiver()
     sink.close = close_proc;
     sink.ctx = this;
 
+    Render->Create();
+    Render->SetTitle("receiver");
     Render->IsRender = true;
+
     _receiver = mirror_create_receiver(_mirror,
                                        _args.ArgsParams.id,
                                        _args.ArgsParams.decoder,
@@ -137,8 +138,6 @@ bool MirrorServiceExt::CreateMirrorReceiver()
         return false;
     }
 
-    Render->Create();
-    Render->SetTitle("receiver");
     _is_runing = true;
     return true;
 }

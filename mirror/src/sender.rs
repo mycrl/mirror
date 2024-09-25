@@ -89,22 +89,38 @@ impl VideoSender {
             } else {
                 while let Some((buffer, flags, timestamp)) = self.encoder.read() {
                     if let Some(adapter) = self.adapter.upgrade() {
-                        adapter.send(
+                        if !adapter.send(
                             package::copy_from_slice(buffer),
                             StreamBufferInfo::Video(flags, timestamp),
-                        );
+                        ) {
+                            log::warn!("video send packet to adapter failed");
+
+                            return false;
+                        }
                     } else {
+                        log::warn!("video adapter weak upgrade failed, maybe is drop");
+
                         return false;
                     }
                 }
             }
         } else {
+            log::warn!("video encoder update frame failed");
+
             return false;
         }
 
         if let Some(sink) = self.sink.upgrade() {
-            sink.video(frame)
+            if sink.video(frame) {
+                true
+            } else {
+                log::warn!("video sink on frame return false");
+
+                false
+            }
         } else {
+            log::warn!("video sink weak upgrade failed, maybe is drop");
+
             false
         }
     }
@@ -201,23 +217,39 @@ impl AudioSender {
                         // packets one by one, so you need to try to get
                         // multiple packets until they are empty.
                         while let Some((buffer, flags, timestamp)) = self.encoder.read() {
-                            adapter.send(
+                            if !adapter.send(
                                 package::copy_from_slice(buffer),
                                 StreamBufferInfo::Audio(flags, timestamp),
-                            );
+                            ) {
+                                log::warn!("audio send packet to adapter failed");
+
+                                return false;
+                            }
                         }
                     }
                 } else {
+                    log::warn!("audio encoder update frame failed");
+
                     return false;
                 }
             } else {
+                log::warn!("audio adapter weak upgrade failed, maybe is drop");
+
                 return false;
             }
         }
 
         if let Some(sink) = self.sink.upgrade() {
-            sink.audio(frame)
+            if sink.audio(frame) {
+                true
+            } else {
+                log::warn!("audio sink on frame return false");
+
+                false
+            }
         } else {
+            log::warn!("audio sink weak upgrade failed, maybe is drop");
+
             false
         }
     }

@@ -45,22 +45,18 @@ pub fn startup() -> Result<()> {
     log::info!("mirror startup");
 
     #[cfg(target_os = "windows")]
-    {
-        if let Err(e) = win32_startup() {
-            log::warn!("{:?}", e);
-        }
+    if let Err(e) = win32_startup() {
+        log::warn!("{:?}", e);
     }
 
     // In order to prevent other programs from affecting the delay performance of
     // the current program, set the priority of the current process to high.
     #[cfg(target_os = "windows")]
-    {
-        if set_process_priority(ProcessPriority::High).is_err() {
-            log::error!(
-                "failed to set current process priority, Maybe it's \
-                because you didn't run it with administrator privileges."
-            );
-        }
+    if set_process_priority(ProcessPriority::High).is_err() {
+        log::error!(
+            "failed to set current process priority, Maybe it's \
+            because you didn't run it with administrator privileges."
+        );
     }
 
     codec::startup();
@@ -78,11 +74,13 @@ pub fn startup() -> Result<()> {
 pub fn shutdown() -> Result<()> {
     log::info!("mirror shutdown");
 
-    #[cfg(target_os = "windows")]
-    win32_shutdown()?;
-
     codec::shutdown();
     transport::shutdown();
+
+    #[cfg(target_os = "windows")]
+    if let Err(e) = win32_shutdown() {
+        log::warn!("{:?}", e);
+    }
 
     Ok(())
 }

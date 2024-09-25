@@ -147,7 +147,7 @@ impl Dx11Renderer {
 
             let view = match texture {
                 TextureResource::Texture(texture) => match texture {
-                    HardwareTexture::Dx11(texture, _, index) => {
+                    HardwareTexture::Dx11(texture, index) => {
                         Some(processor.create_input_view(texture, index)?)
                     }
                 },

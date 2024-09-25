@@ -127,15 +127,15 @@ pub mod desktop {
                 }
             }
 
+            logger.apply()?;
             std::panic::set_hook(Box::new(|info| {
-                log::error!("{:?}", info);
-
-                if cfg!(debug_assertions) {
-                    println!("{:#?}", info);
-                }
+                log::error!(
+                    "pnaic: location={:?}, message={:?}",
+                    info.location(),
+                    info.payload().downcast_ref::<String>(),
+                );
             }));
 
-            logger.apply()?;
             mirror::startup()?;
             Ok::<_, anyhow::Error>(())
         };
@@ -562,7 +562,7 @@ pub mod desktop {
     #[repr(C)]
     #[derive(Debug, Clone, Copy)]
     pub enum VideoDecoderType {
-        D3D11,
+        D3D12,
         Qsv,
         Cuda,
     }
@@ -570,7 +570,7 @@ pub mod desktop {
     impl Into<mirror::VideoDecoderType> for VideoDecoderType {
         fn into(self) -> mirror::VideoDecoderType {
             match self {
-                Self::D3D11 => mirror::VideoDecoderType::D3D11,
+                Self::D3D12 => mirror::VideoDecoderType::D3D11,
                 Self::Qsv => mirror::VideoDecoderType::Qsv,
                 Self::Cuda => mirror::VideoDecoderType::Cuda,
             }
@@ -635,7 +635,7 @@ pub mod desktop {
     extern "C" fn renderer_on_video(render: *mut RawRenderer, frame: *const VideoFrame) -> bool {
         assert!(!render.is_null() && !frame.is_null());
 
-        checker(checker(unsafe { &*render }.0.on_video(unsafe { &*frame }))).is_ok()
+        checker(unsafe { &*render }.0.on_video(unsafe { &*frame })).is_ok()
     }
 
     /// Push the audio frame into the renderer, which will append to audio
@@ -644,7 +644,7 @@ pub mod desktop {
     extern "C" fn renderer_on_audio(render: *mut RawRenderer, frame: *const AudioFrame) -> bool {
         assert!(!render.is_null() && !frame.is_null());
 
-        checker(checker(unsafe { &*render }.0.on_audio(unsafe { &*frame }))).is_ok()
+        checker(unsafe { &*render }.0.on_audio(unsafe { &*frame })).is_ok()
     }
 
     /// Destroy the window renderer.

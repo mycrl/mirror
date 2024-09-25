@@ -12,9 +12,9 @@ use self::{samples::FromNativeResourceError, vertex::Vertex};
 pub use self::samples::{HardwareTexture, SoftwareTexture, Texture, TextureResource};
 
 use pollster::FutureExt;
-use samples::Texture2DSource;
+use samples::{Texture2DSource, Texture2DSourceOptions};
 use thiserror::Error;
-use utils::Size;
+use utils::{win32::Direct3DDevice, Size};
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
     Backends, Buffer, BufferUsages, Color, CommandEncoderDescriptor, Device, Features, IndexFormat,
@@ -41,6 +41,13 @@ pub enum GraphicsError {
     FromNativeResourceError(#[from] FromNativeResourceError),
 }
 
+pub struct RendererOptions<T> {
+    #[cfg(target_os = "windows")]
+    pub direct3d: Direct3DDevice,
+    pub window: T,
+    pub size: Size,
+}
+
 /// Window Renderer.
 ///
 /// Supports rendering RGBA or NV12 hardware or software textures to system
@@ -59,7 +66,9 @@ pub struct Renderer<'a> {
 }
 
 impl<'a> Renderer<'a> {
-    pub fn new(window: impl Into<SurfaceTarget<'a>>, size: Size) -> Result<Self, GraphicsError> {
+    pub fn new<T: Into<SurfaceTarget<'a>>>(
+        options: RendererOptions<T>,
+    ) -> Result<Self, GraphicsError> {
         let instance = Instance::new(InstanceDescriptor {
             backends: if cfg!(target_os = "windows") {
                 Backends::DX12
@@ -69,7 +78,7 @@ impl<'a> Renderer<'a> {
             ..Default::default()
         });
 
-        let surface = instance.create_surface(window)?;
+        let surface = instance.create_surface(options.window)?;
         let adapter = instance
             .request_adapter(&RequestAdapterOptions {
                 compatible_surface: Some(&surface),
@@ -97,7 +106,7 @@ impl<'a> Renderer<'a> {
         // order to unnecessary trouble, directly fixed to RGBA is the best.
         {
             let mut config = surface
-                .get_default_config(&adapter, size.width, size.height)
+                .get_default_config(&adapter, options.size.width, options.size.height)
                 .ok_or_else(|| GraphicsError::NotFoundSurfaceDefaultConfig)?;
 
             config.present_mode = PresentMode::Fifo;
@@ -119,7 +128,11 @@ impl<'a> Renderer<'a> {
         });
 
         Ok(Self {
-            source: Texture2DSource::new(device.clone(), queue.clone()),
+            source: Texture2DSource::new(Texture2DSourceOptions {
+                direct3d: options.direct3d,
+                device: device.clone(),
+                queue: queue.clone(),
+            }),
             vertex_buffer,
             index_buffer,
             surface,
@@ -157,7 +170,7 @@ impl<'a> Renderer<'a> {
                 });
 
                 render_pass.set_pipeline(pipeline);
-                render_pass.set_bind_group(0, &bind_group, &[]);
+                render_pass.set_bind_group(0, Some(&bind_group), &[]);
                 render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
                 render_pass.set_index_buffer(self.index_buffer.slice(..), IndexFormat::Uint16);
                 render_pass.draw_indexed(0..Vertex::INDICES.len() as u32, 0, 0..1);

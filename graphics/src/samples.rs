@@ -3,14 +3,17 @@ use std::sync::Arc;
 use crate::Vertex;
 
 #[cfg(target_os = "windows")]
-use crate::helper::win32::{create_texture_from_dx11_texture, FromDxgiResourceError};
+use crate::helper::win32::{Dx11OnWgpuCompatibilityLayer, Dx11OnWgpuCompatibilityLayerError};
 
 use smallvec::SmallVec;
 use thiserror::Error;
-use utils::Size;
+use utils::{
+    win32::{Direct3DDevice, EasyTexture},
+    Size,
+};
 
 #[cfg(target_os = "windows")]
-use utils::win32::windows::Win32::Graphics::Direct3D11::{ID3D11Texture2D, D3D11_TEXTURE2D_DESC};
+use utils::win32::windows::Win32::Graphics::Direct3D11::ID3D11Texture2D;
 
 use wgpu::{
     include_wgsl, AddressMode, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout,
@@ -28,34 +31,51 @@ use wgpu::{
 pub enum FromNativeResourceError {
     #[cfg(target_os = "windows")]
     #[error(transparent)]
-    FromDxgiResourceError(#[from] FromDxgiResourceError),
+    Dx11OnWgpuCompatibilityLayerError(#[from] Dx11OnWgpuCompatibilityLayerError),
 }
 
+#[derive(Debug)]
 pub enum HardwareTexture<'a> {
     #[cfg(target_os = "windows")]
-    Dx11(&'a ID3D11Texture2D, &'a D3D11_TEXTURE2D_DESC, u32),
-    #[cfg(any(target_os = "linux"))]
+    Dx11(&'a ID3D11Texture2D, u32),
+    #[cfg(target_os = "linux")]
     Vulkan(&'a usize),
 }
 
 impl<'a> HardwareTexture<'a> {
     #[allow(unused)]
-    pub(crate) fn texture(&self, device: &Device) -> Result<WGPUTexture, FromNativeResourceError> {
+    pub(crate) fn texture(
+        &self,
+        layer: &mut Dx11OnWgpuCompatibilityLayer,
+    ) -> Result<WGPUTexture, FromNativeResourceError> {
         Ok(match self {
             #[cfg(target_os = "windows")]
-            HardwareTexture::Dx11(dx11, desc, _) => {
-                create_texture_from_dx11_texture(device, dx11, desc)?
-            }
+            HardwareTexture::Dx11(dx11, index) => layer.texture_from_dx11(dx11, *index)?,
             _ => unimplemented!("not supports native texture"),
         })
     }
+
+    pub(crate) fn size(&self) -> Size {
+        match self {
+            #[cfg(target_os = "windows")]
+            HardwareTexture::Dx11(dx11, _) => {
+                let desc = dx11.desc();
+                Size {
+                    width: desc.Width,
+                    height: desc.Height,
+                }
+            }
+        }
+    }
 }
 
+#[derive(Debug)]
 pub struct SoftwareTexture<'a> {
     pub size: Size,
     pub buffers: &'a [&'a [u8]],
 }
 
+#[derive(Debug)]
 pub enum TextureResource<'a> {
     Texture(HardwareTexture<'a>),
     Buffer(SoftwareTexture<'a>),
@@ -66,23 +86,18 @@ impl<'a> TextureResource<'a> {
     /// if it is software texture directly return None.
     pub(crate) fn texture(
         &self,
-        device: &Device,
+        layer: &mut Dx11OnWgpuCompatibilityLayer,
     ) -> Result<Option<WGPUTexture>, FromNativeResourceError> {
         Ok(match self {
-            TextureResource::Texture(texture) => texture.texture(device).ok(),
-            _ => None,
+            TextureResource::Texture(texture) => Some(texture.texture(layer)?),
+            TextureResource::Buffer(_) => None,
         })
     }
 
     pub(crate) fn size(&self) -> Size {
         match self {
-            TextureResource::Texture(texture) => match texture {
-                HardwareTexture::Dx11(_, desc, _) => Size {
-                    width: desc.Width,
-                    height: desc.Height,
-                },
-            },
-            TextureResource::Buffer(resource) => resource.size,
+            TextureResource::Texture(texture) => texture.size(),
+            TextureResource::Buffer(texture) => texture.size,
         }
     }
 }
@@ -96,11 +111,11 @@ pub enum Texture<'a> {
 impl<'a> Texture<'a> {
     pub(crate) fn texture(
         &self,
-        device: &Device,
+        layer: &mut Dx11OnWgpuCompatibilityLayer,
     ) -> Result<Option<WGPUTexture>, FromNativeResourceError> {
         Ok(match self {
-            Texture::Rgba(texture) | Texture::Nv12(texture) => texture.texture(device)?,
-            _ => None,
+            Texture::Rgba(texture) | Texture::Nv12(texture) => texture.texture(layer)?,
+            Texture::I420(_) => None,
         })
     }
 
@@ -505,22 +520,33 @@ enum Texture2DSourceSample {
     I420(I420),
 }
 
+pub struct Texture2DSourceOptions {
+    #[cfg(target_os = "windows")]
+    pub direct3d: Direct3DDevice,
+    pub device: Arc<Device>,
+    pub queue: Arc<Queue>,
+}
+
 pub struct Texture2DSource {
     device: Arc<Device>,
     queue: Arc<Queue>,
     pipeline: Option<RenderPipeline>,
     sample: Option<Texture2DSourceSample>,
     bind_group_layout: Option<BindGroupLayout>,
+    #[cfg(target_os = "windows")]
+    layer: Dx11OnWgpuCompatibilityLayer,
 }
 
 impl Texture2DSource {
-    pub fn new(device: Arc<Device>, queue: Arc<Queue>) -> Self {
+    pub fn new(options: Texture2DSourceOptions) -> Self {
         Self {
+            #[cfg(target_os = "windows")]
+            layer: Dx11OnWgpuCompatibilityLayer::new(options.device.clone(), options.direct3d),
+            device: options.device,
+            queue: options.queue,
             bind_group_layout: None,
             pipeline: None,
             sample: None,
-            device,
-            queue,
         }
     }
 
@@ -535,16 +561,11 @@ impl Texture2DSource {
     ) -> Result<Option<(&RenderPipeline, BindGroup)>, FromNativeResourceError> {
         // Not yet initialized, initialize the environment first.
         if self.sample.is_none() {
+            let size = texture.size();
             let sample = match &texture {
-                Texture::Rgba(texture) => {
-                    Texture2DSourceSample::Rgba(Rgba::new(&self.device, texture.size()))
-                }
-                Texture::Nv12(texture) => {
-                    Texture2DSourceSample::Nv12(Nv12::new(&self.device, texture.size()))
-                }
-                Texture::I420(texture) => {
-                    Texture2DSourceSample::I420(I420::new(&self.device, texture.size))
-                }
+                Texture::Rgba(_) => Texture2DSourceSample::Rgba(Rgba::new(&self.device, size)),
+                Texture::Nv12(_) => Texture2DSourceSample::Nv12(Nv12::new(&self.device, size)),
+                Texture::I420(_) => Texture2DSourceSample::I420(I420::new(&self.device, size)),
             };
 
             let bind_group_layout = match &sample {
@@ -565,7 +586,7 @@ impl Texture2DSource {
                             },
                         )),
                         vertex: VertexState {
-                            entry_point: "main",
+                            entry_point: Some("main"),
                             module: &self
                                 .device
                                 .create_shader_module(include_wgsl!("./shaders/vertex.wgsl")),
@@ -573,7 +594,7 @@ impl Texture2DSource {
                             buffers: &[Vertex::desc()],
                         },
                         fragment: Some(FragmentState {
-                            entry_point: "main",
+                            entry_point: Some("main"),
                             module: &self.device.create_shader_module(match &sample {
                                 // Because the output surface is RGBA, RGBA is a generic texture
                                 // format.
@@ -636,7 +657,7 @@ impl Texture2DSource {
             if let (Some(layout), Some(sample), Some(pipeline)) =
                 (&self.bind_group_layout, &self.sample, &self.pipeline)
             {
-                let texture = texture.texture(&self.device)?;
+                let texture = texture.texture(&mut self.layer)?;
                 Some((
                     pipeline,
                     match sample {

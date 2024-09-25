@@ -1,4 +1,4 @@
-use std::{ffi::c_void, ptr::null_mut};
+use std::ptr::null_mut;
 
 use crate::video::{VideoDecoderType, VideoEncoderType};
 
@@ -44,18 +44,6 @@ impl CodecType {
 pub struct HardwareFrameSize {
     pub width: u32,
     pub height: u32,
-}
-
-#[repr(C)]
-#[cfg(target_os = "windows")]
-struct AVD3D11VADeviceContext {
-    device: *const c_void,
-    device_context: *const c_void,
-    video_device: *const c_void,
-    video_context: *const c_void,
-    lock: extern "C" fn(lock_ctx: *const c_void),
-    unlock: extern "C" fn(lock_ctx: *const c_void),
-    lock_ctx: *const c_void,
 }
 
 #[derive(Error, Debug)]
@@ -151,8 +139,8 @@ pub fn create_video_context(
                 &mut *((&mut *hwctx).hwctx as *mut AVD3D11VADeviceContext)
             };
 
-            d3d11_hwctx.device = direct3d.device.as_raw();
-            d3d11_hwctx.device_context = direct3d.context.as_raw();
+            d3d11_hwctx.device = direct3d.device.as_raw() as *mut _;
+            d3d11_hwctx.device_context = direct3d.context.as_raw() as *mut _;
         }
 
         if unsafe { av_hwdevice_ctx_init(hw_device_ctx) } != 0 {
@@ -196,7 +184,7 @@ pub fn create_video_context(
                         frames_ctx.format = AVPixelFormat::AV_PIX_FMT_QSV;
                         frames_ctx.width = size.width as i32;
                         frames_ctx.height = size.height as i32;
-                        frames_ctx.initial_pool_size = 20;
+                        frames_ctx.initial_pool_size = 5;
                     }
                 }
 

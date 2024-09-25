@@ -130,9 +130,11 @@ tray.on("double-click", (_event, bounds) => {
 
 Notify("The service is running in the background. Double-click the icon to expand it.");
 
-startup((message) => {
-    console.log(message);
-});
+try {
+    startup(console.log);
+} catch (e: any) {
+    Log("error", e);
+}
 
 let mirror: MirrorService | null = null;
 let sender: MirrorSenderService | null = null;
@@ -153,40 +155,44 @@ ipcMain.handle(
         if (sender == null && mirror != null) {
             Log("info", "create sender");
 
-            sender = mirror.createSender(
-                Config.channel,
-                {
-                    multicast: false,
-                    video: {
-                        source: sources.video,
-                        settings: {
-                            codec: Config.encoder,
-                            frameRate: Config.frameRate,
-                            width: Config.width,
-                            height: Config.height,
-                            bitRate: Config.bitRate,
-                            keyFrameInterval: Config.keyFrameInterval,
+            try {
+                sender = mirror.createSender(
+                    Config.channel,
+                    {
+                        multicast: false,
+                        video: {
+                            source: sources.video,
+                            settings: {
+                                codec: Config.encoder,
+                                frameRate: Config.frameRate,
+                                width: Config.width,
+                                height: Config.height,
+                                bitRate: Config.bitRate,
+                                keyFrameInterval: Config.keyFrameInterval,
+                            },
+                        },
+                        audio: {
+                            source: sources.audio,
+                            settings: {
+                                sampleRate: 48000,
+                                bitRate: 64000,
+                            },
                         },
                     },
-                    audio: {
-                        source: sources.audio,
-                        settings: {
-                            sampleRate: 48000,
-                            bitRate: 64000,
-                        },
-                    },
-                },
-                () => {
-                    Log("info", "sender close callback");
+                    () => {
+                        Log("info", "sender close callback");
 
-                    if (sender != null) {
-                        sender.destroy();
-                        sender = null;
+                        if (sender != null) {
+                            sender.destroy();
+                            sender = null;
+                        }
+
+                        Notify("Screen projection has stopped");
                     }
-
-                    Notify("Screen projection has stopped");
-                }
-            );
+                );
+            } catch (e: any) {
+                Log("error", e);
+            }
         } else {
             Log("error", "sender is exists");
         }
@@ -206,22 +212,26 @@ ipcMain.handle("close-sender", async (_event) => {
     if (receiver == null && mirror != null) {
         Log("info", "receiver not exists, create receiver");
 
-        receiver = mirror.createReceiver(
-            Config.channel,
-            {
-                video: Config.decoder,
-            },
-            () => {
-                Log("info", "receiver close callback");
+        try {
+            receiver = mirror.createReceiver(
+                Config.channel,
+                {
+                    video: Config.decoder,
+                },
+                () => {
+                    Log("info", "receiver close callback");
 
-                if (receiver != null) {
-                    receiver.destroy();
-                    receiver = null;
+                    if (receiver != null) {
+                        receiver.destroy();
+                        receiver = null;
+                    }
+
+                    Notify("Other devices have turned off screen projection");
                 }
-
-                Notify("Other devices have turned off screen projection");
-            }
-        );
+            );
+        } catch (e: any) {
+            Log("error", e);
+        }
     } else {
         Log("warn", "receiver is exists, skip");
     }
@@ -257,22 +267,26 @@ ipcMain.handle("set-settings", (_event, settings: typeof Config) => {
     if (receiver == null) {
         Log("info", "receiver not exists, create receiver");
 
-        receiver = mirror.createReceiver(
-            Config.channel,
-            {
-                video: Config.decoder,
-            },
-            () => {
-                Log("info", "receiver close callback");
+        try {
+            receiver = mirror.createReceiver(
+                Config.channel,
+                {
+                    video: Config.decoder,
+                },
+                () => {
+                    Log("info", "receiver close callback");
 
-                if (receiver != null) {
-                    receiver.destroy();
-                    receiver = null;
+                    if (receiver != null) {
+                        receiver.destroy();
+                        receiver = null;
+                    }
+
+                    Notify("Other sources have turned off screen projection");
                 }
-
-                Notify("Other sources have turned off screen projection");
-            }
-        );
+            );
+        } catch (e: any) {
+            Log("error", e);
+        }
     } else {
         Log("warn", "receiver is exists, skip");
     }
@@ -281,7 +295,11 @@ ipcMain.handle("set-settings", (_event, settings: typeof Config) => {
 ipcMain.handle("get-sources", (_event, kind: SourceType) => {
     Log("info", "ipc get sources event");
 
-    return MirrorService.getSources(kind);
+    try {
+        return MirrorService.getSources(kind);
+    } catch (e: any) {
+        Log("error", e);
+    }
 });
 
 ipcMain.on("close", () => {

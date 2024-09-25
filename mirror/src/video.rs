@@ -2,11 +2,11 @@ use crate::Window;
 
 use anyhow::{anyhow, Result};
 use frame::{VideoFormat, VideoFrame};
-use graphics::{HardwareTexture, SoftwareTexture, Texture, TextureResource};
+use graphics::{HardwareTexture, RendererOptions, SoftwareTexture, Texture, TextureResource};
 use utils::Size;
 
 #[cfg(target_os = "windows")]
-use utils::win32::{d3d_texture_borrowed_raw, EasyTexture};
+use utils::win32::d3d_texture_borrowed_raw;
 
 #[cfg(all(feature = "dx11", target_os = "windows"))]
 use graphics::dx11::Dx11Renderer;
@@ -24,15 +24,24 @@ pub struct VideoPlayer {
 impl VideoPlayer {
     pub fn new(window: Window) -> Result<Self> {
         let size = window.size()?;
+
+        log::info!("create video player, size={:?}", size);
+        let direct3d = crate::DIRECT_3D_DEVICE
+            .read()
+            .unwrap()
+            .as_ref()
+            .unwrap()
+            .clone();
+
         Ok(Self {
-            #[cfg(not(feature = "dx11"))]
-            renderer: Renderer::new(window, size)?,
             #[cfg(all(feature = "dx11", target_os = "windows"))]
-            renderer: Dx11Renderer::new(
-                window.raw(),
+            renderer: Dx11Renderer::new(window.raw(), size, direct3d)?,
+            #[cfg(not(feature = "dx11"))]
+            renderer: Renderer::new(RendererOptions {
+                direct3d,
+                window,
                 size,
-                crate::DIRECT_3D_DEVICE.read().unwrap().clone().unwrap(),
-            )?,
+            })?,
         })
     }
 
@@ -44,12 +53,8 @@ impl VideoPlayer {
                     .cloned()
                     .ok_or_else(|| anyhow!("not found a texture"))?;
 
-                let desc = dx_tex.desc();
-                let texture = TextureResource::Texture(HardwareTexture::Dx11(
-                    &dx_tex,
-                    &desc,
-                    frame.data[1] as u32,
-                ));
+                let texture =
+                    TextureResource::Texture(HardwareTexture::Dx11(&dx_tex, frame.data[1] as u32));
 
                 self.renderer.submit(match frame.format {
                     VideoFormat::RGBA => Texture::Rgba(texture),

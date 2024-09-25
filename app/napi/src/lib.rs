@@ -59,12 +59,13 @@ impl log::Log for Logger {
 #[napi(ts_args_type = "callback: (message: string) => void")]
 pub fn startup(callback: Function) -> napi::Result<()> {
     let func = || {
-        let callback = callback
-            .build_threadsafe_function::<String>()
-            .build_callback(|ctx| ctx.env.create_string(&ctx.value))?;
+        log::set_boxed_logger(Box::new(Logger(
+            callback
+                .build_threadsafe_function::<String>()
+                .build_callback(|ctx| ctx.env.create_string(&ctx.value))?,
+        )))?;
 
-        log::set_boxed_logger(Box::new(Logger(callback)))?;
-        log::set_max_level(log::LevelFilter::Info);
+        // log::set_max_level(log::LevelFilter::Info);
 
         std::panic::set_hook(Box::new(|info| {
             log::error!("{:?}", info);
@@ -439,17 +440,26 @@ struct Views {
 
 impl ApplicationHandler<UserEvent> for Views {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        let mut attr = Window::default_attributes();
-        attr.fullscreen = Some(Fullscreen::Borderless(None));
-        attr.visible = false;
-        attr.resizable = false;
-        attr.maximized = false;
-        attr.decorations = false;
+        let mut func = || {
+            let mut attr = Window::default_attributes();
+            attr.fullscreen = Some(Fullscreen::Borderless(None));
+            attr.visible = false;
+            attr.resizable = false;
+            attr.maximized = false;
+            attr.decorations = false;
 
-        let window = Arc::new(event_loop.create_window(attr).unwrap());
+            let window = Arc::new(event_loop.create_window(attr)?);
+            if let Some(monitor) = window.current_monitor() {
+                window.set_min_inner_size(Some(monitor.size()));
+            }
 
-        (self.callback)(Ok(window.clone()));
-        self.window = Some(window);
+            window.set_cursor_hittest(false)?;
+            self.window = Some(window.clone());
+
+            Ok::<_, anyhow::Error>(window)
+        };
+
+        (self.callback)(func());
     }
 
     fn window_event(
@@ -461,6 +471,9 @@ impl ApplicationHandler<UserEvent> for Views {
         match event {
             WindowEvent::CloseRequested => {
                 event_loop.exit();
+            }
+            WindowEvent::RedrawRequested => {
+                println!("==================================");
             }
             _ => (),
         }
@@ -551,6 +564,9 @@ impl FullDisplaySinker {
             })?;
 
         let window = rx.recv()??;
+
+        println!("================== {:?}", window.inner_size());
+
         let render = Render::new(match window.window_handle()?.as_raw() {
             RawWindowHandle::Win32(handle) => mirror::Window(handle.hwnd.get() as *const _),
             _ => unimplemented!("not supports the window handle"),
