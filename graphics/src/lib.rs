@@ -14,7 +14,7 @@ pub use self::samples::{HardwareTexture, SoftwareTexture, Texture, TextureResour
 use pollster::FutureExt;
 use samples::{Texture2DSource, Texture2DSourceOptions};
 use thiserror::Error;
-use utils::{win32::Direct3DDevice, Size};
+use utils::Size;
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
     Backends, Buffer, BufferUsages, Color, CommandEncoderDescriptor, CompositeAlphaMode, Device,
@@ -44,7 +44,7 @@ pub enum GraphicsError {
 
 pub struct RendererOptions<T> {
     #[cfg(target_os = "windows")]
-    pub direct3d: Direct3DDevice,
+    pub direct3d: utils::win32::Direct3DDevice,
     pub window: T,
     pub size: Size,
 }
@@ -133,6 +133,7 @@ impl<'a> Renderer<'a> {
 
         Ok(Self {
             source: Texture2DSource::new(Texture2DSourceOptions {
+                #[cfg(target_os = "windows")]
                 direct3d: options.direct3d,
                 device: device.clone(),
                 queue: queue.clone(),
