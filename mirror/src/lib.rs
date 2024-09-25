@@ -2,75 +2,61 @@ mod audio;
 mod receiver;
 mod video;
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(any(target_os = "windows", target_os = "linux"))]
 mod sender;
 
-pub use self::{
-    audio::AudioPlayer,
-    receiver::{Receiver, ReceiverDescriptor},
-    video::VideoPlayer,
-};
+use std::{ffi::c_void, num::NonZeroIsize, sync::Mutex};
 
-#[cfg(not(target_os = "macos"))]
-pub use self::sender::{AudioDescriptor, Sender, SenderDescriptor, VideoDescriptor};
-
-use std::{ffi::c_void, num::NonZeroIsize};
-
-#[cfg(not(target_os = "macos"))]
+#[cfg(any(target_os = "windows", target_os = "linux"))]
 use std::sync::RwLock;
 
+pub use self::receiver::{MirrorReceiver, MirrorReceiverDescriptor};
+
+#[cfg(any(target_os = "windows", target_os = "linux"))]
+pub use self::sender::{AudioDescriptor, MirrorSender, MirrorSenderDescriptor, VideoDescriptor};
+
+use self::{audio::AudioPlayer, video::VideoPlayer};
+
 use anyhow::Result;
-use frame::{AudioFrame, VideoFrame};
 use graphics::raw_window_handle::{
     DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, RawWindowHandle,
     Win32WindowHandle, WindowHandle,
 };
 
-use transport::{Transport, TransportDescriptor};
-use utils::{logger, Size};
+use transport::Transport;
+use utils::Size;
+
+pub use capture::{Capture, Source, SourceType};
+pub use codec::{VideoDecoderType, VideoEncoderType};
+pub use frame::{AudioFrame, VideoFormat, VideoFrame};
+pub use transport::TransportDescriptor;
 
 #[cfg(target_os = "windows")]
 use utils::win32::{
     get_hwnd_size, set_process_priority, shutdown as win32_shutdown, startup as win32_startup,
-    Direct3DDevice, ProcessPriority, HWND,
+    windows::Win32::Foundation::HWND, Direct3DDevice, ProcessPriority,
 };
 
 #[cfg(target_os = "windows")]
 pub(crate) static DIRECT_3D_DEVICE: RwLock<Option<Direct3DDevice>> = RwLock::new(None);
 
 /// Initialize the environment, which must be initialized before using the SDK.
-#[rustfmt::skip]
 pub fn startup() -> Result<()> {
-    logger::init(
-        log::LevelFilter::Info,
-        if cfg!(debug_assertions) {
-            Some("mirror.log")
-        } else {
-            None
-        },
-    )?;
-
     log::info!("mirror startup");
 
     #[cfg(target_os = "windows")]
-    {
-        win32_startup()?;
+    if let Err(e) = win32_startup() {
+        log::warn!("{:?}", e);
     }
-
-    // std::panic::set_hook(Box::new(|info| {
-    //     log::error!("{:?}", info);
-    // }));
 
     // In order to prevent other programs from affecting the delay performance of
     // the current program, set the priority of the current process to high.
     #[cfg(target_os = "windows")]
-    {
-        if set_process_priority(ProcessPriority::High).is_err() {
-            log::error!(
-                "failed to set current process priority, Maybe it's \
-                because you didn't run it with administrator privileges."
-            );
-        }
+    if set_process_priority(ProcessPriority::High).is_err() {
+        log::error!(
+            "failed to set current process priority, Maybe it's \
+            because you didn't run it with administrator privileges."
+        );
     }
 
     codec::startup();
@@ -88,16 +74,70 @@ pub fn startup() -> Result<()> {
 pub fn shutdown() -> Result<()> {
     log::info!("mirror shutdown");
 
-    #[cfg(target_os = "windows")]
-    win32_shutdown()?;
-
     codec::shutdown();
     transport::shutdown();
+
+    #[cfg(target_os = "windows")]
+    if let Err(e) = win32_shutdown() {
+        log::warn!("{:?}", e);
+    }
 
     Ok(())
 }
 
-pub struct FrameSink {
+/// A window handle for a particular windowing system.
+///
+/// Each variant contains a struct with fields specific to that windowing system
+/// (e.g. Win32WindowHandle will include a HWND, WaylandWindowHandle uses
+/// wl_surface, etc.)
+#[derive(Debug, Clone)]
+pub struct Window(pub *const c_void);
+
+unsafe impl Send for Window {}
+unsafe impl Sync for Window {}
+
+impl Window {
+    /// A raw window handle for Win32.
+    ///
+    /// This variant is used on Windows systems.
+    #[cfg(target_os = "windows")]
+    fn raw(&self) -> HWND {
+        HWND(self.0 as *mut _)
+    }
+
+    /// Retrieves the coordinates of a window's client area. The client
+    /// coordinates specify the upper-left and lower-right corners of the client
+    /// area. Because client coordinates are relative to the upper-left corner
+    /// of a window's client area, the coordinates of the upper-left corner are
+    /// (0,0).
+    #[cfg(target_os = "windows")]
+    fn size(&self) -> Result<Size> {
+        Ok(get_hwnd_size(self.raw())?)
+    }
+
+    #[cfg(target_os = "linux")]
+    fn size(&self) -> Result<Size> {
+        unimplemented!()
+    }
+}
+
+impl HasDisplayHandle for Window {
+    fn display_handle(&self) -> Result<DisplayHandle<'_>, HandleError> {
+        Ok(DisplayHandle::windows())
+    }
+}
+
+impl HasWindowHandle for Window {
+    fn window_handle(&self) -> Result<WindowHandle<'_>, HandleError> {
+        Ok(unsafe {
+            WindowHandle::borrow_raw(RawWindowHandle::Win32(Win32WindowHandle::new(
+                NonZeroIsize::new(self.0 as isize).unwrap(),
+            )))
+        })
+    }
+}
+
+pub trait FrameSinker: Sync + Send {
     /// Callback occurs when the video frame is updated. The video frame format
     /// is fixed to NV12. Be careful not to call blocking methods inside the
     /// callback, which will seriously slow down the encoding and decoding
@@ -124,7 +164,11 @@ pub struct FrameSink {
     /// allows BT.2020 primaries (since 2021). The same happens with
     /// JPEG: it has BT.601 matrix derived from System M primaries, yet the
     /// primaries of most images are BT.709.
-    pub video: Box<dyn Fn(&VideoFrame) -> bool + Send + Sync>,
+    #[allow(unused_variables)]
+    fn video(&self, frame: &VideoFrame) -> bool {
+        true
+    }
+
     /// Callback is called when the audio frame is updated. The audio frame
     /// format is fixed to PCM. Be careful not to call blocking methods inside
     /// the callback, which will seriously slow down the encoding and decoding
@@ -151,11 +195,15 @@ pub struct FrameSink {
     /// the number of times per second that samples are taken; and the bit
     /// depth, which determines the number of possible digital values that
     /// can be used to represent each sample.
-    pub audio: Box<dyn Fn(&AudioFrame) -> bool + Send + Sync>,
+    #[allow(unused_variables)]
+    fn audio(&self, frame: &AudioFrame) -> bool {
+        true
+    }
+
     /// Callback when the sender is closed. This may be because the external
     /// side actively calls the close, or the audio and video packets cannot be
     /// sent (the network is disconnected), etc.
-    pub close: Box<dyn Fn() + Send + Sync>,
+    fn close(&self);
 }
 
 pub struct Mirror(Transport);
@@ -178,97 +226,71 @@ impl Mirror {
         Ok(Self(Transport::new(options)?))
     }
 
-    /// get direct3d device
-    #[cfg(target_os = "windows")]
-    pub fn get_direct3d_device(&self) -> Option<Direct3DDevice> {
-        DIRECT_3D_DEVICE.read().unwrap().clone()
-    }
-
     /// Create a sender, specify a bound NIC address, you can pass callback to
     /// get the device screen or sound callback, callback can be null, if it is
     /// null then it means no callback data is needed.
-    #[cfg(not(target_os = "macos"))]
-    pub fn create_sender(
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
+    pub fn create_sender<T: FrameSinker + 'static>(
         &self,
         id: u32,
-        options: SenderDescriptor,
-        sink: FrameSink,
-    ) -> Result<Sender> {
+        options: MirrorSenderDescriptor,
+        sink: T,
+    ) -> Result<MirrorSender> {
         log::info!("create sender: id={}, options={:?}", id, options);
 
-        let sender = Sender::new(options, sink)?;
+        let sender = MirrorSender::new(options, sink)?;
         self.0.create_sender(id, &sender.adapter)?;
         Ok(sender)
     }
 
     /// Create a receiver, specify a bound NIC address, you can pass callback to
     /// get the sender's screen or sound callback, callback can not be null.
-    pub fn create_receiver(
+    pub fn create_receiver<T: FrameSinker + 'static>(
         &self,
         id: u32,
-        options: ReceiverDescriptor,
-        sink: FrameSink,
-    ) -> Result<Receiver> {
+        options: MirrorReceiverDescriptor,
+        sink: T,
+    ) -> Result<MirrorReceiver> {
         log::info!("create receiver: id={}, options={:?}", id, options);
 
-        let receiver = Receiver::new(options, sink)?;
+        let receiver = MirrorReceiver::new(options, sink)?;
         self.0.create_receiver(id, &receiver.adapter)?;
         Ok(receiver)
     }
 }
 
-#[derive(Clone)]
-pub struct Window(pub *const c_void);
-
-unsafe impl Send for Window {}
-unsafe impl Sync for Window {}
-
-impl Window {
-    #[cfg(target_os = "windows")]
-    fn size(&self) -> Result<Size> {
-        Ok(get_hwnd_size(HWND(self.0 as *mut _))?)
-    }
-
-    #[cfg(target_os = "macos")]
-    fn size(&self) -> Result<Size> {
-        todo!()
-    }
-}
-
-impl HasDisplayHandle for Window {
-    fn display_handle(&self) -> Result<DisplayHandle<'_>, HandleError> {
-        Ok(DisplayHandle::windows())
-    }
-}
-
-impl HasWindowHandle for Window {
-    fn window_handle(&self) -> Result<WindowHandle<'_>, HandleError> {
-        Ok(unsafe {
-            WindowHandle::borrow_raw(RawWindowHandle::Win32(Win32WindowHandle::new(
-                NonZeroIsize::new(self.0 as isize).unwrap(),
-            )))
-        })
-    }
-}
-
+/// Renderer for video frames and audio frames.
+///
+/// Typically, the player underpinnings for audio and video are implementedin
+/// hardware, but not always, the underpinnings automatically select the adapter
+/// and fall back to the software adapter if the hardware adapter is
+/// unavailable, for video this can be done by enabling the dx11 feature tobe
+/// implemented with Direct3D 11 Graphics, which works fine on some very old
+/// devices.
 pub struct Render {
-    audio: AudioPlayer,
-    video: VideoPlayer,
+    audio: Mutex<AudioPlayer>,
+    video: Mutex<VideoPlayer>,
 }
 
 impl Render {
     pub fn new(window: Window) -> Result<Self> {
         Ok(Self {
-            audio: AudioPlayer::new()?,
-            video: VideoPlayer::new(window)?,
+            audio: Mutex::new(AudioPlayer::new()?),
+            video: Mutex::new(VideoPlayer::new(window)?),
         })
     }
 
-    pub fn on_video(&mut self, frame: &VideoFrame) -> Result<()> {
-        self.video.send(frame)
+    /// Renders video frames and can automatically handle rendering of hardware
+    /// textures and rendering textures.
+    pub fn on_video(&self, frame: &VideoFrame) -> Result<()> {
+        self.video.lock().unwrap().send(frame)
     }
 
-    pub fn on_audio(&mut self, frame: &AudioFrame) -> Result<()> {
-        self.audio.send(frame)
+    /// Renders the audio frame, note that a queue is maintained internally,
+    /// here it just pushes the audio to the playback queue, and if the queue is
+    /// empty, it fills the mute data to the player by default, so you need to
+    /// pay attention to the push rate.
+    pub fn on_audio(&self, frame: &AudioFrame) -> Result<()> {
+        self.audio.lock().unwrap().send(frame)
     }
 }

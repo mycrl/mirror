@@ -6,14 +6,17 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.82"
 bytes = "1.5"
-crossbeam = "0.8"
 log = "0.4.20"
-utils = { path = "../common/utils" }
-frame = { path = "../common/frame" }
+utils = { path = "../utils" }
+frame = { path = "../frame" }
 transport = { path = "../transport" }
 graphics = { path = "../graphics" }
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
+audio = { path = "../audio" }
 capture = { path = "../capture" }
 codec = { path = "../codec" }
 cpal = "0.15.3"
+
+[features]
+dx11 = []

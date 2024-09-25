@@ -6,10 +6,12 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.82"
 cpal = "0.15.3"
-utils = { path = "../common/utils" }
-frame = { path = "../common/frame" }
 once_cell = "1.19.0"
 log = "0.4.20"
+audio = { path = "../audio" }
+utils = { path = "../utils" }
+frame = { path = "../frame" }
+graphics = { path = "../graphics" }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows-capture = { git = "https://github.com/mycrl/windows-capture", branch = "expose-d3d" }
@@ -22,5 +24,4 @@ features = [
 ]
 
 [target.'cfg(target_os = "linux")'.dependencies]
-eye-hal = { git = "https://github.com/raymanfx/eye-rs" }
-x11 = "2.21.0"
+ash = "0.38.0"

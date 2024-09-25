@@ -41,8 +41,7 @@ else()
                     src/service.cpp)
 endif()
 
-include_directories("../../ffi/mirror/include"
-                    "../../common/frame/include")
+include_directories("../../ffi/include")
 
 if(UNIX)
     include_directories("${THIRD_PARTY_DIR}/sdl2/include")

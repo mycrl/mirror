@@ -1,4 +1,4 @@
-#![cfg(not(target_os = "macos"))]
+#![cfg(any(target_os = "windows", target_os = "linux"))]
 
 mod audio;
 

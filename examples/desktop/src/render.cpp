@@ -1,10 +1,7 @@
 #include "./render.h"
 
 #ifdef WIN32
-SimpleRender::SimpleRender(Args& args,
-                           HWND hwnd,
-                           ID3D11Device* d3d_device,
-                           ID3D11DeviceContext* d3d_device_context)
+SimpleRender::SimpleRender(Args& args, HWND hwnd)
     : _args(args)
     , _hwnd(hwnd)
 {
@@ -74,11 +71,13 @@ bool SimpleRender::OnAudioFrame(AudioFrame* frame)
 
 void SimpleRender::Close()
 {
-    if (_renderer != nullptr)
+    if (_renderer == nullptr)
     {
-        renderer_destroy(_renderer);
-        _renderer = nullptr;
+        return;
     }
+
+    renderer_destroy(_renderer);
+    _renderer = nullptr;
 
     SetTitle("");
 }

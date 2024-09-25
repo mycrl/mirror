@@ -5,10 +5,7 @@ edition = "2021"
 
 [dependencies]
 ffmpeg-sys-next = { git = "https://github.com/mycrl/rust-ffmpeg-sys" }
-frame = { path = "../common/frame" }
-utils = { path = "../common/utils" }
+frame = { path = "../frame" }
+utils = { path = "../utils" }
 thiserror = "1.0.63"
 log = "0.4.20"
-
-[target.'cfg(target_os = "windows")'.dependencies]
-windows-core = "0.58.0"

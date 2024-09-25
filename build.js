@@ -103,8 +103,7 @@ const Replace = (file, filters) => {
         ['./examples/desktop/README.md', './build/examples/README.md'],
 
         /* inculde */
-        ['./ffi/mirror/include/mirror.h', './build/include/mirror.h'],
-        ['./common/frame/include/frame.h', './build/include/frame.h'],
+        ['./ffi/include/mirror.h', './build/include/mirror.h'],
     ])
     {
         fs.copyFileSync(...item)
@@ -117,9 +116,9 @@ const Replace = (file, filters) => {
             [`./target/${Profile.toLowerCase()}/service.exe`, './build/server/mirror-service.exe'],
             [`./target/${Profile.toLowerCase()}/mirror.dll.lib`, './build/lib/mirror.dll.lib'],
             [`./target/${Profile.toLowerCase()}/mirror.dll`, './build/bin/mirror.dll'],
-            [`./target/ffmpeg/bin/avcodec-60.dll`, './build/bin/avcodec-60.dll'],
-            [`./target/ffmpeg/bin/avutil-58.dll`, './build/bin/avutil-58.dll'],
-            [`./target/ffmpeg/bin/swresample-4.dll`, './build/bin/swresample-4.dll'],
+            [`./target/ffmpeg/bin/avcodec-61.dll`, './build/bin/avcodec-61.dll'],
+            [`./target/ffmpeg/bin/avutil-59.dll`, './build/bin/avutil-59.dll'],
+            [`./target/ffmpeg/bin/swresample-5.dll`, './build/bin/swresample-5.dll'],
         ])
         {
             fs.copyFileSync(...item)
@@ -132,9 +131,9 @@ const Replace = (file, filters) => {
             [`./target/${Profile.toLowerCase()}/service`, './build/server/mirror-service'],
             [`./target/${Profile.toLowerCase()}/libmirror.so`, './build/bin/libmirror.so'],
             [`./target/${Profile.toLowerCase()}/librenderer.so`, './build/bin/librenderer.so'],
-            ['./target/ffmpeg/lib/libavcodec.so.60', './build/bin/libavcodec.so.60'],
-            ['./target/ffmpeg/lib/libavutil.so.58', './build/bin/libavutil.so.58'],
-            ['./target/ffmpeg/lib/libswresample.so.4', './build/bin/libswresample.so.4'],
+            ['./target/ffmpeg/lib/libavcodec.so.61', './build/bin/libavcodec.so.61'],
+            ['./target/ffmpeg/lib/libavutil.so.59', './build/bin/libavutil.so.59'],
+            ['./target/ffmpeg/lib/libswresample.so.5', './build/bin/libswresample.so.5'],
         ])
         {
             fs.copyFileSync(...item)

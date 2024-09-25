@@ -1,25 +1,31 @@
-use crate::FrameSink;
+use crate::FrameSinker;
 
-use std::{sync::Arc, thread};
+use std::{
+    sync::{atomic::AtomicBool, Arc},
+    thread,
+};
 
 use anyhow::Result;
 use codec::{AudioDecoder, VideoDecoder, VideoDecoderSettings, VideoDecoderType};
 use transport::adapter::{StreamKind, StreamMultiReceiverAdapter, StreamReceiverAdapterExt};
 
+use utils::atomic::EasyAtomic;
 #[cfg(target_os = "windows")]
 use utils::win32::MediaThreadClass;
 
 #[derive(Debug, Clone)]
-pub struct ReceiverDescriptor {
+pub struct MirrorReceiverDescriptor {
     pub video: VideoDecoderType,
 }
 
 fn create_video_decoder(
+    status: &Arc<AtomicBool>,
     adapter: &Arc<StreamMultiReceiverAdapter>,
-    sink: &Arc<FrameSink>,
+    sink: &Arc<dyn FrameSinker>,
     settings: VideoDecoderSettings,
 ) -> Result<()> {
     let sink_ = Arc::downgrade(sink);
+    let status_ = Arc::downgrade(status);
     let adapter_ = Arc::downgrade(adapter);
     let mut codec = VideoDecoder::new(settings)?;
 
@@ -37,19 +43,26 @@ fn create_video_decoder(
                         break;
                     } else {
                         while let Some(frame) = codec.read() {
-                            if !(sink.video)(frame) {
+                            if !sink.video(frame) {
+                                log::warn!("video sink return false!");
+
                                 break 'a;
                             }
                         }
                     }
                 } else {
+                    log::warn!("video adapter next is none!");
+
                     break;
                 }
             }
 
             log::warn!("video decoder thread is closed!");
-            if let Some(sink) = sink_.upgrade() {
-                (sink.close)()
+            if let (Some(sink), Some(status)) = (sink_.upgrade(), status_.upgrade()) {
+                if !status.get() {
+                    status.update(true);
+                    sink.close();
+                }
             }
 
             #[cfg(target_os = "windows")]
@@ -62,10 +75,12 @@ fn create_video_decoder(
 }
 
 fn create_audio_decoder(
+    status: &Arc<AtomicBool>,
     adapter: &Arc<StreamMultiReceiverAdapter>,
-    sink: &Arc<FrameSink>,
+    sink: &Arc<dyn FrameSinker>,
 ) -> Result<()> {
     let sink_ = Arc::downgrade(sink);
+    let status_ = Arc::downgrade(status);
     let adapter_ = Arc::downgrade(adapter);
     let mut codec = AudioDecoder::new()?;
 
@@ -83,19 +98,26 @@ fn create_audio_decoder(
                         break;
                     } else {
                         while let Some(frame) = codec.read() {
-                            if !(sink.audio)(frame) {
+                            if !sink.audio(frame) {
+                                log::warn!("audio sink return false!");
+
                                 break 'a;
                             }
                         }
                     }
                 } else {
+                    log::warn!("audio adapter next is none!");
+
                     break;
                 }
             }
 
             log::warn!("audio decoder thread is closed!");
-            if let Some(sink) = sink_.upgrade() {
-                (sink.close)()
+            if let (Some(sink), Some(status)) = (sink_.upgrade(), status_.upgrade()) {
+                if !status.get() {
+                    status.update(true);
+                    sink.close();
+                }
             }
 
             #[cfg(target_os = "windows")]
@@ -107,23 +129,29 @@ fn create_audio_decoder(
     Ok(())
 }
 
-pub struct Receiver {
+pub struct MirrorReceiver {
     pub(crate) adapter: Arc<StreamMultiReceiverAdapter>,
-    sink: Arc<FrameSink>,
+    status: Arc<AtomicBool>,
+    sink: Arc<dyn FrameSinker>,
 }
 
-impl Receiver {
+impl MirrorReceiver {
     /// Create a receiving end. The receiving end is much simpler to implement.
     /// You only need to decode the data in the queue and call it back to the
     /// sink.
-    pub fn new(options: ReceiverDescriptor, sink: FrameSink) -> Result<Self> {
+    pub fn new<T: FrameSinker + 'static>(
+        options: MirrorReceiverDescriptor,
+        sink: T,
+    ) -> Result<Self> {
         log::info!("create receiver");
 
         let adapter = StreamMultiReceiverAdapter::new();
-        let sink = Arc::new(sink);
+        let status = Arc::new(AtomicBool::new(false));
+        let sink: Arc<dyn FrameSinker> = Arc::new(sink);
 
-        create_audio_decoder(&adapter, &sink)?;
+        create_audio_decoder(&status, &adapter, &sink)?;
         create_video_decoder(
+            &status,
             &adapter,
             &sink,
             VideoDecoderSettings {
@@ -133,15 +161,22 @@ impl Receiver {
             },
         )?;
 
-        Ok(Self { adapter, sink })
+        Ok(Self {
+            adapter,
+            status,
+            sink,
+        })
     }
 }
 
-impl Drop for Receiver {
+impl Drop for MirrorReceiver {
     fn drop(&mut self) {
         log::info!("receiver drop");
 
         self.adapter.close();
-        (self.sink.close)()
+        if !self.status.get() {
+            self.status.update(true);
+            self.sink.close();
+        }
     }
 }

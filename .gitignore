@@ -5,9 +5,10 @@
 .vs
 Cargo.lock
 .DS_Store
-/build
+/build/
 /doc
 /out
 */third_party/
+/logs/
 /node_modules
 package-lock.json

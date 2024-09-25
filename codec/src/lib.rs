@@ -92,9 +92,11 @@ extern "C" {
     // In any case, arg should have been initialized by va_start at some point
     // before the call, and it is expected to be released by va_end at some point
     // after the call.
+    #[allow(improper_ctypes_definitions)]
     fn vsnprintf(s: *mut c_char, n: usize, format: *const c_char, args: va_list) -> c_int;
 }
 
+#[allow(improper_ctypes_definitions)]
 unsafe extern "C" fn logger_proc(
     _: *mut c_void,
     level: c_int,

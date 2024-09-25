@@ -4,7 +4,6 @@
 
 #ifdef WIN32
 #include <windows.h>
-#include <d3d11.h>
 #endif
 
 extern "C"
@@ -24,10 +23,7 @@ class SimpleRender
 {
 public:
 #ifdef WIN32
-    SimpleRender(Args& args,
-                 HWND hwnd,
-                 ID3D11Device* d3d_device,
-                 ID3D11DeviceContext* d3d_device_context);
+    SimpleRender(Args& args, HWND hwnd);
 #else
     SimpleRender(Args& args);
 #endif

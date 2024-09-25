@@ -1,4 +1,7 @@
-/bin
-/build
-/node_modules
+/node_modules/
+napi.*.node
+*.d.ts
+index.js
 package-lock.json
+*.dll
+*.pdb

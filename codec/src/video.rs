@@ -129,18 +129,12 @@ impl VideoDecoder {
             frame: VideoFrame::default(),
         };
 
-        #[cfg(target_os = "windows")]
         let codec = create_video_context(CreateVideoContextDescriptor {
             kind: CodecType::Decoder(options.codec),
             context: &mut this.context,
             frame_size: None,
+            #[cfg(target_os = "windows")]
             direct3d: options.direct3d,
-        })?;
-
-        #[cfg(not(target_os = "windows"))]
-        let codec = create_video_context(CreateVideoContextDescriptor {
-            kind: CodecType::Decoder(options.codec),
-            context: &mut this.context,
         })?;
 
         let context_mut = unsafe { &mut *this.context };
@@ -274,7 +268,16 @@ impl VideoDecoder {
                 self.frame.hardware = true;
                 self.frame.format = VideoFormat::NV12;
             }
-            _ => unimplemented!("only supports RGBA or NV12 video frames!"),
+            AVPixelFormat::AV_PIX_FMT_YUV420P => {
+                for i in 0..3 {
+                    self.frame.data[i] = frame.data[i] as *const _;
+                    self.frame.linesize[i] = frame.linesize[i] as usize;
+                }
+
+                self.frame.hardware = false;
+                self.frame.format = VideoFormat::I420;
+            }
+            _ => unimplemented!("not supports the video frame format!"),
         };
 
         Some(&self.frame)
@@ -376,21 +379,15 @@ impl VideoEncoder {
             initialized: false,
         };
 
-        #[cfg(target_os = "windows")]
         let codec = create_video_context(CreateVideoContextDescriptor {
             kind: CodecType::Encoder(options.codec),
             context: &mut this.context,
-            direct3d: options.direct3d,
             frame_size: Some(HardwareFrameSize {
                 width: options.width,
                 height: options.height,
             }),
-        })?;
-
-        #[cfg(not(target_os = "windows"))]
-        let codec = create_video_context(CreateVideoContextDescriptor {
-            kind: CodecType::Encoder(options.codec),
-            context: &mut this.context,
+            #[cfg(target_os = "windows")]
+            direct3d: options.direct3d,
         })?;
 
         let context_mut = unsafe { &mut *this.context };

@@ -1,27 +1,30 @@
 {
     "name": "mirror-napi",
-    "version": "0.0.1",
-    "description": "Cross-platform screen projection",
+    "version": "0.0.0",
     "main": "index.js",
-    "gypfile": true,
+    "types": "index.d.ts",
+    "napi": {
+        "name": "napi",
+        "triples": {
+            "defaults": false,
+            "additional": [
+                "x86_64-pc-windows-msvc"
+            ]
+        }
+    },
+    "license": "MIT",
+    "devDependencies": {
+        "@napi-rs/cli": "^2.18.4"
+    },
+    "engines": {
+        "node": ">= 10"
+    },
     "scripts": {
-        "build": "node-gyp build",
-        "make": "node-gyp configure",
-        "preinstall": "node-gyp clean",
-        "prepare": "node-gyp configure && node-gyp build"
-    },
-    "repository": {
-        "type": "git",
-        "url": "git+https://github.com/mycrl/mirror.git"
-    },
-    "author": "Mr.Panda",
-    "license": "GPL-3.0-or-later",
-    "bugs": {
-        "url": "https://github.com/mycrl/mirror/issues"
-    },
-    "homepage": "https://github.com/mycrl/mirror#readme",
-    "dependencies": {
-        "node-addon-api": "8.1.0",
-        "node-gyp": "10.2.0"
+        "artifacts": "napi artifacts",
+        "build": "napi build --platform --release",
+        "build:debug": "napi build --platform",
+        "prepublishOnly": "napi prepublish -t npm",
+        "universal": "napi universal",
+        "version": "napi version"
     }
 }

@@ -4,10 +4,8 @@ use std::{net::SocketAddr, process::exit, sync::Arc, thread};
 
 use anyhow::Result;
 use clap::Parser;
-use log::LevelFilter;
 use service::route::Route;
 use tokio::runtime::Runtime;
-use utils::logger;
 
 // #[global_allocator]
 // static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
@@ -27,8 +25,8 @@ pub struct Configure {
 
 fn main() -> Result<()> {
     // Initialize srt and logger
+    simple_logger::init_with_level(log::Level::Info)?;
     srt::startup();
-    logger::init(LevelFilter::Info, Some("mirror-service.log"))?;
 
     // Parse command line parameters. Note that if the command line parameters are
     // incorrect, panic will occur.

@@ -32,8 +32,7 @@ Pure software screen projection is different from Miracast, AirPlay, etc., which
 
 ```sh
 sudo apt-get update
-sudo apt-get upgrade
-sudo apt-get install tclsh pkg-config cmake libssl-dev build-essential libasound2-dev
+sudo apt-get install tclsh pkg-config cmake libssl-dev build-essential libasound2-dev libdrm-dev libgbm-dev libvulkan1 libvulkan-dev
 ```
 
 ---

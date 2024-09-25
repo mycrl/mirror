@@ -1,0 +1,29 @@
+[package]
+name = "mirror-desktop"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+name = "mirror"
+
+[dependencies]
+anyhow = "1.0.82"
+bytes = "1.5"
+log = "0.4.20"
+fern = { version = "0.6.2", features = ["date-based", "colored", "syslog-6"]}
+chrono = { version = "0.4", features = ["clock", "alloc"] }
+utils = { path = "../utils" }
+
+[target.'cfg(target_os = "android")'.dependencies]
+jni = "0.21.1"
+num_cpus = "1.16.0"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+syslog = "6"
+
+[target.'cfg(any(target_os = "windows", target_os = "linux"))'.dependencies]
+mirror = { path = "../mirror" }
+
+[features]
+dx11 = ["mirror/dx11"]
