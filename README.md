@@ -1,7 +1,7 @@
 <!--lint disable no-literal-urls-->
 <div align="center">
-  <h1>Mirror</h1>
-  <strong>Cross-platform casting SDK, support Android, Windows, Linux</strong>
+   <br/>
+   <img src="./logo.png" width="300px"/>
 </div>
 <br/>
 <br/>
