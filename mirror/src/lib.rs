@@ -4,7 +4,7 @@ mod render;
 #[cfg(any(target_os = "windows", target_os = "linux"))]
 mod sender;
 
-use std::{ffi::c_void, num::NonZeroIsize, sync::Mutex};
+use std::{num::NonZeroIsize, sync::Mutex};
 
 #[cfg(any(target_os = "windows", target_os = "linux"))]
 use std::sync::RwLock;
