@@ -1,6 +1,11 @@
 name: publish main release
 on:
   push:
+    paths-ignore:
+      - '*.md'
+      - '*.txt'
+      - 'logo.*'
+      - '**/.gitignore'
     branches:
       - main
 jobs:
