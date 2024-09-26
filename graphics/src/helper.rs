@@ -1,8 +1,22 @@
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum CompatibilityLayerError {
+    #[cfg(target_os = "windows")]
+    #[error(transparent)]
+    DxError(#[from] utils::win32::windows::core::Error),
+    #[error("not found wgpu dx12 device")]
+    NotFoundDxBackend,
+    #[error("dx11 shared handle is invalid")]
+    InvalidDxSharedHandle,
+}
+
 #[cfg(target_os = "windows")]
 pub mod win32 {
     use std::sync::Arc;
 
-    use thiserror::Error;
+    use super::CompatibilityLayerError;
+
     use utils::win32::{
         windows::Win32::Graphics::{
             Direct3D11::{
@@ -19,16 +33,6 @@ pub mod win32 {
         hal::api::Dx12, Device, Extent3d, Texture, TextureDescriptor, TextureDimension,
         TextureFormat, TextureUsages,
     };
-
-    #[derive(Debug, Error)]
-    pub enum Dx11OnWgpuCompatibilityLayerError {
-        #[error(transparent)]
-        DxError(#[from] utils::win32::windows::core::Error),
-        #[error("not found wgpu dx12 device")]
-        NotFoundDxBackend,
-        #[error("dx11 shared handle is invalid")]
-        InvalidDxSharedHandle,
-    }
 
     pub struct Dx11OnWgpuCompatibilityLayer {
         device: Arc<Device>,
@@ -50,11 +54,11 @@ pub mod win32 {
             }
         }
 
-        pub fn texture_from_dx11(
+        pub fn from_hal(
             &mut self,
             texture: &ID3D11Texture2D,
             index: u32,
-        ) -> Result<&Texture, Dx11OnWgpuCompatibilityLayerError> {
+        ) -> Result<&Texture, CompatibilityLayerError> {
             // The first texture received, the texture is not initialized yet, initialize
             // the texture here.
             if self.dx_texture.is_none() {
@@ -91,7 +95,7 @@ pub mod win32 {
                 let tex = tex.unwrap();
                 let handle = tex.get_shared()?;
                 if handle.is_invalid() {
-                    return Err(Dx11OnWgpuCompatibilityLayerError::InvalidDxSharedHandle);
+                    return Err(CompatibilityLayerError::InvalidDxSharedHandle);
                 } else {
                     self.dx_texture = Some(tex);
                 }
@@ -100,9 +104,8 @@ pub mod win32 {
                 let resource = unsafe {
                     self.device
                         .as_hal::<Dx12, _, _>(|hdevice| {
-                            let hdevice = hdevice.ok_or_else(|| {
-                                Dx11OnWgpuCompatibilityLayerError::NotFoundDxBackend
-                            })?;
+                            let hdevice = hdevice
+                                .ok_or_else(|| CompatibilityLayerError::NotFoundDxBackend)?;
 
                             let raw_device = hdevice.raw_device();
 
@@ -110,9 +113,9 @@ pub mod win32 {
                             raw_device
                                 .OpenSharedHandle(handle, &mut resource)
                                 .map(|_| resource.unwrap())
-                                .map_err(|e| Dx11OnWgpuCompatibilityLayerError::DxError(e))
+                                .map_err(|e| CompatibilityLayerError::DxError(e))
                         })
-                        .ok_or_else(|| Dx11OnWgpuCompatibilityLayerError::NotFoundDxBackend)??
+                        .ok_or_else(|| CompatibilityLayerError::NotFoundDxBackend)??
                 };
 
                 let desc = TextureDescriptor {

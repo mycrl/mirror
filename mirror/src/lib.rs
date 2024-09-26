@@ -1,6 +1,5 @@
-mod audio;
 mod receiver;
-mod video;
+mod render;
 
 #[cfg(any(target_os = "windows", target_os = "linux"))]
 mod sender;
@@ -11,12 +10,12 @@ use std::{ffi::c_void, num::NonZeroIsize, sync::Mutex};
 use std::sync::RwLock;
 
 pub use self::receiver::{MirrorReceiver, MirrorReceiverDescriptor};
-pub use self::video::Backend as VideoRenderBackend;
+pub use self::render::Backend as VideoRenderBackend;
 
 #[cfg(any(target_os = "windows", target_os = "linux"))]
 pub use self::sender::{AudioDescriptor, MirrorSender, MirrorSenderDescriptor, VideoDescriptor};
 
-use self::{audio::AudioRender, video::VideoRender};
+use self::render::{AudioRender, VideoRender};
 
 use anyhow::Result;
 use graphics::raw_window_handle::{
@@ -92,33 +91,23 @@ pub fn shutdown() -> Result<()> {
 /// (e.g. Win32WindowHandle will include a HWND, WaylandWindowHandle uses
 /// wl_surface, etc.)
 #[derive(Debug, Clone)]
-pub struct Window(pub *const c_void);
+pub enum Window {
+    Win32(HWND),
+}
 
 unsafe impl Send for Window {}
 unsafe impl Sync for Window {}
 
 impl Window {
-    /// A raw window handle for Win32.
-    ///
-    /// This variant is used on Windows systems.
-    #[cfg(target_os = "windows")]
-    fn raw(&self) -> HWND {
-        HWND(self.0 as *mut _)
-    }
-
     /// Retrieves the coordinates of a window's client area. The client
     /// coordinates specify the upper-left and lower-right corners of the client
     /// area. Because client coordinates are relative to the upper-left corner
     /// of a window's client area, the coordinates of the upper-left corner are
     /// (0,0).
-    #[cfg(target_os = "windows")]
     fn size(&self) -> Result<Size> {
-        Ok(get_hwnd_size(self.raw())?)
-    }
-
-    #[cfg(target_os = "linux")]
-    fn size(&self) -> Result<Size> {
-        unimplemented!()
+        Ok(match self {
+            Self::Win32(hwnd) => get_hwnd_size(hwnd.clone())?,
+        })
     }
 }
 
@@ -130,15 +119,24 @@ impl HasDisplayHandle for Window {
 
 impl HasWindowHandle for Window {
     fn window_handle(&self) -> Result<WindowHandle<'_>, HandleError> {
-        Ok(unsafe {
-            WindowHandle::borrow_raw(RawWindowHandle::Win32(Win32WindowHandle::new(
-                NonZeroIsize::new(self.0 as isize).unwrap(),
-            )))
+        Ok(match self {
+            Self::Win32(hwnd) => unsafe {
+                WindowHandle::borrow_raw(RawWindowHandle::Win32(Win32WindowHandle::new(
+                    NonZeroIsize::new(hwnd.0 as isize).unwrap(),
+                )))
+            },
         })
     }
 }
 
-pub trait FrameSinker: Sync + Send {
+pub trait Close: Sync + Send {
+    /// Callback when the sender is closed. This may be because the external
+    /// side actively calls the close, or the audio and video packets cannot be
+    /// sent (the network is disconnected), etc.
+    fn close(&self);
+}
+
+pub trait AVFrameSink: Sync + Send {
     /// Callback occurs when the video frame is updated. The video frame format
     /// is fixed to NV12. Be careful not to call blocking methods inside the
     /// callback, which will seriously slow down the encoding and decoding
@@ -200,12 +198,9 @@ pub trait FrameSinker: Sync + Send {
     fn audio(&self, frame: &AudioFrame) -> bool {
         true
     }
-
-    /// Callback when the sender is closed. This may be because the external
-    /// side actively calls the close, or the audio and video packets cannot be
-    /// sent (the network is disconnected), etc.
-    fn close(&self);
 }
+
+pub trait AVFrameStream: AVFrameSink + Close {}
 
 pub struct Mirror(Transport);
 
@@ -231,7 +226,7 @@ impl Mirror {
     /// get the device screen or sound callback, callback can be null, if it is
     /// null then it means no callback data is needed.
     #[cfg(any(target_os = "windows", target_os = "linux"))]
-    pub fn create_sender<T: FrameSinker + 'static>(
+    pub fn create_sender<T: AVFrameStream + 'static>(
         &self,
         id: u32,
         options: MirrorSenderDescriptor,
@@ -246,7 +241,7 @@ impl Mirror {
 
     /// Create a receiver, specify a bound NIC address, you can pass callback to
     /// get the sender's screen or sound callback, callback can not be null.
-    pub fn create_receiver<T: FrameSinker + 'static>(
+    pub fn create_receiver<T: AVFrameStream + 'static>(
         &self,
         id: u32,
         options: MirrorReceiverDescriptor,
@@ -268,30 +263,41 @@ impl Mirror {
 /// unavailable, for video this can be done by enabling the dx11 feature tobe
 /// implemented with Direct3D 11 Graphics, which works fine on some very old
 /// devices.
-pub struct Render {
-    audio: Mutex<AudioRender>,
-    video: Mutex<VideoRender>,
-}
+pub struct Render(Mutex<VideoRender>, Mutex<AudioRender>);
 
 impl Render {
     pub fn new(backend: VideoRenderBackend, window: Window) -> Result<Self> {
-        Ok(Self {
-            video: Mutex::new(VideoRender::new(backend, window)?),
-            audio: Mutex::new(AudioRender::new()?),
-        })
+        Ok(Self(
+            Mutex::new(VideoRender::new(backend, window)?),
+            Mutex::new(AudioRender::new()?),
+        ))
     }
+}
 
-    /// Renders video frames and can automatically handle rendering of hardware
-    /// textures and rendering textures.
-    pub fn on_video(&self, frame: &VideoFrame) -> Result<()> {
-        self.video.lock().unwrap().send(frame)
-    }
-
+impl AVFrameSink for Render {
     /// Renders the audio frame, note that a queue is maintained internally,
     /// here it just pushes the audio to the playback queue, and if the queue is
     /// empty, it fills the mute data to the player by default, so you need to
     /// pay attention to the push rate.
-    pub fn on_audio(&self, frame: &AudioFrame) -> Result<()> {
-        self.audio.lock().unwrap().send(frame)
+    fn audio(&self, frame: &AudioFrame) -> bool {
+        if let Err(e) = self.1.lock().unwrap().send(frame) {
+            log::error!("{:?}", e);
+
+            return false;
+        }
+
+        true
+    }
+
+    /// Renders video frames and can automatically handle rendering of hardware
+    /// textures and rendering textures.
+    fn video(&self, frame: &VideoFrame) -> bool {
+        if let Err(e) = self.0.lock().unwrap().send(frame) {
+            log::error!("{:?}", e);
+
+            return false;
+        }
+
+        true
     }
 }

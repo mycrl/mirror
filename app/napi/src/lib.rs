@@ -4,9 +4,9 @@ use std::{
 };
 
 use mirror::{
-    AudioFrame, Capture, FrameSinker, Mirror, MirrorReceiver, MirrorReceiverDescriptor,
-    MirrorSender, MirrorSenderDescriptor, Render, TransportDescriptor, VideoFrame,
-    VideoRenderBackend,
+    AVFrameSink, AVFrameStream, AudioFrame, Capture, Close, Mirror, MirrorReceiver,
+    MirrorReceiverDescriptor, MirrorSender, MirrorSenderDescriptor, Render, TransportDescriptor,
+    VideoFrame, VideoRenderBackend,
 };
 
 use napi::{
@@ -16,7 +16,7 @@ use napi::{
 };
 
 use napi_derive::napi;
-use utils::atomic::EasyAtomic;
+use utils::{atomic::EasyAtomic, win32::windows::Win32::Foundation::HWND};
 use winit::{
     application::ApplicationHandler,
     event::WindowEvent,
@@ -418,7 +418,10 @@ impl MirrorService {
 
 struct SilenceSinker(ThreadsafeFunction<(), JsUnknown, (), false>);
 
-impl FrameSinker for SilenceSinker {
+impl AVFrameSink for SilenceSinker {}
+impl AVFrameStream for SilenceSinker {}
+
+impl Close for SilenceSinker {
     fn close(&self) {
         self.0.call((), ThreadsafeFunctionCallMode::NonBlocking);
     }
@@ -552,7 +555,9 @@ struct FullDisplaySinker {
     render: Render,
 }
 
-impl FrameSinker for FullDisplaySinker {
+impl AVFrameStream for FullDisplaySinker {}
+
+impl AVFrameSink for FullDisplaySinker {
     fn video(&self, frame: &VideoFrame) -> bool {
         if !self.initialized.get() {
             self.initialized.update(true);
@@ -562,25 +567,15 @@ impl FrameSinker for FullDisplaySinker {
             }
         }
 
-        if let Err(e) = self.render.on_video(frame) {
-            log::error!("{:?}", e);
-
-            return false;
-        }
-
-        true
+        self.render.video(frame)
     }
 
     fn audio(&self, frame: &AudioFrame) -> bool {
-        if let Err(e) = self.render.on_audio(frame) {
-            log::error!("{:?}", e);
-
-            return false;
-        }
-
-        true
+        self.render.audio(frame)
     }
+}
 
+impl Close for FullDisplaySinker {
     fn close(&self) {
         if let Err(_) = self.event_loop_proxy.send_event(UserEvent::CloseRequested) {
             log::warn!("winit event loop is closed");
@@ -622,7 +617,9 @@ impl FullDisplaySinker {
         let render = Render::new(
             backend.into(),
             match window.window_handle()?.as_raw() {
-                RawWindowHandle::Win32(handle) => mirror::Window(handle.hwnd.get() as *const _),
+                RawWindowHandle::Win32(handle) => {
+                    mirror::Window::Win32(HWND(handle.hwnd.get() as *mut _))
+                }
                 _ => unimplemented!("not supports the window handle"),
             },
         )?;

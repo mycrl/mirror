@@ -1,4 +1,4 @@
-use crate::FrameSinker;
+use crate::AVFrameStream;
 
 use std::{
     sync::{atomic::AtomicBool, Arc},
@@ -21,7 +21,7 @@ pub struct MirrorReceiverDescriptor {
 fn create_video_decoder(
     status: &Arc<AtomicBool>,
     adapter: &Arc<StreamMultiReceiverAdapter>,
-    sink: &Arc<dyn FrameSinker>,
+    sink: &Arc<dyn AVFrameStream>,
     settings: VideoDecoderSettings,
 ) -> Result<()> {
     let sink_ = Arc::downgrade(sink);
@@ -77,7 +77,7 @@ fn create_video_decoder(
 fn create_audio_decoder(
     status: &Arc<AtomicBool>,
     adapter: &Arc<StreamMultiReceiverAdapter>,
-    sink: &Arc<dyn FrameSinker>,
+    sink: &Arc<dyn AVFrameStream>,
 ) -> Result<()> {
     let sink_ = Arc::downgrade(sink);
     let status_ = Arc::downgrade(status);
@@ -132,14 +132,14 @@ fn create_audio_decoder(
 pub struct MirrorReceiver {
     pub(crate) adapter: Arc<StreamMultiReceiverAdapter>,
     status: Arc<AtomicBool>,
-    sink: Arc<dyn FrameSinker>,
+    sink: Arc<dyn AVFrameStream>,
 }
 
 impl MirrorReceiver {
     /// Create a receiving end. The receiving end is much simpler to implement.
     /// You only need to decode the data in the queue and call it back to the
     /// sink.
-    pub fn new<T: FrameSinker + 'static>(
+    pub fn new<T: AVFrameStream + 'static>(
         options: MirrorReceiverDescriptor,
         sink: T,
     ) -> Result<Self> {
@@ -147,7 +147,7 @@ impl MirrorReceiver {
 
         let adapter = StreamMultiReceiverAdapter::new();
         let status = Arc::new(AtomicBool::new(false));
-        let sink: Arc<dyn FrameSinker> = Arc::new(sink);
+        let sink: Arc<dyn AVFrameStream> = Arc::new(sink);
 
         create_audio_decoder(&status, &adapter, &sink)?;
         create_video_decoder(
