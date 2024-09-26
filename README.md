@@ -38,6 +38,7 @@ Pure software screen projection is different from Miracast, AirPlay, etc., which
    - [x] Windows screen and camera capture
    - [ ] Linux screen and camera capture
    - [x] Android screen and camera capture
+   - [x] Cross-platform audio capture
 - [x] Audio and video rendering
   - [x] Cross-platform hardware-accelerated rendering
   - [x] D3D11 rendering (optional)
