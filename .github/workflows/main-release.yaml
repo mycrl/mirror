@@ -7,7 +7,7 @@ on:
             - "logo.*"
             - "**/.gitignore"
         branches:
-            - main
+            - master
 jobs:
     build:
         runs-on: "${{ matrix.os }}"
