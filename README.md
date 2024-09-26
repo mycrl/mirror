@@ -1,18 +1,18 @@
 <!--lint disable no-literal-urls-->
+<br/>
+<br/>
 <div align="center">
-   <br/>
-   <br/>
-   <img src="./logo.png" width="170px"/>
-   <br/>
-   <br/>
+   <img src="./logo.svg" width="170px"/>
 </div>
+<br/>
+<br/>
 <br/>
 <div align="center">
   <strong>Cross-platform casting SDK, support Android, Windows, Linux</strong>
 </div>
 <div align="center">
-  <img src="https://img.shields.io/github/actions/workflow/status/mycrl/mirror/main-release.yml?branch=main"/>
-  <img src="https://img.shields.io/github/license/mycrl/turn-rsmirror"/>
+  <img src="https://img.shields.io/github/actions/workflow/status/mycrl/mirror/main-release.yaml?branch=main"/>
+  <img src="https://img.shields.io/github/license/mycrl/mirror"/>
   <img src="https://img.shields.io/github/issues/mycrl/mirror"/>
   <img src="https://img.shields.io/github/stars/mycrl/mirror"/>
 </div>
@@ -23,10 +23,10 @@ Pure software screen projection is different from Miracast, AirPlay, etc., which
 
 ## Features
 
-* Audio is transmitted using OPUS raw streaming.
-* Video encoding uses H264, supports QSV, NVENC hardware accelerated encoding and decoding.
-* Supports UDP multicast and [SRT](https://github.com/Haivision/srt), and can dynamically switch the transport layer.
-* Work in an unstable network environment (such as high-QOS WIFI).
+-   Audio is transmitted using OPUS raw streaming.
+-   Video encoding uses H264, supports QSV, NVENC hardware accelerated encoding and decoding.
+-   Supports UDP multicast and [SRT](https://github.com/Haivision/srt), and can dynamically switch the transport layer.
+-   Work in an unstable network environment (such as high-QOS WIFI).
 
 ## Build Instructions
 
@@ -34,13 +34,14 @@ Pure software screen projection is different from Miracast, AirPlay, etc., which
 
 [Git](https://git-scm.com/downloads) | [Rust](https://www.rust-lang.org/tools/install) | [CMake](https://cmake.org/download/) | [Python3](https://www.python.org/downloads/) | [Node.js](https://nodejs.org/en/download)
 
-* C++20 or above compliant compiler.
-* Rust stable toolchain.
-* CMake 3.16 or above as a build system.
-* Node.js 16 or above as a auto build script.
-* Python3 is optional and required for Android Studio projects.
+-   C++20 or above compliant compiler.
+-   Rust stable toolchain.
+-   CMake 3.16 or above as a build system.
+-   Node.js 16 or above as a auto build script.
+-   Python3 is optional and required for Android Studio projects.
 
 ##### Linux (Ubuntu/Debian)
+
 > For Linux, you need to install additional dependencies to build SRT and other.
 
 ```sh
@@ -67,8 +68,8 @@ If you don't need to build the examples, just build the dynamic library:
 cargo build --release
 ```
 
-For the required header files: [frame.h](./common/include/frame.h) | [mirror.h](./sdk/desktop/include/mirror.h) | [renderer.h](./sdk/renderer/include/renderer.h)
-
+For the required header files: [mirror.h](./ffi/include/mirror.h)
 
 ## License
+
 [GPL](./LICENSE) Copyright (c) 2022 Mr.Panda.
