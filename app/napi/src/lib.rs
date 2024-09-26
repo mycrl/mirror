@@ -1,8 +1,10 @@
 use std::{
-    sync::{atomic::AtomicBool, mpsc::channel, Arc},
+    sync::{atomic::AtomicBool, Arc, Mutex, RwLock},
     thread,
 };
 
+use anyhow::anyhow;
+use crossbeam_utils::sync::Parker;
 use mirror::{
     AVFrameSink, AVFrameStream, AudioFrame, Capture, Close, Mirror, MirrorReceiver,
     MirrorReceiverDescriptor, MirrorSender, MirrorSenderDescriptor, Render, TransportDescriptor,
@@ -12,63 +14,113 @@ use mirror::{
 use napi::{
     bindgen_prelude::Function,
     threadsafe_function::{ThreadsafeFunction, ThreadsafeFunctionCallMode},
-    JsString, JsUnknown,
+    JsUnknown,
 };
 
 use napi_derive::napi;
-use utils::{atomic::EasyAtomic, win32::windows::Win32::Foundation::HWND};
+use once_cell::sync::Lazy;
+use utils::{atomic::EasyAtomic, logger, win32::windows::Win32::Foundation::HWND};
 use winit::{
     application::ApplicationHandler,
     event::WindowEvent,
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy},
+    platform::run_on_demand::EventLoopExtRunOnDemand,
     raw_window_handle::{HasWindowHandle, RawWindowHandle},
     window::{Fullscreen, Window, WindowId},
 };
 
-struct Logger(ThreadsafeFunction<String, JsUnknown, JsString, false>);
+static WINDOW: Lazy<RwLock<Option<Arc<Window>>>> = Lazy::new(|| RwLock::new(None));
+static EVENT_LOOP: Lazy<RwLock<Option<EventLoopProxy<AppEvent>>>> = Lazy::new(|| RwLock::new(None));
 
+enum AppEvent {
+    CloseRequested,
+    Show,
+    Hide,
+}
+
+struct App {
+    window: Option<Arc<Window>>,
+    callback: Option<Box<dyn FnOnce(anyhow::Result<()>)>>,
+}
+
+impl ApplicationHandler<AppEvent> for App {
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        let callback = self.callback.take().unwrap();
+
+        // The default window created is invisible, and the window is made visible by
+        // receiving external requests.
+        let mut attr = Window::default_attributes();
+        attr.visible = false;
+        attr.resizable = false;
+        attr.maximized = false;
+        attr.decorations = false;
+        attr.fullscreen = Some(Fullscreen::Borderless(None));
+
+        callback((|| {
+            let window = Arc::new(event_loop.create_window(attr)?);
+            let monitor = window
+                .current_monitor()
+                .ok_or_else(|| anyhow!("not found a monitor"))?;
+
+            window.set_min_inner_size(Some(monitor.size()));
+            window.set_cursor_hittest(false)?;
+
+            self.window = Some(window.clone());
+            WINDOW.write().unwrap().replace(window);
+            Ok::<_, anyhow::Error>(())
+        })())
+    }
+
+    fn window_event(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        _window_id: WindowId,
+        event: WindowEvent,
+    ) {
+        match event {
+            WindowEvent::CloseRequested => {
+                event_loop.exit();
+            }
+            _ => (),
+        }
+    }
+
+    fn user_event(&mut self, event_loop: &ActiveEventLoop, event: AppEvent) {
+        match event {
+            AppEvent::CloseRequested => {
+                event_loop.exit();
+            }
+            AppEvent::Show => {
+                if let Some(window) = self.window.as_ref() {
+                    window.set_visible(true);
+                }
+            }
+            AppEvent::Hide => {
+                if let Some(window) = self.window.as_ref() {
+                    window.set_visible(false);
+                }
+            }
+        }
+    }
+}
+
+struct Events(EventLoop<AppEvent>);
+
+unsafe impl Sync for Events {}
+unsafe impl Send for Events {}
+
+impl Events {
+    fn run(&mut self, mut app: App) {
+        self.0.run_app_on_demand(&mut app).unwrap();
+    }
+}
+
+/// To initialize the environment.
 #[napi]
-#[repr(usize)]
-pub enum LogLevel {
-    Error = 1,
-    Warn = 2,
-    Info = 3,
-    Debug = 4,
-    Trace = 5,
-}
-
-impl log::Log for Logger {
-    fn flush(&self) {}
-    fn enabled(&self, _: &log::Metadata) -> bool {
-        true
-    }
-
-    #[allow(unused_variables)]
-    fn log(&self, record: &log::Record) {
-        self.0.call(
-            format!(
-                "[{}] - ({}) - {}",
-                record.level(),
-                record.target(),
-                record.args(),
-            ),
-            ThreadsafeFunctionCallMode::NonBlocking,
-        );
-    }
-}
-
-/// To initialize the environment, you can pass a callback that is an output
-/// callback for sdk's internal logging.
-#[napi(ts_args_type = "callback: (message: string) => void")]
-pub fn startup(callback: Function) -> napi::Result<()> {
+pub fn startup(user_data: String) -> napi::Result<()> {
     let func = || {
-        log::set_boxed_logger(Box::new(Logger(
-            callback
-                .build_threadsafe_function::<String>()
-                .build_callback(|ctx| ctx.env.create_string(&ctx.value))?,
-        )))?;
+        logger::init(log::LevelFilter::Info, &user_data)?;
 
-        log::set_max_level(log::LevelFilter::Info);
         std::panic::set_hook(Box::new(|info| {
             log::error!(
                 "pnaic: location={:?}, message={:?}",
@@ -76,6 +128,39 @@ pub fn startup(callback: Function) -> napi::Result<()> {
                 info.payload().downcast_ref::<String>(),
             );
         }));
+
+        {
+            let event_loop = EventLoop::<AppEvent>::with_user_event().build()?;
+            event_loop.set_control_flow(ControlFlow::Wait);
+
+            let event_loop_proxy = event_loop.create_proxy();
+            EVENT_LOOP.write().unwrap().replace(event_loop_proxy);
+
+            let parker = Parker::new();
+            let unparker = parker.unparker().clone();
+
+            let result = Arc::new(Mutex::new(Ok(())));
+            let result_ = result.clone();
+
+            let mut events = Events(event_loop);
+            thread::spawn(move || {
+                events.run(App {
+                    window: None,
+                    callback: Some(Box::new(move |result| {
+                        *result_.lock().unwrap() = result;
+                        unparker.unpark();
+                    })),
+                });
+            });
+
+            parker.park();
+            result
+                .lock()
+                .unwrap()
+                .as_ref()
+                .cloned()
+                .map_err(|e| anyhow!("{:?}", e))?;
+        }
 
         mirror::startup()?;
         Ok::<_, anyhow::Error>(())
@@ -87,7 +172,15 @@ pub fn startup(callback: Function) -> napi::Result<()> {
 /// Roll out the sdk environment and clean up resources.
 #[napi]
 pub fn shutdown() -> napi::Result<()> {
-    mirror::shutdown().map_err(|e| napi::Error::from_reason(e.to_string()))
+    mirror::shutdown().map_err(|e| napi::Error::from_reason(e.to_string()))?;
+
+    if let Some(event_loop) = EVENT_LOOP.read().unwrap().as_ref() {
+        if let Err(_) = event_loop.send_event(AppEvent::CloseRequested) {
+            log::warn!("winit event loop is closed");
+        }
+    }
+
+    Ok(())
 }
 
 #[napi]
@@ -397,7 +490,7 @@ impl MirrorService {
                     .create_receiver(
                         id,
                         options.into(),
-                        FullDisplaySinker::new(
+                        ReceiverSinker::new(
                             backend,
                             callback
                                 .build_threadsafe_function::<()>()
@@ -468,102 +561,23 @@ impl MirrorReceiverService {
     }
 }
 
-enum UserEvent {
-    CloseRequested,
-    Show,
-}
-
-struct Events(EventLoop<UserEvent>);
-
-unsafe impl Send for Events {}
-unsafe impl Sync for Events {}
-
-impl Events {
-    fn create_proxy(&self) -> EventLoopProxy<UserEvent> {
-        self.0.create_proxy()
-    }
-
-    fn run(self, app: &mut Views) -> anyhow::Result<()> {
-        self.0.run_app(app)?;
-        Ok(())
-    }
-}
-
-struct Views {
-    callback: Box<dyn Fn(Result<Arc<Window>, anyhow::Error>)>,
-    window: Option<Arc<Window>>,
-}
-
-impl ApplicationHandler<UserEvent> for Views {
-    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        // The default window created is invisible, and the window is made visible by
-        // receiving external requests.
-        let mut func = || {
-            let mut attr = Window::default_attributes();
-            attr.fullscreen = Some(Fullscreen::Borderless(None));
-            attr.visible = false;
-            attr.resizable = false;
-            attr.maximized = false;
-            attr.decorations = false;
-
-            let window = Arc::new(event_loop.create_window(attr)?);
-            if let Some(monitor) = window.current_monitor() {
-                window.set_min_inner_size(Some(monitor.size()));
-            }
-
-            window.set_cursor_hittest(false)?;
-            self.window = Some(window.clone());
-
-            Ok::<_, anyhow::Error>(window)
-        };
-
-        (self.callback)(func());
-    }
-
-    fn window_event(
-        &mut self,
-        event_loop: &ActiveEventLoop,
-        _window_id: WindowId,
-        event: WindowEvent,
-    ) {
-        match event {
-            WindowEvent::CloseRequested => {
-                event_loop.exit();
-            }
-            _ => (),
-        }
-    }
-
-    fn user_event(&mut self, event_loop: &ActiveEventLoop, event: UserEvent) {
-        match event {
-            UserEvent::CloseRequested => {
-                event_loop.exit();
-            }
-            UserEvent::Show => {
-                if let Some(window) = self.window.as_ref() {
-                    window.set_visible(true);
-                }
-            }
-        }
-    }
-}
-
-struct FullDisplaySinker {
+struct ReceiverSinker {
     callback: ThreadsafeFunction<(), JsUnknown, (), false>,
-    event_loop_proxy: EventLoopProxy<UserEvent>,
     initialized: AtomicBool,
     render: Render,
 }
 
-impl AVFrameStream for FullDisplaySinker {}
+impl AVFrameStream for ReceiverSinker {}
 
-impl AVFrameSink for FullDisplaySinker {
+impl AVFrameSink for ReceiverSinker {
     fn video(&self, frame: &VideoFrame) -> bool {
         if !self.initialized.get() {
             self.initialized.update(true);
 
-            if let Err(_) = self.event_loop_proxy.send_event(UserEvent::Show) {
-                log::warn!("winit event loop is closed");
+            if let Some(event_loop) = EVENT_LOOP.read().unwrap().as_ref() {
+                if let Err(_) = event_loop.send_event(AppEvent::Show) {
+                    log::warn!("winit event loop is closed");
+                }
             }
         }
 
@@ -575,10 +589,12 @@ impl AVFrameSink for FullDisplaySinker {
     }
 }
 
-impl Close for FullDisplaySinker {
+impl Close for ReceiverSinker {
     fn close(&self) {
-        if let Err(_) = self.event_loop_proxy.send_event(UserEvent::CloseRequested) {
-            log::warn!("winit event loop is closed");
+        if let Some(event_loop) = EVENT_LOOP.read().unwrap().as_ref() {
+            if let Err(_) = event_loop.send_event(AppEvent::Hide) {
+                log::warn!("winit event loop is closed");
+            }
         }
 
         self.callback
@@ -586,34 +602,12 @@ impl Close for FullDisplaySinker {
     }
 }
 
-impl FullDisplaySinker {
+impl ReceiverSinker {
     fn new(
         backend: Backend,
         callback: ThreadsafeFunction<(), JsUnknown, (), false>,
     ) -> anyhow::Result<Self> {
-        let event_loop = EventLoop::<UserEvent>::with_user_event().build()?;
-        event_loop.set_control_flow(ControlFlow::Wait);
-
-        let event_loop = Events(event_loop);
-        let event_loop_proxy = event_loop.create_proxy();
-
-        let (tx, rx) = channel();
-        thread::Builder::new()
-            .name("FullDisplayWindowThread".to_string())
-            .spawn(move || {
-                event_loop
-                    .run(&mut Views {
-                        window: None,
-                        callback: Box::new(move |window| {
-                            if let Err(e) = tx.send(window) {
-                                log::warn!("{:?}", e);
-                            }
-                        }),
-                    })
-                    .unwrap();
-            })?;
-
-        let window = rx.recv()??;
+        let window = WINDOW.read().unwrap().as_ref().cloned().unwrap();
         let render = Render::new(
             backend.into(),
             match window.window_handle()?.as_raw() {
@@ -626,7 +620,6 @@ impl FullDisplaySinker {
 
         Ok(Self {
             initialized: AtomicBool::new(false),
-            event_loop_proxy,
             callback,
             render,
         })

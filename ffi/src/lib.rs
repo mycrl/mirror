@@ -3,7 +3,6 @@ pub mod desktop {
     use std::{
         ffi::{c_char, c_int},
         fmt::Debug,
-        io::stdout,
         ptr::null_mut,
     };
 
@@ -13,15 +12,8 @@ pub mod desktop {
         mem::ManuallyDrop,
     };
 
-    use chrono::Local;
-    use fern::{
-        colors::{Color, ColoredLevelConfig},
-        Dispatch as LogDispatch,
-    };
-
-    use log::LevelFilter;
     use mirror::{AVFrameSink, AVFrameStream, AudioFrame, Close, VideoFrame, Window};
-    use utils::strings::Strings;
+    use utils::{logger, strings::Strings};
 
     #[cfg(target_os = "windows")]
     use utils::win32::windows::Win32::Foundation::HWND;
@@ -73,64 +65,8 @@ pub mod desktop {
     #[no_mangle]
     pub extern "C" fn mirror_startup() -> bool {
         let func = || {
-            let mut logger = LogDispatch::new()
-                .level(LevelFilter::Info)
-                .level_for("wgpu", LevelFilter::Warn)
-                .level_for("wgpu_core", LevelFilter::Warn)
-                .level_for("wgpu_hal", LevelFilter::Warn)
-                .level_for("wgpu_hal::auxil::dxgi::exception", LevelFilter::Error);
+            logger::init(log::LevelFilter::Info, "./logs/")?;
 
-            if cfg!(debug_assertions) {
-                let colors = ColoredLevelConfig::new()
-                    .info(Color::Blue)
-                    .warn(Color::Yellow)
-                    .error(Color::Red);
-
-                logger = logger
-                    .format(move |out, message, record| {
-                        out.finish(format_args!(
-                            "[{}] - ({}) - {}",
-                            colors.color(record.level()),
-                            record.file_static().unwrap_or("*"),
-                            message
-                        ))
-                    })
-                    .chain(stdout());
-            } else {
-                logger = logger.format(move |out, message, record| {
-                    out.finish(format_args!(
-                        "{} - [{}] - ({}) - {}",
-                        Local::now().format("%m-%d %H:%M:%S"),
-                        record.level(),
-                        record.file_static().unwrap_or("*"),
-                        message
-                    ))
-                });
-
-                #[cfg(target_os = "windows")]
-                {
-                    if std::fs::metadata("./logs").is_err() {
-                        std::fs::create_dir("./logs")?;
-                    }
-
-                    logger = logger.chain(fern::DateBased::new("logs/", "%Y-%m-%d-mirror.log"));
-                }
-
-                #[cfg(target_os = "linux")]
-                {
-                    logger = logger.chain(
-                        syslog::unix(syslog::Formatter3164 {
-                            facility: syslog::Facility::LOG_USER,
-                            process: "mirror".to_owned(),
-                            hostname: None,
-                            pid: 0,
-                        })
-                        .map_err(|e| anyhow::anyhow!("{:?}", e))?,
-                    );
-                }
-            }
-
-            logger.apply()?;
             std::panic::set_hook(Box::new(|info| {
                 log::error!(
                     "pnaic: location={:?}, message={:?}",
@@ -688,24 +624,27 @@ pub mod desktop {
 #[cfg(target_os = "android")]
 pub mod android {
     mod adapter;
-    mod common;
-    mod logger;
+    mod helper;
 
     use std::{ffi::c_void, ptr::null_mut, sync::Arc, thread};
 
-    use adapter::AndroidStreamReceiverAdapter;
-    use common::{catcher, copy_from_byte_array, JVM};
+    use self::{
+        adapter::AndroidStreamReceiverAdapter,
+        helper::{catcher, copy_from_byte_array, JVM},
+    };
+
     use jni::{
         objects::{JByteArray, JClass, JObject, JString},
         sys::JNI_VERSION_1_6,
         JNIEnv, JavaVM,
     };
 
-    use logger::AndroidLogger;
     use transport::{
         adapter::{StreamReceiverAdapter, StreamReceiverAdapterExt, StreamSenderAdapter},
         Transport, TransportDescriptor,
     };
+
+    use utils::logger::AndroidLogger;
 
     /// JNI_OnLoad
     ///

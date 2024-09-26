@@ -14,7 +14,8 @@ import {
 import { join } from "node:path";
 import * as fs from "node:fs";
 
-const CONFIG_PATH = "./settings.json";
+const USER_DATA = app.getPath("userData");
+const CONFIG_PATH = join(USER_DATA, "./settings.json");
 
 if (!fs.existsSync(CONFIG_PATH)) {
     fs.writeFileSync(
@@ -63,7 +64,6 @@ const Config: {
     },
 });
 
-const tray = new Tray(nativeImage.createFromPath(join(__dirname, "../icon.ico")));
 const display = screen.getPrimaryDisplay();
 const window = new BrowserWindow({
     x: display.workAreaSize.width - 210,
@@ -86,6 +86,9 @@ const window = new BrowserWindow({
 });
 
 window.loadFile(join(__dirname, "../view/index.html"));
+
+const icon = nativeImage.createFromPath(join(__dirname, "../logo.ico"));
+const tray = new Tray(icon);
 
 tray.setTitle("mirror");
 tray.setToolTip("service is running");
@@ -110,14 +113,16 @@ tray.setContextMenu(
 
 const Notify = (level: "info" | "warning" | "error", info: string) => {
     tray.displayBalloon({
-        title: "Mirror - Cross-platform screen casting",
-        iconType: level,
+        title: "mirror",
         content: info,
+        iconType: level,
+        largeIcon: false,
+        icon,
     });
 
     setTimeout(() => {
         tray.removeBalloon();
-    }, 3000);
+    }, 5000);
 };
 
 const Log = (level: string, ...args: any[]) => {
@@ -132,7 +137,9 @@ tray.on("double-click", (_event, bounds) => {
 Notify("info", "The service is running in the background. Double-click the icon to expand it.");
 
 try {
-    startup(console.log);
+    Log("info", `startup mirror, user data path=${USER_DATA}`);
+
+    startup(USER_DATA);
 } catch (e: any) {
     Log("error", e);
     Notify("error", e.message);
