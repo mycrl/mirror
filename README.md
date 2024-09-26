@@ -72,4 +72,4 @@ For the required header files: [mirror.h](./ffi/include/mirror.h)
 
 ## License
 
-[GPL](./LICENSE) Copyright (c) 2022 Mr.Panda.
+[GPL](./LICENSE) Copyright (c) 2024 Lazy Panda.
