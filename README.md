@@ -1,7 +1,20 @@
 <!--lint disable no-literal-urls-->
 <div align="center">
-  <h1>Mirror</h1>
+   <br/>
+   <br/>
+   <img src="./logo.png" width="170px"/>
+   <br/>
+   <br/>
+</div>
+<br/>
+<div align="center">
   <strong>Cross-platform casting SDK, support Android, Windows, Linux</strong>
+</div>
+<div align="center">
+  <img src="https://img.shields.io/github/actions/workflow/status/mycrl/mirror/main-release.yml?branch=main"/>
+  <img src="https://img.shields.io/github/license/mycrl/turn-rsmirror"/>
+  <img src="https://img.shields.io/github/issues/mycrl/mirror"/>
+  <img src="https://img.shields.io/github/stars/mycrl/mirror"/>
 </div>
 <br/>
 <br/>
