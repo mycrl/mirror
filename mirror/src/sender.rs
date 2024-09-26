@@ -1,4 +1,4 @@
-use crate::FrameSinker;
+use crate::AVFrameStream;
 
 use std::{
     mem::size_of,
@@ -50,7 +50,7 @@ pub struct MirrorSenderDescriptor {
 
 struct VideoSender {
     status: Weak<AtomicBool>,
-    sink: Weak<dyn FrameSinker>,
+    sink: Weak<dyn AVFrameStream>,
     adapter: Weak<StreamSenderAdapter>,
     encoder: VideoEncoder,
 }
@@ -66,7 +66,7 @@ impl VideoSender {
         status: &Arc<AtomicBool>,
         adapter: &Arc<StreamSenderAdapter>,
         settings: VideoEncoderSettings,
-        sink: &Arc<dyn FrameSinker>,
+        sink: &Arc<dyn AVFrameStream>,
     ) -> Result<Self> {
         Ok(Self {
             sink: Arc::downgrade(sink),
@@ -147,7 +147,7 @@ impl FrameArrived for VideoSender {
 
 struct AudioSender {
     status: Weak<AtomicBool>,
-    sink: Weak<dyn FrameSinker>,
+    sink: Weak<dyn AVFrameStream>,
     adapter: Weak<StreamSenderAdapter>,
     encoder: AudioEncoder,
     chunk_count: usize,
@@ -165,7 +165,7 @@ impl AudioSender {
         status: &Arc<AtomicBool>,
         adapter: &Arc<StreamSenderAdapter>,
         settings: AudioEncoderSettings,
-        sink: &Arc<dyn FrameSinker>,
+        sink: &Arc<dyn AVFrameStream>,
     ) -> Result<Self> {
         // Create an opus header data. The opus decoder needs this data to obtain audio
         // information. Here, actively add an opus header information to the queue, and
@@ -277,7 +277,7 @@ impl FrameArrived for AudioSender {
 pub struct MirrorSender {
     pub(crate) adapter: Arc<StreamSenderAdapter>,
     status: Arc<AtomicBool>,
-    sink: Arc<dyn FrameSinker>,
+    sink: Arc<dyn AVFrameStream>,
     capture: Capture,
 }
 
@@ -285,13 +285,16 @@ impl MirrorSender {
     // Create a sender. The capture of the sender is started following the sender,
     // but both video capture and audio capture can be empty, which means you can
     // create a sender that captures nothing.
-    pub fn new<T: FrameSinker + 'static>(options: MirrorSenderDescriptor, sink: T) -> Result<Self> {
+    pub fn new<T: AVFrameStream + 'static>(
+        options: MirrorSenderDescriptor,
+        sink: T,
+    ) -> Result<Self> {
         log::info!("create sender");
 
         let mut capture_options = CaptureDescriptor::default();
         let adapter = StreamSenderAdapter::new(options.multicast);
         let status = Arc::new(AtomicBool::new(false));
-        let sink: Arc<dyn FrameSinker> = Arc::new(sink);
+        let sink: Arc<dyn AVFrameStream> = Arc::new(sink);
 
         if let Some((source, options)) = options.audio {
             capture_options.audio = Some(SourceCaptureDescriptor {

@@ -20,8 +20,11 @@ pub mod desktop {
     };
 
     use log::LevelFilter;
-    use mirror::{AudioFrame, VideoFrame, Window};
+    use mirror::{AVFrameSink, AVFrameStream, AudioFrame, Close, VideoFrame, Window};
     use utils::strings::Strings;
+
+    #[cfg(target_os = "windows")]
+    use utils::win32::windows::Win32::Foundation::HWND;
 
     #[cfg(any(target_os = "windows", target_os = "linux"))]
     use mirror::{Capture, SourceType};
@@ -277,7 +280,7 @@ pub mod desktop {
 
     #[repr(C)]
     #[derive(Clone, Copy)]
-    pub struct FrameSinker {
+    pub struct RawAVFrameStream {
         /// Callback occurs when the video frame is updated. The video frame
         /// format is fixed to NV12. Be careful not to call blocking
         /// methods inside the callback, which will seriously slow down
@@ -340,10 +343,12 @@ pub mod desktop {
         pub ctx: *const c_void,
     }
 
-    unsafe impl Send for FrameSinker {}
-    unsafe impl Sync for FrameSinker {}
+    unsafe impl Send for RawAVFrameStream {}
+    unsafe impl Sync for RawAVFrameStream {}
 
-    impl mirror::FrameSinker for FrameSinker {
+    impl AVFrameStream for RawAVFrameStream {}
+
+    impl AVFrameSink for RawAVFrameStream {
         fn audio(&self, frame: &AudioFrame) -> bool {
             if let Some(callback) = &self.audio {
                 callback(self.ctx, frame)
@@ -359,7 +364,9 @@ pub mod desktop {
                 true
             }
         }
+    }
 
+    impl Close for RawAVFrameStream {
         fn close(&self) {
             if let Some(callback) = &self.close {
                 callback(self.ctx);
@@ -506,7 +513,7 @@ pub mod desktop {
         mirror: *const Mirror,
         id: c_int,
         options: SenderDescriptor,
-        sink: FrameSinker,
+        sink: RawAVFrameStream,
     ) -> *const Sender {
         assert!(!mirror.is_null());
     
@@ -584,7 +591,7 @@ pub mod desktop {
         mirror: *const Mirror,
         id: c_int,
         codec: VideoDecoderType,
-        sink: FrameSinker,
+        sink: RawAVFrameStream,
     ) -> *const Receiver {
         assert!(!mirror.is_null());
 
@@ -642,7 +649,7 @@ pub mod desktop {
         let func = || {
             Ok::<RawRenderer, anyhow::Error>(RawRenderer(mirror::Render::new(
                 backend.into(),
-                Window(hwnd),
+                Window::Win32(HWND(hwnd)),
             )?))
         };
 
@@ -657,7 +664,7 @@ pub mod desktop {
     extern "C" fn renderer_on_video(render: *mut RawRenderer, frame: *const VideoFrame) -> bool {
         assert!(!render.is_null() && !frame.is_null());
 
-        checker(unsafe { &*render }.0.on_video(unsafe { &*frame })).is_ok()
+        unsafe { &*render }.0.video(unsafe { &*frame })
     }
 
     /// Push the audio frame into the renderer, which will append to audio
@@ -666,7 +673,7 @@ pub mod desktop {
     extern "C" fn renderer_on_audio(render: *mut RawRenderer, frame: *const AudioFrame) -> bool {
         assert!(!render.is_null() && !frame.is_null());
 
-        checker(unsafe { &*render }.0.on_audio(unsafe { &*frame })).is_ok()
+        unsafe { &*render }.0.audio(unsafe { &*frame })
     }
 
     /// Destroy the window renderer.

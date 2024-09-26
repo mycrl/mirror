@@ -108,10 +108,10 @@ tray.setContextMenu(
     ])
 );
 
-const Notify = (info: string) => {
+const Notify = (level: "info" | "warning" | "error", info: string) => {
     tray.displayBalloon({
-        iconType: "info",
         title: "Mirror - Cross-platform screen casting",
+        iconType: level,
         content: info,
     });
 
@@ -129,12 +129,13 @@ tray.on("double-click", (_event, bounds) => {
     window.show();
 });
 
-Notify("The service is running in the background. Double-click the icon to expand it.");
+Notify("info", "The service is running in the background. Double-click the icon to expand it.");
 
 try {
     startup(console.log);
 } catch (e: any) {
     Log("error", e);
+    Notify("error", e.message);
 }
 
 let mirror: MirrorService | null = null;
@@ -192,11 +193,12 @@ ipcMain.handle(
                             sender = null;
                         }
 
-                        Notify("Screen projection has stopped");
+                        Notify("info", "Screen projection has stopped");
                     }
                 );
             } catch (e: any) {
                 Log("error", e);
+                Notify("error", e.message);
             }
         } else {
             Log("error", "sender is exists");
@@ -232,11 +234,12 @@ ipcMain.handle("close-sender", async (_event) => {
                         receiver = null;
                     }
 
-                    Notify("Other devices have turned off screen projection");
+                    Notify("info", "Other devices have turned off screen projection");
                 }
             );
         } catch (e: any) {
             Log("error", e);
+            Notify("error", e.message);
         }
     } else {
         Log("warn", "receiver is exists, skip");
@@ -265,7 +268,7 @@ ipcMain.handle("set-settings", (_event, settings: typeof Config) => {
         mirror = new MirrorService(settings);
     } catch (e: any) {
         Log("error", e);
-        Notify("Initialization failed due to an error in setting parameters!");
+        Notify("error", e.message);
 
         return;
     }
@@ -288,11 +291,12 @@ ipcMain.handle("set-settings", (_event, settings: typeof Config) => {
                         receiver = null;
                     }
 
-                    Notify("Other sources have turned off screen projection");
+                    Notify("info", "Other sources have turned off screen projection");
                 }
             );
         } catch (e: any) {
             Log("error", e);
+            Notify("error", e.message);
         }
     } else {
         Log("warn", "receiver is exists, skip");
@@ -306,6 +310,7 @@ ipcMain.handle("get-sources", (_event, kind: SourceType) => {
         return MirrorService.getSources(kind);
     } catch (e: any) {
         Log("error", e);
+        Notify("error", e.message);
     }
 });
 

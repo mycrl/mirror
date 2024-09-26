@@ -1,19 +1,18 @@
 use std::sync::Arc;
 
-use crate::Vertex;
+use crate::{helper::CompatibilityLayerError, Vertex};
 
 #[cfg(target_os = "windows")]
-use crate::helper::win32::{Dx11OnWgpuCompatibilityLayer, Dx11OnWgpuCompatibilityLayerError};
+use crate::helper::win32::Dx11OnWgpuCompatibilityLayer;
 
 use smallvec::SmallVec;
 use thiserror::Error;
-use utils::{
-    win32::{Direct3DDevice, EasyTexture},
-    Size,
-};
+use utils::Size;
 
 #[cfg(target_os = "windows")]
-use utils::win32::windows::Win32::Graphics::Direct3D11::ID3D11Texture2D;
+use utils::win32::{
+    windows::Win32::Graphics::Direct3D11::ID3D11Texture2D, Direct3DDevice, EasyTexture,
+};
 
 use wgpu::{
     include_wgsl, AddressMode, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout,
@@ -27,11 +26,13 @@ use wgpu::{
     VertexState,
 };
 
+#[cfg(target_os = "windows")]
+type WgpuCompatibilityLayer = Dx11OnWgpuCompatibilityLayer;
+
 #[derive(Debug, Error)]
 pub enum FromNativeResourceError {
-    #[cfg(target_os = "windows")]
     #[error(transparent)]
-    Dx11OnWgpuCompatibilityLayerError(#[from] Dx11OnWgpuCompatibilityLayerError),
+    CompatibilityLayerError(#[from] CompatibilityLayerError),
 }
 
 #[derive(Debug)]
@@ -46,11 +47,11 @@ impl<'a> HardwareTexture<'a> {
     #[allow(unused)]
     pub(crate) fn texture<'b>(
         &self,
-        layer: &'b mut Dx11OnWgpuCompatibilityLayer,
+        compatibility: &'b mut WgpuCompatibilityLayer,
     ) -> Result<&'b WGPUTexture, FromNativeResourceError> {
         Ok(match self {
             #[cfg(target_os = "windows")]
-            HardwareTexture::Dx11(dx11, index) => layer.texture_from_dx11(dx11, *index)?,
+            HardwareTexture::Dx11(dx11, index) => compatibility.from_hal(dx11, *index)?,
             _ => unimplemented!("not supports native texture"),
         })
     }
@@ -86,10 +87,10 @@ impl<'a> TextureResource<'a> {
     /// if it is software texture directly return None.
     pub(crate) fn texture<'b>(
         &self,
-        layer: &'b mut Dx11OnWgpuCompatibilityLayer,
+        compatibility: &'b mut WgpuCompatibilityLayer,
     ) -> Result<Option<&'b WGPUTexture>, FromNativeResourceError> {
         Ok(match self {
-            TextureResource::Texture(texture) => Some(texture.texture(layer)?),
+            TextureResource::Texture(texture) => Some(texture.texture(compatibility)?),
             TextureResource::Buffer(_) => None,
         })
     }
@@ -111,10 +112,10 @@ pub enum Texture<'a> {
 impl<'a> Texture<'a> {
     pub(crate) fn texture<'b>(
         &self,
-        layer: &'b mut Dx11OnWgpuCompatibilityLayer,
+        compatibility: &'b mut WgpuCompatibilityLayer,
     ) -> Result<Option<&'b WGPUTexture>, FromNativeResourceError> {
         Ok(match self {
-            Texture::Rgba(texture) | Texture::Nv12(texture) => texture.texture(layer)?,
+            Texture::Rgba(texture) | Texture::Nv12(texture) => texture.texture(compatibility)?,
             Texture::I420(_) => None,
         })
     }
@@ -533,20 +534,21 @@ pub struct Texture2DSource {
     pipeline: Option<RenderPipeline>,
     sample: Option<Texture2DSourceSample>,
     bind_group_layout: Option<BindGroupLayout>,
-    #[cfg(target_os = "windows")]
-    layer: Dx11OnWgpuCompatibilityLayer,
+    compatibility: WgpuCompatibilityLayer,
 }
 
 impl Texture2DSource {
     pub fn new(options: Texture2DSourceOptions) -> Self {
+        #[cfg(target_os = "windows")]
+        let compatibility = WgpuCompatibilityLayer::new(options.device.clone(), options.direct3d);
+
         Self {
-            #[cfg(target_os = "windows")]
-            layer: Dx11OnWgpuCompatibilityLayer::new(options.device.clone(), options.direct3d),
             device: options.device,
             queue: options.queue,
             bind_group_layout: None,
             pipeline: None,
             sample: None,
+            compatibility,
         }
     }
 
@@ -657,7 +659,7 @@ impl Texture2DSource {
             if let (Some(layout), Some(sample), Some(pipeline)) =
                 (&self.bind_group_layout, &self.sample, &self.pipeline)
             {
-                let texture = texture.texture(&mut self.layer)?;
+                let texture = texture.texture(&mut self.compatibility)?;
                 Some((
                     pipeline,
                     match sample {
