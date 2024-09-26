@@ -21,12 +21,37 @@
 
 Pure software screen projection is different from Miracast, AirPlay, etc., which need to rely on hardware support. This project was not designed to work on a wide area network, but works well in a local area network environment.
 
-## Features
+## Roadmap
 
--   Audio is transmitted using OPUS raw streaming.
--   Video encoding uses H264, supports QSV, NVENC hardware accelerated encoding and decoding.
--   Supports UDP multicast and [SRT](https://github.com/Haivision/srt), and can dynamically switch the transport layer.
--   Work in an unstable network environment (such as high-QOS WIFI).
+- [x] Low Latency Incompletely Reliable Transmission (SRT)
+- [x] UDP multicast transport layer (optional)
+- [ ] H264 codec
+   - [x] Windows hardware acceleration (D3D11)
+   - [ ] Linux hardware acceleration (Vulkan)
+   - [x] Android hardware acceleration
+   - [x] Software coding (optional)
+- [x] Opus codec
+   - [x] Windows
+   - [x] Linux
+   - [x] Android
+- [ ] Audio and video capture
+   - [x] Windows screen and camera capture
+   - [ ] Linux screen and camera capture
+   - [x] Android screen and camera capture
+- [x] Audio and video rendering
+  - [x] Cross-platform hardware-accelerated rendering
+  - [x] D3D11 rendering (optional)
+  - [x] Cross-platform low-latency audio playback
+- [ ] Cross-platform hardware/software texture hardware scaling and format conversion
+- [ ] App
+   - [x] Windows
+   - [ ] Linux
+   - [ ] Android
+- [ ] Examples
+   - [x] Windows
+   - [ ] Linux
+   - [x] Android 
+
 
 ## Build Instructions
 
