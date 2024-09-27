@@ -11,7 +11,7 @@
   <strong>Cross-platform casting SDK, support Android, Windows, Linux</strong>
 </div>
 <div align="center">
-  <img src="https://img.shields.io/github/actions/workflow/status/mycrl/mirror/main-release.yaml?branch=main"/>
+  <img src="https://img.shields.io/github/actions/workflow/status/mycrl/mirror/release.yaml?branch=main"/>
   <img src="https://img.shields.io/github/license/mycrl/mirror"/>
   <img src="https://img.shields.io/github/issues/mycrl/mirror"/>
   <img src="https://img.shields.io/github/stars/mycrl/mirror"/>
