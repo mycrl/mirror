@@ -1,5 +1,6 @@
+use parking_lot::{Mutex, RwLock};
 use std::{
-    sync::{atomic::AtomicBool, Arc, Mutex, RwLock},
+    sync::{atomic::AtomicBool, Arc},
     thread,
 };
 
@@ -19,7 +20,7 @@ use napi::{
 
 use napi_derive::napi;
 use once_cell::sync::Lazy;
-use utils::{atomic::EasyAtomic, logger, win32::windows::Win32::Foundation::HWND};
+use utils::{atomic::EasyAtomic, logger, win32::windows::Win32::Foundation::HWND, Size};
 use winit::{
     application::ApplicationHandler,
     event::WindowEvent,
@@ -66,7 +67,7 @@ impl ApplicationHandler<AppEvent> for App {
             window.set_cursor_hittest(false)?;
 
             self.window = Some(window.clone());
-            WINDOW.write().unwrap().replace(window);
+            WINDOW.write().replace(window);
             Ok::<_, anyhow::Error>(())
         })())
     }
@@ -134,7 +135,7 @@ pub fn startup(user_data: String) -> napi::Result<()> {
             event_loop.set_control_flow(ControlFlow::Wait);
 
             let event_loop_proxy = event_loop.create_proxy();
-            EVENT_LOOP.write().unwrap().replace(event_loop_proxy);
+            EVENT_LOOP.write().replace(event_loop_proxy);
 
             let parker = Parker::new();
             let unparker = parker.unparker().clone();
@@ -147,7 +148,7 @@ pub fn startup(user_data: String) -> napi::Result<()> {
                 events.run(App {
                     window: None,
                     callback: Some(Box::new(move |result| {
-                        *result_.lock().unwrap() = result;
+                        *result_.lock() = result;
                         unparker.unpark();
                     })),
                 });
@@ -156,7 +157,6 @@ pub fn startup(user_data: String) -> napi::Result<()> {
             parker.park();
             result
                 .lock()
-                .unwrap()
                 .as_ref()
                 .cloned()
                 .map_err(|e| anyhow!("{:?}", e))?;
@@ -174,7 +174,7 @@ pub fn startup(user_data: String) -> napi::Result<()> {
 pub fn shutdown() -> napi::Result<()> {
     mirror::shutdown().map_err(|e| napi::Error::from_reason(e.to_string()))?;
 
-    if let Some(event_loop) = EVENT_LOOP.read().unwrap().as_ref() {
+    if let Some(event_loop) = EVENT_LOOP.read().as_ref() {
         if let Err(_) = event_loop.send_event(AppEvent::CloseRequested) {
             log::warn!("winit event loop is closed");
         }
@@ -574,7 +574,7 @@ impl AVFrameSink for ReceiverSinker {
         if !self.initialized.get() {
             self.initialized.update(true);
 
-            if let Some(event_loop) = EVENT_LOOP.read().unwrap().as_ref() {
+            if let Some(event_loop) = EVENT_LOOP.read().as_ref() {
                 if let Err(_) = event_loop.send_event(AppEvent::Show) {
                     log::warn!("winit event loop is closed");
                 }
@@ -591,7 +591,7 @@ impl AVFrameSink for ReceiverSinker {
 
 impl Close for ReceiverSinker {
     fn close(&self) {
-        if let Some(event_loop) = EVENT_LOOP.read().unwrap().as_ref() {
+        if let Some(event_loop) = EVENT_LOOP.read().as_ref() {
             if let Err(_) = event_loop.send_event(AppEvent::Hide) {
                 log::warn!("winit event loop is closed");
             }
@@ -607,13 +607,18 @@ impl ReceiverSinker {
         backend: Backend,
         callback: ThreadsafeFunction<(), JsUnknown, (), false>,
     ) -> anyhow::Result<Self> {
-        let window = WINDOW.read().unwrap().as_ref().cloned().unwrap();
+        let window = WINDOW.read().as_ref().cloned().unwrap();
+        let inner_size = window.inner_size();
         let render = Render::new(
             backend.into(),
             match window.window_handle()?.as_raw() {
-                RawWindowHandle::Win32(handle) => {
-                    mirror::Window::Win32(HWND(handle.hwnd.get() as *mut _))
-                }
+                RawWindowHandle::Win32(handle) => mirror::Window::Win32(
+                    HWND(handle.hwnd.get() as *mut _),
+                    Size {
+                        width: inner_size.width,
+                        height: inner_size.height,
+                    },
+                ),
                 _ => unimplemented!("not supports the window handle"),
             },
         )?;

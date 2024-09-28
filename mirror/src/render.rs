@@ -2,7 +2,7 @@ use std::{
     slice::from_raw_parts,
     sync::{
         mpsc::{channel, Receiver, Sender},
-        Arc, RwLock,
+        Arc,
     },
 };
 
@@ -16,6 +16,7 @@ use cpal::{
 };
 
 use frame::{AudioFrame, VideoFormat, VideoFrame};
+use parking_lot::RwLock;
 use utils::Size;
 
 use graphics::{
@@ -63,7 +64,7 @@ impl AudioRender {
                 },
                 move |err| {
                     if let Some(current_error) = current_error_.upgrade() {
-                        current_error.write().unwrap().replace(err);
+                        current_error.write().replace(err);
                     }
                 },
                 None,
@@ -81,7 +82,7 @@ impl AudioRender {
 
     /// Push an audio clip to the queue.
     pub fn send(&mut self, frame: &AudioFrame) -> Result<()> {
-        if let Some(current_error) = self.current_error.read().unwrap().as_ref() {
+        if let Some(current_error) = self.current_error.read().as_ref() {
             return Err(anyhow!("{}", current_error));
         }
 
@@ -187,12 +188,7 @@ impl VideoRender {
         );
 
         #[cfg(target_os = "windows")]
-        let direct3d = crate::DIRECT_3D_DEVICE
-            .read()
-            .unwrap()
-            .as_ref()
-            .unwrap()
-            .clone();
+        let direct3d = crate::DIRECT_3D_DEVICE.read().as_ref().unwrap().clone();
 
         Ok(match backend {
             #[cfg(not(target_os = "windows"))]
@@ -200,7 +196,7 @@ impl VideoRender {
             #[cfg(target_os = "windows")]
             Backend::Dx11 => Self::Dx11(Dx11Renderer::new(
                 match window {
-                    Window::Win32(hwnd) => hwnd,
+                    Window::Win32(hwnd, _) => hwnd,
                 },
                 size,
                 direct3d,

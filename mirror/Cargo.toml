@@ -7,6 +7,7 @@ edition = "2021"
 anyhow = "1.0.82"
 bytes = "1.5"
 log = "0.4.20"
+parking_lot = "0.12"
 utils = { path = "../utils" }
 frame = { path = "../frame" }
 transport = { path = "../transport" }

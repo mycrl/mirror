@@ -30,7 +30,7 @@ use wgpu::{
 };
 
 #[cfg(target_os = "windows")]
-type CompatibilityLayer = Dx11OnCompatibilityLayer;
+type CompatibilityLayer = Dx11OnWgpuCompatibilityLayer;
 
 #[cfg(target_os = "linux")]
 type CompatibilityLayer = OpenGLOnWgpuCompatibilityLayer;

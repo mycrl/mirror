@@ -8,12 +8,13 @@ use std::{
     sync::{
         atomic::{AtomicU32, AtomicU64},
         mpsc::{channel, Sender},
-        Arc, Mutex, RwLock, Weak,
+        Arc, Weak,
     },
     thread,
 };
 
 use bytes::BytesMut;
+use parking_lot::{Mutex, RwLock};
 use service::{signal::Signal, SocketKind, StreamInfo};
 use smallvec::SmallVec;
 use utils::atomic::EasyAtomic;
@@ -81,15 +82,15 @@ impl Transport {
                             match signal {
                                 Signal::Start { id, port } => {
                                     if let Some(publishs) = publishs_.upgrade() {
-                                        publishs.write().unwrap().insert(id, port);
+                                        publishs.write().insert(id, port);
                                     }
                                 }
                                 Signal::Stop { id } => {
                                     if let Some(publishs) = publishs_.upgrade() {
-                                        publishs.write().unwrap().remove(&id);
+                                        publishs.write().remove(&id);
                                     }
 
-                                    if channels.write().unwrap().remove(&id).is_some() {
+                                    if channels.write().remove(&id).is_some() {
                                         log::info!("channel is close, id={}", id)
                                     }
                                 }
@@ -99,7 +100,7 @@ impl Transport {
 
                             // Forwards the signal to all subscribers
                             {
-                                for (id, tx) in channels.read().unwrap().iter() {
+                                for (id, tx) in channels.read().iter() {
                                     if tx.send(signal).is_err() {
                                         closeds.push(*id);
                                     }
@@ -109,7 +110,7 @@ impl Transport {
                             // Clean up closed subscribers
                             if !closeds.is_empty() {
                                 for id in closeds {
-                                    if channels.write().unwrap().remove(&id).is_some() {
+                                    if channels.write().remove(&id).is_some() {
                                         log::info!("channel is close, id={}", id)
                                     }
                                 }
@@ -225,7 +226,7 @@ impl Transport {
     where
         T: StreamReceiverAdapterExt + 'static,
     {
-        let current_mcast_rceiver = Arc::new(Mutex::new(None));
+        let current_mcast_rceiver: Arc<Mutex<Option<Arc<multicast::Socket>>>> = Default::default();
 
         // Creating a multicast receiver
         let current_mcast_rceiver_ = current_mcast_rceiver.clone();
@@ -238,11 +239,7 @@ impl Transport {
                 multicast::Socket::new(multicast, SocketAddr::new("0.0.0.0".parse().unwrap(), port))
             {
                 let socket = Arc::new(socket);
-                if let Some(socket) = current_mcast_rceiver_
-                    .lock()
-                    .unwrap()
-                    .replace(socket.clone())
-                {
+                if let Some(socket) = current_mcast_rceiver_.lock().replace(socket.clone()) {
                     socket.close()
                 }
 
@@ -328,12 +325,12 @@ impl Transport {
             let sequence = sequence.clone();
             let adapter = Arc::downgrade(adapter);
             let receiver = Arc::downgrade(&receiver);
-            if let Some(port) = self.publishs.read().unwrap().get(&stream_id) {
+            if let Some(port) = self.publishs.read().get(&stream_id) {
                 create_mcast_receiver(receiver, sequence, adapter, multicast, *port);
             } else {
                 // Add a message receiver to the list
                 let (tx, rx) = channel();
-                self.channels.write().unwrap().insert(index, tx);
+                self.channels.write().insert(index, tx);
 
                 thread::Builder::new()
                     .name("MirrorReceiverSignalProcessThread".to_string())
@@ -413,14 +410,14 @@ impl Transport {
                 log::warn!("srt receiver is closed, id={}", stream_id);
 
                 // Remove the sender, which is intended to stop the signal receiver thread.
-                let _ = channels.write().unwrap().remove(&index);
+                let _ = channels.write().remove(&index);
 
                 if let Some(adapter) = adapter_.upgrade() {
                     adapter.close();
                     receiver.close();
                 }
 
-                if let Some(socket) = current_mcast_rceiver.lock().unwrap().take() {
+                if let Some(socket) = current_mcast_rceiver.lock().take() {
                     socket.close()
                 }
             })?;

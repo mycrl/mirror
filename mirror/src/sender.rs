@@ -327,7 +327,6 @@ impl MirrorSender {
                     #[cfg(target_os = "windows")]
                     direct3d: crate::DIRECT_3D_DEVICE
                         .read()
-                        .unwrap()
                         .clone()
                         .expect("D3D device was not initialized successfully!"),
                 },
@@ -342,7 +341,7 @@ impl MirrorSender {
                         height: options.height,
                         bit_rate: options.bit_rate,
                         #[cfg(target_os = "windows")]
-                        direct3d: crate::DIRECT_3D_DEVICE.read().unwrap().clone(),
+                        direct3d: crate::DIRECT_3D_DEVICE.read().clone(),
                     },
                     &sink,
                 )?,

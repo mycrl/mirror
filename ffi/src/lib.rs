@@ -16,7 +16,7 @@ pub mod desktop {
     use utils::{logger, strings::Strings};
 
     #[cfg(target_os = "windows")]
-    use utils::win32::windows::Win32::Foundation::HWND;
+    use utils::win32::{get_hwnd_size, windows::Win32::Foundation::HWND};
 
     #[cfg(any(target_os = "windows", target_os = "linux"))]
     use mirror::{Capture, SourceType};
@@ -588,7 +588,10 @@ pub mod desktop {
     ) -> *mut RawRenderer {
         let func = || {
             #[cfg(target_os = "windows")]
-            let window = Window::Win32(HWND(hwnd));
+            let window = {
+                let hwnd = HWND(hwnd);
+                Window::Win32(hwnd, get_hwnd_size(hwnd)?)
+            };
 
             #[cfg(target_os = "linux")]
             let window = todo!();

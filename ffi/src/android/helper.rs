@@ -1,7 +1,8 @@
-use std::{cell::RefCell, sync::Mutex};
+use std::cell::RefCell;
 
 use bytes::BytesMut;
 use jni::{objects::JByteArray, JNIEnv, JavaVM};
+use parking_lot::Mutex;
 use transport::package;
 
 // Each function is accessible at a fixed offset through the JNIEnv argument.

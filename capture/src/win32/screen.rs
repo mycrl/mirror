@@ -1,7 +1,7 @@
 use crate::{CaptureHandler, FrameArrived, Source, SourceType, VideoCaptureSourceDescription};
 
 use std::{
-    sync::{atomic::AtomicBool, Arc, Mutex},
+    sync::{atomic::AtomicBool, Arc},
     thread,
     time::Duration,
 };
@@ -9,6 +9,7 @@ use std::{
 use anyhow::{anyhow, Result};
 use frame::{VideoFormat, VideoFrame};
 use graphics::dx11::{Resource, VideoTransform, VideoTransformDescriptor};
+use parking_lot::Mutex;
 use utils::{
     atomic::EasyAtomic,
     win32::{EasyTexture, MediaThreadClass},
@@ -83,7 +84,7 @@ impl GraphicsCaptureApiHandler for WindowsCapture {
 
                 let mut func = || {
                     while let Some(shared_resource) = shared_resource_.upgrade() {
-                        if let Some(resource) = shared_resource.lock().unwrap().take() {
+                        if let Some(resource) = shared_resource.lock().take() {
                             let texture = direct3d.open_shared_texture(resource.0.get_shared()?)?;
                             let view = transform.create_input_view(&texture, 0)?;
                             transform.process(Some(view))?;
@@ -148,7 +149,6 @@ impl GraphicsCaptureApiHandler for WindowsCapture {
         if self.status.get() {
             self.shared_resource
                 .lock()
-                .unwrap()
                 .replace(SharedResource(frame.texture()?));
         } else {
             log::info!("windows screen capture control stop");
@@ -209,22 +209,21 @@ impl CaptureHandler for ScreenCapture {
         // Start capturing the screen. This runs in a free thread. If it runs in the
         // current thread, you will encounter problems with Winrt runtime
         // initialization.
-        if let Some(control) = self
-            .0
-            .lock()
-            .unwrap()
-            .replace(WindowsCapture::start_free_threaded(Settings::new(
-                source,
-                CursorCaptureSettings::WithoutCursor,
-                DrawBorderSettings::Default,
-                ColorFormat::Rgba8,
-                Context {
-                    arrived: Box::new(arrived),
-                    options,
+        if let Some(control) =
+            self.0
+                .lock()
+                .replace(WindowsCapture::start_free_threaded(Settings::new(
                     source,
-                },
-                None,
-            ))?)
+                    CursorCaptureSettings::WithoutCursor,
+                    DrawBorderSettings::Default,
+                    ColorFormat::Rgba8,
+                    Context {
+                        arrived: Box::new(arrived),
+                        options,
+                        source,
+                    },
+                    None,
+                ))?)
         {
             control.stop()?;
         }
@@ -233,7 +232,7 @@ impl CaptureHandler for ScreenCapture {
     }
 
     fn stop(&self) -> Result<(), Self::Error> {
-        if let Some(control) = self.0.lock().unwrap().take() {
+        if let Some(control) = self.0.lock().take() {
             control.stop()?;
         }
 

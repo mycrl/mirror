@@ -157,7 +157,7 @@ impl MirrorReceiver {
             VideoDecoderSettings {
                 codec: options.video,
                 #[cfg(target_os = "windows")]
-                direct3d: crate::DIRECT_3D_DEVICE.read().unwrap().clone(),
+                direct3d: crate::DIRECT_3D_DEVICE.read().clone(),
             },
         )?;
 

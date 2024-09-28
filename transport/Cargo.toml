@@ -12,3 +12,4 @@ utils = { path = "../utils" }
 service = { path = "../service" }
 xxhash-rust = { version = "0.8.11", features = ["xxh3", "xxh64"]}
 smallvec = "1.13.2"
+parking_lot = "0.12"

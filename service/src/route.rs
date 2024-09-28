@@ -1,5 +1,6 @@
-use std::{collections::HashMap, sync::RwLock};
+use std::collections::HashMap;
 
+use parking_lot::RwLock;
 use tokio::sync::broadcast::{channel, Receiver, Sender};
 
 use crate::signal::Signal;
@@ -28,7 +29,7 @@ impl Route {
     /// This will trigger an event update, which will broadcast a channel
     /// release event
     pub fn add(&self, id: u32, port: u16) {
-        self.nodes.write().unwrap().insert(id, port);
+        self.nodes.write().insert(id, port);
         self.tx.send(Signal::Start { id, port }).unwrap();
     }
 
@@ -37,19 +38,14 @@ impl Route {
     /// This will trigger an event update, which will broadcast a channel closed
     /// event
     pub fn remove(&self, id: u32) {
-        if self.nodes.write().unwrap().remove(&id).is_some() {
+        if self.nodes.write().remove(&id).is_some() {
             self.tx.send(Signal::Stop { id }).unwrap();
         }
     }
 
     /// Get all channels that are publishing
     pub fn get_channels(&self) -> Vec<(u32, u16)> {
-        self.nodes
-            .read()
-            .unwrap()
-            .iter()
-            .map(|(k, v)| (*k, *v))
-            .collect()
+        self.nodes.read().iter().map(|(k, v)| (*k, *v)).collect()
     }
 
     /// Get the event update listener, which can listen to all subsequent events

@@ -4,10 +4,10 @@ mod render;
 #[cfg(any(target_os = "windows", target_os = "linux"))]
 mod sender;
 
-use std::sync::Mutex;
+use parking_lot::Mutex;
 
 #[cfg(target_os = "windows")]
-use std::sync::RwLock;
+use parking_lot::RwLock;
 
 pub use self::receiver::{MirrorReceiver, MirrorReceiverDescriptor};
 pub use self::render::Backend as VideoRenderBackend;
@@ -40,7 +40,7 @@ pub use transport::TransportDescriptor;
 
 #[cfg(target_os = "windows")]
 use utils::win32::{
-    get_hwnd_size, set_process_priority, shutdown as win32_shutdown, startup as win32_startup,
+    set_process_priority, shutdown as win32_shutdown, startup as win32_startup,
     windows::Win32::Foundation::HWND, Direct3DDevice, ProcessPriority,
 };
 
@@ -268,11 +268,8 @@ impl Mirror {
         // Check if the D3D device has been created. If not, create a global one.
         #[cfg(target_os = "windows")]
         {
-            if DIRECT_3D_DEVICE.read().unwrap().is_none() {
-                DIRECT_3D_DEVICE
-                    .write()
-                    .unwrap()
-                    .replace(Direct3DDevice::new()?);
+            if DIRECT_3D_DEVICE.read().is_none() {
+                DIRECT_3D_DEVICE.write().replace(Direct3DDevice::new()?);
             }
         }
 
@@ -337,7 +334,7 @@ impl AVFrameSink for Render {
     /// empty, it fills the mute data to the player by default, so you need to
     /// pay attention to the push rate.
     fn audio(&self, frame: &AudioFrame) -> bool {
-        if let Err(e) = self.1.lock().unwrap().send(frame) {
+        if let Err(e) = self.1.lock().send(frame) {
             log::error!("{:?}", e);
 
             return false;
@@ -349,7 +346,7 @@ impl AVFrameSink for Render {
     /// Renders video frames and can automatically handle rendering of hardware
     /// textures and rendering textures.
     fn video(&self, frame: &VideoFrame) -> bool {
-        if let Err(e) = self.0.lock().unwrap().send(frame) {
+        if let Err(e) = self.0.lock().send(frame) {
             log::error!("{:?}", e);
 
             return false;

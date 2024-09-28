@@ -1,6 +1,6 @@
 use crate::{AudioCaptureSourceDescription, CaptureHandler, Source, SourceType};
 
-use std::sync::Mutex;
+use parking_lot::Mutex;
 
 use anyhow::{anyhow, Result};
 use audio::AudioResampler;
@@ -128,7 +128,7 @@ impl CaptureHandler for AudioCapture {
         // If there is a previous stream, end it first.
         // Normally, a Capture instance is only used once, but here a defensive process
         // is done to avoid multiple calls due to external errors.
-        if let Some(stream) = self.0.lock().unwrap().replace(stream) {
+        if let Some(stream) = self.0.lock().replace(stream) {
             stream.pause()?;
         }
 
@@ -136,7 +136,7 @@ impl CaptureHandler for AudioCapture {
     }
 
     fn stop(&self) -> Result<(), Self::Error> {
-        if let Some(stream) = self.0.lock().unwrap().take() {
+        if let Some(stream) = self.0.lock().take() {
             stream.pause()?;
         }
 

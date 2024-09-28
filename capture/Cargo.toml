@@ -8,6 +8,7 @@ anyhow = "1.0.82"
 cpal = "0.15.3"
 once_cell = "1.19.0"
 log = "0.4.20"
+parking_lot = "0.12"
 audio = { path = "../audio" }
 utils = { path = "../utils" }
 frame = { path = "../frame" }
