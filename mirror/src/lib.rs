@@ -4,9 +4,9 @@ mod render;
 #[cfg(any(target_os = "windows", target_os = "linux"))]
 mod sender;
 
-use std::{num::NonZeroIsize, sync::Mutex};
+use std::sync::Mutex;
 
-#[cfg(any(target_os = "windows", target_os = "linux"))]
+#[cfg(target_os = "windows")]
 use std::sync::RwLock;
 
 pub use self::receiver::{MirrorReceiver, MirrorReceiverDescriptor};
@@ -19,8 +19,15 @@ use self::render::{AudioRender, VideoRender};
 
 use anyhow::Result;
 use graphics::raw_window_handle::{
-    DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, RawWindowHandle,
-    Win32WindowHandle, WindowHandle,
+    DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, RawWindowHandle, WindowHandle,
+};
+
+#[cfg(target_os = "windows")]
+use graphics::raw_window_handle::Win32WindowHandle;
+
+#[cfg(target_os = "linux")]
+use graphics::raw_window_handle::{
+    GbmWindowHandle, WaylandWindowHandle, XcbWindowHandle, XlibWindowHandle,
 };
 
 use transport::Transport;
@@ -86,28 +93,55 @@ pub fn shutdown() -> Result<()> {
 }
 
 /// A window handle for a particular windowing system.
-///
-/// Each variant contains a struct with fields specific to that windowing system
-/// (e.g. Win32WindowHandle will include a HWND, WaylandWindowHandle uses
-/// wl_surface, etc.)
 #[derive(Debug, Clone)]
 pub enum Window {
-    Win32(HWND),
+    /// Raw window handle for Win32.
+    ///
+    /// This variant is used on Windows systems.
+    #[cfg(target_os = "windows")]
+    Win32(HWND, Size),
+    /// A raw window handle for Xlib.
+    ///
+    /// This variant is likely to show up anywhere someone manages to get X11
+    /// working that Xlib can be built for, which is to say, most (but not all)
+    /// Unix systems.
+    #[cfg(target_os = "linux")]
+    Xlib(u64, Size),
+    /// A raw window handle for Xcb.
+    ///
+    /// This variant is likely to show up anywhere someone manages to get X11
+    /// working that XCB can be built for, which is to say, most (but not all)
+    /// Unix systems.
+    #[cfg(target_os = "linux")]
+    Xcb(u32, Size),
+    /// A raw window handle for Wayland.
+    ///
+    /// This variant should be expected anywhere Wayland works, which is
+    /// currently some subset of unix systems.
+    #[cfg(target_os = "linux")]
+    Wayland(*mut std::ffi::c_void, Size),
+    /// A raw window handle for the Linux Generic Buffer Manager.
+    ///
+    /// This variant is present regardless of windowing backend and likely to be
+    /// used with EGL_MESA_platform_gbm or EGL_KHR_platform_gbm.
+    #[cfg(target_os = "linux")]
+    Gbm(*mut std::ffi::c_void, Size),
 }
 
 unsafe impl Send for Window {}
 unsafe impl Sync for Window {}
 
 impl Window {
-    /// Retrieves the coordinates of a window's client area. The client
-    /// coordinates specify the upper-left and lower-right corners of the client
-    /// area. Because client coordinates are relative to the upper-left corner
-    /// of a window's client area, the coordinates of the upper-left corner are
-    /// (0,0).
-    fn size(&self) -> Result<Size> {
-        Ok(match self {
-            Self::Win32(hwnd) => get_hwnd_size(hwnd.clone())?,
-        })
+    fn size(&self) -> Size {
+        match self {
+            #[cfg(target_os = "windows")]
+            Self::Win32(_, size) => *size,
+            #[cfg(target_os = "linux")]
+            Self::Xlib(_, size)
+            | Self::Xcb(_, size)
+            | Self::Wayland(_, size)
+            | Self::Gbm(_, size) => *size,
+        }
     }
 }
 
@@ -120,9 +154,32 @@ impl HasDisplayHandle for Window {
 impl HasWindowHandle for Window {
     fn window_handle(&self) -> Result<WindowHandle<'_>, HandleError> {
         Ok(match self {
-            Self::Win32(hwnd) => unsafe {
+            #[cfg(target_os = "windows")]
+            Self::Win32(hwnd, _) => unsafe {
                 WindowHandle::borrow_raw(RawWindowHandle::Win32(Win32WindowHandle::new(
-                    NonZeroIsize::new(hwnd.0 as isize).unwrap(),
+                    std::num::NonZeroIsize::new(hwnd.0 as isize).unwrap(),
+                )))
+            },
+            #[cfg(target_os = "linux")]
+            Self::Xlib(window, _) => unsafe {
+                WindowHandle::borrow_raw(RawWindowHandle::Xlib(XlibWindowHandle::new(*window)))
+            },
+            #[cfg(target_os = "linux")]
+            Self::Xcb(window, _) => unsafe {
+                WindowHandle::borrow_raw(RawWindowHandle::Xcb(XcbWindowHandle::new(
+                    std::num::NonZeroU32::new(*window).unwrap(),
+                )))
+            },
+            #[cfg(target_os = "linux")]
+            Self::Wayland(surface, _) => unsafe {
+                WindowHandle::borrow_raw(RawWindowHandle::Wayland(WaylandWindowHandle::new(
+                    std::ptr::NonNull::new_unchecked(*surface),
+                )))
+            },
+            #[cfg(target_os = "linux")]
+            Self::Gbm(surface, _) => unsafe {
+                WindowHandle::borrow_raw(RawWindowHandle::Gbm(GbmWindowHandle::new(
+                    std::ptr::NonNull::new_unchecked(*surface),
                 )))
             },
         })

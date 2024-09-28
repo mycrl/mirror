@@ -179,7 +179,7 @@ pub enum VideoRender {
 
 impl VideoRender {
     pub fn new(backend: Backend, window: Window) -> Result<Self> {
-        let size = window.size()?;
+        let size = window.size();
         log::info!(
             "create video player, backend={:?}, size={:?}",
             backend,
@@ -333,6 +333,7 @@ impl VideoRender {
             };
 
             match self {
+                #[cfg(target_os = "windows")]
                 Self::Dx11(render) => render.submit(texture)?,
                 Self::Wgpu(render) => render.submit(texture)?,
             }

@@ -65,7 +65,11 @@ pub mod desktop {
     #[no_mangle]
     pub extern "C" fn mirror_startup() -> bool {
         let func = || {
+            #[cfg(target_os = "windows")]
             logger::init(log::LevelFilter::Info, "./logs/")?;
+
+            #[cfg(target_os = "linux")]
+            logger::init(log::LevelFilter::Info)?;
 
             std::panic::set_hook(Box::new(|info| {
                 log::error!(
@@ -583,9 +587,15 @@ pub mod desktop {
         backend: VideoRenderBackend,
     ) -> *mut RawRenderer {
         let func = || {
+            #[cfg(target_os = "windows")]
+            let window = Window::Win32(HWND(hwnd));
+
+            #[cfg(target_os = "linux")]
+            let window = todo!();
+
             Ok::<RawRenderer, anyhow::Error>(RawRenderer(mirror::Render::new(
                 backend.into(),
-                Window::Win32(HWND(hwnd)),
+                window,
             )?))
         };
 

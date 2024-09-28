@@ -5,6 +5,9 @@ use crate::{helper::CompatibilityLayerError, Vertex};
 #[cfg(target_os = "windows")]
 use crate::helper::win32::Dx11OnWgpuCompatibilityLayer;
 
+#[cfg(target_os = "linux")]
+use crate::helper::linux::OpenGLOnWgpuCompatibilityLayer;
+
 use smallvec::SmallVec;
 use thiserror::Error;
 use utils::Size;
@@ -27,7 +30,10 @@ use wgpu::{
 };
 
 #[cfg(target_os = "windows")]
-type WgpuCompatibilityLayer = Dx11OnWgpuCompatibilityLayer;
+type CompatibilityLayer = Dx11OnCompatibilityLayer;
+
+#[cfg(target_os = "linux")]
+type CompatibilityLayer = OpenGLOnWgpuCompatibilityLayer;
 
 #[derive(Debug, Error)]
 pub enum FromNativeResourceError {
@@ -40,14 +46,14 @@ pub enum HardwareTexture<'a> {
     #[cfg(target_os = "windows")]
     Dx11(&'a ID3D11Texture2D, u32),
     #[cfg(target_os = "linux")]
-    Vulkan(&'a usize),
+    GL(&'a usize),
 }
 
 impl<'a> HardwareTexture<'a> {
     #[allow(unused)]
     pub(crate) fn texture<'b>(
         &self,
-        compatibility: &'b mut WgpuCompatibilityLayer,
+        compatibility: &'b mut CompatibilityLayer,
     ) -> Result<&'b WGPUTexture, FromNativeResourceError> {
         Ok(match self {
             #[cfg(target_os = "windows")]
@@ -65,6 +71,10 @@ impl<'a> HardwareTexture<'a> {
                     width: desc.Width,
                     height: desc.Height,
                 }
+            }
+            #[cfg(target_os = "linux")]
+            HardwareTexture::GL(gl) => {
+                todo!()
             }
         }
     }
@@ -87,7 +97,7 @@ impl<'a> TextureResource<'a> {
     /// if it is software texture directly return None.
     pub(crate) fn texture<'b>(
         &self,
-        compatibility: &'b mut WgpuCompatibilityLayer,
+        compatibility: &'b mut CompatibilityLayer,
     ) -> Result<Option<&'b WGPUTexture>, FromNativeResourceError> {
         Ok(match self {
             TextureResource::Texture(texture) => Some(texture.texture(compatibility)?),
@@ -112,7 +122,7 @@ pub enum Texture<'a> {
 impl<'a> Texture<'a> {
     pub(crate) fn texture<'b>(
         &self,
-        compatibility: &'b mut WgpuCompatibilityLayer,
+        compatibility: &'b mut CompatibilityLayer,
     ) -> Result<Option<&'b WGPUTexture>, FromNativeResourceError> {
         Ok(match self {
             Texture::Rgba(texture) | Texture::Nv12(texture) => texture.texture(compatibility)?,
@@ -534,13 +544,16 @@ pub struct Texture2DSource {
     pipeline: Option<RenderPipeline>,
     sample: Option<Texture2DSourceSample>,
     bind_group_layout: Option<BindGroupLayout>,
-    compatibility: WgpuCompatibilityLayer,
+    compatibility: CompatibilityLayer,
 }
 
 impl Texture2DSource {
     pub fn new(options: Texture2DSourceOptions) -> Self {
         #[cfg(target_os = "windows")]
-        let compatibility = WgpuCompatibilityLayer::new(options.device.clone(), options.direct3d);
+        let compatibility = CompatibilityLayer::new(options.device.clone(), options.direct3d);
+
+        #[cfg(target_os = "linux")]
+        let compatibility = todo!();
 
         Self {
             device: options.device,

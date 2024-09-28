@@ -73,6 +73,10 @@ impl Into<Level> for LoggerLevel {
     }
 }
 
+#[cfg(target_os = "linux")]
+#[allow(non_camel_case_types)]
+type va_list = *mut __va_list_tag;
+
 extern "C" {
     // Write formatted data from variable argument list to sized buffer
     // Composes a string with the same text that would be printed if format was used
