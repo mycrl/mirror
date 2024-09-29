@@ -125,7 +125,7 @@ impl Events {
 pub fn startup(user_data: Option<String>) -> napi::Result<()> {
     let func = || {
         #[cfg(target_os = "windows")]
-        logger::init(log::LevelFilter::Info, &user_data)?;
+        logger::init(log::LevelFilter::Info, &user_data.unwrap())?;
 
         #[cfg(target_os = "linux")]
         logger::init(log::LevelFilter::Info)?;
