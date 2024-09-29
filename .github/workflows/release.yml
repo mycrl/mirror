@@ -1,79 +1,67 @@
 name: publish release
 on:
-  push:
-    tags:
-      - v*
+    push:
+        tags:
+            - v*
 jobs:
-  build:
-    runs-on: '${{ matrix.os }}'
-    strategy:
-      matrix:
-        os:
-          - ubuntu-latest
-          - windows-latest
-        target:
-          - debug
-          - release
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: '${{ matrix.target }}-cargo-${{ hashFiles(''**/Cargo.lock'') }}'
+    build:
+        runs-on: "${{ matrix.os }}"
+        strategy:
+            matrix:
+                os:
+                    - windows-latest
+                target:
+                    - debug
+                    - app-debug
+                    - release
+                    - app-release
+        steps:
+            - uses: actions/checkout@v4
+            - uses: actions/cache@v4
+              with:
+                  path: |
+                      ~/.cargo/bin/
+                      ~/.cargo/registry/index/
+                      ~/.cargo/registry/cache/
+                      ~/.cargo/git/db/
+                      node_modules/
+                      app/node_modules/
+                      app/napi/node_modules/
+                      target/
+                  key: "${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.lock') }}"
 
-      - name: Install
-        if: runner.os == 'Linux'
-        run: sudo apt-get install tclsh pkg-config cmake libssl-dev build-essential libasound2-dev -y
+            # use auto build script
+            - name: Build distributions
+              run: |
+                  npm i
+                  npm run build:${{ matrix.target }}
 
-      # use auto build script
-      - name: Build distributions
-        run: |
-            npm i
-            npm run build:${{ matrix.target }}
+            # compress shared libraries
+            - name: Compress distributions
+              run: Compress-Archive -Path ./build -DestinationPath ./windows-x64-${{ matrix.target }}.zip
 
-      # compress shared libraries
-      - name: Compress distributions (Windows)
-        if: runner.os == 'Windows'
-        run: Compress-Archive -Path ./build -DestinationPath ./windows-x64-${{ matrix.target }}.zip
-
-      - name: Compress distributions (Linux)
-        if: runner.os == 'Linux'
-        run: zip -r ./linux-x64-${{ matrix.target }}.zip ./build
-
-      - name: Upload artifact (Windows)
-        if: runner.os == 'Windows'
-        uses: actions/upload-artifact@v3
-        with:
-          name: windows-x64-${{ matrix.target }}
-          path: ./windows-x64-${{ matrix.target }}.zip
-          
-      - name: Upload artifact (Linux)
-        if: runner.os == 'Linux'
-        uses: actions/upload-artifact@v3
-        with:
-          name: linux-x64-${{ matrix.target }}
-          path: ./linux-x64-${{ matrix.target }}.zip
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download All Artifacts
-        uses: actions/download-artifact@v3
-        with:
-          path: artifacts
-      - name: Create release
-        id: create_release
-        uses: softprops/action-gh-release@v1
-        env:
-          GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
-        with:
-          tag_name: ${{ github.ref_name }}
-          name: ${{ github.ref_name }}
-          draft: false
-          prerelease: false
-          files: artifacts/**/*
+            - name: Upload artifact
+              if: runner.os == 'Windows'
+              uses: actions/upload-artifact@v4
+              with:
+                  name: windows-x64-${{ matrix.target }}
+                  path: ./windows-x64-${{ matrix.target }}.zip
+    deploy:
+        needs: build
+        runs-on: ubuntu-latest
+        steps:
+            - name: Download All Artifacts
+              uses: actions/download-artifact@v4
+              with:
+                  path: artifacts
+            - name: Create release
+              id: create_release
+              uses: softprops/action-gh-release@v1
+              env:
+                  GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+              with:
+                  tag_name: ${{ github.ref_name }}
+                  name: Last Main Branch Auto build
+                  draft: false
+                  prerelease: false
+                  files: artifacts/**/*
