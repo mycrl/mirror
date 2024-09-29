@@ -20,7 +20,7 @@ use napi::{
 
 use napi_derive::napi;
 use once_cell::sync::Lazy;
-use utils::{atomic::EasyAtomic, logger, win32::windows::Win32::Foundation::HWND, Size};
+use utils::{atomic::EasyAtomic, logger, Size};
 use winit::{
     application::ApplicationHandler,
     event::WindowEvent,
@@ -29,6 +29,9 @@ use winit::{
     raw_window_handle::{HasWindowHandle, RawWindowHandle},
     window::{Fullscreen, Window, WindowId},
 };
+
+#[cfg(target_os = "windows")]
+use utils::win32::windows::Win32::Foundation::HWND;
 
 static WINDOW: Lazy<RwLock<Option<Arc<Window>>>> = Lazy::new(|| RwLock::new(None));
 static EVENT_LOOP: Lazy<RwLock<Option<EventLoopProxy<AppEvent>>>> = Lazy::new(|| RwLock::new(None));
@@ -118,9 +121,14 @@ impl Events {
 
 /// To initialize the environment.
 #[napi]
-pub fn startup(user_data: String) -> napi::Result<()> {
+#[allow(unused_variables)]
+pub fn startup(user_data: Option<String>) -> napi::Result<()> {
     let func = || {
+        #[cfg(target_os = "windows")]
         logger::init(log::LevelFilter::Info, &user_data)?;
+
+        #[cfg(target_os = "linux")]
+        logger::init(log::LevelFilter::Info)?;
 
         std::panic::set_hook(Box::new(|info| {
             log::error!(
@@ -612,6 +620,7 @@ impl ReceiverSinker {
         let render = Render::new(
             backend.into(),
             match window.window_handle()?.as_raw() {
+                #[cfg(target_os = "windows")]
                 RawWindowHandle::Win32(handle) => mirror::Window::Win32(
                     HWND(handle.hwnd.get() as *mut _),
                     Size {

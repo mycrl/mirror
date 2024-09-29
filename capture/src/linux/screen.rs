@@ -11,6 +11,7 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
+use ffmpeg_sys_next::*;
 use frame::VideoFrame;
 use utils::{atomic::EasyAtomic, strings::Strings};
 
@@ -57,7 +58,7 @@ impl Capture {
         if unsafe {
             avformat_open_input(
                 &mut ctx,
-                "/dev/dri/card1".as_ptr() as *const _,
+                "/dev/dri/card0".as_ptr() as *const _,
                 av_find_input_format("kmsgrab".as_ptr() as *const _),
                 null_mut(),
             )
