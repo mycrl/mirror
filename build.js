@@ -132,6 +132,7 @@ const Replace = (file, filters) => {
             [`./target/${Profile.toLowerCase()}/libmirror.so`, './build/bin/libmirror.so'],
             [`./target/${Profile.toLowerCase()}/librenderer.so`, './build/bin/librenderer.so'],
             ['./target/ffmpeg/lib/libavcodec.so.61', './build/bin/libavcodec.so.61'],
+            ['./target/ffmpeg/lib/libavformat.so.61', './build/bin/libavformat.so.61'],
             ['./target/ffmpeg/lib/libavutil.so.59', './build/bin/libavutil.so.59'],
             ['./target/ffmpeg/lib/libswresample.so.5', './build/bin/libswresample.so.5'],
         ])
