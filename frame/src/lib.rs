@@ -52,7 +52,7 @@ impl Default for AudioFrame {
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VideoFormat {
-    BGR,
+    BGRA,
     RGBA,
     NV12,
     I420,

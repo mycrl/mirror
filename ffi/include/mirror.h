@@ -26,6 +26,7 @@
 
 typedef enum
 {
+    BGRA,
     RGBA,
     NV12,
     I420,
@@ -321,6 +322,60 @@ EXPORT void mirror_receiver_destroy(Receiver receiver);
 
 typedef const void* WindowHandle;
 typedef const void* Render;
+
+#ifdef WIN32
+
+/**
+ * Raw window handle for Win32.
+ * 
+ * This variant is used on Windows systems.
+ */
+EXPORT WindowHandle create_window_handle_for_win32(HWND hwnd, uint32_t width, uint32_t height);
+
+#endif // WIN32
+
+#ifdef LINUX
+
+/**
+ * A raw window handle for Xlib.
+ *
+ * This variant is likely to show up anywhere someone manages to get X11
+ * working that Xlib can be built for, which is to say, most (but not all)
+ * Unix systems.
+ */
+EXPORT WindowHandle create_window_handle_for_xlib(uint64_t hwnd, uint32_t width, uint32_t height);
+
+/**
+ * A raw window handle for Xcb.
+ *
+ * This variant is likely to show up anywhere someone manages to get X11
+ * working that XCB can be built for, which is to say, most (but not all)
+ * Unix systems.
+ */
+EXPORT WindowHandle create_window_handle_for_xcb(uint32_t hwnd, uint32_t width, uint32_t height);
+
+/**
+ * A raw window handle for Wayland.
+ *
+ * This variant should be expected anywhere Wayland works, which is
+ * currently some subset of unix systems.
+ */
+EXPORT WindowHandle create_window_handle_for_wayland(*void hwnd, uint32_t width, uint32_t height);
+
+/**
+ * A raw window handle for the Linux Generic Buffer Manager.
+ *
+ * This variant is present regardless of windowing backend and likely to be
+ * used with EGL_MESA_platform_gbm or EGL_KHR_platform_gbm.
+ */
+EXPORT WindowHandle create_window_handle_for_gbm(*void hwnd, uint32_t width, uint32_t height);
+
+#endif
+
+/**
+ * Destroy the window handle.
+ */
+EXPORT void window_handle_destroy(WindowHandle hwnd);
 
 /**
  * Creating a window renderer.

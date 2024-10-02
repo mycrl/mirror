@@ -72,9 +72,10 @@ impl<'a> Renderer<'a> {
     ) -> Result<Self, GraphicsError> {
         let instance = Instance::new(InstanceDescriptor {
             backends: if cfg!(target_os = "windows") {
+                // windows only use direct3d
                 Backends::DX12
             } else {
-                Backends::GL
+                Backends::default()
             },
             ..Default::default()
         });

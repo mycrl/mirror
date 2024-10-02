@@ -15,11 +15,11 @@ use cpal::{
 
 use frame::{AudioFrame, VideoFormat, VideoFrame};
 use parking_lot::RwLock;
-use utils::Size;
+use utils::{win32::windows::Win32::Foundation::HWND, Size};
 
 use graphics::{
-    HardwareTexture, Renderer, RendererOptions, SoftwareTexture, SurfaceTarget, Texture,
-    TextureResource,
+    raw_window_handle::RawWindowHandle, HardwareTexture, Renderer, RendererOptions,
+    SoftwareTexture, SurfaceTarget, Texture, TextureResource,
 };
 
 #[cfg(target_os = "windows")]
@@ -197,8 +197,13 @@ impl<'a> VideoRender<'a> {
             Backend::Dx11 => unimplemented!("not supports dx11 backend"),
             #[cfg(target_os = "windows")]
             Backend::Dx11 => Self::Dx11(Dx11Renderer::new(
-                match window {
-                    Window::Win32(hwnd, _) => hwnd,
+                match window.into() {
+                    SurfaceTarget::Window(window) => match window.window_handle().unwrap().as_raw()
+                    {
+                        RawWindowHandle::Win32(window) => HWND(window.hwnd.get() as _),
+                        _ => unimplemented!(),
+                    },
+                    _ => unimplemented!(),
                 },
                 size,
                 direct3d,
@@ -224,6 +229,7 @@ impl<'a> VideoRender<'a> {
                     TextureResource::Texture(HardwareTexture::Dx11(&dx_tex, frame.data[1] as u32));
 
                 let texture = match frame.format {
+                    VideoFormat::BGRA => Texture::Bgra(texture),
                     VideoFormat::RGBA => Texture::Rgba(texture),
                     VideoFormat::NV12 => Texture::Nv12(texture),
                     VideoFormat::I420 => unimplemented!("no hardware texture for I420"),
@@ -252,21 +258,11 @@ impl<'a> VideoRender<'a> {
                 // In some contexts the abbreviation "RGBA" means a specific memory layout
                 // (called RGBA8888 below), with other terms such as "BGRA" used for
                 // alternatives. In other contexts "RGBA" means any layout.
-                VideoFormat::BGR => [
+                VideoFormat::BGRA | VideoFormat::RGBA => [
                     unsafe {
                         std::slice::from_raw_parts(
                             frame.data[0] as *const _,
                             frame.linesize[0] * frame.height as usize * 3,
-                        )
-                    },
-                    &[],
-                    &[],
-                ],
-                VideoFormat::RGBA => [
-                    unsafe {
-                        std::slice::from_raw_parts(
-                            frame.data[0] as *const _,
-                            frame.linesize[0] * frame.height as usize * 4,
                         )
                     },
                     &[],
@@ -335,7 +331,7 @@ impl<'a> VideoRender<'a> {
             };
 
             let texture = match frame.format {
-                VideoFormat::BGR => Texture::Bgr(TextureResource::Buffer(texture)),
+                VideoFormat::BGRA => Texture::Bgra(TextureResource::Buffer(texture)),
                 VideoFormat::RGBA => Texture::Rgba(TextureResource::Buffer(texture)),
                 VideoFormat::NV12 => Texture::Nv12(TextureResource::Buffer(texture)),
                 VideoFormat::I420 => Texture::I420(texture),

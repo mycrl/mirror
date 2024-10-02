@@ -30,8 +30,8 @@ pub use transport::TransportDescriptor;
 
 #[cfg(target_os = "windows")]
 use utils::win32::{
-    set_process_priority, shutdown as win32_shutdown, startup as win32_startup,
-    windows::Win32::Foundation::HWND, Direct3DDevice, ProcessPriority,
+    set_process_priority, shutdown as win32_shutdown, startup as win32_startup, Direct3DDevice,
+    ProcessPriority,
 };
 
 #[cfg(target_os = "windows")]

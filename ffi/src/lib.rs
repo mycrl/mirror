@@ -14,10 +14,18 @@ pub mod desktop {
 
     use mirror::{
         raw_window_handle::{
-            DisplayHandle, GbmWindowHandle, HandleError, HasDisplayHandle, HasWindowHandle,
-            RawWindowHandle, WaylandWindowHandle, WindowHandle, XcbWindowHandle, XlibWindowHandle,
+            DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, RawWindowHandle,
+            WindowHandle,
         },
         AVFrameSink, AVFrameStream, AudioFrame, Close, VideoFrame,
+    };
+
+    #[cfg(target_os = "windows")]
+    use mirror::raw_window_handle::Win32WindowHandle;
+
+    #[cfg(target_os = "linux")]
+    use mirror::raw_window_handle::{
+        GbmWindowHandle, WaylandWindowHandle, XcbWindowHandle, XlibWindowHandle,
     };
 
     use utils::{logger, strings::Strings, Size};
@@ -662,7 +670,11 @@ pub mod desktop {
     /// This variant is used on Windows systems.
     #[no_mangle]
     #[cfg(target_os = "windows")]
-    extern "C" fn create_window_handle_for_win32(hwnd: *mut c_void, size: Size) -> *mut Window {
+    extern "C" fn create_window_handle_for_win32(
+        hwnd: *mut c_void,
+        width: u32,
+        height: u32,
+    ) -> *mut Window {
         Box::into_raw(Box::new(Window::Win32(HWND(hwnd), Size { width, height })))
     }
 
@@ -716,6 +728,7 @@ pub mod desktop {
         Box::into_raw(Box::new(Window::Gbm(hwnd, Size { width, height })))
     }
 
+    /// Destroy the window handle.
     #[no_mangle]
     extern "C" fn window_handle_destroy(window_handle: *mut Window) {
         assert!(!window_handle.is_null());

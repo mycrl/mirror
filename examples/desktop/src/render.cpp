@@ -5,6 +5,11 @@ SimpleRender::SimpleRender(Args& args, HWND hwnd)
     : _args(args)
     , _hwnd(hwnd)
 {
+    RECT rect;
+    GetClientRect(hwnd, &rect);
+    int width = rect.right - rect.left;
+    int height = rect.bottom - rect.top;
+    _window_handle = create_window_handle_for_win32(hwnd, width, height);
 }
 #else
 SimpleRender::SimpleRender(Args& args)
@@ -22,6 +27,12 @@ SimpleRender::SimpleRender(Args& args)
 SimpleRender::~SimpleRender()
 {
     Close();
+
+    if (_window_handle != nullptr)
+    {
+        window_handle_destroy(_window_handle);
+        _window_handle = nullptr;
+    }
 }
 
 void SimpleRender::SetTitle(std::string title)
@@ -89,7 +100,7 @@ void SimpleRender::Create()
         return;
     }
 
-    _renderer = renderer_create(_hwnd, xVideoRenderBackendWgpu);
+    _renderer = renderer_create(_window_handle, xVideoRenderBackendWgpu);
 }
 
 #ifdef LINUX

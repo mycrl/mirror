@@ -29,9 +29,6 @@ use winit::{
     window::{Fullscreen, Window, WindowId},
 };
 
-#[cfg(target_os = "windows")]
-use utils::win32::windows::Win32::Foundation::HWND;
-
 static WINDOW: Lazy<RwLock<Option<Arc<Window>>>> = Lazy::new(|| RwLock::new(None));
 static EVENT_LOOP: Lazy<RwLock<Option<EventLoopProxy<AppEvent>>>> = Lazy::new(|| RwLock::new(None));
 

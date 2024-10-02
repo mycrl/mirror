@@ -12,9 +12,8 @@ jobs:
                     - windows-latest
                 target:
                     - debug
-                    - app-debug
                     - release
-                    - app-release
+                    - app
         steps:
             - uses: actions/checkout@v4
             - uses: actions/cache@v4

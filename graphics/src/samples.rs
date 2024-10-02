@@ -116,7 +116,7 @@ impl<'a> TextureResource<'a> {
 }
 
 pub enum Texture<'a> {
-    Bgr(TextureResource<'a>),
+    Bgra(TextureResource<'a>),
     Rgba(TextureResource<'a>),
     Nv12(TextureResource<'a>),
     I420(SoftwareTexture<'a>),
@@ -128,7 +128,7 @@ impl<'a> Texture<'a> {
         compatibility: &'b mut CompatibilityLayer,
     ) -> Result<Option<&'b WGPUTexture>, FromNativeResourceError> {
         Ok(match self {
-            Texture::Rgba(texture) | Texture::Nv12(texture) | Texture::Bgr(texture) => {
+            Texture::Rgba(texture) | Texture::Nv12(texture) | Texture::Bgra(texture) => {
                 texture.texture(compatibility)?
             }
             Texture::I420(_) => None,
@@ -137,7 +137,7 @@ impl<'a> Texture<'a> {
 
     pub(crate) fn size(&self) -> Size {
         match self {
-            Texture::Rgba(texture) | Texture::Nv12(texture) | Texture::Bgr(texture) => {
+            Texture::Rgba(texture) | Texture::Nv12(texture) | Texture::Bgra(texture) => {
                 texture.size()
             }
             Texture::I420(texture) => texture.size,
@@ -351,17 +351,17 @@ impl Texture2DSample for Rgba {
     }
 }
 
-struct Bgr(WGPUTexture);
+struct Bgra(WGPUTexture);
 
-impl Bgr {
+impl Bgra {
     fn new(device: &Device, size: Size) -> Self {
         Self(Self::create(device, size).next().unwrap())
     }
 }
 
-impl Texture2DSample for Bgr {
+impl Texture2DSample for Bgra {
     fn create_texture_descriptor(size: Size) -> impl IntoIterator<Item = (Size, TextureFormat)> {
-        [(size, TextureFormat::Rgba8Snorm)]
+        [(size, TextureFormat::Bgra8Unorm)]
     }
 
     fn views_descriptors<'a>(
@@ -370,7 +370,7 @@ impl Texture2DSample for Bgr {
     ) -> impl IntoIterator<Item = (&'a WGPUTexture, TextureFormat, TextureAspect)> {
         [(
             texture.unwrap_or_else(|| &self.0),
-            TextureFormat::Rgba8Unorm,
+            TextureFormat::Bgra8Unorm,
             TextureAspect::All,
         )]
     }
@@ -385,7 +385,7 @@ impl Texture2DSample for Bgr {
             &self.0,
             TextureAspect::All,
             Size {
-                width: size.width * 3,
+                width: size.width * 4,
                 height: size.height,
             },
         )]
@@ -574,7 +574,7 @@ impl Texture2DSample for I420 {
 }
 
 enum Texture2DSourceSample {
-    Bgr(Bgr),
+    Bgra(Bgra),
     Rgba(Rgba),
     Nv12(Nv12),
     I420(I420),
@@ -627,14 +627,14 @@ impl Texture2DSource {
         if self.sample.is_none() {
             let size = texture.size();
             let sample = match &texture {
-                Texture::Bgr(_) => Texture2DSourceSample::Bgr(Bgr::new(&self.device, size)),
+                Texture::Bgra(_) => Texture2DSourceSample::Bgra(Bgra::new(&self.device, size)),
                 Texture::Rgba(_) => Texture2DSourceSample::Rgba(Rgba::new(&self.device, size)),
                 Texture::Nv12(_) => Texture2DSourceSample::Nv12(Nv12::new(&self.device, size)),
                 Texture::I420(_) => Texture2DSourceSample::I420(I420::new(&self.device, size)),
             };
 
             let bind_group_layout = match &sample {
-                Texture2DSourceSample::Bgr(texture) => texture.bind_group_layout(&self.device),
+                Texture2DSourceSample::Bgra(texture) => texture.bind_group_layout(&self.device),
                 Texture2DSourceSample::Rgba(texture) => texture.bind_group_layout(&self.device),
                 Texture2DSourceSample::Nv12(texture) => texture.bind_group_layout(&self.device),
                 Texture2DSourceSample::I420(texture) => texture.bind_group_layout(&self.device),
@@ -664,11 +664,8 @@ impl Texture2DSource {
                             module: &self.device.create_shader_module(match &sample {
                                 // Because the output surface is RGBA, RGBA is a generic texture
                                 // format.
-                                Texture2DSourceSample::Rgba(_) => {
+                                Texture2DSourceSample::Rgba(_) | Texture2DSourceSample::Bgra(_) => {
                                     include_wgsl!("./shaders/fragment/any.wgsl")
-                                }
-                                Texture2DSourceSample::Bgr(_) => {
-                                    include_wgsl!("./shaders/fragment/bgr.wgsl")
                                 }
                                 Texture2DSourceSample::Nv12(_) => {
                                     include_wgsl!("./shaders/fragment/nv12.wgsl")
@@ -730,7 +727,7 @@ impl Texture2DSource {
                 Some((
                     pipeline,
                     match sample {
-                        Texture2DSourceSample::Bgr(sample) => {
+                        Texture2DSourceSample::Bgra(sample) => {
                             sample.bind_group(&self.device, layout, texture)
                         }
                         Texture2DSourceSample::Rgba(sample) => {

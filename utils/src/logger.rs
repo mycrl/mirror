@@ -4,16 +4,15 @@ use std::fs::{create_dir, metadata};
 #[cfg(target_os = "android")]
 use std::ffi::{c_char, c_int};
 
-use fern::{
-    colors::{Color, ColoredLevelConfig},
-    Dispatch,
-};
-
+use fern::Dispatch;
 use log::LevelFilter;
 use thiserror::Error;
 
 #[cfg(not(debug_assertions))]
 use chrono::Local;
+
+#[cfg(debug_assertions)]
+use fern::colors::{Color, ColoredLevelConfig};
 
 #[cfg(not(debug_assertions))]
 use fern::DateBased;
