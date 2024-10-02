@@ -1,4 +1,4 @@
-#[cfg(not(debug_assertions))]
+#[cfg(all(not(debug_assertions), target_os = "windows"))]
 use std::fs::{create_dir, metadata};
 
 #[cfg(target_os = "android")]
@@ -14,7 +14,7 @@ use chrono::Local;
 #[cfg(debug_assertions)]
 use fern::colors::{Color, ColoredLevelConfig};
 
-#[cfg(not(debug_assertions))]
+#[cfg(all(not(debug_assertions), target_os = "windows"))]
 use fern::DateBased;
 
 #[derive(Debug, Error)]
@@ -23,6 +23,9 @@ pub enum LoggerInitError {
     LogError(#[from] log::SetLoggerError),
     #[error(transparent)]
     IoError(#[from] std::io::Error),
+    #[cfg(target_os = "linux")]
+    #[error("init syslog failed")]
+    SysError,
 }
 
 #[allow(unused_variables)]
@@ -83,7 +86,7 @@ fn init_logger(level: LevelFilter, path: Option<&str>) -> Result<(), LoggerInitE
                     hostname: None,
                     pid: 0,
                 })
-                .map_err(|e| anyhow::anyhow!("{:?}", e))?,
+                .map_err(|_| LoggerInitError::SysError)?,
             );
         }
     }

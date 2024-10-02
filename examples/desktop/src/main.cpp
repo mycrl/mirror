@@ -116,7 +116,6 @@ int WinMain(HINSTANCE hinstance,
 int main(int argc, char* argv[])
 {
     mirror_startup();
-    renderer_startup();
 
     Args args = Args(argc >= 2 ? std::string(argv[1]) : "");
     mirror_service = new MirrorServiceExt(args);

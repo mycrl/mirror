@@ -44,8 +44,9 @@ public:
 private:
     Args& _args;
     Render _renderer = nullptr;
-#ifdef WIN32
     WindowHandle _window_handle = nullptr;
+
+#ifdef WIN32
     HWND _hwnd;
 #endif
 };

@@ -464,11 +464,12 @@ impl MirrorService {
                     .create_sender(
                         id,
                         options.into(),
-                        SilenceSinker(
+                        Viewer::new(
+                            Backend::Wgpu,
                             callback
                                 .build_threadsafe_function::<()>()
                                 .build_callback(|_| Ok(()))?,
-                        ),
+                        )?,
                     )?,
             )))
         };
@@ -494,7 +495,7 @@ impl MirrorService {
                     .create_receiver(
                         id,
                         options.into(),
-                        ReceiverSinker::new(
+                        Viewer::new(
                             backend,
                             callback
                                 .build_threadsafe_function::<()>()
@@ -510,17 +511,6 @@ impl MirrorService {
     #[napi]
     pub fn destroy(&mut self) {
         drop(self.0.take());
-    }
-}
-
-struct SilenceSinker(ThreadsafeFunction<(), JsUnknown, (), false>);
-
-impl AVFrameSink for SilenceSinker {}
-impl AVFrameStream for SilenceSinker {}
-
-impl Close for SilenceSinker {
-    fn close(&self) {
-        self.0.call((), ThreadsafeFunctionCallMode::NonBlocking);
     }
 }
 
@@ -565,15 +555,15 @@ impl MirrorReceiverService {
     }
 }
 
-struct ReceiverSinker {
+struct Viewer {
     callback: ThreadsafeFunction<(), JsUnknown, (), false>,
     initialized: AtomicBool,
     render: Render<'static>,
 }
 
-impl AVFrameStream for ReceiverSinker {}
+impl AVFrameStream for Viewer {}
 
-impl AVFrameSink for ReceiverSinker {
+impl AVFrameSink for Viewer {
     fn video(&self, frame: &VideoFrame) -> bool {
         if !self.initialized.get() {
             self.initialized.update(true);
@@ -593,7 +583,7 @@ impl AVFrameSink for ReceiverSinker {
     }
 }
 
-impl Close for ReceiverSinker {
+impl Close for Viewer {
     fn close(&self) {
         if let Some(event_loop) = EVENT_LOOP.read().as_ref() {
             if let Err(_) = event_loop.send_event(AppEvent::Hide) {
@@ -606,7 +596,7 @@ impl Close for ReceiverSinker {
     }
 }
 
-impl ReceiverSinker {
+impl Viewer {
     fn new(
         backend: Backend,
         callback: ThreadsafeFunction<(), JsUnknown, (), false>,

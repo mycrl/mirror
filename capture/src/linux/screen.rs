@@ -45,7 +45,7 @@ impl CaptureHandler for ScreenCapture {
                 let mut frame = VideoFrame::default();
                 frame.width = options.size.width;
                 frame.height = options.size.height;
-                frame.format = VideoFormat::BGR;
+                frame.format = VideoFormat::BGRA;
                 frame.hardware = false;
 
                 while let Some(avframe) = capture.read() {

@@ -61,32 +61,36 @@ const Replace = (file, filters) => {
         }
     }
 
-    if (!fs.existsSync('./target/ffmpeg'))
-    {
-       if (!fs.existsSync('./target/ffmpeg.zip'))
-       {
-           const name = process.platform == 'win32' ? 
-               `ffmpeg-windows-x64-${Args.release ? 'release' : 'debug'}.zip` : 
-               'ffmpeg-linux-x64-release.zip'
-
-           console.log('Start download ffmpeg...')
-           await download(`${BaseDistributions}/${name}`,'./target')
-           fs.renameSync(`./target/${name}`, './target/ffmpeg.zip')
-       }
-        
-       await (await unzipper.Open.file('./target/ffmpeg.zip')).extract({ path: './target' })
-    }
-
     await Command(`cargo build ${Args.release ? '--release' : ''} -p mirror-desktop`)
     await Command(`cargo build ${Args.release ? '--release' : ''} -p service`)
 
-    if (!fs.existsSync('./examples/desktop/build'))
+    /* download ffmpeg librarys for windows */
+    if (process.platform == 'win32') 
     {
-        fs.mkdirSync('./examples/desktop/build')
-    }
+        if (!fs.existsSync('./target/ffmpeg'))
+        {
+            if (!fs.existsSync('./target/ffmpeg.zip'))
+            {
+                const name = process.platform == 'win32' ? 
+                    `ffmpeg-windows-x64-${Args.release ? 'release' : 'debug'}.zip` : 
+                    'ffmpeg-linux-x64-release.zip'
+    
+                console.log('Start download ffmpeg...')
+                await download(`${BaseDistributions}/${name}`,'./target')
+                fs.renameSync(`./target/${name}`, './target/ffmpeg.zip')
+            }
+            
+            await (await unzipper.Open.file('./target/ffmpeg.zip')).extract({ path: './target' })
+        }
 
-    await Command(`cmake -DCMAKE_BUILD_TYPE=${Profile} ..`, { cwd: join(__dirname, './examples/desktop/build') })
-    await Command(`cmake --build . --config=${Profile}`, { cwd: join(__dirname, './examples/desktop/build') })
+        if (!fs.existsSync('./examples/desktop/build'))
+        {
+            fs.mkdirSync('./examples/desktop/build')
+        }
+    
+        await Command(`cmake -DCMAKE_BUILD_TYPE=${Profile} ..`, { cwd: join(__dirname, './examples/desktop/build') })
+        await Command(`cmake --build . --config=${Profile}`, { cwd: join(__dirname, './examples/desktop/build') })
+    }
 
     for (const item of [
         ['./LIBRARYS.txt', './build/bin/LIBRARYS.txt'],
@@ -127,14 +131,8 @@ const Replace = (file, filters) => {
     else
     {
         for (const item of [
-            ['./examples/desktop/build/example', './build/bin/example'],
             [`./target/${Profile.toLowerCase()}/service`, './build/server/mirror-service'],
             [`./target/${Profile.toLowerCase()}/libmirror.so`, './build/bin/libmirror.so'],
-            [`./target/${Profile.toLowerCase()}/librenderer.so`, './build/bin/librenderer.so'],
-            ['./target/ffmpeg/lib/libavcodec.so.61', './build/bin/libavcodec.so.61'],
-            ['./target/ffmpeg/lib/libavformat.so.61', './build/bin/libavformat.so.61'],
-            ['./target/ffmpeg/lib/libavutil.so.59', './build/bin/libavutil.so.59'],
-            ['./target/ffmpeg/lib/libswresample.so.5', './build/bin/libswresample.so.5'],
         ])
         {
             fs.copyFileSync(...item)
@@ -172,7 +170,7 @@ const Replace = (file, filters) => {
     {
         await Command('npm i', { cwd: join(__dirname, './app') })
         await Command('npm run package', { cwd: join(__dirname, './app') })
-        fs.cpSync('./app/dist/win-unpacked', './build/bin', { force: true, recursive: true })
+        fs.cpSync(`./app/dist/${process.platform == 'win32' ? 'win': 'linux'}-unpacked`, './build/bin', { force: true, recursive: true })
     }
 
     /* async block end */

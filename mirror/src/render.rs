@@ -15,15 +15,14 @@ use cpal::{
 
 use frame::{AudioFrame, VideoFormat, VideoFrame};
 use parking_lot::RwLock;
-use utils::{win32::windows::Win32::Foundation::HWND, Size};
+use utils::Size;
 
 use graphics::{
-    raw_window_handle::RawWindowHandle, HardwareTexture, Renderer, RendererOptions,
-    SoftwareTexture, SurfaceTarget, Texture, TextureResource,
+    Renderer, RendererOptions, SoftwareTexture, SurfaceTarget, Texture, TextureResource,
 };
 
 #[cfg(target_os = "windows")]
-use utils::win32::d3d_texture_borrowed_raw;
+use utils::win32::{d3d_texture_borrowed_raw, windows::Win32::Foundation::HWND};
 
 #[cfg(target_os = "windows")]
 use graphics::dx11::Dx11Renderer;
@@ -200,10 +199,16 @@ impl<'a> VideoRender<'a> {
                 match window.into() {
                     SurfaceTarget::Window(window) => match window.window_handle().unwrap().as_raw()
                     {
-                        RawWindowHandle::Win32(window) => HWND(window.hwnd.get() as _),
-                        _ => unimplemented!(),
+                        graphics::raw_window_handle::RawWindowHandle::Win32(window) => {
+                            HWND(window.hwnd.get() as _)
+                        }
+                        _ => unimplemented!(
+                            "what happened? why is the dx11 renderer enabled on linux?"
+                        ),
                     },
-                    _ => unimplemented!(),
+                    _ => {
+                        unimplemented!("the renderer does not support non-windowed render targets")
+                    }
                 },
                 size,
                 direct3d,
@@ -225,8 +230,10 @@ impl<'a> VideoRender<'a> {
                     .cloned()
                     .ok_or_else(|| anyhow!("not found a texture"))?;
 
-                let texture =
-                    TextureResource::Texture(HardwareTexture::Dx11(&dx_tex, frame.data[1] as u32));
+                let texture = TextureResource::Texture(graphics::HardwareTexture::Dx11(
+                    &dx_tex,
+                    frame.data[1] as u32,
+                ));
 
                 let texture = match frame.format {
                     VideoFormat::BGRA => Texture::Bgra(texture),

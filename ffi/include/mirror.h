@@ -360,7 +360,7 @@ EXPORT WindowHandle create_window_handle_for_xcb(uint32_t hwnd, uint32_t width, 
  * This variant should be expected anywhere Wayland works, which is
  * currently some subset of unix systems.
  */
-EXPORT WindowHandle create_window_handle_for_wayland(*void hwnd, uint32_t width, uint32_t height);
+EXPORT WindowHandle create_window_handle_for_wayland(void* hwnd, uint32_t width, uint32_t height);
 
 /**
  * A raw window handle for the Linux Generic Buffer Manager.
@@ -368,7 +368,7 @@ EXPORT WindowHandle create_window_handle_for_wayland(*void hwnd, uint32_t width,
  * This variant is present regardless of windowing backend and likely to be
  * used with EGL_MESA_platform_gbm or EGL_KHR_platform_gbm.
  */
-EXPORT WindowHandle create_window_handle_for_gbm(*void hwnd, uint32_t width, uint32_t height);
+EXPORT WindowHandle create_window_handle_for_gbm(void* hwnd, uint32_t width, uint32_t height);
 
 #endif
 

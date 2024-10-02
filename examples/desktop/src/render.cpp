@@ -15,12 +15,7 @@ SimpleRender::SimpleRender(Args& args, HWND hwnd)
 SimpleRender::SimpleRender(Args& args)
     : _args(args)
 {
-
-    Size size;
-    size.width = args.ArgsParams.width;
-    size.height = args.ArgsParams.height;
-
-    _renderer = renderer_create(size, nullptr);
+    _window_handle = create_window_handle_for_xlib(hwnd, args.ArgsParams.width, args.ArgsParams.height);
 }
 #endif
 
