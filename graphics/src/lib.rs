@@ -75,7 +75,7 @@ impl<'a> Renderer<'a> {
                 // windows only use direct3d
                 Backends::DX12
             } else {
-                Backends::default()
+                Backends::GL
             },
             ..Default::default()
         });
@@ -91,12 +91,17 @@ impl<'a> Renderer<'a> {
             .block_on()
             .ok_or_else(|| GraphicsError::NotFoundAdapter)?;
 
+        let mut required_features = adapter.features();
+        if cfg!(target_os = "windows") {
+            required_features |= Features::TEXTURE_FORMAT_NV12;
+        }
+
         let (device, queue) = adapter
             .request_device(
                 &DeviceDescriptor {
                     label: None,
+                    required_features,
                     memory_hints: MemoryHints::Performance,
-                    required_features: adapter.features() | Features::TEXTURE_FORMAT_NV12,
                     required_limits: adapter.limits(),
                 },
                 None,
