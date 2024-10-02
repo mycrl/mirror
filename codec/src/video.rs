@@ -144,7 +144,12 @@ impl VideoDecoder {
         context_mut.skip_alpha = true as i32;
         context_mut.flags |= AV_CODEC_FLAG_LOW_DELAY as i32;
         context_mut.flags2 |= AV_CODEC_FLAG2_FAST;
-        context_mut.hwaccel_flags |= AV_HWACCEL_FLAG_IGNORE_LEVEL | AV_HWACCEL_FLAG_UNSAFE_OUTPUT;
+        context_mut.hwaccel_flags |= AV_HWACCEL_FLAG_IGNORE_LEVEL;
+
+        #[cfg(target_os = "windows")]
+        {
+            context_mut.hwaccel_flags |= AV_HWACCEL_FLAG_UNSAFE_OUTPUT;
+        }
 
         if options.codec == VideoDecoderType::Qsv {
             set_option(context_mut, "async_depth", 1);
@@ -515,7 +520,7 @@ impl VideoEncoder {
                 av_image_copy(
                     av_frame.data.as_mut_ptr(),
                     av_frame.linesize.as_mut_ptr(),
-                    frame.data.as_ptr() as *const _,
+                    frame.data.as_ptr() as _,
                     [
                         frame.linesize[0] as i32,
                         frame.linesize[1] as i32,
@@ -536,11 +541,14 @@ impl VideoEncoder {
         let av_frame = unsafe { &mut *self.frame };
         av_frame.pts = unsafe {
             let context_ref = &*self.context;
-            av_rescale_q(
-                context_ref.frame_num,
-                context_ref.pkt_timebase,
-                context_ref.time_base,
-            )
+
+            #[cfg(target_os = "linux")]
+            let num = context_ref.frame_number;
+
+            #[cfg(target_os = "windows")]
+            let num = context_ref.frame_num;
+
+            av_rescale_q(num.into(), context_ref.pkt_timebase, context_ref.time_base)
         };
 
         if unsafe { avcodec_send_frame(self.context, self.frame) } != 0 {

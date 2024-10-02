@@ -23,36 +23,35 @@ Pure software screen projection is different from Miracast, AirPlay, etc., which
 
 ## Roadmap
 
-- [x] Low Latency Incompletely Reliable Transmission (SRT)
-- [x] UDP multicast transport layer (optional)
-- [ ] H264 codec
-   - [x] Windows hardware acceleration (D3D11)
-   - [ ] Linux hardware acceleration (Vulkan)
-   - [x] Android hardware acceleration
-   - [x] Software coding (optional)
-- [x] Opus codec
-   - [x] Windows
-   - [x] Linux
-   - [x] Android
-- [ ] Audio and video capture
-   - [x] Windows screen and camera capture
-   - [ ] Linux screen and camera capture
-   - [x] Android screen and camera capture
-   - [x] Cross-platform audio capture
-- [x] Audio and video rendering
-  - [x] Cross-platform hardware-accelerated rendering
-  - [x] D3D11 rendering (optional)
-  - [x] Cross-platform low-latency audio playback
-- [ ] Cross-platform hardware/software texture hardware scaling and format conversion
-- [ ] App
-   - [x] Windows
-   - [ ] Linux
-   - [ ] Android
-- [ ] Examples
-   - [x] Windows
-   - [ ] Linux
-   - [x] Android 
-
+-   [x] Low Latency Incompletely Reliable Transmission (SRT)
+-   [x] UDP multicast transport layer (optional)
+-   [ ] H264 codec
+    -   [x] Windows hardware acceleration (D3D11)
+    -   [ ] Linux hardware acceleration (Vulkan)
+    -   [x] Android hardware acceleration
+    -   [x] Software coding (optional)
+-   [x] Opus codec
+    -   [x] Windows
+    -   [x] Linux
+    -   [x] Android
+-   [ ] Audio and video capture
+    -   [x] Windows screen and camera capture
+    -   [ ] Linux screen and camera capture
+    -   [x] Android screen and camera capture
+    -   [x] Cross-platform audio capture
+-   [x] Audio and video rendering
+    -   [x] Cross-platform hardware-accelerated rendering
+    -   [x] D3D11 rendering (optional)
+    -   [x] Cross-platform low-latency audio playback
+-   [ ] Cross-platform hardware/software texture hardware scaling and format conversion
+-   [ ] App
+    -   [x] Windows
+    -   [ ] Linux
+    -   [ ] Android
+-   [ ] Examples
+    -   [x] Windows
+    -   [ ] Linux
+    -   [x] Android
 
 ## Build Instructions
 
@@ -72,7 +71,7 @@ Pure software screen projection is different from Miracast, AirPlay, etc., which
 
 ```sh
 sudo apt-get update
-sudo apt-get install tclsh pkg-config cmake libssl-dev build-essential libasound2-dev libdrm-dev libgbm-dev libvulkan1 libvulkan-dev
+sudo apt-get install tclsh pkg-config cmake libssl-dev build-essential libasound2-dev libdbus-1-dev libpipewire-0.3-dev
 ```
 
 ---

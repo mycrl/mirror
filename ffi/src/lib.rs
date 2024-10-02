@@ -12,11 +12,18 @@ pub mod desktop {
         mem::ManuallyDrop,
     };
 
-    use mirror::{AVFrameSink, AVFrameStream, AudioFrame, Close, VideoFrame, Window};
-    use utils::{logger, strings::Strings};
+    use mirror::{
+        raw_window_handle::{
+            DisplayHandle, GbmWindowHandle, HandleError, HasDisplayHandle, HasWindowHandle,
+            RawWindowHandle, WaylandWindowHandle, WindowHandle, XcbWindowHandle, XlibWindowHandle,
+        },
+        AVFrameSink, AVFrameStream, AudioFrame, Close, VideoFrame,
+    };
+
+    use utils::{logger, strings::Strings, Size};
 
     #[cfg(target_os = "windows")]
-    use utils::win32::{get_hwnd_size, windows::Win32::Foundation::HWND};
+    use utils::win32::windows::Win32::Foundation::HWND;
 
     #[cfg(any(target_os = "windows", target_os = "linux"))]
     use mirror::{Capture, SourceType};
@@ -576,29 +583,165 @@ pub mod desktop {
         }
     }
 
+    /// A window handle for a particular windowing system.
     #[repr(C)]
-    struct RawRenderer(mirror::Render);
+    #[derive(Debug, Clone)]
+    pub enum Window {
+        #[cfg(target_os = "windows")]
+        Win32(HWND, Size),
+        #[cfg(target_os = "linux")]
+        Xlib(u64, Size),
+        #[cfg(target_os = "linux")]
+        Xcb(u32, Size),
+        #[cfg(target_os = "linux")]
+        Wayland(*mut std::ffi::c_void, Size),
+        #[cfg(target_os = "linux")]
+        Gbm(*mut std::ffi::c_void, Size),
+    }
+
+    unsafe impl Send for Window {}
+    unsafe impl Sync for Window {}
+
+    impl Window {
+        fn size(&self) -> Size {
+            *match self {
+                #[cfg(target_os = "windows")]
+                Self::Win32(_, size) => size,
+                #[cfg(target_os = "linux")]
+                Self::Xlib(_, size)
+                | Self::Xcb(_, size)
+                | Self::Wayland(_, size)
+                | Self::Gbm(_, size) => size,
+            }
+        }
+    }
+
+    impl HasDisplayHandle for Window {
+        fn display_handle(&self) -> Result<DisplayHandle<'_>, HandleError> {
+            Ok(DisplayHandle::windows())
+        }
+    }
+
+    impl HasWindowHandle for Window {
+        fn window_handle(&self) -> Result<WindowHandle<'_>, HandleError> {
+            Ok(match self {
+                #[cfg(target_os = "windows")]
+                Self::Win32(hwnd, _) => unsafe {
+                    WindowHandle::borrow_raw(RawWindowHandle::Win32(Win32WindowHandle::new(
+                        std::num::NonZeroIsize::new(hwnd.0 as isize).unwrap(),
+                    )))
+                },
+                #[cfg(target_os = "linux")]
+                Self::Xlib(window, _) => unsafe {
+                    WindowHandle::borrow_raw(RawWindowHandle::Xlib(XlibWindowHandle::new(*window)))
+                },
+                #[cfg(target_os = "linux")]
+                Self::Xcb(window, _) => unsafe {
+                    WindowHandle::borrow_raw(RawWindowHandle::Xcb(XcbWindowHandle::new(
+                        std::num::NonZeroU32::new(*window).unwrap(),
+                    )))
+                },
+                #[cfg(target_os = "linux")]
+                Self::Wayland(surface, _) => unsafe {
+                    WindowHandle::borrow_raw(RawWindowHandle::Wayland(WaylandWindowHandle::new(
+                        std::ptr::NonNull::new_unchecked(*surface),
+                    )))
+                },
+                #[cfg(target_os = "linux")]
+                Self::Gbm(surface, _) => unsafe {
+                    WindowHandle::borrow_raw(RawWindowHandle::Gbm(GbmWindowHandle::new(
+                        std::ptr::NonNull::new_unchecked(*surface),
+                    )))
+                },
+            })
+        }
+    }
+
+    /// Raw window handle for Win32.
+    ///
+    /// This variant is used on Windows systems.
+    #[no_mangle]
+    #[cfg(target_os = "windows")]
+    extern "C" fn create_window_handle_for_win32(hwnd: *mut c_void, size: Size) -> *mut Window {
+        Box::into_raw(Box::new(Window::Win32(HWND(hwnd), Size { width, height })))
+    }
+
+    /// A raw window handle for Xlib.
+    ///
+    /// This variant is likely to show up anywhere someone manages to get X11
+    /// working that Xlib can be built for, which is to say, most (but not all)
+    /// Unix systems.
+    #[no_mangle]
+    #[cfg(target_os = "linux")]
+    extern "C" fn create_window_handle_for_xlib(hwnd: u64, width: u32, height: u32) -> *mut Window {
+        Box::into_raw(Box::new(Window::Xlib(hwnd, Size { width, height })))
+    }
+
+    /// A raw window handle for Xcb.
+    ///
+    /// This variant is likely to show up anywhere someone manages to get X11
+    /// working that XCB can be built for, which is to say, most (but not all)
+    /// Unix systems.
+    #[no_mangle]
+    #[cfg(target_os = "linux")]
+    extern "C" fn create_window_handle_for_xcb(hwnd: u32, width: u32, height: u32) -> *mut Window {
+        Box::into_raw(Box::new(Window::Xcb(hwnd, Size { width, height })))
+    }
+
+    /// A raw window handle for Wayland.
+    ///
+    /// This variant should be expected anywhere Wayland works, which is
+    /// currently some subset of unix systems.
+    #[no_mangle]
+    #[cfg(target_os = "linux")]
+    extern "C" fn create_window_handle_for_wayland(
+        hwnd: *mut std::ffi::c_void,
+        width: u32,
+        height: u32,
+    ) -> *mut Window {
+        Box::into_raw(Box::new(Window::Wayland(hwnd, Size { width, height })))
+    }
+
+    /// A raw window handle for the Linux Generic Buffer Manager.
+    ///
+    /// This variant is present regardless of windowing backend and likely to be
+    /// used with EGL_MESA_platform_gbm or EGL_KHR_platform_gbm.
+    #[no_mangle]
+    #[cfg(target_os = "linux")]
+    extern "C" fn create_window_handle_for_gbm(
+        hwnd: *mut std::ffi::c_void,
+        width: u32,
+        height: u32,
+    ) -> *mut Window {
+        Box::into_raw(Box::new(Window::Gbm(hwnd, Size { width, height })))
+    }
+
+    #[no_mangle]
+    extern "C" fn window_handle_destroy(window_handle: *mut Window) {
+        assert!(!window_handle.is_null());
+
+        drop(unsafe { Box::from_raw(window_handle) });
+    }
+
+    #[repr(C)]
+    struct RawRenderer(mirror::Render<'static>);
 
     /// Creating a window renderer.
     #[no_mangle]
     #[allow(unused_variables)]
     extern "C" fn renderer_create(
-        hwnd: *mut c_void,
+        window_handle: *const Window,
         backend: VideoRenderBackend,
     ) -> *mut RawRenderer {
+        assert!(!window_handle.is_null());
+
+        let window = unsafe { &*window_handle };
+
         let func = || {
-            #[cfg(target_os = "windows")]
-            let window = {
-                let hwnd = HWND(hwnd);
-                Window::Win32(hwnd, get_hwnd_size(hwnd)?)
-            };
-
-            #[cfg(target_os = "linux")]
-            let window = todo!();
-
             Ok::<RawRenderer, anyhow::Error>(RawRenderer(mirror::Render::new(
                 backend.into(),
                 window,
+                window.size(),
             )?))
         };
 
@@ -630,7 +773,7 @@ pub mod desktop {
     extern "C" fn renderer_destroy(render: *mut RawRenderer) {
         assert!(!render.is_null());
 
-        let _ = unsafe { Box::from_raw(render) };
+        drop(unsafe { Box::from_raw(render) });
     }
 }
 

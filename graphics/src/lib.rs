@@ -20,11 +20,11 @@ use wgpu::{
     Backends, Buffer, BufferUsages, Color, CommandEncoderDescriptor, CompositeAlphaMode, Device,
     DeviceDescriptor, Features, IndexFormat, Instance, InstanceDescriptor, LoadOp, MemoryHints,
     Operations, PowerPreference, PresentMode, Queue, RenderPassColorAttachment,
-    RenderPassDescriptor, RequestAdapterOptions, StoreOp, Surface, SurfaceTarget, TextureFormat,
-    TextureUsages, TextureViewDescriptor,
+    RenderPassDescriptor, RequestAdapterOptions, StoreOp, Surface, TextureFormat, TextureUsages,
+    TextureViewDescriptor,
 };
 
-pub use wgpu::rwh as raw_window_handle;
+pub use wgpu::{rwh as raw_window_handle, SurfaceTarget};
 
 #[derive(Debug, Error)]
 pub enum GraphicsError {
@@ -74,7 +74,7 @@ impl<'a> Renderer<'a> {
             backends: if cfg!(target_os = "windows") {
                 Backends::DX12
             } else {
-                Backends::VULKAN
+                Backends::GL
             },
             ..Default::default()
         });

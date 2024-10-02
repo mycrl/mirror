@@ -168,5 +168,25 @@ pub mod win32 {
 
 #[cfg(target_os = "linux")]
 pub mod linux {
-    pub struct OpenGLOnWgpuCompatibilityLayer {}
+    use std::sync::Arc;
+
+    use wgpu::{Device, Texture};
+
+    use super::CompatibilityLayerError;
+
+    pub struct VulkanOnWgpuCompatibilityLayer {}
+
+    impl VulkanOnWgpuCompatibilityLayer {
+        pub fn new(device: Arc<Device>) -> Self {
+            todo!()
+        }
+
+        pub fn from_hal(
+            &mut self,
+            texture: &(),
+            index: u32,
+        ) -> Result<&Texture, CompatibilityLayerError> {
+            todo!()
+        }
+    }
 }

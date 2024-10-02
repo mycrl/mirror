@@ -6,7 +6,7 @@ use crate::{helper::CompatibilityLayerError, Vertex};
 use crate::helper::win32::Dx11OnWgpuCompatibilityLayer;
 
 #[cfg(target_os = "linux")]
-use crate::helper::linux::OpenGLOnWgpuCompatibilityLayer;
+use crate::helper::linux::VulkanOnWgpuCompatibilityLayer;
 
 use smallvec::SmallVec;
 use thiserror::Error;
@@ -33,7 +33,7 @@ use wgpu::{
 type CompatibilityLayer = Dx11OnWgpuCompatibilityLayer;
 
 #[cfg(target_os = "linux")]
-type CompatibilityLayer = OpenGLOnWgpuCompatibilityLayer;
+type CompatibilityLayer = VulkanOnWgpuCompatibilityLayer;
 
 #[derive(Debug, Error)]
 pub enum FromNativeResourceError {
@@ -58,6 +58,8 @@ impl<'a> HardwareTexture<'a> {
         Ok(match self {
             #[cfg(target_os = "windows")]
             HardwareTexture::Dx11(dx11, index) => compatibility.from_hal(dx11, *index)?,
+            #[cfg(target_os = "linux")]
+            HardwareTexture::GL(gl) => todo!(),
             _ => unimplemented!("not supports native texture"),
         })
     }
@@ -73,7 +75,7 @@ impl<'a> HardwareTexture<'a> {
                 }
             }
             #[cfg(target_os = "linux")]
-            HardwareTexture::GL(gl) => {
+            HardwareTexture::GL(_gl) => {
                 todo!()
             }
         }
@@ -114,6 +116,7 @@ impl<'a> TextureResource<'a> {
 }
 
 pub enum Texture<'a> {
+    Bgr(TextureResource<'a>),
     Rgba(TextureResource<'a>),
     Nv12(TextureResource<'a>),
     I420(SoftwareTexture<'a>),
@@ -125,14 +128,18 @@ impl<'a> Texture<'a> {
         compatibility: &'b mut CompatibilityLayer,
     ) -> Result<Option<&'b WGPUTexture>, FromNativeResourceError> {
         Ok(match self {
-            Texture::Rgba(texture) | Texture::Nv12(texture) => texture.texture(compatibility)?,
+            Texture::Rgba(texture) | Texture::Nv12(texture) | Texture::Bgr(texture) => {
+                texture.texture(compatibility)?
+            }
             Texture::I420(_) => None,
         })
     }
 
     pub(crate) fn size(&self) -> Size {
         match self {
-            Texture::Rgba(texture) | Texture::Nv12(texture) => texture.size(),
+            Texture::Rgba(texture) | Texture::Nv12(texture) | Texture::Bgr(texture) => {
+                texture.size()
+            }
             Texture::I420(texture) => texture.size,
         }
     }
@@ -344,6 +351,47 @@ impl Texture2DSample for Rgba {
     }
 }
 
+struct Bgr(WGPUTexture);
+
+impl Bgr {
+    fn new(device: &Device, size: Size) -> Self {
+        Self(Self::create(device, size).next().unwrap())
+    }
+}
+
+impl Texture2DSample for Bgr {
+    fn create_texture_descriptor(size: Size) -> impl IntoIterator<Item = (Size, TextureFormat)> {
+        [(size, TextureFormat::Rgba8Snorm)]
+    }
+
+    fn views_descriptors<'a>(
+        &'a self,
+        texture: Option<&'a WGPUTexture>,
+    ) -> impl IntoIterator<Item = (&'a WGPUTexture, TextureFormat, TextureAspect)> {
+        [(
+            texture.unwrap_or_else(|| &self.0),
+            TextureFormat::Rgba8Unorm,
+            TextureAspect::All,
+        )]
+    }
+
+    fn copy_buffer_descriptors<'a>(
+        &self,
+        buffers: &'a [&'a [u8]],
+    ) -> impl IntoIterator<Item = (&'a [u8], &WGPUTexture, TextureAspect, Size)> {
+        let size = self.0.size();
+        [(
+            buffers[0],
+            &self.0,
+            TextureAspect::All,
+            Size {
+                width: size.width * 3,
+                height: size.height,
+            },
+        )]
+    }
+}
+
 /// YCbCr, Y′CbCr, or Y Pb/Cb Pr/Cr, also written as YCBCR or Y′CBCR, is a
 /// family of color spaces used as a part of the color image pipeline in video
 /// and digital photography systems. Y′ is the luma component and CB and CR are
@@ -526,6 +574,7 @@ impl Texture2DSample for I420 {
 }
 
 enum Texture2DSourceSample {
+    Bgr(Bgr),
     Rgba(Rgba),
     Nv12(Nv12),
     I420(I420),
@@ -553,7 +602,7 @@ impl Texture2DSource {
         let compatibility = CompatibilityLayer::new(options.device.clone(), options.direct3d);
 
         #[cfg(target_os = "linux")]
-        let compatibility = todo!();
+        let compatibility = CompatibilityLayer::new(options.device.clone());
 
         Self {
             device: options.device,
@@ -578,12 +627,14 @@ impl Texture2DSource {
         if self.sample.is_none() {
             let size = texture.size();
             let sample = match &texture {
+                Texture::Bgr(_) => Texture2DSourceSample::Bgr(Bgr::new(&self.device, size)),
                 Texture::Rgba(_) => Texture2DSourceSample::Rgba(Rgba::new(&self.device, size)),
                 Texture::Nv12(_) => Texture2DSourceSample::Nv12(Nv12::new(&self.device, size)),
                 Texture::I420(_) => Texture2DSourceSample::I420(I420::new(&self.device, size)),
             };
 
             let bind_group_layout = match &sample {
+                Texture2DSourceSample::Bgr(texture) => texture.bind_group_layout(&self.device),
                 Texture2DSourceSample::Rgba(texture) => texture.bind_group_layout(&self.device),
                 Texture2DSourceSample::Nv12(texture) => texture.bind_group_layout(&self.device),
                 Texture2DSourceSample::I420(texture) => texture.bind_group_layout(&self.device),
@@ -615,6 +666,9 @@ impl Texture2DSource {
                                 // format.
                                 Texture2DSourceSample::Rgba(_) => {
                                     include_wgsl!("./shaders/fragment/any.wgsl")
+                                }
+                                Texture2DSourceSample::Bgr(_) => {
+                                    include_wgsl!("./shaders/fragment/bgr.wgsl")
                                 }
                                 Texture2DSourceSample::Nv12(_) => {
                                     include_wgsl!("./shaders/fragment/nv12.wgsl")
@@ -676,6 +730,9 @@ impl Texture2DSource {
                 Some((
                     pipeline,
                     match sample {
+                        Texture2DSourceSample::Bgr(sample) => {
+                            sample.bind_group(&self.device, layout, texture)
+                        }
                         Texture2DSourceSample::Rgba(sample) => {
                             sample.bind_group(&self.device, layout, texture)
                         }

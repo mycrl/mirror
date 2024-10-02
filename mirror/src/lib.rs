@@ -4,6 +4,7 @@ mod render;
 #[cfg(any(target_os = "windows", target_os = "linux"))]
 mod sender;
 
+use graphics::SurfaceTarget;
 use parking_lot::Mutex;
 
 #[cfg(target_os = "windows")]
@@ -18,24 +19,13 @@ pub use self::sender::{AudioDescriptor, MirrorSender, MirrorSenderDescriptor, Vi
 use self::render::{AudioRender, VideoRender};
 
 use anyhow::Result;
-use graphics::raw_window_handle::{
-    DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, RawWindowHandle, WindowHandle,
-};
-
-#[cfg(target_os = "windows")]
-use graphics::raw_window_handle::Win32WindowHandle;
-
-#[cfg(target_os = "linux")]
-use graphics::raw_window_handle::{
-    GbmWindowHandle, WaylandWindowHandle, XcbWindowHandle, XlibWindowHandle,
-};
-
 use transport::Transport;
 use utils::Size;
 
 pub use capture::{Capture, Source, SourceType};
 pub use codec::{VideoDecoderType, VideoEncoderType};
 pub use frame::{AudioFrame, VideoFormat, VideoFrame};
+pub use graphics::raw_window_handle;
 pub use transport::TransportDescriptor;
 
 #[cfg(target_os = "windows")]
@@ -90,100 +80,6 @@ pub fn shutdown() -> Result<()> {
     }
 
     Ok(())
-}
-
-/// A window handle for a particular windowing system.
-#[derive(Debug, Clone)]
-pub enum Window {
-    /// Raw window handle for Win32.
-    ///
-    /// This variant is used on Windows systems.
-    #[cfg(target_os = "windows")]
-    Win32(HWND, Size),
-    /// A raw window handle for Xlib.
-    ///
-    /// This variant is likely to show up anywhere someone manages to get X11
-    /// working that Xlib can be built for, which is to say, most (but not all)
-    /// Unix systems.
-    #[cfg(target_os = "linux")]
-    Xlib(u64, Size),
-    /// A raw window handle for Xcb.
-    ///
-    /// This variant is likely to show up anywhere someone manages to get X11
-    /// working that XCB can be built for, which is to say, most (but not all)
-    /// Unix systems.
-    #[cfg(target_os = "linux")]
-    Xcb(u32, Size),
-    /// A raw window handle for Wayland.
-    ///
-    /// This variant should be expected anywhere Wayland works, which is
-    /// currently some subset of unix systems.
-    #[cfg(target_os = "linux")]
-    Wayland(*mut std::ffi::c_void, Size),
-    /// A raw window handle for the Linux Generic Buffer Manager.
-    ///
-    /// This variant is present regardless of windowing backend and likely to be
-    /// used with EGL_MESA_platform_gbm or EGL_KHR_platform_gbm.
-    #[cfg(target_os = "linux")]
-    Gbm(*mut std::ffi::c_void, Size),
-}
-
-unsafe impl Send for Window {}
-unsafe impl Sync for Window {}
-
-impl Window {
-    fn size(&self) -> Size {
-        match self {
-            #[cfg(target_os = "windows")]
-            Self::Win32(_, size) => *size,
-            #[cfg(target_os = "linux")]
-            Self::Xlib(_, size)
-            | Self::Xcb(_, size)
-            | Self::Wayland(_, size)
-            | Self::Gbm(_, size) => *size,
-        }
-    }
-}
-
-impl HasDisplayHandle for Window {
-    fn display_handle(&self) -> Result<DisplayHandle<'_>, HandleError> {
-        Ok(DisplayHandle::windows())
-    }
-}
-
-impl HasWindowHandle for Window {
-    fn window_handle(&self) -> Result<WindowHandle<'_>, HandleError> {
-        Ok(match self {
-            #[cfg(target_os = "windows")]
-            Self::Win32(hwnd, _) => unsafe {
-                WindowHandle::borrow_raw(RawWindowHandle::Win32(Win32WindowHandle::new(
-                    std::num::NonZeroIsize::new(hwnd.0 as isize).unwrap(),
-                )))
-            },
-            #[cfg(target_os = "linux")]
-            Self::Xlib(window, _) => unsafe {
-                WindowHandle::borrow_raw(RawWindowHandle::Xlib(XlibWindowHandle::new(*window)))
-            },
-            #[cfg(target_os = "linux")]
-            Self::Xcb(window, _) => unsafe {
-                WindowHandle::borrow_raw(RawWindowHandle::Xcb(XcbWindowHandle::new(
-                    std::num::NonZeroU32::new(*window).unwrap(),
-                )))
-            },
-            #[cfg(target_os = "linux")]
-            Self::Wayland(surface, _) => unsafe {
-                WindowHandle::borrow_raw(RawWindowHandle::Wayland(WaylandWindowHandle::new(
-                    std::ptr::NonNull::new_unchecked(*surface),
-                )))
-            },
-            #[cfg(target_os = "linux")]
-            Self::Gbm(surface, _) => unsafe {
-                WindowHandle::borrow_raw(RawWindowHandle::Gbm(GbmWindowHandle::new(
-                    std::ptr::NonNull::new_unchecked(*surface),
-                )))
-            },
-        })
-    }
 }
 
 pub trait Close: Sync + Send {
@@ -317,18 +213,22 @@ impl Mirror {
 /// unavailable, for video this can be done by enabling the dx11 feature tobe
 /// implemented with Direct3D 11 Graphics, which works fine on some very old
 /// devices.
-pub struct Render(Mutex<VideoRender>, Mutex<AudioRender>);
+pub struct Render<'a>(Mutex<VideoRender<'a>>, Mutex<AudioRender>);
 
-impl Render {
-    pub fn new(backend: VideoRenderBackend, window: Window) -> Result<Self> {
+impl<'a> Render<'a> {
+    pub fn new<T: Into<SurfaceTarget<'a>>>(
+        backend: VideoRenderBackend,
+        window: T,
+        size: Size,
+    ) -> Result<Self> {
         Ok(Self(
-            Mutex::new(VideoRender::new(backend, window)?),
+            Mutex::new(VideoRender::new(backend, window, size)?),
             Mutex::new(AudioRender::new()?),
         ))
     }
 }
 
-impl AVFrameSink for Render {
+impl<'a> AVFrameSink for Render<'a> {
     /// Renders the audio frame, note that a queue is maintained internally,
     /// here it just pushes the audio to the playback queue, and if the queue is
     /// empty, it fills the mute data to the player by default, so you need to

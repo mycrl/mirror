@@ -26,7 +26,6 @@ use winit::{
     event::WindowEvent,
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy},
     platform::run_on_demand::EventLoopExtRunOnDemand,
-    raw_window_handle::{HasWindowHandle, RawWindowHandle},
     window::{Fullscreen, Window, WindowId},
 };
 
@@ -572,7 +571,7 @@ impl MirrorReceiverService {
 struct ReceiverSinker {
     callback: ThreadsafeFunction<(), JsUnknown, (), false>,
     initialized: AtomicBool,
-    render: Render,
+    render: Render<'static>,
 }
 
 impl AVFrameStream for ReceiverSinker {}
@@ -619,16 +618,10 @@ impl ReceiverSinker {
         let inner_size = window.inner_size();
         let render = Render::new(
             backend.into(),
-            match window.window_handle()?.as_raw() {
-                #[cfg(target_os = "windows")]
-                RawWindowHandle::Win32(handle) => mirror::Window::Win32(
-                    HWND(handle.hwnd.get() as *mut _),
-                    Size {
-                        width: inner_size.width,
-                        height: inner_size.height,
-                    },
-                ),
-                _ => unimplemented!("not supports the window handle"),
+            window,
+            Size {
+                width: inner_size.width,
+                height: inner_size.height,
             },
         )?;
 

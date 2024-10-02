@@ -6,8 +6,6 @@ use std::{
     },
 };
 
-use crate::Window;
-
 use anyhow::{anyhow, Result};
 use audio::AudioResampler;
 use cpal::{
@@ -20,7 +18,8 @@ use parking_lot::RwLock;
 use utils::Size;
 
 use graphics::{
-    HardwareTexture, Renderer, RendererOptions, SoftwareTexture, Texture, TextureResource,
+    HardwareTexture, Renderer, RendererOptions, SoftwareTexture, SurfaceTarget, Texture,
+    TextureResource,
 };
 
 #[cfg(target_os = "windows")]
@@ -172,15 +171,18 @@ pub enum Backend {
     Wgpu,
 }
 
-pub enum VideoRender {
-    Wgpu(Renderer<'static>),
+pub enum VideoRender<'a> {
+    Wgpu(Renderer<'a>),
     #[cfg(target_os = "windows")]
     Dx11(Dx11Renderer),
 }
 
-impl VideoRender {
-    pub fn new(backend: Backend, window: Window) -> Result<Self> {
-        let size = window.size();
+impl<'a> VideoRender<'a> {
+    pub fn new<T: Into<SurfaceTarget<'a>>>(
+        backend: Backend,
+        window: T,
+        size: Size,
+    ) -> Result<Self> {
         log::info!(
             "create video player, backend={:?}, size={:?}",
             backend,
@@ -250,29 +252,24 @@ impl VideoRender {
                 // In some contexts the abbreviation "RGBA" means a specific memory layout
                 // (called RGBA8888 below), with other terms such as "BGRA" used for
                 // alternatives. In other contexts "RGBA" means any layout.
-                VideoFormat::RGBA => [
+                VideoFormat::BGR => [
                     unsafe {
                         std::slice::from_raw_parts(
                             frame.data[0] as *const _,
-                            frame.linesize[0] as usize * frame.height as usize * 4,
+                            frame.linesize[0] * frame.height as usize * 3,
                         )
                     },
                     &[],
                     &[],
                 ],
-                VideoFormat::NV12 => [
+                VideoFormat::RGBA => [
                     unsafe {
                         std::slice::from_raw_parts(
                             frame.data[0] as *const _,
-                            frame.linesize[0] as usize * frame.height as usize,
+                            frame.linesize[0] * frame.height as usize * 4,
                         )
                     },
-                    unsafe {
-                        std::slice::from_raw_parts(
-                            frame.data[1] as *const _,
-                            frame.linesize[1] as usize * frame.height as usize,
-                        )
-                    },
+                    &[],
                     &[],
                 ],
                 // YCbCr, Y′CbCr, or Y Pb/Cb Pr/Cr, also written as YCBCR or Y′CBCR, is a
@@ -292,23 +289,38 @@ impl VideoRender {
                 // now Netflix allows BT.2020 primaries (since 2021).[1] The same happens with
                 // JPEG: it has BT.601 matrix derived from System M primaries, yet the
                 // primaries of most images are BT.709.
-                VideoFormat::I420 => [
+                VideoFormat::NV12 => [
                     unsafe {
                         std::slice::from_raw_parts(
                             frame.data[0] as *const _,
-                            frame.linesize[0] as usize * frame.height as usize,
+                            frame.linesize[0] * frame.height as usize,
                         )
                     },
                     unsafe {
                         std::slice::from_raw_parts(
                             frame.data[1] as *const _,
-                            frame.linesize[1] as usize * frame.height as usize,
+                            frame.linesize[1] * frame.height as usize,
+                        )
+                    },
+                    &[],
+                ],
+                VideoFormat::I420 => [
+                    unsafe {
+                        std::slice::from_raw_parts(
+                            frame.data[0] as *const _,
+                            frame.linesize[0] * frame.height as usize,
+                        )
+                    },
+                    unsafe {
+                        std::slice::from_raw_parts(
+                            frame.data[1] as *const _,
+                            frame.linesize[1] * frame.height as usize,
                         )
                     },
                     unsafe {
                         std::slice::from_raw_parts(
                             frame.data[2] as *const _,
-                            frame.linesize[2] as usize * frame.height as usize,
+                            frame.linesize[2] * frame.height as usize,
                         )
                     },
                 ],
@@ -323,6 +335,7 @@ impl VideoRender {
             };
 
             let texture = match frame.format {
+                VideoFormat::BGR => Texture::Bgr(TextureResource::Buffer(texture)),
                 VideoFormat::RGBA => Texture::Rgba(TextureResource::Buffer(texture)),
                 VideoFormat::NV12 => Texture::Nv12(TextureResource::Buffer(texture)),
                 VideoFormat::I420 => Texture::I420(texture),
