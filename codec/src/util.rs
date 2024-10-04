@@ -233,14 +233,16 @@ pub fn create_video_frame(
 
     // qsv needs to indicate the use of hardware textures, otherwise qsv will return
     // software textures.
+    #[cfg(target_os = "windows")]
     if kind.is_qsv() {
         if unsafe { av_hwframe_get_buffer(context_ref.hw_frames_ctx, *frame, 0) } != 0 {
             return Err(CreateVideoFrameError::AllocHardwareAVFrameBufferError);
         }
-    } else {
-        if unsafe { av_frame_get_buffer(*frame, 0) } != 0 {
-            return Err(CreateVideoFrameError::AllocAVFrameBufferError);
-        }
+    }
+
+    #[cfg(target_os = "linux")]
+    if unsafe { av_frame_get_buffer(*frame, 0) } != 0 {
+        return Err(CreateVideoFrameError::AllocAVFrameBufferError);
     }
 
     Ok(())

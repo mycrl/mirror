@@ -19,7 +19,7 @@ void close_proc(void* ctx)
 }
 
 #ifdef WIN32
-MirrorServiceExt::MirrorServiceExt(Args& args, HWND hwnd, HINSTANCE hinstance)
+MirrorServiceExt::MirrorServiceExt(Args& args, HWND hwnd)
     : _args(args)
 {
     MirrorDescriptor mirror_options;
@@ -31,9 +31,15 @@ MirrorServiceExt::MirrorServiceExt(Args& args, HWND hwnd, HINSTANCE hinstance)
     Render = new SimpleRender(args, hwnd);
 }
 #else
-MirrorServiceExt::MirrorServiceExt(Args& args) : _args(args)
+MirrorServiceExt::MirrorServiceExt(Args& args, uint64_t window_handle) : _args(args)
 {
-    _render = new SimpleRender(args);
+    MirrorDescriptor mirror_options;
+    mirror_options.server = const_cast<char*>(_args.ArgsParams.server.c_str());
+    mirror_options.multicast = const_cast<char*>("239.0.0.1");
+    mirror_options.mtu = 1400;
+
+    _mirror = mirror_create(mirror_options);
+    Render = new SimpleRender(args, window_handle);
 }
 #endif
 
@@ -167,10 +173,3 @@ void MirrorServiceExt::Close()
 
     Render->Close();
 }
-
-#ifdef LINUX
-void MirrorServiceExt::RunEventLoop(std::function<bool(SDL_Event*)> handler)
-{
-    _render->RunEventLoop(handler);
-}
-#endif // LINUX

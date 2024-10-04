@@ -25,7 +25,7 @@ public:
 #ifdef WIN32
     SimpleRender(Args& args, HWND hwnd);
 #else
-    SimpleRender(Args& args);
+    SimpleRender(Args& args, uint64_t window_handle);
 #endif
 
     ~SimpleRender();
@@ -35,10 +35,6 @@ public:
     bool OnAudioFrame(AudioFrame* frame);
     void Close();
     void Create();
-
-#ifdef LINUX
-    void RunEventLoop(std::function<bool(SDL_Event*)> handler);
-#endif // LINUX
 
     bool IsRender = true;
 private:

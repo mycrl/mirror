@@ -82,15 +82,15 @@ const Replace = (file, filters) => {
             
             await (await unzipper.Open.file('./target/ffmpeg.zip')).extract({ path: './target' })
         }
-
-        if (!fs.existsSync('./examples/desktop/build'))
-        {
-            fs.mkdirSync('./examples/desktop/build')
-        }
-    
-        await Command(`cmake -DCMAKE_BUILD_TYPE=${Profile} ..`, { cwd: join(__dirname, './examples/desktop/build') })
-        await Command(`cmake --build . --config=${Profile}`, { cwd: join(__dirname, './examples/desktop/build') })
     }
+
+    if (!fs.existsSync('./examples/desktop/build'))
+    {
+        fs.mkdirSync('./examples/desktop/build')
+    }
+
+    await Command(`cmake -DCMAKE_BUILD_TYPE=${Profile} ..`, { cwd: join(__dirname, './examples/desktop/build') })
+    await Command(`cmake --build . --config=${Profile}`, { cwd: join(__dirname, './examples/desktop/build') })
 
     for (const item of [
         ['./LIBRARYS.txt', './build/bin/LIBRARYS.txt'],
@@ -131,6 +131,7 @@ const Replace = (file, filters) => {
     else
     {
         for (const item of [
+            [`./examples/desktop/build/example`, './build/bin/example'],
             [`./target/${Profile.toLowerCase()}/service`, './build/server/mirror-service'],
             [`./target/${Profile.toLowerCase()}/libmirror.so`, './build/bin/libmirror.so'],
         ])

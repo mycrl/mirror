@@ -12,10 +12,10 @@ SimpleRender::SimpleRender(Args& args, HWND hwnd)
     _window_handle = create_window_handle_for_win32(hwnd, width, height);
 }
 #else
-SimpleRender::SimpleRender(Args& args)
+SimpleRender::SimpleRender(Args& args, uint64_t window_handle)
     : _args(args)
 {
-    _window_handle = create_window_handle_for_xlib(hwnd, args.ArgsParams.width, args.ArgsParams.height);
+    _window_handle = create_window_handle_for_xlib(window_handle, args.ArgsParams.width, args.ArgsParams.height);
 }
 #endif
 
@@ -97,23 +97,3 @@ void SimpleRender::Create()
 
     _renderer = renderer_create(_window_handle, xVideoRenderBackendWgpu);
 }
-
-#ifdef LINUX
-struct EventLoopContext
-{
-    std::function<bool(SDL_Event*)> func;
-};
-
-bool event_proc(const void* event, void* ctx)
-{
-    auto ctx_ = (EventLoopContext*)ctx;
-    return ctx_->func((SDL_Event*)event);
-}
-
-void SimpleRender::RunEventLoop(std::function<bool(SDL_Event*)> handler)
-{
-    auto ctx = new EventLoopContext{};
-    ctx->func = handler;
-    renderer_event_loop(_renderer, event_proc, ctx);
-}
-#endif // LINUX

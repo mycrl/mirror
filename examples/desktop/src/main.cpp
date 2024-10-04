@@ -9,6 +9,11 @@
 #include <windows.h>
 #endif
 
+#ifdef LINUX
+#include <SDL.h>
+#include <SDL_syswm.h>
+#endif
+
 #include "./args.h"
 #include "./render.h"
 #include "./service.h"
@@ -96,7 +101,7 @@ int WinMain(HINSTANCE hinstance,
         nullptr,
         hinstance,
         nullptr);
-    mirror_service = new MirrorServiceExt(args, hwnd, hinstance);
+    mirror_service = new MirrorServiceExt(args, hwnd);
 
     MSG message;
     while (GetMessage(&message, nullptr, 0, 0))
@@ -118,15 +123,26 @@ int main(int argc, char* argv[])
     mirror_startup();
 
     Args args = Args(argc >= 2 ? std::string(argv[1]) : "");
-    mirror_service = new MirrorServiceExt(args);
-    mirror_service->RunEventLoop([&](SDL_Event* event) {
-        if (event->type == SDL_QUIT)
+    
+    SDL_Init(SDL_INIT_EVENTS);
+    SDL_Window* window = SDL_CreateWindow("example", 0, 0, args.ArgsParams.width, args.ArgsParams.height, SDL_WINDOW_OPENGL);
+
+    SDL_SysWMinfo info;
+    SDL_VERSION(&info.version);
+    SDL_GetWindowWMInfo(window, &info);
+
+    auto window_handle = info.info.x11.window;
+    mirror_service = new MirrorServiceExt(args, (uint64_t)window_handle);
+    
+    SDL_Event event;
+    while (SDL_WaitEvent(&event) == 1) {
+        if (event.type == SDL_QUIT)
         {
-            return false;
+            break;
         }
-        else if (event->type == SDL_KEYDOWN)
+        else if (event.type == SDL_KEYDOWN)
         {
-            switch (event->key.keysym.sym)
+            switch (event.key.keysym.sym)
             {
             case SDLK_r:
                 mirror_service->CreateMirrorReceiver();
@@ -142,11 +158,11 @@ int main(int argc, char* argv[])
                 break;
             }
         }
-
-        return true;
-    });
+    }
 
     mirror_shutdown();
+    SDL_DestroyWindow(window);
+    SDL_Quit();
 }
 
 #endif
