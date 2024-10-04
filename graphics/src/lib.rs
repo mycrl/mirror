@@ -118,7 +118,12 @@ impl<'a> Renderer<'a> {
                 .get_default_config(&adapter, options.size.width, options.size.height)
                 .ok_or_else(|| GraphicsError::NotFoundSurfaceDefaultConfig)?;
 
-            config.present_mode = PresentMode::Mailbox;
+            config.present_mode = if cfg!(target_os = "windows") {
+                PresentMode::Mailbox
+            } else {
+                PresentMode::Fifo
+            };
+
             config.format = TextureFormat::Rgba8Unorm;
             config.alpha_mode = CompositeAlphaMode::Opaque;
             config.usage = TextureUsages::RENDER_ATTACHMENT;

@@ -23,9 +23,6 @@ pub enum LoggerInitError {
     LogError(#[from] log::SetLoggerError),
     #[error(transparent)]
     IoError(#[from] std::io::Error),
-    #[cfg(target_os = "linux")]
-    #[error("init syslog failed")]
-    SysError,
 }
 
 #[allow(unused_variables)]
@@ -68,7 +65,6 @@ fn init_logger(level: LevelFilter, path: Option<&str>) -> Result<(), LoggerInitE
             ))
         });
 
-        #[cfg(target_os = "windows")]
         if let Some(path) = path {
             if metadata(path).is_err() {
                 create_dir(path)?;
@@ -76,33 +72,14 @@ fn init_logger(level: LevelFilter, path: Option<&str>) -> Result<(), LoggerInitE
 
             logger = logger.chain(DateBased::new(path, "%Y-%m-%d-mirror.log"));
         }
-
-        #[cfg(target_os = "linux")]
-        {
-            logger = logger.chain(
-                syslog::unix(syslog::Formatter3164 {
-                    facility: syslog::Facility::LOG_USER,
-                    process: "mirror".to_owned(),
-                    hostname: None,
-                    pid: 0,
-                })
-                .map_err(|_| LoggerInitError::SysError)?,
-            );
-        }
     }
 
     logger.apply()?;
     Ok(())
 }
 
-#[cfg(target_os = "windows")]
-pub fn init(level: LevelFilter, path: &str) -> Result<(), LoggerInitError> {
-    init_logger(level, Some(path))
-}
-
-#[cfg(target_os = "linux")]
-pub fn init(level: LevelFilter) -> Result<(), LoggerInitError> {
-    init_logger(level, None)
+pub fn init(level: LevelFilter, path: Option<&str>) -> Result<(), LoggerInitError> {
+    init_logger(level, path)
 }
 
 #[repr(C)]

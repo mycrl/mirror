@@ -120,11 +120,10 @@ impl Events {
 #[allow(unused_variables)]
 pub fn startup(user_data: Option<String>) -> napi::Result<()> {
     let func = || {
-        #[cfg(target_os = "windows")]
-        logger::init(log::LevelFilter::Info, &user_data.unwrap())?;
-
-        #[cfg(target_os = "linux")]
-        logger::init(log::LevelFilter::Info)?;
+        logger::init(
+            log::LevelFilter::Info,
+            user_data.as_ref().map(|x| x.as_str()),
+        )?;
 
         std::panic::set_hook(Box::new(|info| {
             log::error!(

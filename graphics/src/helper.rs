@@ -177,8 +177,8 @@ pub mod linux {
     pub struct VulkanOnWgpuCompatibilityLayer {}
 
     impl VulkanOnWgpuCompatibilityLayer {
-        pub fn new(device: Arc<Device>) -> Self {
-            todo!()
+        pub fn new(_device: Arc<Device>) -> Self {
+            Self {}
         }
 
         pub fn from_hal(

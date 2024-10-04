@@ -80,12 +80,7 @@ pub mod desktop {
     #[no_mangle]
     pub extern "C" fn mirror_startup() -> bool {
         let func = || {
-            #[cfg(target_os = "windows")]
-            logger::init(log::LevelFilter::Info, "./logs/")?;
-
-            #[cfg(target_os = "linux")]
-            logger::init(log::LevelFilter::Info)?;
-
+            logger::init(log::LevelFilter::Info, None)?;
             std::panic::set_hook(Box::new(|info| {
                 log::error!(
                     "pnaic: location={:?}, message={:?}",
