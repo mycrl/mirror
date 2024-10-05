@@ -31,7 +31,9 @@ MirrorServiceExt::MirrorServiceExt(Args& args, HWND hwnd)
     Render = new SimpleRender(args, hwnd);
 }
 #else
-MirrorServiceExt::MirrorServiceExt(Args& args, uint64_t window_handle, void* display) 
+MirrorServiceExt::MirrorServiceExt(Args& args,
+                                   uint64_t window_handle,
+                                   void* display)
     : _args(args)
 {
     MirrorDescriptor mirror_options;
@@ -109,7 +111,10 @@ bool MirrorServiceExt::CreateMirrorSender()
     Render->SetTitle("sender");
     Render->IsRender = false;
 
-    _sender = mirror_create_sender(_mirror, _args.ArgsParams.id, options, sink);
+    _sender = mirror_create_sender(_mirror,
+                                   _args.ArgsParams.id,
+                                   options,
+                                   sink);
     if (_sender == nullptr)
     {
         return false;

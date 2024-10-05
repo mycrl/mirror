@@ -28,14 +28,15 @@ const Command = (cmd, options = {}) => new Promise((
     ps.on('close', resolve)
     ps.on('error', reject)
 })
-    
-const Replace = (file, filters) => {
+
+const Replace = (file, filters) =>
+{
     let src = fs.readFileSync(file).toString()
     for (const item of filters)
     {
         src = src.replace(...item)
     }
-    
+
     fs.writeFileSync(file, src)
 }
 
@@ -65,21 +66,21 @@ const Replace = (file, filters) => {
     await Command(`cargo build ${Args.release ? '--release' : ''} -p service`)
 
     /* download ffmpeg librarys for windows */
-    if (process.platform == 'win32') 
+    if (process.platform == 'win32')
     {
         if (!fs.existsSync('./target/ffmpeg'))
         {
             if (!fs.existsSync('./target/ffmpeg.zip'))
             {
-                const name = process.platform == 'win32' ? 
-                    `ffmpeg-windows-x64-${Args.release ? 'release' : 'debug'}.zip` : 
+                const name = process.platform == 'win32' ?
+                    `ffmpeg-windows-x64-${Args.release ? 'release' : 'debug'}.zip` :
                     'ffmpeg-linux-x64-release.zip'
-    
+
                 console.log('Start download ffmpeg...')
-                await download(`${BaseDistributions}/${name}`,'./target')
+                await download(`${BaseDistributions}/${name}`, './target')
                 fs.renameSync(`./target/${name}`, './target/ffmpeg.zip')
             }
-            
+
             await (await unzipper.Open.file('./target/ffmpeg.zip')).extract({ path: './target' })
         }
     }
@@ -165,13 +166,15 @@ const Replace = (file, filters) => {
         ['../../target/debug', '../lib'],
         ['../../target/release', '../lib'],
     ])
-    
+
     /* package electron app */
     if (Args.app)
     {
         await Command('npm i', { cwd: join(__dirname, './app') })
         await Command('npm run package', { cwd: join(__dirname, './app') })
-        fs.cpSync(`./app/dist/${process.platform == 'win32' ? 'win': 'linux'}-unpacked`, './build/bin', { force: true, recursive: true })
+        fs.cpSync(`./app/dist/${process.platform == 'win32' ? 'win' : 'linux'}-unpacked`,
+            './build/bin',
+            { force: true, recursive: true })
     }
 
     /* async block end */

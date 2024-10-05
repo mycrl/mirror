@@ -12,10 +12,16 @@ SimpleRender::SimpleRender(Args& args, HWND hwnd)
     _window_handle = create_window_handle_for_win32(hwnd, width, height);
 }
 #else
-SimpleRender::SimpleRender(Args& args, uint64_t window_handle, void* display)
+SimpleRender::SimpleRender(Args& args,
+                           uint64_t window_handle,
+                           void* display)
     : _args(args)
 {
-    _window_handle = create_window_handle_for_xlib(window_handle, display, 0, args.ArgsParams.width, args.ArgsParams.height);
+    _window_handle = create_window_handle_for_xlib(window_handle,
+                                                   display,
+                                                   0,
+                                                   args.ArgsParams.width,
+                                                   args.ArgsParams.height);
 }
 #endif
 
@@ -51,7 +57,7 @@ bool SimpleRender::OnVideoFrame(VideoFrame* frame)
     {
         return false;
     }
-    
+
     /*if (!IsRender)
     {
         return true;

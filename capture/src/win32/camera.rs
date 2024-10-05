@@ -8,7 +8,7 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
-use frame::{VideoFormat, VideoFrame};
+use frame::{VideoFormat, VideoFrame, VideoSubFormat};
 use utils::{
     atomic::EasyAtomic,
     win32::{IMFValue, MediaFoundationIMFAttributesSetHelper, MediaThreadClass},
@@ -228,7 +228,7 @@ impl CaptureHandler for CameraCapture {
         frame.height = opt.size.height;
         frame.width = opt.size.width;
         frame.format = VideoFormat::NV12;
-        frame.hardware = false;
+        frame.sub_format = VideoSubFormat::SW;
 
         let mut ctx = Context {
             status: self.0.clone(),

@@ -7,7 +7,7 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
-use frame::{VideoFormat, VideoFrame};
+use frame::{VideoFormat, VideoFrame, VideoSubFormat};
 use graphics::dx11::{Resource, VideoTransform, VideoTransformDescriptor};
 use parking_lot::Mutex;
 use utils::{
@@ -53,8 +53,12 @@ impl GraphicsCaptureApiHandler for WindowsCapture {
         let mut frame = VideoFrame::default();
         frame.width = ctx.options.size.width;
         frame.height = ctx.options.size.height;
-        frame.hardware = ctx.options.hardware;
         frame.format = VideoFormat::NV12;
+        frame.sub_format = if ctx.options.hardware {
+            VideoSubFormat::D3D11
+        } else {
+            VideoSubFormat::SW
+        };
 
         let mut transform = VideoTransform::new(VideoTransformDescriptor {
             direct3d: ctx.options.direct3d.clone(),
@@ -90,7 +94,7 @@ impl GraphicsCaptureApiHandler for WindowsCapture {
                             transform.process(Some(view))?;
                         }
 
-                        if frame.hardware {
+                        if frame.sub_format == VideoSubFormat::D3D11 {
                             frame.data[0] = transform.get_output().as_raw();
                             frame.data[1] = 0 as *const _;
 

@@ -3,8 +3,11 @@ pub mod desktop {
     use std::{
         ffi::{c_char, c_int},
         fmt::Debug,
-        ptr::{null_mut, NonNull},
+        ptr::null_mut,
     };
+
+    #[cfg(target_os = "linux")]
+    use std::ptr::NonNull;
 
     #[cfg(any(target_os = "windows", target_os = "linux"))]
     use std::{
@@ -14,8 +17,8 @@ pub mod desktop {
 
     use mirror::{
         raw_window_handle::{
-            DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, RawDisplayHandle,
-            RawWindowHandle, WindowHandle,
+            DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, RawWindowHandle,
+            WindowHandle,
         },
         AVFrameSink, AVFrameStream, AudioFrame, Close, VideoFrame,
     };
@@ -25,8 +28,8 @@ pub mod desktop {
 
     #[cfg(target_os = "linux")]
     use mirror::raw_window_handle::{
-        WaylandDisplayHandle, WaylandWindowHandle, XcbDisplayHandle, XcbWindowHandle,
-        XlibDisplayHandle, XlibWindowHandle,
+        RawDisplayHandle, WaylandDisplayHandle, WaylandWindowHandle, XcbDisplayHandle,
+        XcbWindowHandle, XlibDisplayHandle, XlibWindowHandle,
     };
 
     use utils::{logger, strings::Strings, Size};
@@ -623,7 +626,7 @@ pub mod desktop {
         fn display_handle(&self) -> Result<DisplayHandle<'_>, HandleError> {
             Ok(match self {
                 #[cfg(target_os = "windows")]
-                Self::Win32(_, _) => unsafe { DisplayHandle::windows() },
+                Self::Win32(_, _) => DisplayHandle::windows(),
                 #[cfg(target_os = "linux")]
                 Self::Xlib(_, display, screen, _) => unsafe {
                     DisplayHandle::borrow_raw(RawDisplayHandle::Xlib(XlibDisplayHandle::new(
