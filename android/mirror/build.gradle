@@ -78,7 +78,7 @@ cargo {
     prebuiltToolchains = true
     pythonCommand = 'python3'
     module = '../../ffi'
-    libname = 'mirror'
+    libname = 'mirror-ffi'
     targets = ['arm64']
     targetDirectory = '../../target'
     targetIncludes = ['libmirror.so']
