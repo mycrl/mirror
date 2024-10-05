@@ -79,8 +79,8 @@ typedef struct
 } Sources;
 
 typedef enum {
+    VIDEO_DECODER_H264,
     VIDEO_DECODER_D3D11,
-    VIDEO_DECODER_VAAPI,
     VIDEO_DECODER_QSV,
     VIDEO_DECODER_CUDA,
 } VideoDecoderType;
@@ -350,7 +350,7 @@ EXPORT WindowHandle create_window_handle_for_win32(HWND hwnd, uint32_t width, ui
  * working that Xlib can be built for, which is to say, most (but not all)
  * Unix systems.
  */
-EXPORT WindowHandle create_window_handle_for_xlib(uint64_t hwnd, uint32_t width, uint32_t height);
+EXPORT WindowHandle create_window_handle_for_xlib(uint64_t hwnd, void* display, int screen, uint32_t width, uint32_t height);
 
 /**
  * A raw window handle for Xcb.
@@ -359,7 +359,7 @@ EXPORT WindowHandle create_window_handle_for_xlib(uint64_t hwnd, uint32_t width,
  * working that XCB can be built for, which is to say, most (but not all)
  * Unix systems.
  */
-EXPORT WindowHandle create_window_handle_for_xcb(uint32_t hwnd, uint32_t width, uint32_t height);
+EXPORT WindowHandle create_window_handle_for_xcb(uint32_t hwnd, void* display, int screen, uint32_t width, uint32_t height);
 
 /**
  * A raw window handle for Wayland.
@@ -367,15 +367,7 @@ EXPORT WindowHandle create_window_handle_for_xcb(uint32_t hwnd, uint32_t width, 
  * This variant should be expected anywhere Wayland works, which is
  * currently some subset of unix systems.
  */
-EXPORT WindowHandle create_window_handle_for_wayland(void* hwnd, uint32_t width, uint32_t height);
-
-/**
- * A raw window handle for the Linux Generic Buffer Manager.
- *
- * This variant is present regardless of windowing backend and likely to be
- * used with EGL_MESA_platform_gbm or EGL_KHR_platform_gbm.
- */
-EXPORT WindowHandle create_window_handle_for_gbm(void* hwnd, uint32_t width, uint32_t height);
+EXPORT WindowHandle create_window_handle_for_wayland(void* hwnd, void* display, uint32_t width, uint32_t height);
 
 #endif
 

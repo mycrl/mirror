@@ -170,23 +170,13 @@ pub mod win32 {
 pub mod linux {
     use std::sync::Arc;
 
-    use wgpu::{Device, Texture};
-
-    use super::CompatibilityLayerError;
+    use wgpu::Device;
 
     pub struct VulkanOnWgpuCompatibilityLayer {}
 
     impl VulkanOnWgpuCompatibilityLayer {
         pub fn new(_device: Arc<Device>) -> Self {
             Self {}
-        }
-
-        pub fn from_hal(
-            &mut self,
-            texture: &(),
-            index: u32,
-        ) -> Result<&Texture, CompatibilityLayerError> {
-            todo!()
         }
     }
 }

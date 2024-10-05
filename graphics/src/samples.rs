@@ -680,7 +680,7 @@ impl Texture2DSource {
                             targets: &[Some(ColorTargetState {
                                 blend: Some(BlendState::REPLACE),
                                 write_mask: ColorWrites::ALL,
-                                format: TextureFormat::Rgba8Unorm,
+                                format: TextureFormat::Bgra8Unorm,
                             })],
                         }),
                         primitive: PrimitiveState {

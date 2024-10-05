@@ -131,8 +131,9 @@ int main(int argc, char* argv[])
     SDL_VERSION(&info.version);
     SDL_GetWindowWMInfo(window, &info);
 
+    auto display = info.info.x11.display;
     auto window_handle = info.info.x11.window;
-    mirror_service = new MirrorServiceExt(args, (uint64_t)window_handle);
+    mirror_service = new MirrorServiceExt(args, (uint64_t)window_handle, display);
     
     SDL_Event event;
     while (SDL_WaitEvent(&event) == 1) {

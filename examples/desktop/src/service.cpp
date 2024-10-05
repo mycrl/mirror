@@ -31,7 +31,8 @@ MirrorServiceExt::MirrorServiceExt(Args& args, HWND hwnd)
     Render = new SimpleRender(args, hwnd);
 }
 #else
-MirrorServiceExt::MirrorServiceExt(Args& args, uint64_t window_handle) : _args(args)
+MirrorServiceExt::MirrorServiceExt(Args& args, uint64_t window_handle, void* display) 
+    : _args(args)
 {
     MirrorDescriptor mirror_options;
     mirror_options.server = const_cast<char*>(_args.ArgsParams.server.c_str());
@@ -39,7 +40,7 @@ MirrorServiceExt::MirrorServiceExt(Args& args, uint64_t window_handle) : _args(a
     mirror_options.mtu = 1400;
 
     _mirror = mirror_create(mirror_options);
-    Render = new SimpleRender(args, window_handle);
+    Render = new SimpleRender(args, window_handle, display);
 }
 #endif
 

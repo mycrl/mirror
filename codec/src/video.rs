@@ -17,8 +17,8 @@ use crate::{
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VideoDecoderType {
+    H264,
     D3D11,
-    Vaapi,
     Qsv,
     Cuda,
 }
@@ -26,8 +26,8 @@ pub enum VideoDecoderType {
 impl Into<&'static str> for VideoDecoderType {
     fn into(self) -> &'static str {
         match self {
+            Self::H264 => "h264",
             Self::D3D11 => "d3d11va",
-            Self::Vaapi => "h264_vaapi",
             Self::Qsv => "h264_qsv",
             Self::Cuda => "h264_cuvid",
         }
@@ -39,8 +39,8 @@ impl TryFrom<&str> for VideoDecoderType {
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         Ok(match value {
+            "h264" => Self::H264,
             "d3d11va" => Self::D3D11,
-            "h264_vaapi" => Self::Vaapi,
             "h264_qsv" => Self::Qsv,
             "h264_cuvid" => Self::Cuda,
             _ => return Err(CodecError::NotSupportCodec),
@@ -259,16 +259,18 @@ impl VideoDecoder {
             // D3D11: mfxHDLPair.first contains a ID3D11Texture2D pointer. mfxHDLPair.second
             // contains the texture array index of the frame if the ID3D11Texture2D is an
             // array texture, or always MFX_INFINITE if it is a normal texture.
-            #[cfg(target_os = "windows")]
             AVPixelFormat::AV_PIX_FMT_QSV => {
-                let surface = unsafe { &*(frame.data[3] as *const mfxFrameSurface1) };
-                let hdl = unsafe { &*(surface.Data.MemId as *const mfxHDLPair) };
+                #[cfg(target_os = "windows")]
+                {
+                    let surface = unsafe { &*(frame.data[3] as *const mfxFrameSurface1) };
+                    let hdl = unsafe { &*(surface.Data.MemId as *const mfxHDLPair) };
 
-                self.frame.data[0] = hdl.first;
-                self.frame.data[1] = hdl.second;
+                    self.frame.data[0] = hdl.first;
+                    self.frame.data[1] = hdl.second;
 
-                self.frame.sub_format = VideoSubFormat::D3D11;
-                self.frame.format = VideoFormat::NV12;
+                    self.frame.sub_format = VideoSubFormat::D3D11;
+                    self.frame.format = VideoFormat::NV12;
+                }
             }
             // The d3d11va video frame texture has no stride.
             AVPixelFormat::AV_PIX_FMT_D3D11 => {
@@ -467,7 +469,6 @@ impl VideoEncoder {
                 set_option(context_mut, "preset", 7);
                 set_option(context_mut, "tune", 3);
             }
-            _ => (),
         };
 
         if unsafe { avcodec_open2(this.context, codec, null_mut()) } != 0 {

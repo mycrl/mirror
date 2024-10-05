@@ -47,10 +47,6 @@ Args::Args(std::string args)
             {
                 ArgsParams.decoder = VIDEO_DECODER_D3D11;
             }
-            if (kv[1] == "vaapi")
-            {
-                ArgsParams.decoder = VIDEO_DECODER_VAAPI;
-            }
             else if (kv[1] == "h264_qsv")
             {
                 ArgsParams.decoder = VIDEO_DECODER_QSV;

@@ -16,7 +16,7 @@ public:
 #ifdef WIN32
     MirrorServiceExt(Args& args, HWND hwnd);
 #else
-    MirrorServiceExt(Args& args, uint64_t window_handle);
+    MirrorServiceExt(Args& args, uint64_t window_handle, void* display);
 #endif
 
     ~MirrorServiceExt();

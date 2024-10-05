@@ -71,12 +71,10 @@ impl<'a> Renderer<'a> {
         options: RendererOptions<T>,
     ) -> Result<Self, GraphicsError> {
         let instance = Instance::new(InstanceDescriptor {
-            backends: if cfg!(target_os = "windows") {
-                // windows only use direct3d
-                Backends::DX12
-            } else {
-                Backends::GL
-            },
+            #[cfg(target_os = "windows")]
+            backends: Backends::DX12,
+            #[cfg(target_os = "linux")]
+            backends: Backends::VULKAN,
             ..Default::default()
         });
 
@@ -91,16 +89,11 @@ impl<'a> Renderer<'a> {
             .block_on()
             .ok_or_else(|| GraphicsError::NotFoundAdapter)?;
 
-        let mut required_features = adapter.features();
-        if cfg!(target_os = "windows") {
-            required_features |= Features::TEXTURE_FORMAT_NV12;
-        }
-
         let (device, queue) = adapter
             .request_device(
                 &DeviceDescriptor {
                     label: None,
-                    required_features,
+                    required_features: adapter.features() | Features::TEXTURE_FORMAT_NV12,
                     memory_hints: MemoryHints::Performance,
                     required_limits: adapter.limits(),
                 },
@@ -118,13 +111,8 @@ impl<'a> Renderer<'a> {
                 .get_default_config(&adapter, options.size.width, options.size.height)
                 .ok_or_else(|| GraphicsError::NotFoundSurfaceDefaultConfig)?;
 
-            config.present_mode = if cfg!(target_os = "windows") {
-                PresentMode::Mailbox
-            } else {
-                PresentMode::Fifo
-            };
-
-            config.format = TextureFormat::Rgba8Unorm;
+            config.present_mode = PresentMode::Mailbox;
+            config.format = TextureFormat::Bgra8Unorm;
             config.alpha_mode = CompositeAlphaMode::Opaque;
             config.usage = TextureUsages::RENDER_ATTACHMENT;
             surface.configure(&device, &config);

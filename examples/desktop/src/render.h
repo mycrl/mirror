@@ -25,7 +25,7 @@ public:
 #ifdef WIN32
     SimpleRender(Args& args, HWND hwnd);
 #else
-    SimpleRender(Args& args, uint64_t window_handle);
+    SimpleRender(Args& args, uint64_t window_handle, void* display);
 #endif
 
     ~SimpleRender();

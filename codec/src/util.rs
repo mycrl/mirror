@@ -1,5 +1,3 @@
-use std::ptr::null_mut;
-
 use crate::video::{VideoDecoderType, VideoEncoderType};
 
 use ffmpeg_sys_next::*;
@@ -17,6 +15,7 @@ pub enum CodecType {
 }
 
 impl CodecType {
+    #[allow(unused)]
     fn is_qsv(self) -> bool {
         match self {
             CodecType::Encoder(kind) => kind == VideoEncoderType::Qsv,
@@ -24,7 +23,7 @@ impl CodecType {
         }
     }
 
-    #[cfg(target_os = "windows")]
+    #[allow(unused)]
     fn is_d3d(self) -> bool {
         match self {
             CodecType::Decoder(kind) => kind == VideoDecoderType::D3D11,
@@ -32,14 +31,7 @@ impl CodecType {
         }
     }
 
-    #[cfg(target_os = "linux")]
-    fn is_vaapi(self) -> bool {
-        match self {
-            CodecType::Decoder(kind) => kind == VideoDecoderType::Vaapi,
-            _ => false,
-        }
-    }
-
+    #[allow(unused)]
     fn is_encoder(&self) -> bool {
         if let Self::Encoder(_) = self {
             true
@@ -147,7 +139,7 @@ pub fn create_video_context(
         // to be derived from the platform's native hardware context.
         let context_mut = unsafe { &mut **context };
         if kind.is_qsv() {
-            let mut qsv_device_ctx = null_mut();
+            let mut qsv_device_ctx = std::ptr::null_mut();
             if unsafe {
                 av_hwdevice_ctx_create_derived(
                     &mut qsv_device_ctx,
@@ -211,12 +203,8 @@ pub fn create_video_context(
             unsafe { avcodec_find_encoder_by_name(Strings::from(codec).as_ptr()) }
         }
         CodecType::Decoder(kind) => {
-            if kind == VideoDecoderType::Vaapi {
-                unsafe { avcodec_find_decoder(AVCodecID::AV_CODEC_ID_H264) }
-            } else {
-                let codec: &str = kind.into();
-                unsafe { avcodec_find_decoder_by_name(Strings::from(codec).as_ptr()) }
-            }
+            let codec: &str = kind.into();
+            unsafe { avcodec_find_decoder_by_name(Strings::from(codec).as_ptr()) }
         }
     };
 
@@ -228,27 +216,6 @@ pub fn create_video_context(
     if context.is_null() {
         return Err(CreateVideoContextError::AllocAVContextError);
     }
-
-    // if kind.is_vaapi() {
-    //     let context_mut = unsafe { &mut **context };
-    //     let mut hw_device_ctx = null_mut();
-    //     if unsafe {
-    //         av_hwdevice_ctx_create(
-    //             &mut hw_device_ctx,
-    //             AVHWDeviceType::AV_HWDEVICE_TYPE_VAAPI,
-    //             null_mut(),
-    //             null_mut(),
-    //             0,
-    //         )
-    //     } != 0
-    //     {
-    //         return Err(CreateVideoContextError::AllocAVHardwareDeviceContextError);
-    //     }
-
-    //     unsafe {
-    //         context_mut.hw_device_ctx = av_buffer_ref(hw_device_ctx);
-    //     }
-    // }
 
     Ok(codec)
 }

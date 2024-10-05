@@ -27,11 +27,12 @@ pub enum LoggerInitError {
 
 #[allow(unused_variables)]
 fn init_logger(level: LevelFilter, path: Option<&str>) -> Result<(), LoggerInitError> {
-    let mut logger = Dispatch::new().level(level);
-    // .level_for("wgpu", LevelFilter::Warn)
-    // .level_for("wgpu_core", LevelFilter::Warn)
-    // .level_for("wgpu_hal", LevelFilter::Warn)
-    // .level_for("wgpu_hal::auxil::dxgi::exception", LevelFilter::Error);
+    let mut logger = Dispatch::new()
+        .level(level)
+        .level_for("wgpu", LevelFilter::Warn)
+        .level_for("wgpu_core", LevelFilter::Warn)
+        .level_for("wgpu_hal", LevelFilter::Warn)
+        .level_for("wgpu_hal::auxil::dxgi::exception", LevelFilter::Error);
 
     #[cfg(debug_assertions)]
     {
@@ -69,7 +70,9 @@ fn init_logger(level: LevelFilter, path: Option<&str>) -> Result<(), LoggerInitE
                 create_dir(path)?;
             }
 
-            logger = logger.chain(DateBased::new(path, "%Y-%m-%d-mirror.log"));
+            logger = logger.chain(DateBased::new(path, "%Y-%m-%d-mirror.log"))
+        } else {
+            logger = logger.chain(std::io::stdout());
         }
     }
 
@@ -115,25 +118,11 @@ extern "C" {
     // )
     //
     // Writes the constant string text to the log, with priority prio and tag tag.
-    fn __android_log_write(prio: c_int, tag: *const c_char, text: *const c_char) -> c_int;
+    #[link_name = "__android_log_write"]
+    fn android_log_write(prio: c_int, tag: *const c_char, text: *const c_char) -> c_int;
 }
 
 pub struct AndroidLogger;
-
-impl AndroidLogger {
-    pub fn init() {
-        log::set_boxed_logger(Box::new(Self)).unwrap();
-        log::set_max_level(log::LevelFilter::Info);
-
-        std::panic::set_hook(Box::new(|info| {
-            log::error!(
-                "pnaic: location={:?}, message={:?}",
-                info.location(),
-                info.payload().downcast_ref::<String>(),
-            );
-        }));
-    }
-}
 
 impl log::Log for AndroidLogger {
     fn flush(&self) {}
@@ -145,11 +134,16 @@ impl log::Log for AndroidLogger {
     fn log(&self, record: &log::Record) {
         #[cfg(target_os = "android")]
         unsafe {
-            __android_log_write(
+            android_log_write(
                 AndroidLogLevel::from_level(record.level()) as c_int,
                 "com.github.mycrl.mirror\0".as_ptr() as *const _,
                 format!("{}\0", record.args()).as_ptr() as *const _,
             );
         }
     }
+}
+
+pub fn init_with_android(level: LevelFilter) {
+    log::set_boxed_logger(Box::new(AndroidLogger)).unwrap();
+    log::set_max_level(level);
 }
