@@ -846,7 +846,7 @@ pub mod android {
     pub extern "system" fn JNI_OnLoad(vm: JavaVM, _: *mut c_void) -> i32 {
         AndroidLogger::init();
         transport::startup();
-        JVM.lock().unwrap().replace(vm);
+        JVM.lock().replace(vm);
 
         JNI_VERSION_1_6
     }

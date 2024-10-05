@@ -61,7 +61,7 @@ const Replace = (file, filters) => {
         }
     }
 
-    await Command(`cargo build ${Args.release ? '--release' : ''} -p mirror-desktop`)
+    await Command(`cargo build ${Args.release ? '--release' : ''} -p mirror-ffi`)
     await Command(`cargo build ${Args.release ? '--release' : ''} -p service`)
 
     /* download ffmpeg librarys for windows */

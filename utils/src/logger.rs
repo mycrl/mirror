@@ -1,4 +1,4 @@
-#[cfg(all(not(debug_assertions), target_os = "windows"))]
+#[cfg(all(not(debug_assertions)))]
 use std::fs::{create_dir, metadata};
 
 #[cfg(target_os = "android")]
@@ -14,7 +14,7 @@ use chrono::Local;
 #[cfg(debug_assertions)]
 use fern::colors::{Color, ColoredLevelConfig};
 
-#[cfg(all(not(debug_assertions), target_os = "windows"))]
+#[cfg(all(not(debug_assertions)))]
 use fern::DateBased;
 
 #[derive(Debug, Error)]
