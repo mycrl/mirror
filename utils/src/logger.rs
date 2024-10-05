@@ -27,12 +27,11 @@ pub enum LoggerInitError {
 
 #[allow(unused_variables)]
 fn init_logger(level: LevelFilter, path: Option<&str>) -> Result<(), LoggerInitError> {
-    let mut logger = Dispatch::new()
-        .level(level)
-        .level_for("wgpu", LevelFilter::Warn)
-        .level_for("wgpu_core", LevelFilter::Warn)
-        .level_for("wgpu_hal", LevelFilter::Warn)
-        .level_for("wgpu_hal::auxil::dxgi::exception", LevelFilter::Error);
+    let mut logger = Dispatch::new().level(level);
+    // .level_for("wgpu", LevelFilter::Warn)
+    // .level_for("wgpu_core", LevelFilter::Warn)
+    // .level_for("wgpu_hal", LevelFilter::Warn)
+    // .level_for("wgpu_hal::auxil::dxgi::exception", LevelFilter::Error);
 
     #[cfg(debug_assertions)]
     {

@@ -15,8 +15,12 @@ class Args
 public:
     struct Params
     {
-        VideoEncoderType encoder = xVideoEncoderTypeQsv;
-        VideoDecoderType decoder = xVideoDecoderTypeD3D11;
+        VideoEncoderType encoder = VIDEO_ENCODER_QSV;
+#ifdef WIN32
+        VideoDecoderType decoder = VIDEO_DECODER_D3D11;
+#elif LINUX
+        VideoDecoderType decoder = VIDEO_DECODER_VAAPI;
+#endif
         std::string server = "127.0.0.1:8080";
         int width = 1280;
         int height = 720;

@@ -11,7 +11,7 @@ use std::{
 
 use anyhow::{anyhow, Result};
 use ffmpeg_sys_next::*;
-use frame::{VideoFormat, VideoFrame};
+use frame::{VideoFormat, VideoFrame, VideoSubFormat};
 use utils::{atomic::EasyAtomic, strings::Strings};
 
 #[derive(Default)]
@@ -46,7 +46,7 @@ impl CaptureHandler for ScreenCapture {
                 frame.width = options.size.width;
                 frame.height = options.size.height;
                 frame.format = VideoFormat::BGRA;
-                frame.hardware = false;
+                frame.sub_format = VideoSubFormat::SW;
 
                 while let Some(avframe) = capture.read() {
                     match unsafe { std::mem::transmute::<_, AVPixelFormat>(avframe.format) } {

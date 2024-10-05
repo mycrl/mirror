@@ -519,7 +519,8 @@ pub mod desktop {
     #[repr(C)]
     #[derive(Debug, Clone, Copy)]
     pub enum VideoDecoderType {
-        D3D12,
+        D3D11,
+        Vaapi,
         Qsv,
         Cuda,
     }
@@ -527,7 +528,8 @@ pub mod desktop {
     impl Into<mirror::VideoDecoderType> for VideoDecoderType {
         fn into(self) -> mirror::VideoDecoderType {
             match self {
-                Self::D3D12 => mirror::VideoDecoderType::D3D11,
+                Self::D3D11 => mirror::VideoDecoderType::D3D11,
+                Self::Vaapi => mirror::VideoDecoderType::Vaapi,
                 Self::Qsv => mirror::VideoDecoderType::Qsv,
                 Self::Cuda => mirror::VideoDecoderType::Cuda,
             }

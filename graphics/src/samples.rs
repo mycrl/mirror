@@ -115,6 +115,7 @@ impl<'a> TextureResource<'a> {
     }
 }
 
+#[derive(Debug)]
 pub enum Texture<'a> {
     Bgra(TextureResource<'a>),
     Rgba(TextureResource<'a>),
@@ -128,7 +129,7 @@ impl<'a> Texture<'a> {
         compatibility: &'b mut CompatibilityLayer,
     ) -> Result<Option<&'b WGPUTexture>, FromNativeResourceError> {
         Ok(match self {
-            Texture::Rgba(texture) | Texture::Nv12(texture) | Texture::Bgra(texture) => {
+            Texture::Rgba(texture) | Texture::Bgra(texture) | Texture::Nv12(texture) => {
                 texture.texture(compatibility)?
             }
             Texture::I420(_) => None,
@@ -137,7 +138,7 @@ impl<'a> Texture<'a> {
 
     pub(crate) fn size(&self) -> Size {
         match self {
-            Texture::Rgba(texture) | Texture::Nv12(texture) | Texture::Bgra(texture) => {
+            Texture::Rgba(texture) | Texture::Bgra(texture) | Texture::Nv12(texture) => {
                 texture.size()
             }
             Texture::I420(texture) => texture.size,
@@ -282,7 +283,7 @@ trait Texture2DSample {
                 buffer,
                 ImageDataLayout {
                     offset: 0,
-                    // Bytes per “row” in an image.
+                    // Bytes per "row" in an image.
                     //
                     // A row is one row of pixels or of compressed blocks in the x direction.
                     bytes_per_row: Some(size.width),
@@ -662,9 +663,10 @@ impl Texture2DSource {
                         fragment: Some(FragmentState {
                             entry_point: Some("main"),
                             module: &self.device.create_shader_module(match &sample {
-                                // Because the output surface is RGBA, RGBA is a generic texture
-                                // format.
-                                Texture2DSourceSample::Rgba(_) | Texture2DSourceSample::Bgra(_) => {
+                                Texture2DSourceSample::Rgba(_) => {
+                                    include_wgsl!("./shaders/fragment/any.wgsl")
+                                }
+                                Texture2DSourceSample::Bgra(_) => {
                                     include_wgsl!("./shaders/fragment/any.wgsl")
                                 }
                                 Texture2DSourceSample::Nv12(_) => {
@@ -700,6 +702,11 @@ impl Texture2DSource {
         // Only software textures need to be updated to the sample via update.
         if let Some(sample) = &self.sample {
             match &texture {
+                Texture::Bgra(TextureResource::Buffer(buffer)) => {
+                    if let Texture2DSourceSample::Bgra(rgba) = sample {
+                        rgba.update(&self.queue, buffer);
+                    }
+                }
                 Texture::Rgba(TextureResource::Buffer(buffer)) => {
                     if let Texture2DSourceSample::Rgba(rgba) = sample {
                         rgba.update(&self.queue, buffer);

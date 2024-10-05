@@ -61,7 +61,7 @@ bool MirrorServiceExt::CreateMirrorSender()
         return true;
     }
 
-    auto video_sources = mirror_get_sources(xSourceTypeScreen);
+    auto video_sources = mirror_get_sources(SOURCE_TYPE_SCREEN);
 
     VideoDescriptor video_options;
     video_options.encoder.codec = _args.ArgsParams.encoder;
@@ -79,7 +79,7 @@ bool MirrorServiceExt::CreateMirrorSender()
         }
     }
 
-    auto audio_sources = mirror_get_sources(xSourceTypeAudio);
+    auto audio_sources = mirror_get_sources(SOURCE_TYPE_AUDIO);
 
     AudioDescriptor audio_options;
     audio_options.encoder.sample_rate = 48000;

@@ -77,38 +77,38 @@ impl VideoSender {
     }
 
     fn process(&mut self, frame: &VideoFrame) -> bool {
-        // // Push the audio and video frames into the encoder.
-        // if self.encoder.update(frame) {
-        //     // Try to get the encoded data packets. The audio and video frames do not
-        //     // correspond to the data packets one by one, so you need to try to get
-        //     // multiple packets until they are empty.
-        //     if let Err(e) = self.encoder.encode() {
-        //         log::error!("video encode error={:?}", e);
+        // Push the audio and video frames into the encoder.
+        if self.encoder.update(frame) {
+            // Try to get the encoded data packets. The audio and video frames do not
+            // correspond to the data packets one by one, so you need to try to get
+            // multiple packets until they are empty.
+            if let Err(e) = self.encoder.encode() {
+                log::error!("video encode error={:?}", e);
 
-        //         return false;
-        //     } else {
-        //         while let Some((buffer, flags, timestamp)) = self.encoder.read() {
-        //             if let Some(adapter) = self.adapter.upgrade() {
-        //                 if !adapter.send(
-        //                     package::copy_from_slice(buffer),
-        //                     StreamBufferInfo::Video(flags, timestamp),
-        //                 ) {
-        //                     log::warn!("video send packet to adapter failed");
+                return false;
+            } else {
+                while let Some((buffer, flags, timestamp)) = self.encoder.read() {
+                    if let Some(adapter) = self.adapter.upgrade() {
+                        if !adapter.send(
+                            package::copy_from_slice(buffer),
+                            StreamBufferInfo::Video(flags, timestamp),
+                        ) {
+                            log::warn!("video send packet to adapter failed");
 
-        //                     return false;
-        //                 }
-        //             } else {
-        //                 log::warn!("video adapter weak upgrade failed, maybe is drop");
+                            return false;
+                        }
+                    } else {
+                        log::warn!("video adapter weak upgrade failed, maybe is drop");
 
-        //                 return false;
-        //             }
-        //         }
-        //     }
-        // } else {
-        //     log::warn!("video encoder update frame failed");
+                        return false;
+                    }
+                }
+            }
+        } else {
+            log::warn!("video encoder update frame failed");
 
-        //     return false;
-        // }
+            return false;
+        }
 
         if let Some(sink) = self.sink.upgrade() {
             if sink.video(frame) {
@@ -189,55 +189,55 @@ impl AudioSender {
     }
 
     fn process(&mut self, frame: &AudioFrame) -> bool {
-        // self.buffer.extend_from_slice(unsafe {
-        //     std::slice::from_raw_parts(
-        //         frame.data as *const _,
-        //         frame.frames as usize * size_of::<i16>(),
-        //     )
-        // });
+        self.buffer.extend_from_slice(unsafe {
+            std::slice::from_raw_parts(
+                frame.data as *const _,
+                frame.frames as usize * size_of::<i16>(),
+            )
+        });
 
-        // if self.buffer.len() >= self.chunk_count * 2 {
-        //     if let Some(adapter) = self.adapter.upgrade() {
-        //         let payload = self.buffer.split_to(self.chunk_count * size_of::<i16>());
-        //         let frame = AudioFrame {
-        //             data: payload.as_ptr() as *const _,
-        //             frames: self.chunk_count as u32,
-        //             sample_rate: 0,
-        //         };
+        if self.buffer.len() >= self.chunk_count * 2 {
+            if let Some(adapter) = self.adapter.upgrade() {
+                let payload = self.buffer.split_to(self.chunk_count * size_of::<i16>());
+                let frame = AudioFrame {
+                    data: payload.as_ptr() as *const _,
+                    frames: self.chunk_count as u32,
+                    sample_rate: 0,
+                };
 
-        //         if self.encoder.update(&frame) {
-        //             // Push the audio and video frames into the encoder.
-        //             if let Err(e) = self.encoder.encode() {
-        //                 log::error!("audio encode error={:?}", e);
+                if self.encoder.update(&frame) {
+                    // Push the audio and video frames into the encoder.
+                    if let Err(e) = self.encoder.encode() {
+                        log::error!("audio encode error={:?}", e);
 
-        //                 return false;
-        //             } else {
-        //                 // Try to get the encoded data packets. The audio and video frames
-        //                 // do not correspond to the data
-        //                 // packets one by one, so you need to try to get
-        //                 // multiple packets until they are empty.
-        //                 while let Some((buffer, flags, timestamp)) = self.encoder.read() {
-        //                     if !adapter.send(
-        //                         package::copy_from_slice(buffer),
-        //                         StreamBufferInfo::Audio(flags, timestamp),
-        //                     ) {
-        //                         log::warn!("audio send packet to adapter failed");
+                        return false;
+                    } else {
+                        // Try to get the encoded data packets. The audio and video frames
+                        // do not correspond to the data
+                        // packets one by one, so you need to try to get
+                        // multiple packets until they are empty.
+                        while let Some((buffer, flags, timestamp)) = self.encoder.read() {
+                            if !adapter.send(
+                                package::copy_from_slice(buffer),
+                                StreamBufferInfo::Audio(flags, timestamp),
+                            ) {
+                                log::warn!("audio send packet to adapter failed");
 
-        //                         return false;
-        //                     }
-        //                 }
-        //             }
-        //         } else {
-        //             log::warn!("audio encoder update frame failed");
+                                return false;
+                            }
+                        }
+                    }
+                } else {
+                    log::warn!("audio encoder update frame failed");
 
-        //             return false;
-        //         }
-        //     } else {
-        //         log::warn!("audio adapter weak upgrade failed, maybe is drop");
+                    return false;
+                }
+            } else {
+                log::warn!("audio adapter weak upgrade failed, maybe is drop");
 
-        //         return false;
-        //     }
-        // }
+                return false;
+            }
+        }
 
         if let Some(sink) = self.sink.upgrade() {
             if sink.audio(frame) {

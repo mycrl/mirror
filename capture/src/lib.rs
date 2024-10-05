@@ -71,9 +71,9 @@ pub trait CaptureHandler: Sync + Send {
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SourceType {
-    Camera = 1,
-    Screen = 2,
-    Audio = 3,
+    Camera,
+    Screen,
+    Audio,
 }
 
 #[derive(Debug, Clone)]

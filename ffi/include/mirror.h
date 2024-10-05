@@ -26,16 +26,22 @@
 
 typedef enum
 {
-    BGRA,
-    RGBA,
-    NV12,
-    I420,
+    VIDEO_FORMAT_BGRA,
+    VIDEO_FORMAT_RGBA,
+    VIDEO_FORMAT_NV12,
+    VIDEO_FORMAT_I420,
 } VideoFormat;
+
+typedef enum
+{
+    VIDEO_SUB_FORMAT_D3D11,
+    VIDEO_SUB_FORMAT_SW,
+} VideoSubFormat;
 
 typedef struct
 {
     VideoFormat format;
-    bool hardware;
+    VideoSubFormat sub_format;
     uint32_t width;
     uint32_t height;
     void* data[3];
@@ -51,9 +57,9 @@ typedef struct
 
 typedef enum
 {
-    xSourceTypeCamera = 1,
-    xSourceTypeScreen = 2,
-    xSourceTypeAudio = 3,
+    SOURCE_TYPE_CAMERA,
+    SOURCE_TYPE_SCREEN,
+    SOURCE_TYPE_AUDIO,
 } SourceType;
 
 typedef struct
@@ -73,22 +79,23 @@ typedef struct
 } Sources;
 
 typedef enum {
-    xVideoDecoderTypeD3D11,
-    xVideoDecoderTypeQsv,
-    xVideoDecoderTypeCuda,
+    VIDEO_DECODER_D3D11,
+    VIDEO_DECODER_VAAPI,
+    VIDEO_DECODER_QSV,
+    VIDEO_DECODER_CUDA,
 } VideoDecoderType;
 
 typedef enum 
 {
-    xVideoEncoderTypeX264,
-    xVideoEncoderTypeQsv,
-    xVideoEncoderTypeCuda,
+    VIDEO_ENCODER_X264,
+    VIDEO_ENCODER_QSV,
+    VIDEO_ENCODER_CUDA,
 } VideoEncoderType;
 
 typedef enum 
 {
-    xVideoRenderBackendDx11,
-    xVideoRenderBackendWgpu,
+    RENDER_BACKEND_DX11,
+    RENDER_BACKEND_WGPU,
 } VideoRenderBackend;
 
 typedef struct

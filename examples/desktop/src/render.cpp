@@ -95,5 +95,5 @@ void SimpleRender::Create()
         return;
     }
 
-    _renderer = renderer_create(_window_handle, xVideoRenderBackendWgpu);
+    _renderer = renderer_create(_window_handle, RENDER_BACKEND_WGPU);
 }
