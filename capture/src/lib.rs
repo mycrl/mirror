@@ -15,16 +15,20 @@ mod linux {
     mod camera;
     mod screen;
 
-    pub use self::{camera::CameraCapture, screen::ScreenCapture};
+    pub use self::{
+        camera::{CameraCapture, CameraCaptureError},
+        screen::{ScreenCapture, ScreenCaptureError},
+    };
 }
 
 use self::audio::AudioCapture;
 
-use anyhow::Result;
 use common::{
     frame::{AudioFrame, VideoFrame},
     Size,
 };
+
+use thiserror::Error;
 
 #[cfg(target_os = "windows")]
 use win32::{CameraCapture, ScreenCapture};
@@ -129,6 +133,18 @@ where
     }
 }
 
+#[derive(Debug, Error)]
+pub enum CaptureError {
+    #[error(transparent)]
+    AudioCaptureError(#[from] audio::AudioCaptureError),
+    #[error(transparent)]
+    #[cfg(target_os = "linux")]
+    ScreenCaptureError(#[from] linux::ScreenCaptureError),
+    #[error(transparent)]
+    #[cfg(target_os = "linux")]
+    CameraCaptureError(#[from] linux::CameraCaptureError),
+}
+
 enum CaptureImplement {
     Camera(CameraCapture),
     Screen(ScreenCapture),
@@ -141,7 +157,7 @@ pub struct Capture(Vec<CaptureImplement>);
 impl Capture {
     /// Returns a list of devices by type.
     #[allow(unreachable_patterns)]
-    pub fn get_sources(kind: SourceType) -> Result<Vec<Source>> {
+    pub fn get_sources(kind: SourceType) -> Result<Vec<Source>, CaptureError> {
         log::info!("capture get sources, kind={:?}", kind);
 
         Ok(match kind {
@@ -152,7 +168,9 @@ impl Capture {
         })
     }
 
-    pub fn new<V, A>(CaptureDescriptor { video, audio }: CaptureDescriptor<V, A>) -> Result<Self>
+    pub fn new<V, A>(
+        CaptureDescriptor { video, audio }: CaptureDescriptor<V, A>,
+    ) -> Result<Self, CaptureError>
     where
         V: FrameArrived<Frame = VideoFrame> + 'static,
         A: FrameArrived<Frame = AudioFrame> + 'static,
@@ -192,13 +210,13 @@ impl Capture {
         Ok(Self(devices))
     }
 
-    pub fn close(&self) -> Result<()> {
+    pub fn close(&self) -> Result<(), CaptureError> {
         for item in self.0.iter() {
             match item {
-                CaptureImplement::Screen(it) => it.stop(),
-                CaptureImplement::Camera(it) => it.stop(),
-                CaptureImplement::Audio(it) => it.stop(),
-            }?;
+                CaptureImplement::Screen(it) => it.stop()?,
+                CaptureImplement::Camera(it) => it.stop()?,
+                CaptureImplement::Audio(it) => it.stop()?,
+            };
         }
 
         log::info!("close capture");

@@ -109,7 +109,7 @@ pub mod win32 {
         Texture(ID3D11Texture2D),
     }
 
-    pub struct VideoTransformDescriptor {
+    pub struct VideoResamplerDescriptor {
         pub direct3d: Direct3DDevice,
         pub input: Resource,
         pub output: Resource,
@@ -122,7 +122,7 @@ pub mod win32 {
     /// decide what format to use, because this method does not copy the
     /// texture.
     #[allow(unused)]
-    pub struct VideoTransform {
+    pub struct VideoResampler {
         d3d_device: ID3D11Device,
         d3d_context: ID3D11DeviceContext,
         video_device: ID3D11VideoDevice,
@@ -135,15 +135,15 @@ pub mod win32 {
         output_view: ID3D11VideoProcessorOutputView,
     }
 
-    unsafe impl Send for VideoTransform {}
-    unsafe impl Sync for VideoTransform {}
+    unsafe impl Send for VideoResampler {}
+    unsafe impl Sync for VideoResampler {}
 
-    impl VideoTransform {
-        /// Create `VideoTransform`, the default_device parameter is used to
+    impl VideoResampler {
+        /// Create `VideoResampler`, the default_device parameter is used to
         /// directly use the device when it has been created externally, so
         /// there is no need to copy across devices, which improves
         /// processing performance.
-        pub fn new(options: VideoTransformDescriptor) -> Result<Self, Error> {
+        pub fn new(options: VideoResamplerDescriptor) -> Result<Self, Error> {
             let (d3d_device, d3d_context) = (options.direct3d.device, options.direct3d.context);
             let video_device = d3d_device.cast::<ID3D11VideoDevice>()?;
             let video_context = d3d_context.cast::<ID3D11VideoContext>()?;

@@ -98,7 +98,7 @@ bool MirrorServiceExt::CreateMirrorSender()
 
     SenderDescriptor options;
     options.video = &video_options;
-    options.audio = &audio_options;
+    options.audio = nullptr;
     options.multicast = false;
 
     FrameSink sink;

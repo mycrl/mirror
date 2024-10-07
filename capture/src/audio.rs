@@ -1,15 +1,32 @@
 use crate::{AudioCaptureSourceDescription, CaptureHandler, Source, SourceType};
 
-use parking_lot::Mutex;
-
-use anyhow::{anyhow, Result};
 use common::frame::AudioFrame;
 use cpal::{traits::*, Host, Stream, StreamConfig};
 use once_cell::sync::Lazy;
+use parking_lot::Mutex;
 use resample::AudioResampler;
+use thiserror::Error;
 
 // Just use a default audio port globally.
 static HOST: Lazy<Host> = Lazy::new(|| cpal::default_host());
+
+#[derive(Error, Debug)]
+pub enum AudioCaptureError {
+    #[error("not found the audio source")]
+    NotFoundAudioSource,
+    #[error(transparent)]
+    DeviceError(#[from] cpal::DevicesError),
+    #[error(transparent)]
+    DeviceNameError(#[from] cpal::DeviceNameError),
+    #[error(transparent)]
+    DefaultStreamConfigError(#[from] cpal::DefaultStreamConfigError),
+    #[error(transparent)]
+    BuildStreamError(#[from] cpal::BuildStreamError),
+    #[error(transparent)]
+    PlayStreamError(#[from] cpal::PlayStreamError),
+    #[error(transparent)]
+    PauseStreamError(#[from] cpal::PauseStreamError),
+}
 
 enum DeviceKind {
     Input,
@@ -24,7 +41,7 @@ unsafe impl Sync for AudioCapture {}
 
 impl CaptureHandler for AudioCapture {
     type Frame = AudioFrame;
-    type Error = anyhow::Error;
+    type Error = AudioCaptureError;
     type CaptureDescriptor = AudioCaptureSourceDescription;
 
     // Get the default input device. In theory, all microphones will be listed here.
@@ -69,7 +86,7 @@ impl CaptureHandler for AudioCapture {
                     .map(|name| name == options.source.name)
                     .unwrap_or(false)
             })
-            .ok_or_else(|| anyhow!("not found the audio source"))?;
+            .ok_or_else(|| AudioCaptureError::NotFoundAudioSource)?;
 
         let config: StreamConfig = match kind {
             DeviceKind::Input => device.default_input_config()?.into(),

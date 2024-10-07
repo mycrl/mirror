@@ -204,7 +204,7 @@ pub mod dx11 {
         },
         Size,
     };
-    use resample::win32::{Resource, VideoTransform, VideoTransformDescriptor};
+    use resample::win32::{Resource, VideoResampler, VideoResamplerDescriptor};
 
     use thiserror::Error;
 
@@ -220,7 +220,7 @@ pub mod dx11 {
         direct3d: Direct3DDevice,
         swap_chain: IDXGISwapChain,
         render_target_view: ID3D11RenderTargetView,
-        video_processor: Option<VideoTransform>,
+        video_processor: Option<VideoResampler>,
     }
 
     unsafe impl Send for Dx11Renderer {}
@@ -305,7 +305,7 @@ pub mod dx11 {
                     _ => unimplemented!("not supports texture format"),
                 };
 
-                self.video_processor = Some(VideoTransform::new(VideoTransformDescriptor {
+                self.video_processor = Some(VideoResampler::new(VideoResamplerDescriptor {
                     direct3d: self.direct3d.clone(),
                     input: Resource::Default(format, size),
                     output: Resource::Texture(unsafe {

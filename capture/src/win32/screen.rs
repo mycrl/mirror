@@ -15,7 +15,7 @@ use common::{
 };
 
 use parking_lot::Mutex;
-use resample::win32::{Resource, VideoTransform, VideoTransformDescriptor};
+use resample::win32::{Resource, VideoResampler, VideoResamplerDescriptor};
 use windows::{
     core::Interface,
     Win32::Graphics::{
@@ -60,7 +60,7 @@ impl GraphicsCaptureApiHandler for WindowsCapture {
             VideoSubFormat::SW
         };
 
-        let mut transform = VideoTransform::new(VideoTransformDescriptor {
+        let mut transform = VideoResampler::new(VideoResamplerDescriptor {
             direct3d: ctx.options.direct3d.clone(),
             input: Resource::Default(
                 DXGI_FORMAT_R8G8B8A8_UNORM,
