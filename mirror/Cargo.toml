@@ -14,7 +14,7 @@ transport = { path = "../transport" }
 graphics = { path = "../graphics" }
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
-audio = { path = "../audio" }
+resample = { path = "../resample" }
 capture = { path = "../capture" }
 codec = { path = "../codec" }
 cpal = "0.15.3"

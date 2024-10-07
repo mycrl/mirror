@@ -7,7 +7,6 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
-use audio::AudioResampler;
 use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
     Stream, StreamConfig, StreamError,
@@ -15,10 +14,11 @@ use cpal::{
 
 use frame::{AudioFrame, VideoFormat, VideoFrame, VideoSubFormat};
 use parking_lot::RwLock;
+use resample::AudioResampler;
 use utils::Size;
 
 use graphics::{
-    Renderer, RendererOptions, SoftwareTexture, SurfaceTarget, Texture, TextureResource,
+    Renderer, RendererOptions, SurfaceTarget, Texture, Texture2DBuffer, Texture2DResource,
 };
 
 #[cfg(target_os = "windows")]
@@ -231,7 +231,7 @@ impl<'a> VideoRender<'a> {
                         .cloned()
                         .ok_or_else(|| anyhow!("not found a texture"))?;
 
-                    let texture = TextureResource::Texture(graphics::HardwareTexture::Dx11(
+                    let texture = Texture2DResource::Texture(graphics::Texture2DRaw::Dx11(
                         &dx_tex,
                         frame.data[1] as u32,
                     ));
@@ -331,7 +331,7 @@ impl<'a> VideoRender<'a> {
                     ],
                 };
 
-                let texture = SoftwareTexture {
+                let texture = Texture2DBuffer {
                     buffers: &buffers,
                     size: Size {
                         width: frame.width,
@@ -340,9 +340,9 @@ impl<'a> VideoRender<'a> {
                 };
 
                 let texture = match frame.format {
-                    VideoFormat::BGRA => Texture::Bgra(TextureResource::Buffer(texture)),
-                    VideoFormat::RGBA => Texture::Rgba(TextureResource::Buffer(texture)),
-                    VideoFormat::NV12 => Texture::Nv12(TextureResource::Buffer(texture)),
+                    VideoFormat::BGRA => Texture::Bgra(Texture2DResource::Buffer(texture)),
+                    VideoFormat::RGBA => Texture::Rgba(Texture2DResource::Buffer(texture)),
+                    VideoFormat::NV12 => Texture::Nv12(Texture2DResource::Buffer(texture)),
                     VideoFormat::I420 => Texture::I420(texture),
                 };
 

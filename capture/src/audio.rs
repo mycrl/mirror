@@ -3,10 +3,10 @@ use crate::{AudioCaptureSourceDescription, CaptureHandler, Source, SourceType};
 use parking_lot::Mutex;
 
 use anyhow::{anyhow, Result};
-use audio::AudioResampler;
 use cpal::{traits::*, Host, Stream, StreamConfig};
 use frame::AudioFrame;
 use once_cell::sync::Lazy;
+use resample::AudioResampler;
 
 // Just use a default audio port globally.
 static HOST: Lazy<Host> = Lazy::new(|| cpal::default_host());

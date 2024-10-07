@@ -42,14 +42,14 @@ pub enum FromNativeResourceError {
 }
 
 #[derive(Debug)]
-pub enum HardwareTexture<'a> {
+pub enum Texture2DRaw<'a> {
     #[cfg(target_os = "windows")]
     Dx11(&'a ID3D11Texture2D, u32),
     #[cfg(target_os = "linux")]
     GL(&'a usize),
 }
 
-impl<'a> HardwareTexture<'a> {
+impl<'a> Texture2DRaw<'a> {
     #[allow(unused)]
     pub(crate) fn texture<'b>(
         &self,
@@ -57,9 +57,9 @@ impl<'a> HardwareTexture<'a> {
     ) -> Result<&'b WGPUTexture, FromNativeResourceError> {
         Ok(match self {
             #[cfg(target_os = "windows")]
-            HardwareTexture::Dx11(dx11, index) => compatibility.from_hal(dx11, *index)?,
+            Self::Dx11(dx11, index) => compatibility.from_hal(dx11, *index)?,
             #[cfg(target_os = "linux")]
-            HardwareTexture::GL(gl) => todo!(),
+            Self::GL(gl) => todo!(),
             _ => unimplemented!("not supports native texture"),
         })
     }
@@ -67,7 +67,7 @@ impl<'a> HardwareTexture<'a> {
     pub(crate) fn size(&self) -> Size {
         match self {
             #[cfg(target_os = "windows")]
-            HardwareTexture::Dx11(dx11, _) => {
+            Self::Dx11(dx11, _) => {
                 let desc = dx11.desc();
                 Size {
                     width: desc.Width,
@@ -75,7 +75,7 @@ impl<'a> HardwareTexture<'a> {
                 }
             }
             #[cfg(target_os = "linux")]
-            HardwareTexture::GL(_gl) => {
+            Self::GL(_gl) => {
                 todo!()
             }
         }
@@ -83,18 +83,18 @@ impl<'a> HardwareTexture<'a> {
 }
 
 #[derive(Debug)]
-pub struct SoftwareTexture<'a> {
+pub struct Texture2DBuffer<'a> {
     pub size: Size,
     pub buffers: &'a [&'a [u8]],
 }
 
 #[derive(Debug)]
-pub enum TextureResource<'a> {
-    Texture(HardwareTexture<'a>),
-    Buffer(SoftwareTexture<'a>),
+pub enum Texture2DResource<'a> {
+    Texture(Texture2DRaw<'a>),
+    Buffer(Texture2DBuffer<'a>),
 }
 
-impl<'a> TextureResource<'a> {
+impl<'a> Texture2DResource<'a> {
     /// Get the hardware texture, here does not deal with software texture, so
     /// if it is software texture directly return None.
     pub(crate) fn texture<'b>(
@@ -102,25 +102,25 @@ impl<'a> TextureResource<'a> {
         compatibility: &'b mut CompatibilityLayer,
     ) -> Result<Option<&'b WGPUTexture>, FromNativeResourceError> {
         Ok(match self {
-            TextureResource::Texture(texture) => Some(texture.texture(compatibility)?),
-            TextureResource::Buffer(_) => None,
+            Texture2DResource::Texture(texture) => Some(texture.texture(compatibility)?),
+            Texture2DResource::Buffer(_) => None,
         })
     }
 
     pub(crate) fn size(&self) -> Size {
         match self {
-            TextureResource::Texture(texture) => texture.size(),
-            TextureResource::Buffer(texture) => texture.size,
+            Texture2DResource::Texture(texture) => texture.size(),
+            Texture2DResource::Buffer(texture) => texture.size,
         }
     }
 }
 
 #[derive(Debug)]
 pub enum Texture<'a> {
-    Bgra(TextureResource<'a>),
-    Rgba(TextureResource<'a>),
-    Nv12(TextureResource<'a>),
-    I420(SoftwareTexture<'a>),
+    Bgra(Texture2DResource<'a>),
+    Rgba(Texture2DResource<'a>),
+    Nv12(Texture2DResource<'a>),
+    I420(Texture2DBuffer<'a>),
 }
 
 impl<'a> Texture<'a> {
@@ -271,7 +271,7 @@ trait Texture2DSample {
     }
 
     /// Schedule a write of some data into a texture.
-    fn update(&self, queue: &Queue, resource: &SoftwareTexture) {
+    fn update(&self, queue: &Queue, resource: &Texture2DBuffer) {
         for (buffer, texture, aspect, size) in self.copy_buffer_descriptors(resource.buffers) {
             queue.write_texture(
                 ImageCopyTexture {
@@ -702,17 +702,17 @@ impl Texture2DSource {
         // Only software textures need to be updated to the sample via update.
         if let Some(sample) = &self.sample {
             match &texture {
-                Texture::Bgra(TextureResource::Buffer(buffer)) => {
+                Texture::Bgra(Texture2DResource::Buffer(buffer)) => {
                     if let Texture2DSourceSample::Bgra(rgba) = sample {
                         rgba.update(&self.queue, buffer);
                     }
                 }
-                Texture::Rgba(TextureResource::Buffer(buffer)) => {
+                Texture::Rgba(Texture2DResource::Buffer(buffer)) => {
                     if let Texture2DSourceSample::Rgba(rgba) = sample {
                         rgba.update(&self.queue, buffer);
                     }
                 }
-                Texture::Nv12(TextureResource::Buffer(buffer)) => {
+                Texture::Nv12(Texture2DResource::Buffer(buffer)) => {
                     if let Texture2DSourceSample::Nv12(nv12) = sample {
                         nv12.update(&self.queue, buffer);
                     }

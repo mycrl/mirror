@@ -3,10 +3,9 @@ use std::{ffi::c_int, ptr::null_mut};
 use ffmpeg_sys_next::*;
 use frame::{VideoFormat, VideoFrame, VideoSubFormat};
 use thiserror::Error;
-use utils::Size;
 
 #[cfg(target_os = "windows")]
-use utils::win32::Direct3DDevice;
+use utils::{win32::Direct3DDevice, Size};
 
 use crate::{
     util::{

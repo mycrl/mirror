@@ -1,10 +1,13 @@
 use crate::video::{VideoDecoderType, VideoEncoderType};
 
 use ffmpeg_sys_next::*;
-use utils::{strings::Strings, Size};
+use utils::strings::Strings;
 
 #[cfg(target_os = "windows")]
-use utils::win32::{windows::core::Interface, Direct3DDevice};
+use utils::{
+    win32::{windows::core::Interface, Direct3DDevice},
+    Size,
+};
 
 use thiserror::Error;
 

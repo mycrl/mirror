@@ -11,6 +11,7 @@ resolver = "2"
 members = [
     "ffi",
     "codec",
+    "resample",
     "capture",
     "graphics",
     "mirror",
@@ -20,6 +21,5 @@ members = [
     "srt",
     "frame",
     "utils",
-    "audio",
     "app/napi",
 ]
