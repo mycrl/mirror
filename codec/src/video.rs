@@ -1,11 +1,11 @@
 use std::{ffi::c_int, ptr::null_mut};
 
+use common::frame::{VideoFormat, VideoFrame, VideoSubFormat};
 use ffmpeg_sys_next::*;
-use frame::{VideoFormat, VideoFrame, VideoSubFormat};
 use thiserror::Error;
 
 #[cfg(target_os = "windows")]
-use utils::{win32::Direct3DDevice, Size};
+use common::{win32::Direct3DDevice, Size};
 
 use crate::{
     util::{

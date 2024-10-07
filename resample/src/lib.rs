@@ -74,33 +74,32 @@ impl AudioResampler {
 pub mod win32 {
     use std::mem::ManuallyDrop;
 
-    use utils::{
-        win32::windows::{
-            core::Interface,
-            Win32::{
-                Foundation::{HWND, RECT},
-                Graphics::{
-                    Direct3D11::{
-                        ID3D11Device, ID3D11DeviceContext, ID3D11RenderTargetView, ID3D11Texture2D,
-                        ID3D11VideoContext, ID3D11VideoDevice, ID3D11VideoProcessor,
-                        ID3D11VideoProcessorEnumerator, ID3D11VideoProcessorInputView,
-                        ID3D11VideoProcessorOutputView, D3D11_BIND_RENDER_TARGET,
-                        D3D11_CPU_ACCESS_READ, D3D11_MAPPED_SUBRESOURCE, D3D11_MAP_READ,
-                        D3D11_RESOURCE_MISC_SHARED, D3D11_TEXTURE2D_DESC, D3D11_USAGE_DEFAULT,
-                        D3D11_USAGE_STAGING, D3D11_VIDEO_FRAME_FORMAT_PROGRESSIVE,
-                        D3D11_VIDEO_PROCESSOR_COLOR_SPACE, D3D11_VIDEO_PROCESSOR_CONTENT_DESC,
-                        D3D11_VIDEO_PROCESSOR_INPUT_VIEW_DESC,
-                        D3D11_VIDEO_PROCESSOR_OUTPUT_VIEW_DESC, D3D11_VIDEO_PROCESSOR_STREAM,
-                        D3D11_VIDEO_USAGE_PLAYBACK_NORMAL, D3D11_VIEWPORT,
-                        D3D11_VPIV_DIMENSION_TEXTURE2D, D3D11_VPOV_DIMENSION_TEXTURE2D,
-                    },
-                    Dxgi::{
-                        Common::{DXGI_FORMAT, DXGI_FORMAT_NV12, DXGI_FORMAT_R8G8B8A8_UNORM},
-                        CreateDXGIFactory, IDXGIFactory, IDXGISwapChain, DXGI_PRESENT,
-                        DXGI_SWAP_CHAIN_DESC, DXGI_USAGE_RENDER_TARGET_OUTPUT,
+    use common::{
+        win32::{
+            windows::{
+                core::{Error, Interface},
+                Win32::{
+                    Foundation::RECT,
+                    Graphics::{
+                        Direct3D11::{
+                            ID3D11Device, ID3D11DeviceContext, ID3D11Texture2D, ID3D11VideoContext,
+                            ID3D11VideoDevice, ID3D11VideoProcessor,
+                            ID3D11VideoProcessorEnumerator, ID3D11VideoProcessorInputView,
+                            ID3D11VideoProcessorOutputView, D3D11_BIND_RENDER_TARGET,
+                            D3D11_CPU_ACCESS_READ, D3D11_MAPPED_SUBRESOURCE, D3D11_MAP_READ,
+                            D3D11_RESOURCE_MISC_SHARED, D3D11_TEXTURE2D_DESC, D3D11_USAGE_DEFAULT,
+                            D3D11_USAGE_STAGING, D3D11_VIDEO_FRAME_FORMAT_PROGRESSIVE,
+                            D3D11_VIDEO_PROCESSOR_COLOR_SPACE, D3D11_VIDEO_PROCESSOR_CONTENT_DESC,
+                            D3D11_VIDEO_PROCESSOR_INPUT_VIEW_DESC,
+                            D3D11_VIDEO_PROCESSOR_OUTPUT_VIEW_DESC, D3D11_VIDEO_PROCESSOR_STREAM,
+                            D3D11_VIDEO_USAGE_PLAYBACK_NORMAL, D3D11_VPIV_DIMENSION_TEXTURE2D,
+                            D3D11_VPOV_DIMENSION_TEXTURE2D,
+                        },
+                        Dxgi::Common::DXGI_FORMAT,
                     },
                 },
             },
+            Direct3DDevice,
         },
         Size,
     };
@@ -144,7 +143,7 @@ pub mod win32 {
         /// directly use the device when it has been created externally, so
         /// there is no need to copy across devices, which improves
         /// processing performance.
-        pub fn new(options: VideoTransformDescriptor) -> Result<Self, Dx11GraphicsError> {
+        pub fn new(options: VideoTransformDescriptor) -> Result<Self, Error> {
             let (d3d_device, d3d_context) = (options.direct3d.device, options.direct3d.context);
             let video_device = d3d_device.cast::<ID3D11VideoDevice>()?;
             let video_context = d3d_context.cast::<ID3D11VideoContext>()?;
@@ -312,7 +311,7 @@ pub mod win32 {
             &mut self,
             buf: *const u8,
             stride: u32,
-        ) -> Result<(), Dx11GraphicsError> {
+        ) -> Result<(), Error> {
             unsafe {
                 self.d3d_context.UpdateSubresource(
                     &self.input_texture,
@@ -334,7 +333,7 @@ pub mod win32 {
             &mut self,
             texture: &ID3D11Texture2D,
             index: u32,
-        ) -> Result<ID3D11VideoProcessorInputView, Dx11GraphicsError> {
+        ) -> Result<ID3D11VideoProcessorInputView, Error> {
             let input_view = unsafe {
                 let mut desc = D3D11_VIDEO_PROCESSOR_INPUT_VIEW_DESC::default();
                 desc.FourCC = 0;
@@ -360,7 +359,7 @@ pub mod win32 {
             &self.output_texture
         }
 
-        pub fn get_output_buffer(&mut self) -> Result<TextureBuffer, Dx11GraphicsError> {
+        pub fn get_output_buffer(&mut self) -> Result<TextureBuffer, Error> {
             Ok(TextureBuffer::new(
                 &self.d3d_device,
                 &self.d3d_context,
@@ -371,7 +370,7 @@ pub mod win32 {
         pub fn process(
             &mut self,
             input_view: Option<ID3D11VideoProcessorInputView>,
-        ) -> Result<(), Dx11GraphicsError> {
+        ) -> Result<(), Error> {
             unsafe {
                 let mut streams = [D3D11_VIDEO_PROCESSOR_STREAM::default()];
                 streams[0].Enable = true.into();
@@ -408,7 +407,7 @@ pub mod win32 {
             d3d_device: &ID3D11Device,
             d3d_context: &'a ID3D11DeviceContext,
             source_texture: &ID3D11Texture2D,
-        ) -> Result<Self, Dx11GraphicsError> {
+        ) -> Result<Self, Error> {
             let texture = unsafe {
                 let mut desc = D3D11_TEXTURE2D_DESC::default();
                 source_texture.GetDesc(&mut desc);

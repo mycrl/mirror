@@ -1,5 +1,12 @@
 pub mod adapter;
+pub mod multicast;
 pub mod package;
+pub mod srt;
+
+use crate::{
+    adapter::{StreamReceiverAdapterExt, StreamSenderAdapter},
+    package::{Package, PacketInfo, UnPackage},
+};
 
 use std::{
     collections::HashMap,
@@ -13,16 +20,11 @@ use std::{
     thread,
 };
 
-use bytes::BytesMut;
+use bytes::{BufMut, Bytes, BytesMut};
+use common::atomic::EasyAtomic;
 use parking_lot::{Mutex, RwLock};
-use service::{signal::Signal, SocketKind, StreamInfo};
+use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
-use utils::atomic::EasyAtomic;
-
-use crate::{
-    adapter::{StreamReceiverAdapterExt, StreamSenderAdapter},
-    package::{Package, PacketInfo, UnPackage},
-};
 
 pub fn startup() -> bool {
     srt::startup()
@@ -423,5 +425,109 @@ impl Transport {
             })?;
 
         Ok(())
+    }
+}
+
+#[repr(u8)]
+#[derive(Default, PartialEq, Eq, Debug)]
+pub enum SocketKind {
+    #[default]
+    Subscriber = 0,
+    Publisher = 1,
+}
+
+#[derive(Default, Debug)]
+pub struct StreamInfo {
+    pub id: u32,
+    pub port: Option<u16>,
+    pub kind: SocketKind,
+}
+
+impl StreamInfo {
+    pub fn decode(value: &str) -> Option<Self> {
+        if value.starts_with("#!::") {
+            let mut info = Self::default();
+            for item in value.split_at(4).1.split(',') {
+                if let Some((k, v)) = item.split_once('=') {
+                    match k {
+                        "i" => {
+                            if let Ok(id) = v.parse::<u32>() {
+                                info.id = id;
+                            }
+                        }
+                        "k" => {
+                            if let Ok(kind) = v.parse::<u8>() {
+                                match kind {
+                                    0 => {
+                                        info.kind = SocketKind::Subscriber;
+                                    }
+                                    1 => {
+                                        info.kind = SocketKind::Publisher;
+                                    }
+                                    _ => (),
+                                }
+                            }
+                        }
+                        "p" => {
+                            if let Ok(port) = v.parse::<u16>() {
+                                info.port = Some(port);
+                            }
+                        }
+                        _ => (),
+                    }
+                }
+            }
+
+            Some(info)
+        } else {
+            None
+        }
+    }
+
+    pub fn encode(self) -> String {
+        format!(
+            "#!::{}",
+            [
+                format!("i={}", self.id),
+                format!("k={}", self.kind as u8),
+                self.port.map(|p| format!("p={}", p)).unwrap_or_default(),
+            ]
+            .join(",")
+        )
+    }
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, Serialize)]
+pub enum Signal {
+    /// Start publishing a channel. The port number is the publisher's multicast
+    /// port.
+    Start { id: u32, port: u16 },
+    /// Stop publishing to a channel
+    Stop { id: u32 },
+}
+
+impl Signal {
+    pub fn encode(&self) -> Bytes {
+        let payload = rmp_serde::to_vec(&self).unwrap();
+        let mut buf = BytesMut::with_capacity(payload.len() + 2);
+        buf.put_u16(buf.capacity() as u16);
+        buf.extend_from_slice(&payload);
+        buf.freeze()
+    }
+
+    #[rustfmt::skip]
+    pub fn decode(buf: &[u8]) -> Option<(usize, Self)> {
+        if buf.len() > 2 {
+            let size = u16::from_be_bytes([
+                buf[0],
+                buf[1],
+            ]) as usize;
+
+            if size <= buf.len() {
+                return rmp_serde::from_slice(&buf[2..size]).ok().map(|it| (size, it))
+            }
+        }
+
+        None
     }
 }

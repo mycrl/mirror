@@ -8,10 +8,10 @@ use self::{texture::FromNativeResourceError, vertex::Vertex};
 
 pub use self::texture::{Texture, Texture2DBuffer, Texture2DRaw, Texture2DResource};
 
+use common::Size;
 use pollster::FutureExt;
 use texture::{Texture2DSource, Texture2DSourceOptions};
 use thiserror::Error;
-use utils::Size;
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
     Backends, Buffer, BufferUsages, Color, CommandEncoderDescriptor, CompositeAlphaMode, Device,
@@ -41,7 +41,7 @@ pub enum GraphicsError {
 
 pub struct RendererOptions<T> {
     #[cfg(target_os = "windows")]
-    pub direct3d: utils::win32::Direct3DDevice,
+    pub direct3d: common::win32::Direct3DDevice,
     pub window: T,
     pub size: Size,
 }
@@ -187,46 +187,33 @@ impl<'a> Renderer<'a> {
 
 #[cfg(target_os = "windows")]
 pub mod dx11 {
-    use utils::{
-        win32::windows::{
-            core::Interface,
-            Win32::{
-                Foundation::{HWND, RECT},
+    use common::{
+        win32::{
+            windows::Win32::{
+                Foundation::HWND,
                 Graphics::{
-                    Direct3D11::{
-                        ID3D11Device, ID3D11DeviceContext, ID3D11RenderTargetView, ID3D11Texture2D,
-                        ID3D11VideoContext, ID3D11VideoDevice, ID3D11VideoProcessor,
-                        ID3D11VideoProcessorEnumerator, ID3D11VideoProcessorInputView,
-                        ID3D11VideoProcessorOutputView, D3D11_BIND_RENDER_TARGET,
-                        D3D11_CPU_ACCESS_READ, D3D11_MAPPED_SUBRESOURCE, D3D11_MAP_READ,
-                        D3D11_RESOURCE_MISC_SHARED, D3D11_TEXTURE2D_DESC, D3D11_USAGE_DEFAULT,
-                        D3D11_USAGE_STAGING, D3D11_VIDEO_FRAME_FORMAT_PROGRESSIVE,
-                        D3D11_VIDEO_PROCESSOR_COLOR_SPACE, D3D11_VIDEO_PROCESSOR_CONTENT_DESC,
-                        D3D11_VIDEO_PROCESSOR_INPUT_VIEW_DESC,
-                        D3D11_VIDEO_PROCESSOR_OUTPUT_VIEW_DESC, D3D11_VIDEO_PROCESSOR_STREAM,
-                        D3D11_VIDEO_USAGE_PLAYBACK_NORMAL, D3D11_VIEWPORT,
-                        D3D11_VPIV_DIMENSION_TEXTURE2D, D3D11_VPOV_DIMENSION_TEXTURE2D,
-                    },
+                    Direct3D11::{ID3D11RenderTargetView, ID3D11Texture2D, D3D11_VIEWPORT},
                     Dxgi::{
-                        Common::{DXGI_FORMAT, DXGI_FORMAT_NV12, DXGI_FORMAT_R8G8B8A8_UNORM},
+                        Common::{DXGI_FORMAT_NV12, DXGI_FORMAT_R8G8B8A8_UNORM},
                         CreateDXGIFactory, IDXGIFactory, IDXGISwapChain, DXGI_PRESENT,
                         DXGI_SWAP_CHAIN_DESC, DXGI_USAGE_RENDER_TARGET_OUTPUT,
                     },
                 },
             },
+            Direct3DDevice,
         },
         Size,
     };
+    use resample::win32::{Resource, VideoTransform, VideoTransformDescriptor};
 
     use thiserror::Error;
-    use utils::win32::Direct3DDevice;
 
     use crate::{Texture, Texture2DRaw, Texture2DResource};
 
     #[derive(Debug, Error)]
     pub enum Dx11GraphicsError {
         #[error(transparent)]
-        WindowsError(#[from] utils::win32::windows::core::Error),
+        WindowsError(#[from] common::win32::windows::core::Error),
     }
 
     pub struct Dx11Renderer {

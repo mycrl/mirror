@@ -1,10 +1,10 @@
 use crate::video::{VideoDecoderType, VideoEncoderType};
 
+use common::strings::Strings;
 use ffmpeg_sys_next::*;
-use utils::strings::Strings;
 
 #[cfg(target_os = "windows")]
-use utils::{
+use common::{
     win32::{windows::core::Interface, Direct3DDevice},
     Size,
 };
@@ -56,7 +56,7 @@ pub enum CreateVideoContextError {
     MissingDirect3DDevice,
     #[cfg(target_os = "windows")]
     #[error(transparent)]
-    SetMultithreadProtectedError(#[from] utils::win32::windows::core::Error),
+    SetMultithreadProtectedError(#[from] common::win32::windows::core::Error),
     #[error("failed to init av hardware device context")]
     InitAVHardwareDeviceContextError,
     #[error("failed to init qsv device context")]

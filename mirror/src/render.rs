@@ -12,17 +12,20 @@ use cpal::{
     Stream, StreamConfig, StreamError,
 };
 
-use frame::{AudioFrame, VideoFormat, VideoFrame, VideoSubFormat};
+use common::{
+    frame::{AudioFrame, VideoFormat, VideoFrame, VideoSubFormat},
+    Size,
+};
+
 use parking_lot::RwLock;
 use resample::AudioResampler;
-use utils::Size;
 
 use graphics::{
     Renderer, RendererOptions, SurfaceTarget, Texture, Texture2DBuffer, Texture2DResource,
 };
 
 #[cfg(target_os = "windows")]
-use utils::win32::{d3d_texture_borrowed_raw, windows::Win32::Foundation::HWND};
+use common::win32::{d3d_texture_borrowed_raw, windows::Win32::Foundation::HWND};
 
 #[cfg(target_os = "windows")]
 use graphics::dx11::Dx11Renderer;

@@ -1,11 +1,15 @@
 mod proxy;
+mod route;
+mod signal;
+
+use self::{route::Route, signal::start_server};
 
 use std::{net::SocketAddr, process::exit, sync::Arc, thread};
 
 use anyhow::Result;
 use clap::Parser;
-use service::route::Route;
 use tokio::runtime::Runtime;
+use transport::srt::{cleanup, startup};
 
 // #[global_allocator]
 // static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
@@ -26,7 +30,7 @@ pub struct Configure {
 fn main() -> Result<()> {
     // Initialize srt and logger
     simple_logger::init_with_level(log::Level::Info)?;
-    srt::startup();
+    startup();
 
     // Parse command line parameters. Note that if the command line parameters are
     // incorrect, panic will occur.
@@ -47,8 +51,8 @@ fn main() -> Result<()> {
     // Start the signaling server. If the signaling server exits, the entire process
     // will exit. This is because if the signaling exits, it is meaningless to
     // continue running.
-    Runtime::new()?.block_on(service::signal::start_server(config.bind, route))?;
-    srt::cleanup();
+    Runtime::new()?.block_on(start_server(config.bind, route))?;
+    cleanup();
 
     Ok(())
 }

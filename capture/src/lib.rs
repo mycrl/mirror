@@ -20,7 +20,11 @@ mod linux {
 
 use self::audio::AudioCapture;
 
-use utils::Size;
+use anyhow::Result;
+use common::{
+    frame::{AudioFrame, VideoFrame},
+    Size,
+};
 
 #[cfg(target_os = "windows")]
 use win32::{CameraCapture, ScreenCapture};
@@ -29,10 +33,7 @@ use win32::{CameraCapture, ScreenCapture};
 use linux::{CameraCapture, ScreenCapture};
 
 #[cfg(target_os = "windows")]
-use utils::win32::Direct3DDevice;
-
-use anyhow::Result;
-use frame::{AudioFrame, VideoFrame};
+use common::win32::Direct3DDevice;
 
 pub trait FrameArrived: Sync + Send {
     /// The type of data captured, such as video frames.

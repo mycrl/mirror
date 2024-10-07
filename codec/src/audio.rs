@@ -1,9 +1,8 @@
 use std::{ffi::c_int, ptr::null_mut};
 
+use common::{frame::AudioFrame, strings::Strings};
 use ffmpeg_sys_next::*;
-use frame::AudioFrame;
 use thiserror::Error;
-use utils::strings::Strings;
 
 use crate::util::{set_option, set_str_option};
 

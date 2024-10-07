@@ -7,11 +7,11 @@ use std::{
 
 use anyhow::Result;
 use codec::{AudioDecoder, VideoDecoder, VideoDecoderSettings, VideoDecoderType};
+use common::atomic::EasyAtomic;
 use transport::adapter::{StreamKind, StreamMultiReceiverAdapter, StreamReceiverAdapterExt};
 
-use utils::atomic::EasyAtomic;
 #[cfg(target_os = "windows")]
-use utils::win32::MediaThreadClass;
+use common::win32::MediaThreadClass;
 
 #[derive(Debug, Clone)]
 pub struct MirrorReceiverDescriptor {

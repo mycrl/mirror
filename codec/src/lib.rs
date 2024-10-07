@@ -16,9 +16,9 @@ pub use self::{
     },
 };
 
+use common::strings::Strings;
 use ffmpeg_sys_next::*;
 use log::Level;
-use utils::strings::Strings;
 
 pub fn is_hardware_encoder(kind: VideoEncoderType) -> bool {
     match kind {

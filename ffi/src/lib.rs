@@ -32,10 +32,10 @@ pub mod desktop {
         XcbWindowHandle, XlibDisplayHandle, XlibWindowHandle,
     };
 
-    use utils::{logger, strings::Strings, Size};
+    use common::{logger, strings::Strings, Size};
 
     #[cfg(target_os = "windows")]
-    use utils::win32::windows::Win32::Foundation::HWND;
+    use common::win32::windows::Win32::Foundation::HWND;
 
     #[cfg(any(target_os = "windows", target_os = "linux"))]
     use mirror::{Capture, SourceType};

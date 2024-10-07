@@ -15,7 +15,7 @@ parking_lot = "0.12"
 napi = { version = "3.0.0-alpha.11", features = ["napi4"] }
 napi-derive = "3.0.0-alpha.11"
 mirror = { path = "../../mirror" }
-utils = { path = "../../utils" }
+common = { path = "../../common" }
 winit = "0.30.5"
 
 [build-dependencies]

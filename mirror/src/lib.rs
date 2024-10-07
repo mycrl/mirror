@@ -20,16 +20,19 @@ use self::render::{AudioRender, VideoRender};
 
 use anyhow::Result;
 use transport::Transport;
-use utils::Size;
 
 pub use capture::{Capture, Source, SourceType};
 pub use codec::{VideoDecoderType, VideoEncoderType};
-pub use frame::{AudioFrame, VideoFormat, VideoFrame};
+pub use common::{
+    frame::{AudioFrame, VideoFormat, VideoFrame},
+    Size,
+};
+
 pub use graphics::raw_window_handle;
 pub use transport::TransportDescriptor;
 
 #[cfg(target_os = "windows")]
-use utils::win32::{
+use common::win32::{
     set_process_priority, shutdown as win32_shutdown, startup as win32_startup, Direct3DDevice,
     ProcessPriority,
 };

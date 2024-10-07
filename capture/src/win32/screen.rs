@@ -7,15 +7,15 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
-use frame::{VideoFormat, VideoFrame, VideoSubFormat};
-use graphics::dx11::{Resource, VideoTransform, VideoTransformDescriptor};
-use parking_lot::Mutex;
-use utils::{
+use common::{
     atomic::EasyAtomic,
+    frame::{VideoFormat, VideoFrame, VideoSubFormat},
     win32::{EasyTexture, MediaThreadClass},
     Size,
 };
 
+use parking_lot::Mutex;
+use resample::win32::{Resource, VideoTransform, VideoTransformDescriptor};
 use windows::{
     core::Interface,
     Win32::Graphics::{

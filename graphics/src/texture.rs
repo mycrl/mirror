@@ -8,12 +8,12 @@ use crate::helper::win32::Dx11OnWgpuCompatibilityLayer;
 #[cfg(target_os = "linux")]
 use crate::helper::linux::VulkanOnWgpuCompatibilityLayer;
 
+use common::Size;
 use smallvec::SmallVec;
 use thiserror::Error;
-use utils::Size;
 
 #[cfg(target_os = "windows")]
-use utils::win32::{
+use common::win32::{
     windows::Win32::Graphics::Direct3D11::ID3D11Texture2D, Direct3DDevice, EasyTexture,
 };
 

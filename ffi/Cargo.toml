@@ -11,7 +11,7 @@ name = "mirror"
 anyhow = "1.0.82"
 bytes = "1.5"
 log = "0.4.20"
-utils = { path = "../utils" }
+common = { path = "../common" }
 
 [target.'cfg(target_os = "android")'.dependencies]
 jni = "0.21.1"

@@ -3,8 +3,8 @@ use crate::{AudioCaptureSourceDescription, CaptureHandler, Source, SourceType};
 use parking_lot::Mutex;
 
 use anyhow::{anyhow, Result};
+use common::frame::AudioFrame;
 use cpal::{traits::*, Host, Stream, StreamConfig};
-use frame::AudioFrame;
 use once_cell::sync::Lazy;
 use resample::AudioResampler;
 

@@ -12,18 +12,21 @@ use capture::{
     SourceCaptureDescriptor, VideoCaptureSourceDescription,
 };
 
+use common::{
+    atomic::EasyAtomic,
+    frame::{AudioFrame, VideoFrame},
+    Size,
+};
+
 use codec::{
     create_opus_identification_header, AudioEncoder, AudioEncoderSettings, VideoEncoder,
     VideoEncoderSettings, VideoEncoderType,
 };
 
-use frame::{AudioFrame, VideoFrame};
 use transport::{
     adapter::{BufferFlag, StreamBufferInfo, StreamSenderAdapter},
     package,
 };
-
-use utils::{atomic::EasyAtomic, Size};
 
 #[derive(Debug, Clone)]
 pub struct VideoDescriptor {

@@ -2,8 +2,7 @@ use std::collections::HashMap;
 
 use parking_lot::RwLock;
 use tokio::sync::broadcast::{channel, Receiver, Sender};
-
-use crate::signal::Signal;
+use transport::Signal;
 
 pub struct Route {
     nodes: RwLock<HashMap<u32, u16>>,

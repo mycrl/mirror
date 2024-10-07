@@ -2,7 +2,7 @@ use std::{ffi::c_int, io::Error, net::SocketAddr};
 
 use os_socketaddr::OsSocketAddr;
 
-use crate::{srt_getsockstate, SRT_SOCKSTATUS};
+use super::{srt_getsockstate, SRT_SOCKSTATUS};
 
 use super::{
     error, options::Descriptor, socket::Socket, srt_accept, srt_bind, srt_bstats, srt_close,
