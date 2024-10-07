@@ -43,7 +43,11 @@ Args::Args(std::string args)
         }
         else if (kv[0] == "decoder")
         {
-            if (kv[1] == "d3d11")
+            if (kv[1] == "h264")
+            {
+                ArgsParams.decoder = VIDEO_DECODER_H264;
+            }
+            else if (kv[1] == "d3d11va")
             {
                 ArgsParams.decoder = VIDEO_DECODER_D3D11;
             }
