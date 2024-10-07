@@ -4,9 +4,11 @@ mod vertex;
 
 use std::sync::Arc;
 
-use self::{texture::FromNativeResourceError, vertex::Vertex};
+use self::vertex::Vertex;
 
-pub use self::texture::{Texture, Texture2DBuffer, Texture2DRaw, Texture2DResource};
+pub use self::texture::{
+    FromNativeResourceError, Texture, Texture2DBuffer, Texture2DRaw, Texture2DResource,
+};
 
 use common::Size;
 use pollster::FutureExt;
@@ -289,7 +291,7 @@ pub mod dx11 {
             })
         }
 
-        /// Draw this pixel buffer to the configured [`SurfaceTexture`].
+        /// Draw this pixel buffer to the configured SurfaceTexture.
         pub fn submit(&mut self, texture: Texture) -> Result<(), Dx11GraphicsError> {
             unsafe {
                 self.direct3d

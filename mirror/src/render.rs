@@ -6,7 +6,10 @@ use std::{
     },
 };
 
-use anyhow::{anyhow, Result};
+use parking_lot::RwLock;
+use resample::AudioResampler;
+use thiserror::Error;
+
 use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
     Stream, StreamConfig, StreamError,
@@ -17,9 +20,6 @@ use common::{
     Size,
 };
 
-use parking_lot::RwLock;
-use resample::AudioResampler;
-
 use graphics::{
     Renderer, RendererOptions, SurfaceTarget, Texture, Texture2DBuffer, Texture2DResource,
 };
@@ -29,6 +29,32 @@ use common::win32::{d3d_texture_borrowed_raw, windows::Win32::Foundation::HWND};
 
 #[cfg(target_os = "windows")]
 use graphics::dx11::Dx11Renderer;
+
+#[derive(Debug, Error)]
+pub enum RendererError {
+    #[error("no output device available")]
+    AudioNotFoundOutputDevice,
+    #[error(transparent)]
+    AudioDefaultStreamConfigError(#[from] cpal::DefaultStreamConfigError),
+    #[error(transparent)]
+    AudioBuildStreamError(#[from] cpal::BuildStreamError),
+    #[error(transparent)]
+    AudioResamplerConstructionError(#[from] resample::ResamplerConstructionError),
+    #[error(transparent)]
+    AudioStreamError(#[from] cpal::StreamError),
+    #[error(transparent)]
+    AudioPlayStreamError(#[from] cpal::PlayStreamError),
+    #[error(transparent)]
+    AudioResampleError(#[from] resample::ResampleError),
+    #[error("send audio queue error")]
+    AudioSendQueueError,
+    #[error(transparent)]
+    VideoDx11GraphicsError(#[from] graphics::dx11::Dx11GraphicsError),
+    #[error(transparent)]
+    VideoGraphicsError(#[from] graphics::GraphicsError),
+    #[error("invalid d3d11texture2d texture")]
+    VideoInvalidD3D11Texture,
+}
 
 pub struct AudioRender {
     stream: Stream,
@@ -42,11 +68,11 @@ unsafe impl Send for AudioRender {}
 unsafe impl Sync for AudioRender {}
 
 impl AudioRender {
-    pub fn new() -> Result<Self> {
+    pub fn new() -> Result<Self, RendererError> {
         let host = cpal::default_host();
         let device = host
             .default_output_device()
-            .ok_or_else(|| anyhow!("no output device available"))?;
+            .ok_or_else(|| RendererError::AudioNotFoundOutputDevice)?;
         let config: StreamConfig = device.default_output_config()?.into();
         let current_error: Arc<RwLock<Option<StreamError>>> = Default::default();
 
@@ -82,9 +108,11 @@ impl AudioRender {
     }
 
     /// Push an audio clip to the queue.
-    pub fn send(&mut self, frame: &AudioFrame) -> Result<()> {
-        if let Some(current_error) = self.current_error.read().as_ref() {
-            return Err(anyhow!("{}", current_error));
+    pub fn send(&mut self, frame: &AudioFrame) -> Result<(), RendererError> {
+        if self.current_error.read().is_some() {
+            if let Some(e) = self.current_error.write().take() {
+                return Err(RendererError::AudioStreamError(e));
+            }
         }
 
         if self.sampler.is_none() {
@@ -99,14 +127,16 @@ impl AudioRender {
         }
 
         if let Some(sampler) = &mut self.sampler {
-            self.queue.send(
-                sampler
-                    .resample(
-                        unsafe { from_raw_parts(frame.data, frame.frames as usize) },
-                        1,
-                    )?
-                    .to_vec(),
-            )?;
+            self.queue
+                .send(
+                    sampler
+                        .resample(
+                            unsafe { from_raw_parts(frame.data, frame.frames as usize) },
+                            1,
+                        )?
+                        .to_vec(),
+                )
+                .map_err(|_| RendererError::AudioSendQueueError)?;
         }
 
         Ok(())
@@ -184,7 +214,7 @@ impl<'a> VideoRender<'a> {
         backend: Backend,
         window: T,
         size: Size,
-    ) -> Result<Self> {
+    ) -> Result<Self, RendererError> {
         log::info!(
             "create video player, backend={:?}, size={:?}",
             backend,
@@ -225,14 +255,14 @@ impl<'a> VideoRender<'a> {
         })
     }
 
-    pub fn send(&mut self, frame: &VideoFrame) -> Result<()> {
+    pub fn send(&mut self, frame: &VideoFrame) -> Result<(), RendererError> {
         match frame.sub_format {
             VideoSubFormat::D3D11 => {
                 #[cfg(target_os = "windows")]
                 {
                     let dx_tex = d3d_texture_borrowed_raw(&(frame.data[0] as *mut _))
                         .cloned()
-                        .ok_or_else(|| anyhow!("not found a texture"))?;
+                        .ok_or_else(|| RendererError::VideoInvalidD3D11Texture)?;
 
                     let texture = Texture2DResource::Texture(graphics::Texture2DRaw::Dx11(
                         &dx_tex,

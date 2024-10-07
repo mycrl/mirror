@@ -137,10 +137,10 @@ pub mod desktop {
     pub extern "C" fn mirror_create(options: MirrorDescriptor) -> *const Mirror {
         log::info!("extern api: mirror create");
 
-        let func = || mirror::Mirror::new(options.try_into()?);
+        let func = || Ok(mirror::Mirror::new(options.try_into()?)?);
         checker(func())
             .map(|mirror| Box::into_raw(Box::new(Mirror(mirror))))
-            .unwrap_or_else(|_| null_mut()) as *const _
+            .unwrap_or_else(|_: anyhow::Error| null_mut()) as *const _
     }
 
     /// Release mirror.
@@ -477,14 +477,14 @@ pub mod desktop {
             let options: mirror::MirrorSenderDescriptor = options.try_into()?;
             log::info!("mirror create options={:?}", options);
             
-            unsafe { &*mirror }
+            Ok(unsafe { &*mirror }
                 .0
-                .create_sender(id as u32, options, sink)
+                .create_sender(id as u32, options, sink)?)
         };
     
         checker(func())
         .map(|sender| Box::into_raw(Box::new(Sender(sender))))
-        .unwrap_or_else(|_| null_mut())
+        .unwrap_or_else(|_: anyhow::Error| null_mut())
     }
 
     /// Set whether the sender uses multicast transmission.

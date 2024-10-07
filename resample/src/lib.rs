@@ -1,6 +1,6 @@
-use rubato::{
-    FastFixedIn, PolynomialDegree, ResampleResult, Resampler, ResamplerConstructionError,
-};
+use rubato::{FastFixedIn, PolynomialDegree, Resampler};
+
+pub use rubato::{ResampleError, ResampleResult, ResamplerConstructionError};
 
 /// Audio resampler, quickly resample input to a single channel count and
 /// different sampling rates.

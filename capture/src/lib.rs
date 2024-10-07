@@ -1,17 +1,18 @@
-#![cfg(any(target_os = "windows", target_os = "linux"))]
-
-mod audio;
+pub mod audio;
 
 #[cfg(target_os = "windows")]
-mod win32 {
+pub mod win32 {
     mod camera;
     mod screen;
 
-    pub use self::{camera::CameraCapture, screen::ScreenCapture};
+    pub use self::{
+        camera::{CameraCapture, CameraCaptureError},
+        screen::{ScreenCapture, ScreenCaptureError},
+    };
 }
 
 #[cfg(target_os = "linux")]
-mod linux {
+pub mod linux {
     mod camera;
     mod screen;
 
@@ -38,6 +39,24 @@ use linux::{CameraCapture, ScreenCapture};
 
 #[cfg(target_os = "windows")]
 use common::win32::Direct3DDevice;
+
+#[derive(Debug, Error)]
+pub enum CaptureError {
+    #[error(transparent)]
+    AudioCaptureError(#[from] audio::AudioCaptureError),
+    #[error(transparent)]
+    #[cfg(target_os = "linux")]
+    ScreenCaptureError(#[from] linux::ScreenCaptureError),
+    #[error(transparent)]
+    #[cfg(target_os = "linux")]
+    CameraCaptureError(#[from] linux::CameraCaptureError),
+    #[error(transparent)]
+    #[cfg(target_os = "windows")]
+    ScreenCaptureError(#[from] win32::ScreenCaptureError),
+    #[error(transparent)]
+    #[cfg(target_os = "windows")]
+    CameraCaptureError(#[from] win32::CameraCaptureError),
+}
 
 pub trait FrameArrived: Sync + Send {
     /// The type of data captured, such as video frames.
@@ -83,10 +102,17 @@ pub enum SourceType {
 
 #[derive(Debug, Clone)]
 pub struct Source {
+    /// Device ID, usually the symbolic link to the device or the address of the
+    /// device file handle.
     pub id: String,
     pub name: String,
+    /// Sequence number, which can normally be ignored, in most cases this field
+    /// has no real meaning and simply indicates the order in which the device
+    /// was acquired internally.
     pub index: usize,
     pub kind: SourceType,
+    /// Whether or not it is the default device, normally used to indicate
+    /// whether or not it is the master device.
     pub is_default: bool,
 }
 
@@ -94,6 +120,9 @@ pub struct Source {
 pub struct VideoCaptureSourceDescription {
     #[cfg(target_os = "windows")]
     pub direct3d: Direct3DDevice,
+    /// Indicates whether the capturer internally outputs hardware frames or
+    /// not, it should be noted that internally it will just output hardware
+    /// frames to the best of its ability and may also output software frames.
     pub hardware: bool,
     pub source: Source,
     pub size: Size,
@@ -131,18 +160,6 @@ where
             audio: None,
         }
     }
-}
-
-#[derive(Debug, Error)]
-pub enum CaptureError {
-    #[error(transparent)]
-    AudioCaptureError(#[from] audio::AudioCaptureError),
-    #[error(transparent)]
-    #[cfg(target_os = "linux")]
-    ScreenCaptureError(#[from] linux::ScreenCaptureError),
-    #[error(transparent)]
-    #[cfg(target_os = "linux")]
-    CameraCaptureError(#[from] linux::CameraCaptureError),
 }
 
 enum CaptureImplement {

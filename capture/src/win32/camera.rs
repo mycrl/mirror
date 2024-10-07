@@ -7,13 +7,13 @@ use std::{
     thread,
 };
 
-use anyhow::{anyhow, Result};
 use common::{
     atomic::EasyAtomic,
     frame::{VideoFormat, VideoFrame, VideoSubFormat},
     win32::{IMFValue, MediaFoundationIMFAttributesSetHelper, MediaThreadClass},
 };
 
+use thiserror::Error;
 use windows::{
     core::Interface,
     Win32::Media::MediaFoundation::{
@@ -29,24 +29,40 @@ use windows::{
     },
 };
 
+#[derive(Debug, Error)]
+pub enum CameraCaptureError {
+    #[error(transparent)]
+    CreateThreadError(#[from] std::io::Error),
+    #[error(transparent)]
+    Win32Error(#[from] windows::core::Error),
+    #[error("failed to create imf attributes")]
+    CreateIMFAttributesError,
+    #[error("capture is stop")]
+    CaptureIsStoped,
+    #[error("failed to lock textture 2d")]
+    Lock2DError,
+    #[error("FrameArrived sink return false")]
+    FrameArrivedStoped,
+}
+
 /// Creates an empty attribute store.
-fn create_attributes() -> Result<IMFAttributes> {
+fn create_attributes() -> Result<IMFAttributes, CameraCaptureError> {
     let mut attributes = None;
     unsafe { MFCreateAttributes(&mut attributes, 1) }?;
-    let attributes = attributes.ok_or_else(|| anyhow!("failed to create imf attributes"))?;
+    let attributes = attributes.ok_or_else(|| CameraCaptureError::CreateIMFAttributesError)?;
     Ok(attributes)
 }
 
 trait SampleIterator {
     type Item;
 
-    fn next(&mut self) -> Result<Option<Self::Item>, anyhow::Error>;
+    fn next(&mut self) -> Result<Option<Self::Item>, CameraCaptureError>;
 }
 
 impl SampleIterator for IMFSourceReader {
     type Item = IMFSample;
 
-    fn next(&mut self) -> Result<Option<Self::Item>, anyhow::Error> {
+    fn next(&mut self) -> Result<Option<Self::Item>, CameraCaptureError> {
         // Reads the next sample from the media source.
         let mut sample = None;
         let mut index = 0;
@@ -79,9 +95,9 @@ unsafe impl<T> Sync for Context<T> {}
 unsafe impl<T> Send for Context<T> {}
 
 impl<T: FrameArrived<Frame = VideoFrame>> Context<T> {
-    fn poll(&mut self) -> Result<()> {
+    fn poll(&mut self) -> Result<(), CameraCaptureError> {
         if !self.status.get() {
-            return Err(anyhow!("capture is stop"));
+            return Err(CameraCaptureError::CaptureIsStoped);
         }
 
         // Reads the next sample from the media source.
@@ -92,7 +108,7 @@ impl<T: FrameArrived<Frame = VideoFrame>> Context<T> {
         };
 
         if !self.status.get() {
-            return Err(anyhow!("capture is stop"));
+            return Err(CameraCaptureError::CaptureIsStoped);
         }
 
         // Converts a sample with multiple buffers into a sample with a single buffer.
@@ -111,7 +127,7 @@ impl<T: FrameArrived<Frame = VideoFrame>> Context<T> {
         }
 
         if data.is_null() {
-            return Err(anyhow!("failed to lock textture 2d"));
+            return Err(CameraCaptureError::Lock2DError);
         }
 
         self.frame.data[0] = data as *const _;
@@ -119,7 +135,7 @@ impl<T: FrameArrived<Frame = VideoFrame>> Context<T> {
             unsafe { data.add(stride as usize * self.frame.height as usize) as *const _ };
         self.frame.linesize = [stride as usize, stride as usize, 0];
         if !self.arrived.sink(&self.frame) {
-            return Err(anyhow!("FrameArrived sink return false"));
+            return Err(CameraCaptureError::FrameArrivedStoped);
         }
 
         // Unlocks a buffer that was previously locked.
@@ -144,7 +160,7 @@ pub struct CameraCapture(Arc<AtomicBool>);
 
 impl CaptureHandler for CameraCapture {
     type Frame = VideoFrame;
-    type Error = anyhow::Error;
+    type Error = CameraCaptureError;
     type CaptureDescriptor = VideoCaptureSourceDescription;
 
     fn get_sources() -> Result<Vec<Source>, Self::Error> {
