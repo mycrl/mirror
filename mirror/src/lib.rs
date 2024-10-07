@@ -4,6 +4,14 @@ mod render;
 #[cfg(any(target_os = "windows", target_os = "linux"))]
 mod sender;
 
+pub use self::{
+    receiver::{MirrorReceiver, MirrorReceiverDescriptor, ReceiverError},
+    render::{Backend as VideoRenderBackend, RendererError},
+    sender::{AudioDescriptor, MirrorSender, MirrorSenderDescriptor, SenderError, VideoDescriptor},
+};
+
+use self::render::{AudioRender, VideoRender};
+
 use graphics::SurfaceTarget;
 use parking_lot::Mutex;
 use thiserror::Error;
@@ -11,16 +19,6 @@ use transport::Transport;
 
 #[cfg(target_os = "windows")]
 use parking_lot::RwLock;
-
-pub use self::receiver::{MirrorReceiver, MirrorReceiverDescriptor, ReceiverError};
-pub use self::render::{Backend as VideoRenderBackend, RendererError};
-
-#[cfg(any(target_os = "windows", target_os = "linux"))]
-pub use self::sender::{
-    AudioDescriptor, MirrorSender, MirrorSenderDescriptor, SenderError, VideoDescriptor,
-};
-
-use self::render::{AudioRender, VideoRender};
 
 pub use capture::{Capture, Source, SourceType};
 pub use codec::{VideoDecoderType, VideoEncoderType};
