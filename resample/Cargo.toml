@@ -6,6 +6,3 @@ edition = "2021"
 [dependencies]
 rubato = "0.15.0"
 common = { path = "../common" }
-
-[target.'cfg(target_os = "linux")'.dependencies]
-ffmpeg-sys-next = { git = "https://github.com/mycrl/rust-ffmpeg-sys" }

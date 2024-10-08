@@ -18,5 +18,5 @@ members = [
     "mirror",
     "service",
     "transport",
-    "app/napi", "renderer",
+    "app/napi",
 ]

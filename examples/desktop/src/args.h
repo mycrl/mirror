@@ -22,7 +22,7 @@ public:
         VideoEncoderType encoder = VIDEO_ENCODER_X264;
         VideoDecoderType decoder = VIDEO_DECODER_H264;
 #endif
-        std::string server = "127.0.0.1:8080";
+        std::string server = "192.168.2.88:8088";
         int width = 1280;
         int height = 720;
         int fps = 24;

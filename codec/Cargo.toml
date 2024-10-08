@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-ffmpeg-sys-next = { git = "https://github.com/mycrl/rust-ffmpeg-sys" }
-common = { path = "../common" }
-thiserror = "1.0.63"
 log = "0.4.20"
+thiserror = "1.0.63"
+common = { path = "../common" }
+ffmpeg-sys-next = { git = "https://github.com/mycrl/rust-ffmpeg-sys" }
