@@ -393,8 +393,8 @@ extern "C" {
     ///
     /// * Its binding address and UDP-related socket options match the socket to
     ///   be bound.
-    /// * Its `SRTO_REUSEADDR`(API-socket-options.md#SRTO_REUSEADDRS) is set
-    ///   to *true* (default).
+    /// * Its `SRTO_REUSEADDR`(API-socket-options.md#SRTO_REUSEADDRS) is set to
+    ///   *true* (default).
     ///
     /// If none of the free, side and shared binding options is currently
     /// possible, this function will fail. If the socket blocking the
@@ -501,8 +501,8 @@ extern "C" {
     /// **Arguments**:
     ///
     /// * `u`(#u): can be an SRT socket or SRT group, both freshly created and
-    ///   not yet used for any connection, except possibly
-    ///   `srt_bind`(#srt_bind) on the socket
+    ///   not yet used for any connection, except possibly `srt_bind`(#srt_bind)
+    ///   on the socket
     /// * `name`: specification of the remote address and port
     /// * `namelen`: size of the object passed by `name`
     ///
