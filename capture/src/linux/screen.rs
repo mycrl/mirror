@@ -1,9 +1,7 @@
-use crate::{
-    CaptureHandler, FrameArrived, Size, Source, SourceType, VideoCaptureSourceDescription,
-};
+use crate::{CaptureHandler, FrameArrived, Source, SourceType, VideoCaptureSourceDescription};
 
 use std::{
-    ptr::null_mut,
+    ptr::{null, null_mut},
     sync::{atomic::AtomicBool, Arc},
     thread::{self, sleep},
     time::Duration,
@@ -11,8 +9,8 @@ use std::{
 
 use common::{
     atomic::EasyAtomic,
+    c_str,
     frame::{VideoFormat, VideoFrame, VideoSubFormat},
-    strings::Strings,
 };
 
 use ffmpeg_sys_next::*;
@@ -40,6 +38,12 @@ pub enum ScreenCaptureError {
     SetParametersError,
     #[error("not open decoder")]
     NotOpenDecoder,
+    #[error("failed to create filter input")]
+    CreateFilterInputError,
+    #[error("failed to create filter output")]
+    CreateFilterOutputError,
+    #[error("failed to create filter chain")]
+    CreateFilterChainError,
 }
 
 #[derive(Default)]
@@ -65,7 +69,7 @@ impl CaptureHandler for ScreenCapture {
         options: Self::CaptureDescriptor,
         mut arrived: S,
     ) -> Result<(), Self::Error> {
-        let mut capture = Capture::new(options.size)?;
+        let mut capture = Capture::new(&options)?;
 
         thread::Builder::new()
             .name("LinuxScreenCaptureThread".to_string())
@@ -87,6 +91,7 @@ impl CaptureHandler for ScreenCapture {
                             //     break;
                             // }
                         }
+                        AVPixelFormat::AV_PIX_FMT_DRM_PRIME => {}
                         _ => unimplemented!("not supports capture pix fmt = {:?}", format),
                     }
 
@@ -108,44 +113,38 @@ struct Capture {
     codec_ctx: *mut AVCodecContext,
     packet: *mut AVPacket,
     frame: *mut AVFrame,
+    scaled_frame: *mut AVFrame,
+    filter_graph: *mut AVFilterGraph,
+    buffer_ctx: *mut AVFilterContext,
+    buffer_sink_ctx: *mut AVFilterContext,
 }
 
 unsafe impl Send for Capture {}
 unsafe impl Sync for Capture {}
 
 impl Capture {
-    fn new(size: Size) -> Result<Self, ScreenCaptureError> {
+    fn new(options: &VideoCaptureSourceDescription) -> Result<Self, ScreenCaptureError> {
         unsafe {
             avdevice_register_all();
-        }
-
-        let mut hw_device_ctx = null_mut();
-        if unsafe {
-            av_hwdevice_ctx_create(
-                &mut hw_device_ctx,
-                AVHWDeviceType::AV_HWDEVICE_TYPE_VAAPI,
-                null_mut(),
-                null_mut(),
-                0,
-            )
-        } != 0
-        {
-            return Err(ScreenCaptureError::CreateHWDeviceContextError);
         }
 
         let mut this = Self {
             packet: unsafe { av_packet_alloc() },
             frame: unsafe { av_frame_alloc() },
+            scaled_frame: unsafe { av_frame_alloc() },
             codec_ctx: null_mut(),
             fmt_ctx: null_mut(),
+            filter_graph: unsafe { avfilter_graph_alloc() },
+            buffer_ctx: null_mut(),
+            buffer_sink_ctx: null_mut(),
         };
 
-        let format = unsafe { av_find_input_format(Strings::from("kmsgrab").as_ptr()) };
+        let format = unsafe { av_find_input_format(c_str!("kmsgrab")) };
         if format.is_null() {
             return Err(ScreenCaptureError::NotFoundInputFormat);
         }
 
-        let mut options = null_mut();
+        let mut format_options = null_mut();
         // for (k, v) in [
         //     ("pix_fmt", "rgba"),
         //     ("video_size", &format!("{}x{}", size.width, size.height)),
@@ -161,12 +160,7 @@ impl Capture {
         // }
 
         if unsafe {
-            avformat_open_input(
-                &mut this.fmt_ctx,
-                Strings::from(":0").as_ptr(),
-                format,
-                &mut options,
-            )
+            avformat_open_input(&mut this.fmt_ctx, c_str!(":0"), format, &mut format_options)
         } != 0
         {
             return Err(ScreenCaptureError::NotOpenInputFormat);
@@ -202,6 +196,20 @@ impl Capture {
             return Err(ScreenCaptureError::NotOpenDecoder);
         }
 
+        let mut hw_device_ctx = null_mut();
+        if unsafe {
+            av_hwdevice_ctx_create(
+                &mut hw_device_ctx,
+                AVHWDeviceType::AV_HWDEVICE_TYPE_VAAPI,
+                null_mut(),
+                null_mut(),
+                0,
+            )
+        } != 0
+        {
+            return Err(ScreenCaptureError::CreateHWDeviceContextError);
+        }
+
         {
             let frame_mut = unsafe { &mut *this.frame };
             frame_mut.hw_frames_ctx = unsafe { av_hwframe_ctx_alloc(hw_device_ctx) };
@@ -210,25 +218,58 @@ impl Capture {
             }
         }
 
-        let filter_graph = unsafe { avfilter_graph_alloc() };
-        let buffer_src = unsafe { avfilter_get_by_name(Strings::from("buffer").as_ptr()) };
-        let buffer_sink = unsafe { avfilter_get_by_name(Strings::from("buffersinkr").as_ptr()) };
-        let filter_input = unsafe { avfilter_inout_alloc() };
-        let filter_output = unsafe { avfilter_inout_alloc() };
-
-        let input_args =
-            format!("width=%d:height=%d:pix_fmt=%d:time_base=%d/%d:pixel_aspect=%d/%d");
-
-        let mut buffer_src_ctx = null_mut();
-        unsafe {
+        if unsafe {
             avfilter_graph_create_filter(
-                &mut buffer_src_ctx,
-                buffer_src,
-                Strings::from("in").as_ptr(),
-                Strings::from(input_args.as_str()).as_ptr(),
+                &mut this.buffer_ctx,
+                avfilter_get_by_name(c_str!("buffer")),
+                c_str!("in"),
+                c_str!(format!(
+                    "video_size={}x{}:pix_fmt={}:time_base=1/{}",
+                    { &*stream.codecpar }.width,
+                    { &*stream.codecpar }.height,
+                    AVPixelFormat::AV_PIX_FMT_DRM_PRIME as u32,
+                    options.fps,
+                )),
                 null_mut(),
-                filter_graph,
-            );
+                this.filter_graph,
+            )
+        } != 0
+        {
+            return Err(ScreenCaptureError::CreateFilterInputError);
+        }
+
+        if unsafe {
+            avfilter_graph_create_filter(
+                &mut this.buffer_sink_ctx,
+                avfilter_get_by_name(c_str!("buffersink")),
+                c_str!("out"),
+                null(),
+                null_mut(),
+                this.filter_graph,
+            )
+        } != 0
+        {
+            return Err(ScreenCaptureError::CreateFilterOutputError);
+        }
+
+        if unsafe {
+            avfilter_graph_parse_ptr(
+                this.filter_graph,
+                c_str!(format!(
+                    "scale_vaapi=w={}:h={}",
+                    options.size.width, options.size.height
+                )),
+                null_mut(),
+                null_mut(),
+                null_mut(),
+            )
+        } != 0
+        {
+            return Err(ScreenCaptureError::CreateFilterChainError);
+        }
+
+        if unsafe { avfilter_graph_config(this.filter_graph, null_mut()) } != 0 {
+            return Err(ScreenCaptureError::CreateFilterChainError);
         }
 
         Ok(this)
@@ -253,7 +294,15 @@ impl Capture {
             return None;
         }
 
-        Some(unsafe { &*self.frame })
+        if unsafe { av_buffersrc_add_frame(self.buffer_ctx, self.frame) } != 0 {
+            return None;
+        }
+
+        if unsafe { av_buffersink_get_frame(self.buffer_sink_ctx, self.scaled_frame) } != 0 {
+            return None;
+        }
+
+        Some(unsafe { &*self.scaled_frame })
     }
 }
 

@@ -49,10 +49,12 @@ pub enum RendererError {
     #[error("send audio queue error")]
     AudioSendQueueError,
     #[error(transparent)]
+    #[cfg(target_os = "windows")]
     VideoDx11GraphicsError(#[from] graphics::dx11::Dx11GraphicsError),
     #[error(transparent)]
     VideoGraphicsError(#[from] graphics::GraphicsError),
     #[error("invalid d3d11texture2d texture")]
+    #[cfg(target_os = "windows")]
     VideoInvalidD3D11Texture,
 }
 

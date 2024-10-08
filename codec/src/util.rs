@@ -1,6 +1,6 @@
 use crate::video::{VideoDecoderType, VideoEncoderType};
 
-use common::strings::Strings;
+use common::c_str;
 use ffmpeg_sys_next::*;
 
 #[cfg(target_os = "windows")]
@@ -80,14 +80,14 @@ pub fn create_video_context(
     let codec = match kind {
         CodecType::Encoder(kind) => {
             let codec: &str = kind.into();
-            unsafe { avcodec_find_encoder_by_name(Strings::from(codec).as_ptr()) }
+            unsafe { avcodec_find_encoder_by_name(c_str!(codec)) }
         }
         CodecType::Decoder(kind) => {
             if kind == VideoDecoderType::D3D11 {
                 unsafe { avcodec_find_decoder(AVCodecID::AV_CODEC_ID_H264) }
             } else {
                 let codec: &str = kind.into();
-                unsafe { avcodec_find_decoder_by_name(Strings::from(codec).as_ptr()) }
+                unsafe { avcodec_find_decoder_by_name(c_str!(codec)) }
             }
         }
     };
@@ -203,11 +203,11 @@ pub fn create_video_context(
     let codec = match kind {
         CodecType::Encoder(kind) => {
             let codec: &str = kind.into();
-            unsafe { avcodec_find_encoder_by_name(Strings::from(codec).as_ptr()) }
+            unsafe { avcodec_find_encoder_by_name(c_str!(codec)) }
         }
         CodecType::Decoder(kind) => {
             let codec: &str = kind.into();
-            unsafe { avcodec_find_decoder_by_name(Strings::from(codec).as_ptr()) }
+            unsafe { avcodec_find_decoder_by_name(c_str!(codec)) }
         }
     };
 
@@ -266,17 +266,12 @@ pub fn create_video_frame(
 
 pub fn set_option(context: &mut AVCodecContext, key: &str, value: i64) {
     unsafe {
-        av_opt_set_int(context.priv_data, Strings::from(key).as_ptr(), value, 0);
+        av_opt_set_int(context.priv_data, c_str!(key), value, 0);
     }
 }
 
 pub fn set_str_option(context: &mut AVCodecContext, key: &str, value: &str) {
     unsafe {
-        av_opt_set(
-            context.priv_data,
-            Strings::from(key).as_ptr(),
-            Strings::from(value).as_ptr(),
-            0,
-        );
+        av_opt_set(context.priv_data, c_str!(key), c_str!(value), 0);
     }
 }

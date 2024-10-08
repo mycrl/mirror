@@ -25,8 +25,10 @@ const Command = (cmd, options = {}) => new Promise((
     ps.stdout.pipe(process.stdout)
     ps.stderr.pipe(process.stderr)
 
-    ps.on('close', resolve)
     ps.on('error', reject)
+    ps.on('close', code => {
+        code == 0 ? resolve() : reject(`exit codec: ${code}`)
+    })
 })
 
 const Replace = (file, filters) =>
@@ -178,4 +180,4 @@ const Replace = (file, filters) =>
     }
 
     /* async block end */
-})()
+})().catch(console.error)
