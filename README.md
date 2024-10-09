@@ -22,13 +22,12 @@ Pure software screen projection is different from Miracast, AirPlay, etc., which
 
 #### Requirements
 
-[Git](https://git-scm.com/downloads) | [Rust](https://www.rust-lang.org/tools/install) | [CMake](https://cmake.org/download/) | [Python3](https://www.python.org/downloads/) | [Node.js](https://nodejs.org/en/download)
-
--   C++20 or above compliant compiler.
--   Rust stable toolchain.
--   CMake 3.16 or above as a build system.
--   Node.js 16 or above as a auto build script.
--   Python3 is optional and required for Android Studio projects.
+- [Git](https://git-scm.com/downloads)
+- [Rust](https://www.rust-lang.org/tools/install): Rust stable toolchain.
+- C++20 or above compliant compiler. (G++/Clang)
+- [CMake](https://cmake.org/download/): CMake 3.16 or above as a build system.
+- [Node.js](https://nodejs.org/en/download): Node.js 16 or above as a auto build script.
+- [Python3](https://www.python.org/downloads/): Python3 is optional and required for Android Studio projects.
 
 ##### Linux (Ubuntu/Debian)
 
