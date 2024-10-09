@@ -1,6 +1,4 @@
 <!--lint disable no-literal-urls-->
-<br/>
-<br/>
 <div align="center">
    <h1>MIRROR</h1>
 </div>
@@ -24,7 +22,7 @@ Pure software screen projection is different from Miracast, AirPlay, etc., which
 
 - [Git](https://git-scm.com/downloads)
 - [Rust](https://www.rust-lang.org/tools/install): Rust stable toolchain.
-- C++20 or above compliant compiler. (G++/Clang)
+- C++20 or above compliant compiler. (G++/Clang/MSVC)
 - [CMake](https://cmake.org/download/): CMake 3.16 or above as a build system.
 - [Node.js](https://nodejs.org/en/download): Node.js 16 or above as a auto build script.
 - [Python3](https://www.python.org/downloads/): Python3 is optional and required for Android Studio projects.
