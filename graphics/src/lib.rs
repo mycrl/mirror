@@ -71,10 +71,13 @@ impl<'a> Renderer<'a> {
         options: RendererOptions<T>,
     ) -> Result<Self, GraphicsError> {
         let instance = Instance::new(InstanceDescriptor {
-            #[cfg(target_os = "windows")]
-            backends: Backends::DX12,
-            #[cfg(target_os = "linux")]
-            backends: Backends::VULKAN,
+            backends: if cfg!(target_os = "windows") {
+                Backends::DX12
+            } else if cfg!(target_os = "linux") {
+                Backends::VULKAN
+            } else {
+                Backends::default()
+            },
             ..Default::default()
         });
 
