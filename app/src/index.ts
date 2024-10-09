@@ -287,7 +287,7 @@ ipcMain.handle("set-settings", (_event, settings: typeof Config) => {
             receiver = mirror.createReceiver(
                 Config.channel,
                 {
-                    video: Config.decoder,
+                    video: VideoDecoderType.Qsv,
                     backend: Backend.Wgpu,
                 },
                 () => {

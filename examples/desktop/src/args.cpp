@@ -30,30 +30,34 @@ Args::Args(std::string args)
         {
             if (kv[1] == "libx264")
             {
-                ArgsParams.encoder = xVideoEncoderTypeX264;
+                ArgsParams.encoder = VIDEO_ENCODER_X264;
             }
             else if (kv[1] == "h264_qsv")
             {
-                ArgsParams.encoder = xVideoEncoderTypeQsv;
+                ArgsParams.encoder = VIDEO_ENCODER_QSV;
             }
             else
             {
-                ArgsParams.encoder = xVideoEncoderTypeCuda;
+                ArgsParams.encoder = VIDEO_ENCODER_CUDA;
             }
         }
         else if (kv[0] == "decoder")
         {
-            if (kv[1] == "d3d11")
+            if (kv[1] == "h264")
             {
-                ArgsParams.decoder = xVideoDecoderTypeD3D11;
+                ArgsParams.decoder = VIDEO_DECODER_H264;
+            }
+            else if (kv[1] == "d3d11va")
+            {
+                ArgsParams.decoder = VIDEO_DECODER_D3D11;
             }
             else if (kv[1] == "h264_qsv")
             {
-                ArgsParams.decoder = xVideoDecoderTypeQsv;
+                ArgsParams.decoder = VIDEO_DECODER_QSV;
             }
             else
             {
-                ArgsParams.decoder = xVideoDecoderTypeCuda;
+                ArgsParams.decoder = VIDEO_DECODER_CUDA;
             }
         }
         else if (kv[0] == "server")

@@ -1,5 +1,12 @@
 pub mod adapter;
+pub mod multicast;
 pub mod package;
+pub mod srt;
+
+use crate::{
+    adapter::{StreamReceiverAdapterExt, StreamSenderAdapter},
+    package::{Package, PacketInfo, UnPackage},
+};
 
 use std::{
     collections::HashMap,
@@ -8,20 +15,16 @@ use std::{
     sync::{
         atomic::{AtomicU32, AtomicU64},
         mpsc::{channel, Sender},
-        Arc, Mutex, RwLock, Weak,
+        Arc, Weak,
     },
     thread,
 };
 
-use bytes::BytesMut;
-use service::{signal::Signal, SocketKind, StreamInfo};
+use bytes::{BufMut, Bytes, BytesMut};
+use common::atomic::EasyAtomic;
+use parking_lot::{Mutex, RwLock};
+use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
-use utils::atomic::EasyAtomic;
-
-use crate::{
-    adapter::{StreamReceiverAdapterExt, StreamSenderAdapter},
-    package::{Package, PacketInfo, UnPackage},
-};
 
 pub fn startup() -> bool {
     srt::startup()
@@ -81,15 +84,15 @@ impl Transport {
                             match signal {
                                 Signal::Start { id, port } => {
                                     if let Some(publishs) = publishs_.upgrade() {
-                                        publishs.write().unwrap().insert(id, port);
+                                        publishs.write().insert(id, port);
                                     }
                                 }
                                 Signal::Stop { id } => {
                                     if let Some(publishs) = publishs_.upgrade() {
-                                        publishs.write().unwrap().remove(&id);
+                                        publishs.write().remove(&id);
                                     }
 
-                                    if channels.write().unwrap().remove(&id).is_some() {
+                                    if channels.write().remove(&id).is_some() {
                                         log::info!("channel is close, id={}", id)
                                     }
                                 }
@@ -99,7 +102,7 @@ impl Transport {
 
                             // Forwards the signal to all subscribers
                             {
-                                for (id, tx) in channels.read().unwrap().iter() {
+                                for (id, tx) in channels.read().iter() {
                                     if tx.send(signal).is_err() {
                                         closeds.push(*id);
                                     }
@@ -109,7 +112,7 @@ impl Transport {
                             // Clean up closed subscribers
                             if !closeds.is_empty() {
                                 for id in closeds {
-                                    if channels.write().unwrap().remove(&id).is_some() {
+                                    if channels.write().remove(&id).is_some() {
                                         log::info!("channel is close, id={}", id)
                                     }
                                 }
@@ -149,7 +152,7 @@ impl Transport {
         // Create an srt configuration and carry stream information
         let mut opt = srt::Descriptor::default();
         opt.fc = 32;
-        opt.latency = 40;
+        opt.latency = 20;
         opt.mtu = self.options.mtu as u32;
         opt.stream_id = Some(
             StreamInfo {
@@ -225,7 +228,7 @@ impl Transport {
     where
         T: StreamReceiverAdapterExt + 'static,
     {
-        let current_mcast_rceiver = Arc::new(Mutex::new(None));
+        let current_mcast_rceiver: Arc<Mutex<Option<Arc<multicast::Socket>>>> = Default::default();
 
         // Creating a multicast receiver
         let current_mcast_rceiver_ = current_mcast_rceiver.clone();
@@ -238,11 +241,7 @@ impl Transport {
                 multicast::Socket::new(multicast, SocketAddr::new("0.0.0.0".parse().unwrap(), port))
             {
                 let socket = Arc::new(socket);
-                if let Some(socket) = current_mcast_rceiver_
-                    .lock()
-                    .unwrap()
-                    .replace(socket.clone())
-                {
+                if let Some(socket) = current_mcast_rceiver_.lock().replace(socket.clone()) {
                     socket.close()
                 }
 
@@ -301,7 +300,7 @@ impl Transport {
         // Create an srt configuration and carry stream information
         let mut opt = srt::Descriptor::default();
         opt.fc = 32;
-        opt.latency = 40;
+        opt.latency = 20;
         opt.mtu = self.options.mtu as u32;
         opt.stream_id = Some(
             StreamInfo {
@@ -328,12 +327,12 @@ impl Transport {
             let sequence = sequence.clone();
             let adapter = Arc::downgrade(adapter);
             let receiver = Arc::downgrade(&receiver);
-            if let Some(port) = self.publishs.read().unwrap().get(&stream_id) {
+            if let Some(port) = self.publishs.read().get(&stream_id) {
                 create_mcast_receiver(receiver, sequence, adapter, multicast, *port);
             } else {
                 // Add a message receiver to the list
                 let (tx, rx) = channel();
-                self.channels.write().unwrap().insert(index, tx);
+                self.channels.write().insert(index, tx);
 
                 thread::Builder::new()
                     .name("MirrorReceiverSignalProcessThread".to_string())
@@ -413,18 +412,122 @@ impl Transport {
                 log::warn!("srt receiver is closed, id={}", stream_id);
 
                 // Remove the sender, which is intended to stop the signal receiver thread.
-                let _ = channels.write().unwrap().remove(&index);
+                let _ = channels.write().remove(&index);
 
                 if let Some(adapter) = adapter_.upgrade() {
                     adapter.close();
                     receiver.close();
                 }
 
-                if let Some(socket) = current_mcast_rceiver.lock().unwrap().take() {
+                if let Some(socket) = current_mcast_rceiver.lock().take() {
                     socket.close()
                 }
             })?;
 
         Ok(())
+    }
+}
+
+#[repr(u8)]
+#[derive(Default, PartialEq, Eq, Debug)]
+pub enum SocketKind {
+    #[default]
+    Subscriber = 0,
+    Publisher = 1,
+}
+
+#[derive(Default, Debug)]
+pub struct StreamInfo {
+    pub id: u32,
+    pub port: Option<u16>,
+    pub kind: SocketKind,
+}
+
+impl StreamInfo {
+    pub fn decode(value: &str) -> Option<Self> {
+        if value.starts_with("#!::") {
+            let mut info = Self::default();
+            for item in value.split_at(4).1.split(',') {
+                if let Some((k, v)) = item.split_once('=') {
+                    match k {
+                        "i" => {
+                            if let Ok(id) = v.parse::<u32>() {
+                                info.id = id;
+                            }
+                        }
+                        "k" => {
+                            if let Ok(kind) = v.parse::<u8>() {
+                                match kind {
+                                    0 => {
+                                        info.kind = SocketKind::Subscriber;
+                                    }
+                                    1 => {
+                                        info.kind = SocketKind::Publisher;
+                                    }
+                                    _ => (),
+                                }
+                            }
+                        }
+                        "p" => {
+                            if let Ok(port) = v.parse::<u16>() {
+                                info.port = Some(port);
+                            }
+                        }
+                        _ => (),
+                    }
+                }
+            }
+
+            Some(info)
+        } else {
+            None
+        }
+    }
+
+    pub fn encode(self) -> String {
+        format!(
+            "#!::{}",
+            [
+                format!("i={}", self.id),
+                format!("k={}", self.kind as u8),
+                self.port.map(|p| format!("p={}", p)).unwrap_or_default(),
+            ]
+            .join(",")
+        )
+    }
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, Serialize)]
+pub enum Signal {
+    /// Start publishing a channel. The port number is the publisher's multicast
+    /// port.
+    Start { id: u32, port: u16 },
+    /// Stop publishing to a channel
+    Stop { id: u32 },
+}
+
+impl Signal {
+    pub fn encode(&self) -> Bytes {
+        let payload = rmp_serde::to_vec(&self).unwrap();
+        let mut buf = BytesMut::with_capacity(payload.len() + 2);
+        buf.put_u16(buf.capacity() as u16);
+        buf.extend_from_slice(&payload);
+        buf.freeze()
+    }
+
+    #[rustfmt::skip]
+    pub fn decode(buf: &[u8]) -> Option<(usize, Self)> {
+        if buf.len() > 2 {
+            let size = u16::from_be_bytes([
+                buf[0],
+                buf[1],
+            ]) as usize;
+
+            if size <= buf.len() {
+                return rmp_serde::from_slice(&buf[2..size]).ok().map(|it| (size, it))
+            }
+        }
+
+        None
     }
 }

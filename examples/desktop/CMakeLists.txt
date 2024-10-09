@@ -9,20 +9,6 @@ if (NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE "Debug")
 endif()
 
-set(THIRD_PARTY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party")
-
-if(UNIX)
-    if (NOT EXISTS "${THIRD_PARTY_DIR}")
-        execute_process(COMMAND mkdir "${THIRD_PARTY_DIR}")
-    endif()
-
-    if (NOT EXISTS "${THIRD_PARTY_DIR}/sdl2")
-        execute_process(
-            WORKING_DIRECTORY "${THIRD_PARTY_DIR}"
-            COMMAND bash -c "git clone --branch SDL2 https://github.com/libsdl-org/SDL sdl2")
-    endif()
-endif()
-
 if(MSVC)
     add_executable(example WIN32 src/main.cpp 
                     src/args.h 
@@ -44,7 +30,8 @@ endif()
 include_directories("../../ffi/include")
 
 if(UNIX)
-    include_directories("${THIRD_PARTY_DIR}/sdl2/include")
+    include_directories("/usr/include/SDL2"
+                        "/usr/include")
 endif()
 
 # If it is WIN32, you need to set the runtime library.
@@ -62,6 +49,11 @@ else()
     target_link_directories(example PRIVATE "../../target/release")
 endif()
 
+if(UNIX)
+    include_directories(example PRIVATE
+                        "/usr/lib/x86_64-linux-gnu")
+endif()
+
 # Debug/Release target in build header.
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     add_compile_definitions(DEBUG)
@@ -71,7 +63,7 @@ endif()
 if(WIN32)
     add_compile_definitions(WIN32 _WINDOWS)
 else()
-    add_compile_definitions(LINUX)
+    add_compile_definitions(LINUX SDL_VIDEO_DRIVER_X11)
 endif()
 
 # Introduce other runtime necessary library files.
@@ -86,5 +78,6 @@ endif()
 
 if(UNIX)
     target_link_libraries(example
-                          libmirror.so)
+                          libmirror.so
+                          SDL2)
 endif()

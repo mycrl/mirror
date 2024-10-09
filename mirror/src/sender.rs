@@ -5,11 +5,18 @@ use std::{
     sync::{atomic::AtomicBool, Arc, Weak},
 };
 
-use anyhow::Result;
 use bytes::BytesMut;
+use thiserror::Error;
+
 use capture::{
     AudioCaptureSourceDescription, Capture, CaptureDescriptor, FrameArrived, Source,
     SourceCaptureDescriptor, VideoCaptureSourceDescription,
+};
+
+use common::{
+    atomic::EasyAtomic,
+    frame::{AudioFrame, VideoFrame},
+    Size,
 };
 
 use codec::{
@@ -17,13 +24,22 @@ use codec::{
     VideoEncoderSettings, VideoEncoderType,
 };
 
-use frame::{AudioFrame, VideoFrame};
 use transport::{
     adapter::{BufferFlag, StreamBufferInfo, StreamSenderAdapter},
     package,
 };
 
-use utils::{atomic::EasyAtomic, Size};
+#[derive(Debug, Error)]
+pub enum SenderError {
+    #[error(transparent)]
+    TransportError(#[from] std::io::Error),
+    #[error(transparent)]
+    CaptureError(#[from] capture::CaptureError),
+    #[error(transparent)]
+    VideoEncoderError(#[from] codec::VideoEncoderError),
+    #[error(transparent)]
+    AudioEncoderError(#[from] codec::AudioEncoderError),
+}
 
 #[derive(Debug, Clone)]
 pub struct VideoDescriptor {
@@ -67,7 +83,7 @@ impl VideoSender {
         adapter: &Arc<StreamSenderAdapter>,
         settings: VideoEncoderSettings,
         sink: &Arc<dyn AVFrameStream>,
-    ) -> Result<Self> {
+    ) -> Result<Self, SenderError> {
         Ok(Self {
             sink: Arc::downgrade(sink),
             adapter: Arc::downgrade(adapter),
@@ -166,7 +182,7 @@ impl AudioSender {
         adapter: &Arc<StreamSenderAdapter>,
         settings: AudioEncoderSettings,
         sink: &Arc<dyn AVFrameStream>,
-    ) -> Result<Self> {
+    ) -> Result<Self, SenderError> {
         // Create an opus header data. The opus decoder needs this data to obtain audio
         // information. Here, actively add an opus header information to the queue, and
         // the transport layer will automatically cache it.
@@ -288,7 +304,7 @@ impl MirrorSender {
     pub fn new<T: AVFrameStream + 'static>(
         options: MirrorSenderDescriptor,
         sink: T,
-    ) -> Result<Self> {
+    ) -> Result<Self, SenderError> {
         log::info!("create sender");
 
         let mut capture_options = CaptureDescriptor::default();
@@ -327,7 +343,6 @@ impl MirrorSender {
                     #[cfg(target_os = "windows")]
                     direct3d: crate::DIRECT_3D_DEVICE
                         .read()
-                        .unwrap()
                         .clone()
                         .expect("D3D device was not initialized successfully!"),
                 },
@@ -342,7 +357,7 @@ impl MirrorSender {
                         height: options.height,
                         bit_rate: options.bit_rate,
                         #[cfg(target_os = "windows")]
-                        direct3d: crate::DIRECT_3D_DEVICE.read().unwrap().clone(),
+                        direct3d: crate::DIRECT_3D_DEVICE.read().clone(),
                     },
                     &sink,
                 )?,

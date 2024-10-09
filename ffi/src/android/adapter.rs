@@ -3,7 +3,7 @@ use bytes::Bytes;
 use jni::objects::{GlobalRef, JValue, JValueGen};
 use transport::adapter::StreamKind;
 
-use super::common::{catcher, get_current_env};
+use super::helper::{catcher, get_current_env};
 
 pub struct AndroidStreamReceiverAdapter {
     pub callback: GlobalRef,

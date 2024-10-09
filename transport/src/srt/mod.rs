@@ -1,49 +1,3 @@
-//! use std::{net::SocketAddr, time::Duration};
-//!
-//! use srt::{Listener, Socket, SrtError};
-//! use tokio::time::sleep;
-//!
-//! #[tokio::main]
-//! async fn main() -> Result<(), SrtError> {
-//!     tokio::spawn(async {
-//!         let mut server = Listener::bind(
-//!             &"0.0.0.0:3000".parse::<SocketAddr>().unwrap()
-//!         ).await?;
-//!
-//!         println!("start server, listening....");
-//!
-//!         while let Ok((socket, addr)) = server.accept().await {
-//!             println!("server accept socket: addr={}", addr);
-//!
-//!             tokio::spawn(async move {
-//!                 for _ in 0..5 {
-//!                     sleep(Duration::from_secs(1)).await;
-//!                     socket.send(&[0x01, 0x02]).await?;
-//!                 }
-//!
-//!                 #[allow(unused)]
-//!                 Ok::<(), SrtError>(())
-//!             });
-//!         }
-//!
-//!         Ok::<(), SrtError>(())
-//!     });
-//!
-//!     sleep(Duration::from_secs(5)).await;
-//!     println!("connecting...");
-//!
-//!     let mut buf = [0u8; 2048];
-//!     let socket = Socket::connect(
-//!         &"127.0.0.1:3000".parse::<SocketAddr>().unwrap()
-//!     ).await?;
-//!
-//!     while let Ok(size) = socket.read(&mut buf).await {
-//!         println!("socket recv: buf={:?}", &buf[..size]);
-//!     }
-//!
-//!     Ok(())
-//! }
-
 mod fragments;
 mod options;
 mod server;
@@ -63,9 +17,9 @@ use std::{
     ptr::null,
 };
 
+use common::strings::Strings;
 use libc::sockaddr;
 use log::{log, Level};
-use utils::strings::Strings;
 
 pub(crate) fn error() -> Error {
     Error::other(
@@ -380,13 +334,13 @@ extern "C" {
     /// **IMPORTANT**: When you bind an IPv6 wildcard address, note that the
     /// `SRTO_IPV6ONLY` option must be set on the socket explicitly to 1 or
     /// 0 prior to calling this function. See
-    /// [`SRTO_IPV6ONLY`](API-socket-options.md#SRTO_IPV6ONLY) for more
+    /// `SRTO_IPV6ONLY`(API-socket-options.md#SRTO_IPV6ONLY) for more
     /// details.
     ///
     /// Binding is necessary for every socket to be used for communication.
     /// If the socket is to be used to initiate a connection to a
     /// listener socket, which can be done, for example, by the
-    /// [`srt_connect`](#srt_connect) function, the socket is bound
+    /// `srt_connect`(#srt_connect) function, the socket is bound
     /// implicitly to the wildcard address according to the IP family
     /// (`INADDR_ANY` for `AF_INET` or `in6addr_any` for `AF_INET6`) and
     /// port number 0. In all other cases, a socket must be bound explicitly
@@ -394,11 +348,11 @@ extern "C" {
     ///
     /// When the port number parameter is 0, then the effective port number
     /// will be system-allocated. To obtain this effective port
-    /// number you can use [`srt_getsockname`](#srt_getsockname).
+    /// number you can use `srt_getsockname`(#srt_getsockname).
     ///
     /// This call is obligatory for a listening socket before calling
-    /// [`srt_listen`](#srt_listen) and for rendezvous mode before calling
-    /// [`srt_connect`](#srt_connect); otherwise it's optional. For a
+    /// `srt_listen`(#srt_listen) and for rendezvous mode before calling
+    /// `srt_connect`(#srt_connect); otherwise it's optional. For a
     /// listening socket it defines the network interface and the port where
     /// the listener should expect a call request.
     ///
@@ -410,7 +364,7 @@ extern "C" {
     /// endpoint B. In this case the Party 1 binds the socket to the
     /// endpoint A and then connects to the endpoint B,
     /// and the Party 2 the other way around. Both sockets must be set
-    /// [`SRTO_RENDEZVOUS`](API-socket-options.md#SRTO_RENDEZVOUS) to *true*
+    /// `SRTO_RENDEZVOUS`(API-socket-options.md#SRTO_RENDEZVOUS) to *true*
     /// to make this connection possible.
     ///
     /// For a connecting socket the call to `srt_bind` is optional, but can
@@ -439,8 +393,8 @@ extern "C" {
     ///
     /// * Its binding address and UDP-related socket options match the socket to
     ///   be bound.
-    /// * Its [`SRTO_REUSEADDR`](API-socket-options.md#SRTO_REUSEADDRS) is set
-    ///   to *true* (default).
+    /// * Its `SRTO_REUSEADDR`(API-socket-options.md#SRTO_REUSEADDRS) is set to
+    ///   *true* (default).
     ///
     /// If none of the free, side and shared binding options is currently
     /// possible, this function will fail. If the socket blocking the
@@ -475,8 +429,8 @@ extern "C" {
     /// **NOTE**: This function cannot be called on a socket group. If you
     /// need to have the group-member socket bound to the specified
     /// source address before connecting, use
-    /// [`srt_connect_bind`](#srt_connect_bind) for that purpose or set the
-    /// appropriate source address using [`srt_prepare_endpoint`](#
+    /// `srt_connect_bind`(#srt_connect_bind) for that purpose or set the
+    /// appropriate source address using `srt_prepare_endpoint`(#
     /// srt_prepare_endpoint).
     ///
     /// **IMPORTANT information about IPv6**: If you are going to bind to
@@ -496,13 +450,13 @@ extern "C" {
     /// rejected in advance).
     ///
     /// The following important options may change the behavior of the
-    /// listener socket and the [`srt_accept`](#srt_accept)
+    /// listener socket and the `srt_accept`(#srt_accept)
     /// function:
     ///
-    /// * [`srt_listen_callback`](#srt_listen_callback) installs a user function
+    /// * `srt_listen_callback`(#srt_listen_callback) installs a user function
     ///   that will
-    /// be called before [`srt_accept`](#srt_accept) can happen
-    /// * [`SRTO_GROUPCONNECT`](API-socket-options.md#SRTO_GROUPCONNECT) option
+    /// be called before `srt_accept`(#srt_accept) can happen
+    /// * `SRTO_GROUPCONNECT`(API-socket-options.md#SRTO_GROUPCONNECT) option
     ///   allows
     /// the listener socket to accept group connections
     pub(crate) fn srt_listen(s: SRTSOCKET, backlog: c_int) -> c_int;
@@ -546,18 +500,18 @@ extern "C" {
     ///
     /// **Arguments**:
     ///
-    /// * [`u`](#u): can be an SRT socket or SRT group, both freshly created and
-    ///   not yet used for any connection, except possibly
-    ///   [`srt_bind`](#srt_bind) on the socket
+    /// * `u`(#u): can be an SRT socket or SRT group, both freshly created and
+    ///   not yet used for any connection, except possibly `srt_bind`(#srt_bind)
+    ///   on the socket
     /// * `name`: specification of the remote address and port
     /// * `namelen`: size of the object passed by `name`
     ///
     /// **NOTES:**
     ///
-    /// 1. The socket used here may be [bound by `srt_bind`](#srt_bind) before
+    /// 1. The socket used here may be [bound by `srt_bind`(#srt_bind) before
     ///    connecting,
     /// or binding and connection can be done in one function
-    /// ([`srt_connect_bind`](#srt_connect_bind)), such that it uses a
+    /// (`srt_connect_bind`(#srt_connect_bind)), such that it uses a
     /// predefined network interface or local outgoing port. This is
     /// optional in the case of a caller-listener arrangement, but
     /// obligatory for a rendezvous arrangement. If not used, the
@@ -568,12 +522,12 @@ extern "C" {
     /// 2. This function is used for both connecting to the listening peer in a
     ///    caller-listener
     /// arrangement, and calling the peer in rendezvous mode. For the
-    /// latter, the [`SRTO_RENDEZVOUS`](API-socket-options.md#
+    /// latter, the `SRTO_RENDEZVOUS`(API-socket-options.md#
     /// SRTO_RENDEZVOUS) flag must be set to true prior to calling
     /// this function, and binding, as described in #1, is in this
     /// case obligatory (see `SRT_ERDVUNBOUND` below).
     ///
-    /// 3. When [`u`](#u) is a group, then this call can be done multiple times,
+    /// 3. When `u`(#u) is a group, then this call can be done multiple times,
     ///    each time
     /// for another member connection, and a new member SRT socket will be
     /// created automatically for every call of this function.
@@ -581,15 +535,15 @@ extern "C" {
     /// 4. If you want to connect a group to multiple links at once and use
     ///    blocking
     /// mode, you might want to use
-    /// [`srt_connect_group`](#srt_connect_group) instead. This
+    /// `srt_connect_group`(#srt_connect_group) instead. This
     /// function also allows you to use additional settings,
     /// available only for groups.
     ///
     /// If the `u` socket is configured for blocking mode (when
-    /// [`SRTO_RCVSYN`](API-socket-options.md#SRTO_RCVSYN) is set to true,
+    /// `SRTO_RCVSYN`(API-socket-options.md#SRTO_RCVSYN) is set to true,
     /// default), the call will block until the connection succeeds or
-    /// fails. The "early" errors [`SRT_EINVSOCK`](#srt_einvsock),
-    /// [`SRT_ERDVUNBOUND`](#srt_erdvunbound) and [`SRT_ECONNSOCK`](#
+    /// fails. The "early" errors `SRT_EINVSOCK`(#srt_einvsock),
+    /// `SRT_ERDVUNBOUND`(#srt_erdvunbound) and `SRT_ECONNSOCK`(#
     /// srt_econnsock) are reported in both modes immediately. Other
     /// errors are "late" failures and can only be reported in blocking
     /// mode.
@@ -601,28 +555,28 @@ extern "C" {
     /// that case.
     ///
     /// In the case of "late" failures you can additionally call
-    /// [`srt_getrejectreason`](#srt_getrejectreason) to get detailed error
+    /// `srt_getrejectreason`(#srt_getrejectreason) to get detailed error
     /// information. Note that in blocking mode only for the `SRT_ECONNREJ`
     /// error this function may return any additional information. In
     /// non-blocking mode a detailed "late" failure cannot be distinguished,
     /// and therefore it can also be obtained from this function.
     pub(crate) fn srt_connect(s: SRTSOCKET, name: *const sockaddr, name_len: c_int) -> c_int;
     /// Extracts the payload waiting to be received. Note that
-    /// [`srt_recv`](#srt_recv) and [`srt_recvmsg`](#srt_recvmsg) are
+    /// `srt_recv`(#srt_recv) and `srt_recvmsg`(#srt_recvmsg) are
     /// identical functions, two different names being kept for historical
     /// reasons. In the UDT predecessor the application was required
     /// to use either the `UDT::recv` version for **stream mode** and
     /// `UDT::recvmsg` for **message mode**. In SRT this distinction is
-    /// resolved internally by the [`SRTO_MESSAGEAPI`](API-socket-options.
+    /// resolved internally by the `SRTO_MESSAGEAPI`(API-socket-options.
     /// md#SRTO_MESSAGEAPI) flag.
     ///
     /// **Arguments**:
     ///
-    /// * [`u`](#u): Socket used to send. The socket must be connected for this
+    /// * `u`(#u): Socket used to send. The socket must be connected for this
     ///   operation.
     /// * `buf`: Points to the buffer to which the payload is copied.
     /// * `len`: Size of the payload specified in `buf`.
-    /// * `mctrl`: An object of [`SRT_MSGCTRL`](#SRT_MSGCTRL) type that contains
+    /// * `mctrl`: An object of `SRT_MSGCTRL`(#SRT_MSGCTRL) type that contains
     ///   extra
     /// parameters.
     ///
@@ -639,23 +593,23 @@ extern "C" {
     /// boundaries defined at the moment of sending. If some parts of the
     /// messages are already retrieved, but not the whole message, nothing
     /// will be received (the function blocks or returns
-    /// [`SRT_EASYNCRCV`](#srt_easyncrcv)). If the message to be returned
+    /// `SRT_EASYNCRCV`(#srt_easyncrcv)). If the message to be returned
     /// does not fit in the buffer, nothing will be received and
     /// the error is reported.
     ///
     /// 3. In **live mode**, the function behaves as in **file/message mode**,
     ///    although the
     /// number of bytes retrieved will be at most the maximum payload of one
-    /// MTU. The [`SRTO_PAYLOADSIZE`](API-socket-options.md#
+    /// MTU. The `SRTO_PAYLOADSIZE`(API-socket-options.md#
     /// SRTO_PAYLOADSIZE) value configured by the sender is not negotiated,
     /// and not known to the receiver.
-    /// The [`SRTO_PAYLOADSIZE`](API-socket-options.md#SRTO_PAYLOADSIZE)
+    /// The `SRTO_PAYLOADSIZE`(API-socket-options.md#SRTO_PAYLOADSIZE)
     /// value set on the SRT receiver is mainly used for heuristics.
     /// However, the receiver is prepared to receive the whole MTU
-    /// as configured with [`SRTO_MSS`](API-socket-options.md#
+    /// as configured with `SRTO_MSS`(API-socket-options.md#
     /// SRTO_MSS). In this mode, however, with default settings of
-    /// [`SRTO_TSBPDMODE`](API-socket-options.md#SRTO_TSBPDMODE)
-    /// and [`SRTO_TLPKTDROP`](API-socket-options.md#SRTO_TLPKTDROP), the
+    /// `SRTO_TSBPDMODE`(API-socket-options.md#SRTO_TSBPDMODE)
+    /// and `SRTO_TLPKTDROP`(API-socket-options.md#SRTO_TLPKTDROP), the
     /// message will be received only when its time to play has come, and
     /// until then it will be kept in the receiver buffer. Also, when the
     /// time to play has come for a message that is next to the currently
@@ -665,16 +619,16 @@ extern "C" {
     ///
     /// **Arguments**:
     ///
-    /// * [`u`](#u): Socket used to send. The socket must be connected for this
+    /// * `u`(#u): Socket used to send. The socket must be connected for this
     ///   operation.
     /// * `buf`: Points to the buffer containing the payload to send.
     /// * `len`: Size of the payload specified in `buf`.
     /// * `ttl`: Time (in `[ms]`) to wait for a successful delivery. See
     ///   description of
-    /// the [`SRT_MSGCTRL::msgttl`](#SRT_MSGCTRL) field.
+    /// the `SRT_MSGCTRL::msgttl`(#SRT_MSGCTRL) field.
     /// * `inorder`: Required to be received in the order of sending. See
-    /// [`SRT_MSGCTRL::inorder`](#SRT_MSGCTRL).
-    /// * `mctrl`: An object of [`SRT_MSGCTRL`](#SRT_MSGCTRL) type that contains
+    /// `SRT_MSGCTRL::inorder`(#SRT_MSGCTRL).
+    /// * `mctrl`: An object of `SRT_MSGCTRL`(#SRT_MSGCTRL) type that contains
     ///   extra
     /// parameters, including `ttl` and `inorder`.
     ///

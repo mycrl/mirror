@@ -232,6 +232,9 @@ class SimpleMirrorService : Service() {
                 intent
             )
 
+        VideoConfigure.width = 1920;
+        VideoConfigure.height = 1080;
+
         mediaProjection?.registerCallback(object : MediaProjection.Callback() {}, null)
         sender = mirror?.createSender(
             id,

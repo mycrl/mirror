@@ -3,12 +3,13 @@ use std::{
     sync::{
         atomic::{AtomicBool, AtomicU8},
         mpsc::{channel, Receiver, Sender},
-        Arc, Mutex,
+        Arc,
     },
 };
 
 use bytes::{Bytes, BytesMut};
-use utils::atomic::{AtomicOption, EasyAtomic};
+use common::atomic::{AtomicOption, EasyAtomic};
+use parking_lot::Mutex;
 
 #[repr(i32)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -300,7 +301,7 @@ impl<T> Channel<T> {
     }
 
     fn recv(&self) -> Option<T> {
-        self.1.lock().unwrap().recv().ok().flatten()
+        self.1.lock().recv().ok().flatten()
     }
 }
 

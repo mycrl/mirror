@@ -51,6 +51,15 @@ impl From<&str> for Strings {
     }
 }
 
+impl From<String> for Strings {
+    fn from(value: String) -> Self {
+        Self {
+            ptr: CString::new(value).unwrap().into_raw(),
+            drop: true,
+        }
+    }
+}
+
 impl Strings {
     /// Yields a &str slice if the CStr contains valid UTF-8.
     ///
@@ -83,4 +92,11 @@ impl Strings {
     pub fn as_ptr(&self) -> *const c_char {
         self.ptr
     }
+}
+
+#[macro_export]
+macro_rules! c_str {
+    ($s:expr) => {
+        common::strings::Strings::from($s).as_ptr()
+    };
 }

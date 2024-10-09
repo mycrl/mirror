@@ -10,16 +10,13 @@ lto = true
 resolver = "2"
 members = [
     "ffi",
+    "common",
     "codec",
+    "resample",
     "capture",
     "graphics",
     "mirror",
     "service",
     "transport",
-    "multicast",
-    "srt",
-    "frame",
-    "utils",
-    "audio",
     "app/napi",
 ]

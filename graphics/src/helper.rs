@@ -4,7 +4,7 @@ use thiserror::Error;
 pub enum CompatibilityLayerError {
     #[cfg(target_os = "windows")]
     #[error(transparent)]
-    DxError(#[from] utils::win32::windows::core::Error),
+    DxError(#[from] common::win32::windows::core::Error),
     #[error("not found wgpu dx12 device")]
     NotFoundDxBackend,
     #[error("dx11 shared handle is invalid")]
@@ -17,7 +17,7 @@ pub mod win32 {
 
     use super::CompatibilityLayerError;
 
-    use utils::win32::{
+    use common::win32::{
         windows::Win32::Graphics::{
             Direct3D11::{
                 ID3D11Texture2D, D3D11_RESOURCE_MISC_SHARED, D3D11_TEXTURE2D_DESC,
@@ -162,6 +162,21 @@ pub mod win32 {
             }
 
             Ok(self.texture.as_ref().unwrap())
+        }
+    }
+}
+
+#[cfg(target_os = "linux")]
+pub mod linux {
+    use std::sync::Arc;
+
+    use wgpu::Device;
+
+    pub struct VulkanOnWgpuCompatibilityLayer {}
+
+    impl VulkanOnWgpuCompatibilityLayer {
+        pub fn new(_device: Arc<Device>) -> Self {
+            Self {}
         }
     }
 }

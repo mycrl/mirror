@@ -4,16 +4,16 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-anyhow = "1.0.82"
+thiserror = "1.0.63"
 bytes = "1.5"
 log = "0.4.20"
-utils = { path = "../utils" }
-frame = { path = "../frame" }
+parking_lot = "0.12"
+common = { path = "../common" }
 transport = { path = "../transport" }
 graphics = { path = "../graphics" }
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
-audio = { path = "../audio" }
+resample = { path = "../resample" }
 capture = { path = "../capture" }
 codec = { path = "../codec" }
 cpal = "0.15.3"

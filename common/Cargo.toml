@@ -1,5 +1,5 @@
 [package]
-name = "utils"
+name = "common"
 version = "0.1.0"
 edition = "2021"
 
@@ -8,9 +8,6 @@ thiserror = "1.0.56"
 log = "0.4.20"
 fern = { version = "0.6.2", features = ["date-based", "colored", "syslog-6"] }
 chrono = { version = "0.4", features = ["clock", "alloc"] }
-
-[target.'cfg(target_os = "linux")'.dependencies]
-syslog = "6"
 
 [target.'cfg(target_os = "windows")'.dependencies.windows]
 version = "0.58.0"

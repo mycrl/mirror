@@ -1,23 +1,23 @@
 use std::{ffi::c_int, ptr::null_mut};
 
+use common::frame::{VideoFormat, VideoFrame, VideoSubFormat};
 use ffmpeg_sys_next::*;
-use frame::{VideoFormat, VideoFrame};
 use thiserror::Error;
 
 #[cfg(target_os = "windows")]
-use utils::win32::Direct3DDevice;
+use common::{win32::Direct3DDevice, Size};
 
 use crate::{
     util::{
         create_video_context, create_video_frame, set_option, set_str_option, CodecType,
-        CreateVideoContextDescriptor, CreateVideoContextError, CreateVideoFrameError,
-        HardwareFrameSize,
+        CreateVideoContextError, CreateVideoFrameError,
     },
     CodecError,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VideoDecoderType {
+    H264,
     D3D11,
     Qsv,
     Cuda,
@@ -26,6 +26,7 @@ pub enum VideoDecoderType {
 impl Into<&'static str> for VideoDecoderType {
     fn into(self) -> &'static str {
         match self {
+            Self::H264 => "h264",
             Self::D3D11 => "d3d11va",
             Self::Qsv => "h264_qsv",
             Self::Cuda => "h264_cuvid",
@@ -38,6 +39,7 @@ impl TryFrom<&str> for VideoDecoderType {
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         Ok(match value {
+            "h264" => Self::H264,
             "d3d11va" => Self::D3D11,
             "h264_qsv" => Self::Qsv,
             "h264_cuvid" => Self::Cuda,
@@ -121,6 +123,11 @@ unsafe impl Send for VideoDecoder {}
 
 impl VideoDecoder {
     pub fn new(options: VideoDecoderSettings) -> Result<Self, VideoDecoderError> {
+        // TODO: linux does not currently support hardware codecs
+        if cfg!(target_os = "linux") {
+            assert_eq!(options.codec, VideoDecoderType::H264);
+        }
+
         let mut this = Self {
             context: null_mut(),
             parser: null_mut(),
@@ -129,13 +136,16 @@ impl VideoDecoder {
             frame: VideoFrame::default(),
         };
 
-        let codec = create_video_context(CreateVideoContextDescriptor {
-            kind: CodecType::Decoder(options.codec),
-            context: &mut this.context,
-            frame_size: None,
-            #[cfg(target_os = "windows")]
-            direct3d: options.direct3d,
-        })?;
+        #[cfg(target_os = "windows")]
+        let codec = create_video_context(
+            &mut this.context,
+            CodecType::Decoder(options.codec),
+            None,
+            options.direct3d,
+        )?;
+
+        #[cfg(target_os = "linux")]
+        let codec = create_video_context(&mut this.context, CodecType::Decoder(options.codec))?;
 
         let context_mut = unsafe { &mut *this.context };
         context_mut.delay = 0;
@@ -144,7 +154,12 @@ impl VideoDecoder {
         context_mut.skip_alpha = true as i32;
         context_mut.flags |= AV_CODEC_FLAG_LOW_DELAY as i32;
         context_mut.flags2 |= AV_CODEC_FLAG2_FAST;
-        context_mut.hwaccel_flags |= AV_HWACCEL_FLAG_IGNORE_LEVEL | AV_HWACCEL_FLAG_UNSAFE_OUTPUT;
+        context_mut.hwaccel_flags |= AV_HWACCEL_FLAG_IGNORE_LEVEL;
+
+        #[cfg(target_os = "windows")]
+        {
+            context_mut.hwaccel_flags |= AV_HWACCEL_FLAG_UNSAFE_OUTPUT;
+        }
 
         if options.codec == VideoDecoderType::Qsv {
             set_option(context_mut, "async_depth", 1);
@@ -235,7 +250,8 @@ impl VideoDecoder {
         self.frame.width = frame.width as u32;
         self.frame.height = frame.height as u32;
 
-        match unsafe { std::mem::transmute(frame.format) } {
+        let format = unsafe { std::mem::transmute::<_, AVPixelFormat>(frame.format) };
+        match format {
             // mfxFrameSurface1.Data.MemId contains a pointer to the mfxHDLPair structure
             // when importing the following frames as QSV frames:
             //
@@ -248,16 +264,18 @@ impl VideoDecoder {
             // D3D11: mfxHDLPair.first contains a ID3D11Texture2D pointer. mfxHDLPair.second
             // contains the texture array index of the frame if the ID3D11Texture2D is an
             // array texture, or always MFX_INFINITE if it is a normal texture.
-            #[cfg(target_os = "windows")]
             AVPixelFormat::AV_PIX_FMT_QSV => {
-                let surface = unsafe { &*(frame.data[3] as *const mfxFrameSurface1) };
-                let hdl = unsafe { &*(surface.Data.MemId as *const mfxHDLPair) };
+                #[cfg(target_os = "windows")]
+                {
+                    let surface = unsafe { &*(frame.data[3] as *const mfxFrameSurface1) };
+                    let hdl = unsafe { &*(surface.Data.MemId as *const mfxHDLPair) };
 
-                self.frame.data[0] = hdl.first;
-                self.frame.data[1] = hdl.second;
+                    self.frame.data[0] = hdl.first;
+                    self.frame.data[1] = hdl.second;
 
-                self.frame.hardware = true;
-                self.frame.format = VideoFormat::NV12;
+                    self.frame.sub_format = VideoSubFormat::D3D11;
+                    self.frame.format = VideoFormat::NV12;
+                }
             }
             // The d3d11va video frame texture has no stride.
             AVPixelFormat::AV_PIX_FMT_D3D11 => {
@@ -265,7 +283,7 @@ impl VideoDecoder {
                     self.frame.data[i] = frame.data[i] as *const _;
                 }
 
-                self.frame.hardware = true;
+                self.frame.sub_format = VideoSubFormat::D3D11;
                 self.frame.format = VideoFormat::NV12;
             }
             AVPixelFormat::AV_PIX_FMT_YUV420P => {
@@ -274,10 +292,11 @@ impl VideoDecoder {
                     self.frame.linesize[i] = frame.linesize[i] as usize;
                 }
 
-                self.frame.hardware = false;
+                self.frame.sub_format = VideoSubFormat::SW;
                 self.frame.format = VideoFormat::I420;
             }
-            _ => unimplemented!("not supports the video frame format!"),
+            #[allow(unreachable_patterns)]
+            _ => unimplemented!("unsupported video frame format"),
         };
 
         Some(&self.frame)
@@ -372,6 +391,11 @@ unsafe impl Send for VideoEncoder {}
 
 impl VideoEncoder {
     pub fn new(options: VideoEncoderSettings) -> Result<Self, VideoEncoderError> {
+        // TODO: linux does not currently support hardware codecs
+        if cfg!(target_os = "linux") {
+            assert_eq!(options.codec, VideoEncoderType::X264);
+        }
+
         let mut this = Self {
             context: null_mut(),
             packet: null_mut(),
@@ -379,16 +403,19 @@ impl VideoEncoder {
             initialized: false,
         };
 
-        let codec = create_video_context(CreateVideoContextDescriptor {
-            kind: CodecType::Encoder(options.codec),
-            context: &mut this.context,
-            frame_size: Some(HardwareFrameSize {
+        #[cfg(target_os = "windows")]
+        let codec = create_video_context(
+            &mut this.context,
+            CodecType::Encoder(options.codec),
+            Some(Size {
                 width: options.width,
                 height: options.height,
             }),
-            #[cfg(target_os = "windows")]
-            direct3d: options.direct3d,
-        })?;
+            options.direct3d,
+        )?;
+
+        #[cfg(target_os = "linux")]
+        let codec = create_video_context(&mut this.context, CodecType::Encoder(options.codec))?;
 
         let context_mut = unsafe { &mut *this.context };
         context_mut.delay = 0;
@@ -430,6 +457,16 @@ impl VideoEncoder {
         context_mut.width = options.width as i32;
 
         match options.codec {
+            VideoEncoderType::X264 => {
+                set_str_option(context_mut, "preset", "superfast");
+                set_str_option(context_mut, "tune", "zerolatency");
+                set_option(context_mut, "nal-hrd", 2);
+                set_option(
+                    context_mut,
+                    "sc_threshold",
+                    options.key_frame_interval as i64,
+                );
+            }
             VideoEncoderType::Qsv => {
                 set_option(context_mut, "async_depth", 1);
                 set_option(context_mut, "low_power", 1);
@@ -442,16 +479,6 @@ impl VideoEncoder {
                 set_option(context_mut, "cbr", 1);
                 set_option(context_mut, "preset", 7);
                 set_option(context_mut, "tune", 3);
-            }
-            VideoEncoderType::X264 => {
-                set_str_option(context_mut, "preset", "superfast");
-                set_str_option(context_mut, "tune", "zerolatency");
-                set_option(context_mut, "nal-hrd", 2);
-                set_option(
-                    context_mut,
-                    "sc_threshold",
-                    options.key_frame_interval as i64,
-                );
             }
         };
 
@@ -470,18 +497,14 @@ impl VideoEncoder {
 
         // When encoding a video, frames can be reused. Here, a frame is created and
         // then reused by replacing the data inside the frame.
-        create_video_frame(
-            &mut this.frame,
-            this.context,
-            CodecType::Encoder(options.codec),
-        )?;
+        create_video_frame(&mut this.frame, this.context)?;
 
         Ok(this)
     }
 
     pub fn update(&mut self, frame: &VideoFrame) -> bool {
         let av_frame = unsafe { &mut *self.frame };
-        if frame.hardware {
+        match frame.sub_format {
             // mfxFrameSurface1.Data.MemId contains a pointer to the mfxHDLPair structure
             // when importing the following frames as QSV frames:
             //
@@ -495,38 +518,43 @@ impl VideoEncoder {
             // contains the texture array index of the frame if the ID3D11Texture2D is an
             // array texture, or always MFX_INFINITE if it is a normal texture.
             #[cfg(target_os = "windows")]
-            if av_frame.format == AVPixelFormat::AV_PIX_FMT_QSV as i32 {
-                let surface = unsafe { &mut *(av_frame.data[3] as *mut mfxFrameSurface1) };
-                let hdl = unsafe { &mut *(surface.Data.MemId as *mut mfxHDLPair) };
+            VideoSubFormat::D3D11 => {
+                if av_frame.format == AVPixelFormat::AV_PIX_FMT_QSV as i32 {
+                    let surface = unsafe { &mut *(av_frame.data[3] as *mut mfxFrameSurface1) };
+                    let hdl = unsafe { &mut *(surface.Data.MemId as *mut mfxHDLPair) };
 
-                hdl.first = frame.data[0] as *mut _;
-                hdl.second = frame.data[1] as *mut _;
+                    hdl.first = frame.data[0] as *mut _;
+                    hdl.second = frame.data[1] as *mut _;
+                }
             }
-        } else {
-            // Anyway, the hardware encoder has no way to check whether the current frame is
-            // writable.
-            if unsafe { av_frame_make_writable(self.frame) } != 0 {
-                return false;
-            }
+            VideoSubFormat::SW => {
+                // Anyway, the hardware encoder has no way to check whether the current frame is
+                // writable.
+                if unsafe { av_frame_make_writable(self.frame) } != 0 {
+                    return false;
+                }
 
-            // Directly replacing the pointer may cause some problems with pointer access.
-            // Copying data to the frame is the safest way.
-            unsafe {
-                av_image_copy(
-                    av_frame.data.as_mut_ptr(),
-                    av_frame.linesize.as_mut_ptr(),
-                    frame.data.as_ptr() as *const _,
-                    [
-                        frame.linesize[0] as i32,
-                        frame.linesize[1] as i32,
-                        frame.linesize[2] as i32,
-                    ]
-                    .as_ptr(),
-                    { &*self.context }.pix_fmt,
-                    av_frame.width,
-                    av_frame.height,
-                );
+                // Directly replacing the pointer may cause some problems with pointer access.
+                // Copying data to the frame is the safest way.
+                unsafe {
+                    av_image_copy(
+                        av_frame.data.as_mut_ptr(),
+                        av_frame.linesize.as_mut_ptr(),
+                        frame.data.as_ptr() as _,
+                        [
+                            frame.linesize[0] as i32,
+                            frame.linesize[1] as i32,
+                            frame.linesize[2] as i32,
+                        ]
+                        .as_ptr(),
+                        { &*self.context }.pix_fmt,
+                        av_frame.width,
+                        av_frame.height,
+                    );
+                }
             }
+            #[allow(unreachable_patterns)]
+            _ => unimplemented!("unsupported video frame format"),
         }
 
         true
@@ -536,11 +564,14 @@ impl VideoEncoder {
         let av_frame = unsafe { &mut *self.frame };
         av_frame.pts = unsafe {
             let context_ref = &*self.context;
-            av_rescale_q(
-                context_ref.frame_num,
-                context_ref.pkt_timebase,
-                context_ref.time_base,
-            )
+
+            #[cfg(target_os = "linux")]
+            let num = context_ref.frame_number;
+
+            #[cfg(target_os = "windows")]
+            let num = context_ref.frame_num;
+
+            av_rescale_q(num.into(), context_ref.pkt_timebase, context_ref.time_base)
         };
 
         if unsafe { avcodec_send_frame(self.context, self.frame) } != 0 {

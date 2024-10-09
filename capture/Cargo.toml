@@ -4,24 +4,22 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-anyhow = "1.0.82"
+thiserror = "1.0.63"
 cpal = "0.15.3"
 once_cell = "1.19.0"
 log = "0.4.20"
-audio = { path = "../audio" }
-utils = { path = "../utils" }
-frame = { path = "../frame" }
+parking_lot = "0.12"
+common = { path = "../common" }
+resample = { path = "../resample" }
 graphics = { path = "../graphics" }
 
 [target.'cfg(target_os = "windows")'.dependencies]
-windows-capture = { git = "https://github.com/mycrl/windows-capture", branch = "expose-d3d" }
+windows-capture = { git = "https://github.com/mycrl/windows-capture" }
 
 [target.'cfg(target_os = "windows")'.dependencies.windows]
 version = "0.58.0"
-features = [
-    "Win32_Media", 
-    "Win32_Media_MediaFoundation", 
-]
+features = ["Win32_Media", "Win32_Media_MediaFoundation"]
 
 [target.'cfg(target_os = "linux")'.dependencies]
-ash = "0.38.0"
+ffmpeg-sys-next = { git = "https://github.com/mycrl/rust-ffmpeg-sys" }
+v4l = "0.14.0"

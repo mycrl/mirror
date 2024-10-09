@@ -25,17 +25,20 @@ const Command = (cmd, options = {}) => new Promise((
     ps.stdout.pipe(process.stdout)
     ps.stderr.pipe(process.stderr)
 
-    ps.on('close', resolve)
     ps.on('error', reject)
+    ps.on('close', code => {
+        code == 0 ? resolve() : reject(`exit codec: ${code}`)
+    })
 })
-    
-const Replace = (file, filters) => {
+
+const Replace = (file, filters) =>
+{
     let src = fs.readFileSync(file).toString()
     for (const item of filters)
     {
         src = src.replace(...item)
     }
-    
+
     fs.writeFileSync(file, src)
 }
 
@@ -61,24 +64,28 @@ const Replace = (file, filters) => {
         }
     }
 
-    if (!fs.existsSync('./target/ffmpeg'))
-    {
-       if (!fs.existsSync('./target/ffmpeg.zip'))
-       {
-           const name = process.platform == 'win32' ? 
-               `ffmpeg-windows-x64-${Args.release ? 'release' : 'debug'}.zip` : 
-               'ffmpeg-linux-x64-release.zip'
-
-           console.log('Start download ffmpeg...')
-           await download(`${BaseDistributions}/${name}`,'./target')
-           fs.renameSync(`./target/${name}`, './target/ffmpeg.zip')
-       }
-        
-       await (await unzipper.Open.file('./target/ffmpeg.zip')).extract({ path: './target' })
-    }
-
-    await Command(`cargo build ${Args.release ? '--release' : ''} -p mirror-desktop`)
+    await Command(`cargo build ${Args.release ? '--release' : ''} -p mirror-ffi`)
     await Command(`cargo build ${Args.release ? '--release' : ''} -p service`)
+
+    /* download ffmpeg librarys for windows */
+    if (process.platform == 'win32')
+    {
+        if (!fs.existsSync('./target/ffmpeg'))
+        {
+            if (!fs.existsSync('./target/ffmpeg.zip'))
+            {
+                const name = process.platform == 'win32' ?
+                    `ffmpeg-windows-x64-${Args.release ? 'release' : 'debug'}.zip` :
+                    'ffmpeg-linux-x64-release.zip'
+
+                console.log('Start download ffmpeg...')
+                await download(`${BaseDistributions}/${name}`, './target')
+                fs.renameSync(`./target/${name}`, './target/ffmpeg.zip')
+            }
+
+            await (await unzipper.Open.file('./target/ffmpeg.zip')).extract({ path: './target' })
+        }
+    }
 
     if (!fs.existsSync('./examples/desktop/build'))
     {
@@ -127,13 +134,9 @@ const Replace = (file, filters) => {
     else
     {
         for (const item of [
-            ['./examples/desktop/build/example', './build/bin/example'],
+            [`./examples/desktop/build/example`, './build/bin/example'],
             [`./target/${Profile.toLowerCase()}/service`, './build/server/mirror-service'],
             [`./target/${Profile.toLowerCase()}/libmirror.so`, './build/bin/libmirror.so'],
-            [`./target/${Profile.toLowerCase()}/librenderer.so`, './build/bin/librenderer.so'],
-            ['./target/ffmpeg/lib/libavcodec.so.61', './build/bin/libavcodec.so.61'],
-            ['./target/ffmpeg/lib/libavutil.so.59', './build/bin/libavutil.so.59'],
-            ['./target/ffmpeg/lib/libswresample.so.5', './build/bin/libswresample.so.5'],
         ])
         {
             fs.copyFileSync(...item)
@@ -165,14 +168,16 @@ const Replace = (file, filters) => {
         ['../../target/debug', '../lib'],
         ['../../target/release', '../lib'],
     ])
-    
+
     /* package electron app */
     if (Args.app)
     {
         await Command('npm i', { cwd: join(__dirname, './app') })
         await Command('npm run package', { cwd: join(__dirname, './app') })
-        fs.cpSync('./app/dist/win-unpacked', './build/bin', { force: true, recursive: true })
+        fs.cpSync(`./app/dist/${process.platform == 'win32' ? 'win' : 'linux'}-unpacked`,
+            './build/bin',
+            { force: true, recursive: true })
     }
 
     /* async block end */
-})()
+})().catch(console.error)

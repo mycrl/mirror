@@ -5,23 +5,35 @@ SimpleRender::SimpleRender(Args& args, HWND hwnd)
     : _args(args)
     , _hwnd(hwnd)
 {
+    RECT rect;
+    GetClientRect(hwnd, &rect);
+    int width = rect.right - rect.left;
+    int height = rect.bottom - rect.top;
+    _window_handle = create_window_handle_for_win32(hwnd, width, height);
 }
 #else
-SimpleRender::SimpleRender(Args& args)
+SimpleRender::SimpleRender(Args& args,
+                           uint64_t window_handle,
+                           void* display)
     : _args(args)
 {
-
-    Size size;
-    size.width = args.ArgsParams.width;
-    size.height = args.ArgsParams.height;
-
-    _renderer = renderer_create(size, nullptr);
+    _window_handle = create_window_handle_for_xlib(window_handle,
+                                                   display,
+                                                   0,
+                                                   args.ArgsParams.width,
+                                                   args.ArgsParams.height);
 }
 #endif
 
 SimpleRender::~SimpleRender()
 {
     Close();
+
+    if (_window_handle != nullptr)
+    {
+        window_handle_destroy(_window_handle);
+        _window_handle = nullptr;
+    }
 }
 
 void SimpleRender::SetTitle(std::string title)
@@ -45,7 +57,7 @@ bool SimpleRender::OnVideoFrame(VideoFrame* frame)
     {
         return false;
     }
-    
+
     /*if (!IsRender)
     {
         return true;
@@ -89,25 +101,5 @@ void SimpleRender::Create()
         return;
     }
 
-    _renderer = renderer_create(_hwnd, xVideoRenderBackendWgpu);
+    _renderer = renderer_create(_window_handle, RENDER_BACKEND_WGPU);
 }
-
-#ifdef LINUX
-struct EventLoopContext
-{
-    std::function<bool(SDL_Event*)> func;
-};
-
-bool event_proc(const void* event, void* ctx)
-{
-    auto ctx_ = (EventLoopContext*)ctx;
-    return ctx_->func((SDL_Event*)event);
-}
-
-void SimpleRender::RunEventLoop(std::function<bool(SDL_Event*)> handler)
-{
-    auto ctx = new EventLoopContext{};
-    ctx->func = handler;
-    renderer_event_loop(_renderer, event_proc, ctx);
-}
-#endif // LINUX

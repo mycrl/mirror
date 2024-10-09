@@ -52,9 +52,17 @@ impl Default for AudioFrame {
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VideoFormat {
+    BGRA,
     RGBA,
     NV12,
     I420,
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VideoSubFormat {
+    D3D11,
+    SW,
 }
 
 /// YCbCr (NV12)
@@ -80,7 +88,7 @@ pub enum VideoFormat {
 #[derive(Debug)]
 pub struct VideoFrame {
     pub format: VideoFormat,
-    pub hardware: bool,
+    pub sub_format: VideoSubFormat,
     pub width: u32,
     pub height: u32,
     pub data: [*const c_void; 3],
@@ -95,10 +103,10 @@ impl Default for VideoFrame {
         Self {
             width: 0,
             height: 0,
-            hardware: false,
             linesize: [0, 0, 0],
             data: [null(), null(), null()],
             format: VideoFormat::RGBA,
+            sub_format: VideoSubFormat::SW,
         }
     }
 }

@@ -1,7 +1,8 @@
-use std::{cell::RefCell, sync::Mutex};
+use std::cell::RefCell;
 
 use bytes::BytesMut;
 use jni::{objects::JByteArray, JNIEnv, JavaVM};
+use parking_lot::Mutex;
 use transport::package;
 
 // Each function is accessible at a fixed offset through the JNIEnv argument.
@@ -27,7 +28,7 @@ pub fn get_current_env<'local>() -> JNIEnv<'local> {
             ENV.with(|cell| {
                 let mut env = cell.borrow_mut();
                 if env.is_none() {
-                    let vm = JVM.lock().unwrap();
+                    let vm = JVM.lock();
                     env.replace(
                         vm.as_ref()
                             .unwrap()

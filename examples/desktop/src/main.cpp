@@ -9,6 +9,11 @@
 #include <windows.h>
 #endif
 
+#ifdef LINUX
+#include <SDL.h>
+#include <SDL_syswm.h>
+#endif
+
 #include "./args.h"
 #include "./render.h"
 #include "./service.h"
@@ -21,7 +26,10 @@ extern "C"
 static MirrorServiceExt* mirror_service = nullptr;
 
 #ifdef WIN32
-LRESULT CALLBACK window_handle_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam)
+LRESULT CALLBACK window_handle_proc(HWND hwnd,
+                                    UINT message,
+                                    WPARAM wparam,
+                                    LPARAM lparam)
 {
     switch (message)
     {
@@ -34,14 +42,20 @@ LRESULT CALLBACK window_handle_proc(HWND hwnd, UINT message, WPARAM wparam, LPAR
         case 'S':
             if (!mirror_service->CreateMirrorSender())
             {
-                MessageBox(nullptr, TEXT("Failed to create sender"), TEXT("Error"), 0);
+                MessageBox(nullptr,
+                           TEXT("Failed to create sender"),
+                           TEXT("Error"),
+                           0);
             }
 
             break;
         case 'R':
             if (!mirror_service->CreateMirrorReceiver())
             {
-                MessageBox(nullptr, TEXT("Failed to create receiver"), TEXT("Error"), 0);
+                MessageBox(nullptr,
+                           TEXT("Failed to create receiver"),
+                           TEXT("Error"),
+                           0);
             }
 
             break;
@@ -59,9 +73,9 @@ LRESULT CALLBACK window_handle_proc(HWND hwnd, UINT message, WPARAM wparam, LPAR
 }
 
 int WinMain(HINSTANCE hinstance,
-    HINSTANCE _prev_instance,
-    LPSTR cmd_line,
-    int _show_cmd)
+            HINSTANCE _prev_instance,
+            LPSTR cmd_line,
+            int _show_cmd)
 {
     AttachConsole(ATTACH_PARENT_PROCESS);
     freopen("CONIN$", "r+t", stdin);
@@ -83,20 +97,20 @@ int WinMain(HINSTANCE hinstance,
 
     Args args = Args(std::string(cmd_line));
     int height = (GetSystemMetrics(SM_CYFRAME) +
-        GetSystemMetrics(SM_CYCAPTION) +
-        GetSystemMetrics(SM_CXPADDEDBORDER));
+                  GetSystemMetrics(SM_CYCAPTION) +
+                  GetSystemMetrics(SM_CXPADDEDBORDER));
     HWND hwnd = CreateWindow("example",
-        "example",
-        WS_CAPTION | WS_POPUPWINDOW | WS_VISIBLE,
-        0,
-        0,
-        args.ArgsParams.width,
-        args.ArgsParams.height + height,
-        nullptr,
-        nullptr,
-        hinstance,
-        nullptr);
-    mirror_service = new MirrorServiceExt(args, hwnd, hinstance);
+                             "example",
+                             WS_CAPTION | WS_POPUPWINDOW | WS_VISIBLE,
+                             0,
+                             0,
+                             args.ArgsParams.width,
+                             args.ArgsParams.height + height,
+                             nullptr,
+                             nullptr,
+                             hinstance,
+                             nullptr);
+    mirror_service = new MirrorServiceExt(args, hwnd);
 
     MSG message;
     while (GetMessage(&message, nullptr, 0, 0))
@@ -116,18 +130,34 @@ int WinMain(HINSTANCE hinstance,
 int main(int argc, char* argv[])
 {
     mirror_startup();
-    renderer_startup();
 
     Args args = Args(argc >= 2 ? std::string(argv[1]) : "");
-    mirror_service = new MirrorServiceExt(args);
-    mirror_service->RunEventLoop([&](SDL_Event* event) {
-        if (event->type == SDL_QUIT)
+
+    SDL_Init(SDL_INIT_EVENTS);
+    SDL_Window* window = SDL_CreateWindow("example",
+                                          0,
+                                          0,
+                                          args.ArgsParams.width,
+                                          args.ArgsParams.height,
+                                          SDL_WINDOW_OPENGL);
+
+    SDL_SysWMinfo info;
+    SDL_VERSION(&info.version);
+    SDL_GetWindowWMInfo(window, &info);
+
+    auto display = info.info.x11.display;
+    auto window_handle = info.info.x11.window;
+    mirror_service = new MirrorServiceExt(args, (uint64_t)window_handle, display);
+
+    SDL_Event event;
+    while (SDL_WaitEvent(&event) == 1) {
+        if (event.type == SDL_QUIT)
         {
-            return false;
+            break;
         }
-        else if (event->type == SDL_KEYDOWN)
+        else if (event.type == SDL_KEYDOWN)
         {
-            switch (event->key.keysym.sym)
+            switch (event.key.keysym.sym)
             {
             case SDLK_r:
                 mirror_service->CreateMirrorReceiver();
@@ -143,11 +173,11 @@ int main(int argc, char* argv[])
                 break;
             }
         }
-
-        return true;
-    });
+    }
 
     mirror_shutdown();
+    SDL_DestroyWindow(window);
+    SDL_Quit();
 }
 
 #endif

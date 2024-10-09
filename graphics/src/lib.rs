@@ -1,30 +1,30 @@
 mod helper;
-mod samples;
+mod texture;
 mod vertex;
-
-#[cfg(target_os = "windows")]
-pub mod dx11;
 
 use std::sync::Arc;
 
-use self::{samples::FromNativeResourceError, vertex::Vertex};
+use self::vertex::Vertex;
 
-pub use self::samples::{HardwareTexture, SoftwareTexture, Texture, TextureResource};
+pub use self::texture::{FromNativeResourceError, Texture, Texture2DBuffer, Texture2DResource};
 
+#[cfg(target_os = "windows")]
+pub use self::texture::Texture2DRaw;
+
+use common::Size;
 use pollster::FutureExt;
-use samples::{Texture2DSource, Texture2DSourceOptions};
+use texture::{Texture2DSource, Texture2DSourceOptions};
 use thiserror::Error;
-use utils::Size;
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
     Backends, Buffer, BufferUsages, Color, CommandEncoderDescriptor, CompositeAlphaMode, Device,
     DeviceDescriptor, Features, IndexFormat, Instance, InstanceDescriptor, LoadOp, MemoryHints,
     Operations, PowerPreference, PresentMode, Queue, RenderPassColorAttachment,
-    RenderPassDescriptor, RequestAdapterOptions, StoreOp, Surface, SurfaceTarget, TextureFormat,
-    TextureUsages, TextureViewDescriptor,
+    RenderPassDescriptor, RequestAdapterOptions, StoreOp, Surface, TextureFormat, TextureUsages,
+    TextureViewDescriptor,
 };
 
-pub use wgpu::rwh as raw_window_handle;
+pub use wgpu::{rwh as raw_window_handle, SurfaceTarget};
 
 #[derive(Debug, Error)]
 pub enum GraphicsError {
@@ -44,7 +44,7 @@ pub enum GraphicsError {
 
 pub struct RendererOptions<T> {
     #[cfg(target_os = "windows")]
-    pub direct3d: utils::win32::Direct3DDevice,
+    pub direct3d: common::win32::Direct3DDevice,
     pub window: T,
     pub size: Size,
 }
@@ -71,11 +71,10 @@ impl<'a> Renderer<'a> {
         options: RendererOptions<T>,
     ) -> Result<Self, GraphicsError> {
         let instance = Instance::new(InstanceDescriptor {
-            backends: if cfg!(target_os = "windows") {
-                Backends::DX12
-            } else {
-                Backends::VULKAN
-            },
+            #[cfg(target_os = "windows")]
+            backends: Backends::DX12,
+            #[cfg(target_os = "linux")]
+            backends: Backends::VULKAN,
             ..Default::default()
         });
 
@@ -94,8 +93,8 @@ impl<'a> Renderer<'a> {
             .request_device(
                 &DeviceDescriptor {
                     label: None,
-                    memory_hints: MemoryHints::Performance,
                     required_features: adapter.features() | Features::TEXTURE_FORMAT_NV12,
+                    memory_hints: MemoryHints::Performance,
                     required_limits: adapter.limits(),
                 },
                 None,
@@ -113,7 +112,7 @@ impl<'a> Renderer<'a> {
                 .ok_or_else(|| GraphicsError::NotFoundSurfaceDefaultConfig)?;
 
             config.present_mode = PresentMode::Mailbox;
-            config.format = TextureFormat::Rgba8Unorm;
+            config.format = TextureFormat::Bgra8Unorm;
             config.alpha_mode = CompositeAlphaMode::Opaque;
             config.usage = TextureUsages::RENDER_ATTACHMENT;
             surface.configure(&device, &config);
@@ -186,5 +185,168 @@ impl<'a> Renderer<'a> {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(target_os = "windows")]
+pub mod dx11 {
+    use common::{
+        win32::{
+            windows::Win32::{
+                Foundation::HWND,
+                Graphics::{
+                    Direct3D11::{ID3D11RenderTargetView, ID3D11Texture2D, D3D11_VIEWPORT},
+                    Dxgi::{
+                        Common::{DXGI_FORMAT_NV12, DXGI_FORMAT_R8G8B8A8_UNORM},
+                        CreateDXGIFactory, IDXGIFactory, IDXGISwapChain, DXGI_PRESENT,
+                        DXGI_SWAP_CHAIN_DESC, DXGI_USAGE_RENDER_TARGET_OUTPUT,
+                    },
+                },
+            },
+            Direct3DDevice,
+        },
+        Size,
+    };
+    use resample::win32::{Resource, VideoResampler, VideoResamplerDescriptor};
+
+    use thiserror::Error;
+
+    use crate::{Texture, Texture2DRaw, Texture2DResource};
+
+    #[derive(Debug, Error)]
+    pub enum Dx11GraphicsError {
+        #[error(transparent)]
+        WindowsError(#[from] common::win32::windows::core::Error),
+    }
+
+    pub struct Dx11Renderer {
+        direct3d: Direct3DDevice,
+        swap_chain: IDXGISwapChain,
+        render_target_view: ID3D11RenderTargetView,
+        video_processor: Option<VideoResampler>,
+    }
+
+    unsafe impl Send for Dx11Renderer {}
+    unsafe impl Sync for Dx11Renderer {}
+
+    impl Dx11Renderer {
+        pub fn new(
+            window: HWND,
+            size: Size,
+            direct3d: Direct3DDevice,
+        ) -> Result<Self, Dx11GraphicsError> {
+            let swap_chain = unsafe {
+                let dxgi_factory = CreateDXGIFactory::<IDXGIFactory>()?;
+
+                let mut desc = DXGI_SWAP_CHAIN_DESC::default();
+                desc.BufferCount = 1;
+                desc.BufferDesc.Width = size.width;
+                desc.BufferDesc.Height = size.height;
+                desc.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+                desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+                desc.OutputWindow = window;
+                desc.SampleDesc.Count = 1;
+                desc.Windowed = true.into();
+
+                let mut swap_chain = None;
+                dxgi_factory
+                    .CreateSwapChain(&direct3d.device, &desc, &mut swap_chain)
+                    .ok()?;
+
+                swap_chain.unwrap()
+            };
+
+            let back_buffer = unsafe { swap_chain.GetBuffer::<ID3D11Texture2D>(0)? };
+            let render_target_view = unsafe {
+                let mut render_target_view = None;
+                direct3d.device.CreateRenderTargetView(
+                    &back_buffer,
+                    None,
+                    Some(&mut render_target_view),
+                )?;
+
+                render_target_view.unwrap()
+            };
+
+            unsafe {
+                direct3d
+                    .context
+                    .OMSetRenderTargets(Some(&[Some(render_target_view.clone())]), None);
+            }
+
+            unsafe {
+                let mut vp = D3D11_VIEWPORT::default();
+                vp.Width = size.width as f32;
+                vp.Height = size.height as f32;
+                vp.MinDepth = 0.0;
+                vp.MaxDepth = 1.0;
+
+                direct3d.context.RSSetViewports(Some(&[vp]));
+            }
+
+            Ok(Self {
+                video_processor: None,
+                render_target_view,
+                swap_chain,
+                direct3d,
+            })
+        }
+
+        /// Draw this pixel buffer to the configured SurfaceTexture.
+        pub fn submit(&mut self, texture: Texture) -> Result<(), Dx11GraphicsError> {
+            unsafe {
+                self.direct3d
+                    .context
+                    .ClearRenderTargetView(&self.render_target_view, &[0.0, 0.0, 0.0, 1.0]);
+            }
+
+            if self.video_processor.is_none() {
+                let size = texture.size();
+                let format = match texture {
+                    Texture::Nv12(_) => DXGI_FORMAT_NV12,
+                    Texture::Rgba(_) => DXGI_FORMAT_R8G8B8A8_UNORM,
+                    _ => unimplemented!("not supports texture format"),
+                };
+
+                self.video_processor = Some(VideoResampler::new(VideoResamplerDescriptor {
+                    direct3d: self.direct3d.clone(),
+                    input: Resource::Default(format, size),
+                    output: Resource::Texture(unsafe {
+                        self.swap_chain.GetBuffer::<ID3D11Texture2D>(0)?
+                    }),
+                })?);
+            }
+
+            if let Some(processor) = &mut self.video_processor {
+                let texture = match texture {
+                    Texture::Rgba(texture) | Texture::Nv12(texture) => texture,
+                    _ => unimplemented!("not supports texture format"),
+                };
+
+                let view = match texture {
+                    Texture2DResource::Texture(texture) => match texture {
+                        Texture2DRaw::Dx11(texture, index) => {
+                            Some(processor.create_input_view(texture, index)?)
+                        }
+                    },
+                    Texture2DResource::Buffer(texture) => {
+                        processor.update_input_from_buffer(
+                            texture.buffers[0].as_ptr(),
+                            texture.size.width,
+                        )?;
+
+                        None
+                    }
+                };
+
+                processor.process(view)?;
+            }
+
+            unsafe {
+                self.swap_chain.Present(0, DXGI_PRESENT(0)).ok()?;
+            }
+
+            Ok(())
+        }
     }
 }

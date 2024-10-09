@@ -14,9 +14,9 @@ class MirrorServiceExt
 {
 public:
 #ifdef WIN32
-    MirrorServiceExt(Args& args, HWND hwnd, HINSTANCE hinstance);
+    MirrorServiceExt(Args& args, HWND hwnd);
 #else
-    MirrorServiceExt(Args& args);
+    MirrorServiceExt(Args& args, uint64_t window_handle, void* display);
 #endif
 
     ~MirrorServiceExt();
@@ -24,10 +24,6 @@ public:
     bool CreateMirrorSender();
     bool CreateMirrorReceiver();
     void Close();
-
-#ifdef LINUX
-    void RunEventLoop(std::function<bool(SDL_Event*)> handler);
-#endif // LINUX
 
     SimpleRender* Render = nullptr;
 private:

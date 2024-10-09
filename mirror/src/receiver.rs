@@ -5,13 +5,23 @@ use std::{
     thread,
 };
 
-use anyhow::Result;
 use codec::{AudioDecoder, VideoDecoder, VideoDecoderSettings, VideoDecoderType};
+use common::atomic::EasyAtomic;
+use thiserror::Error;
 use transport::adapter::{StreamKind, StreamMultiReceiverAdapter, StreamReceiverAdapterExt};
 
-use utils::atomic::EasyAtomic;
 #[cfg(target_os = "windows")]
-use utils::win32::MediaThreadClass;
+use common::win32::MediaThreadClass;
+
+#[derive(Debug, Error)]
+pub enum ReceiverError {
+    #[error(transparent)]
+    CreateThreadError(#[from] std::io::Error),
+    #[error(transparent)]
+    VideoDecoderError(#[from] codec::VideoDecoderError),
+    #[error(transparent)]
+    AudioDecoderError(#[from] codec::AudioDecoderError),
+}
 
 #[derive(Debug, Clone)]
 pub struct MirrorReceiverDescriptor {
@@ -23,7 +33,7 @@ fn create_video_decoder(
     adapter: &Arc<StreamMultiReceiverAdapter>,
     sink: &Arc<dyn AVFrameStream>,
     settings: VideoDecoderSettings,
-) -> Result<()> {
+) -> Result<(), ReceiverError> {
     let sink_ = Arc::downgrade(sink);
     let status_ = Arc::downgrade(status);
     let adapter_ = Arc::downgrade(adapter);
@@ -78,7 +88,7 @@ fn create_audio_decoder(
     status: &Arc<AtomicBool>,
     adapter: &Arc<StreamMultiReceiverAdapter>,
     sink: &Arc<dyn AVFrameStream>,
-) -> Result<()> {
+) -> Result<(), ReceiverError> {
     let sink_ = Arc::downgrade(sink);
     let status_ = Arc::downgrade(status);
     let adapter_ = Arc::downgrade(adapter);
@@ -142,7 +152,7 @@ impl MirrorReceiver {
     pub fn new<T: AVFrameStream + 'static>(
         options: MirrorReceiverDescriptor,
         sink: T,
-    ) -> Result<Self> {
+    ) -> Result<Self, ReceiverError> {
         log::info!("create receiver");
 
         let adapter = StreamMultiReceiverAdapter::new();
@@ -157,7 +167,7 @@ impl MirrorReceiver {
             VideoDecoderSettings {
                 codec: options.video,
                 #[cfg(target_os = "windows")]
-                direct3d: crate::DIRECT_3D_DEVICE.read().unwrap().clone(),
+                direct3d: crate::DIRECT_3D_DEVICE.read().clone(),
             },
         )?;
 

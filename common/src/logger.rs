@@ -1,21 +1,20 @@
-#[cfg(not(debug_assertions))]
+#[cfg(all(not(debug_assertions)))]
 use std::fs::{create_dir, metadata};
 
 #[cfg(target_os = "android")]
 use std::ffi::{c_char, c_int};
 
-use fern::{
-    colors::{Color, ColoredLevelConfig},
-    Dispatch,
-};
-
+use fern::Dispatch;
 use log::LevelFilter;
 use thiserror::Error;
 
 #[cfg(not(debug_assertions))]
 use chrono::Local;
 
-#[cfg(not(debug_assertions))]
+#[cfg(debug_assertions)]
+use fern::colors::{Color, ColoredLevelConfig};
+
+#[cfg(all(not(debug_assertions)))]
 use fern::DateBased;
 
 #[derive(Debug, Error)]
@@ -66,26 +65,14 @@ fn init_logger(level: LevelFilter, path: Option<&str>) -> Result<(), LoggerInitE
             ))
         });
 
-        #[cfg(target_os = "windows")]
         if let Some(path) = path {
             if metadata(path).is_err() {
                 create_dir(path)?;
             }
 
-            logger = logger.chain(DateBased::new(path, "%Y-%m-%d-mirror.log"));
-        }
-
-        #[cfg(target_os = "linux")]
-        {
-            logger = logger.chain(
-                syslog::unix(syslog::Formatter3164 {
-                    facility: syslog::Facility::LOG_USER,
-                    process: "mirror".to_owned(),
-                    hostname: None,
-                    pid: 0,
-                })
-                .map_err(|e| anyhow::anyhow!("{:?}", e))?,
-            );
+            logger = logger.chain(DateBased::new(path, "%Y-%m-%d-mirror.log"))
+        } else {
+            logger = logger.chain(std::io::stdout());
         }
     }
 
@@ -93,14 +80,8 @@ fn init_logger(level: LevelFilter, path: Option<&str>) -> Result<(), LoggerInitE
     Ok(())
 }
 
-#[cfg(target_os = "windows")]
-pub fn init(level: LevelFilter, path: &str) -> Result<(), LoggerInitError> {
-    init_logger(level, Some(path))
-}
-
-#[cfg(target_os = "linux")]
-pub fn init(level: LevelFilter) -> Result<(), LoggerInitError> {
-    init_logger(level, None)
+pub fn init(level: LevelFilter, path: Option<&str>) -> Result<(), LoggerInitError> {
+    init_logger(level, path)
 }
 
 #[repr(C)]
@@ -137,25 +118,11 @@ extern "C" {
     // )
     //
     // Writes the constant string text to the log, with priority prio and tag tag.
-    fn __android_log_write(prio: c_int, tag: *const c_char, text: *const c_char) -> c_int;
+    #[link_name = "__android_log_write"]
+    fn android_log_write(prio: c_int, tag: *const c_char, text: *const c_char) -> c_int;
 }
 
 pub struct AndroidLogger;
-
-impl AndroidLogger {
-    pub fn init() {
-        log::set_boxed_logger(Box::new(Self)).unwrap();
-        log::set_max_level(log::LevelFilter::Info);
-
-        std::panic::set_hook(Box::new(|info| {
-            log::error!(
-                "pnaic: location={:?}, message={:?}",
-                info.location(),
-                info.payload().downcast_ref::<String>(),
-            );
-        }));
-    }
-}
 
 impl log::Log for AndroidLogger {
     fn flush(&self) {}
@@ -167,11 +134,16 @@ impl log::Log for AndroidLogger {
     fn log(&self, record: &log::Record) {
         #[cfg(target_os = "android")]
         unsafe {
-            __android_log_write(
+            android_log_write(
                 AndroidLogLevel::from_level(record.level()) as c_int,
                 "com.github.mycrl.mirror\0".as_ptr() as *const _,
                 format!("{}\0", record.args()).as_ptr() as *const _,
             );
         }
     }
+}
+
+pub fn init_with_android(level: LevelFilter) {
+    log::set_boxed_logger(Box::new(AndroidLogger)).unwrap();
+    log::set_max_level(level);
 }

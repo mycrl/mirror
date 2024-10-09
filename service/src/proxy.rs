@@ -1,14 +1,17 @@
+use crate::{route::Route, Configure};
+
 use std::{
     collections::{HashMap, HashSet},
-    sync::{Arc, RwLock},
+    sync::Arc,
     thread,
 };
 
 use anyhow::Result;
-use service::{route::Route, SocketKind, StreamInfo};
-use srt::{Descriptor, Server};
-
-use crate::Configure;
+use parking_lot::RwLock;
+use transport::{
+    srt::{Descriptor, Server},
+    SocketKind, StreamInfo,
+};
 
 pub fn start_server(config: Configure, route: Arc<Route>) -> Result<()> {
     // Configuration of the srt server. Since this suite only works within the LAN,
@@ -61,10 +64,9 @@ pub fn start_server(config: Configure, route: Arc<Route>) -> Result<()> {
                     // If it is a subscriber, add the current connection to the subscription
                     // connection pool
                     if stream_info.kind == SocketKind::Subscriber {
-                        sockets.write().unwrap().insert(addr, socket.clone());
+                        sockets.write().insert(addr, socket.clone());
                         subscribers
                             .write()
-                            .unwrap()
                             .entry(stream_info.id)
                             .or_insert_with(|| HashSet::with_capacity(200))
                             .insert(addr);
@@ -94,8 +96,8 @@ pub fn start_server(config: Configure, route: Arc<Route>) -> Result<()> {
                                 closed.clear();
 
                                 {
-                                    let sockets = sockets.read().unwrap();
-                                    let subscribers = subscribers.read().unwrap();
+                                    let sockets = sockets.read();
+                                    let subscribers = subscribers.read();
 
                                     // Forwards all packets sent by the publisher to all subscribers
                                     // of the same channel
@@ -118,7 +120,7 @@ pub fn start_server(config: Configure, route: Arc<Route>) -> Result<()> {
 
                                 // Some subscribers have expired, clean up all expired subscribers
                                 if !closed.is_empty() {
-                                    let mut sockets = sockets.write().unwrap();
+                                    let mut sockets = sockets.write();
                                     for addr in &closed {
                                         if let Some(socket) = sockets.remove(addr) {
                                             socket.close()
@@ -140,8 +142,8 @@ pub fn start_server(config: Configure, route: Arc<Route>) -> Result<()> {
 
                     log::info!("srt socket closed, addr={:?}, info={:?}", addr, stream_info);
 
-                    let mut sockets = sockets.write().unwrap();
-                    let mut subscribers = subscribers.write().unwrap();
+                    let mut sockets = sockets.write();
+                    let mut subscribers = subscribers.write();
 
                     // If the publisher has exited, it is necessary to close all subscribers of the
                     // current channel and inform the client that the publisher has exited.

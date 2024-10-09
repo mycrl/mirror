@@ -1,12 +1,13 @@
-use std::ptr::null_mut;
-
 use crate::video::{VideoDecoderType, VideoEncoderType};
 
+use common::c_str;
 use ffmpeg_sys_next::*;
-use utils::strings::Strings;
 
 #[cfg(target_os = "windows")]
-use utils::win32::{windows::core::Interface, Direct3DDevice};
+use common::{
+    win32::{windows::core::Interface, Direct3DDevice},
+    Size,
+};
 
 use thiserror::Error;
 
@@ -17,6 +18,7 @@ pub enum CodecType {
 }
 
 impl CodecType {
+    #[allow(unused)]
     fn is_qsv(self) -> bool {
         match self {
             CodecType::Encoder(kind) => kind == VideoEncoderType::Qsv,
@@ -24,6 +26,7 @@ impl CodecType {
         }
     }
 
+    #[allow(unused)]
     fn is_d3d(self) -> bool {
         match self {
             CodecType::Decoder(kind) => kind == VideoDecoderType::D3D11,
@@ -31,6 +34,7 @@ impl CodecType {
         }
     }
 
+    #[allow(unused)]
     fn is_encoder(&self) -> bool {
         if let Self::Encoder(_) = self {
             true
@@ -38,12 +42,6 @@ impl CodecType {
             false
         }
     }
-}
-
-#[derive(Default)]
-pub struct HardwareFrameSize {
-    pub width: u32,
-    pub height: u32,
 }
 
 #[derive(Error, Debug)]
@@ -58,7 +56,7 @@ pub enum CreateVideoContextError {
     MissingDirect3DDevice,
     #[cfg(target_os = "windows")]
     #[error(transparent)]
-    SetMultithreadProtectedError(#[from] utils::win32::windows::core::Error),
+    SetMultithreadProtectedError(#[from] common::win32::windows::core::Error),
     #[error("failed to init av hardware device context")]
     InitAVHardwareDeviceContextError,
     #[error("failed to init qsv device context")]
@@ -69,31 +67,27 @@ pub enum CreateVideoContextError {
     InitAVHardwareFrameContextError,
 }
 
-pub struct CreateVideoContextDescriptor<'a> {
-    pub context: &'a mut *mut AVCodecContext,
-    pub kind: CodecType,
-    pub frame_size: Option<HardwareFrameSize>,
-    #[cfg(target_os = "windows")]
-    pub direct3d: Option<Direct3DDevice>,
-}
-
+#[cfg(target_os = "windows")]
 pub fn create_video_context(
-    options: CreateVideoContextDescriptor,
+    context: &mut *mut AVCodecContext,
+    kind: CodecType,
+    frame_size: Option<Size>,
+    direct3d: Option<Direct3DDevice>,
 ) -> Result<*const AVCodec, CreateVideoContextError> {
     // It is not possible to directly find the d3d11va decoder, so special
     // processing is required here. For d3d11va, the hardware context is initialized
     // below.
-    let codec = match options.kind {
+    let codec = match kind {
         CodecType::Encoder(kind) => {
             let codec: &str = kind.into();
-            unsafe { avcodec_find_encoder_by_name(Strings::from(codec).as_ptr()) }
+            unsafe { avcodec_find_encoder_by_name(c_str!(codec)) }
         }
         CodecType::Decoder(kind) => {
             if kind == VideoDecoderType::D3D11 {
                 unsafe { avcodec_find_decoder(AVCodecID::AV_CODEC_ID_H264) }
             } else {
                 let codec: &str = kind.into();
-                unsafe { avcodec_find_decoder_by_name(Strings::from(codec).as_ptr()) }
+                unsafe { avcodec_find_decoder_by_name(c_str!(codec)) }
             }
         }
     };
@@ -102,14 +96,14 @@ pub fn create_video_context(
         return Err(CreateVideoContextError::NotFoundAVCodec);
     }
 
-    *options.context = unsafe { avcodec_alloc_context3(codec) };
-    if options.context.is_null() {
+    *context = unsafe { avcodec_alloc_context3(codec) };
+    if context.is_null() {
         return Err(CreateVideoContextError::AllocAVContextError);
     }
 
     // The hardware codec is used, and the hardware context is initialized here for
     // the hardware codec.
-    if options.kind.is_d3d() || options.kind.is_qsv() {
+    if kind.is_d3d() || kind.is_qsv() {
         let hw_device_ctx =
             unsafe { av_hwdevice_ctx_alloc(AVHWDeviceType::AV_HWDEVICE_TYPE_D3D11VA) };
         if hw_device_ctx.is_null() {
@@ -118,30 +112,27 @@ pub fn create_video_context(
 
         // Use externally created d3d devices and do not let ffmpeg create d3d devices
         // itself.
-        #[cfg(target_os = "windows")]
-        {
-            let direct3d = if let Some(direct3d) = options.direct3d {
-                direct3d
-            } else {
-                return Err(CreateVideoContextError::MissingDirect3DDevice);
-            };
+        let direct3d = if let Some(direct3d) = direct3d {
+            direct3d
+        } else {
+            return Err(CreateVideoContextError::MissingDirect3DDevice);
+        };
 
-            // Special handling is required for qsv, which requires multithreading to be
-            // enabled for the d3d device.
-            if options.kind.is_qsv() {
-                if let Err(e) = direct3d.set_multithread_protected(true) {
-                    return Err(CreateVideoContextError::SetMultithreadProtectedError(e));
-                }
+        // Special handling is required for qsv, which requires multithreading to be
+        // enabled for the d3d device.
+        if kind.is_qsv() {
+            if let Err(e) = direct3d.set_multithread_protected(true) {
+                return Err(CreateVideoContextError::SetMultithreadProtectedError(e));
             }
-
-            let d3d11_hwctx = unsafe {
-                let hwctx = (&mut *hw_device_ctx).data as *mut AVHWDeviceContext;
-                &mut *((&mut *hwctx).hwctx as *mut AVD3D11VADeviceContext)
-            };
-
-            d3d11_hwctx.device = direct3d.device.as_raw() as *mut _;
-            d3d11_hwctx.device_context = direct3d.context.as_raw() as *mut _;
         }
+
+        let d3d11_hwctx = unsafe {
+            let hwctx = (&mut *hw_device_ctx).data as *mut AVHWDeviceContext;
+            &mut *((&mut *hwctx).hwctx as *mut AVD3D11VADeviceContext)
+        };
+
+        d3d11_hwctx.device = direct3d.device.as_raw() as *mut _;
+        d3d11_hwctx.device_context = direct3d.context.as_raw() as *mut _;
 
         if unsafe { av_hwdevice_ctx_init(hw_device_ctx) } != 0 {
             return Err(CreateVideoContextError::InitAVHardwareDeviceContextError);
@@ -149,9 +140,9 @@ pub fn create_video_context(
 
         // Creating a qsv device is a little different, the qsv hardware context needs
         // to be derived from the platform's native hardware context.
-        let context_mut = unsafe { &mut **options.context };
-        if options.kind.is_qsv() {
-            let mut qsv_device_ctx = null_mut();
+        let context_mut = unsafe { &mut **context };
+        if kind.is_qsv() {
+            let mut qsv_device_ctx = std::ptr::null_mut();
             if unsafe {
                 av_hwdevice_ctx_create_derived(
                     &mut qsv_device_ctx,
@@ -170,22 +161,20 @@ pub fn create_video_context(
 
             // Similarly, the qsv hardware frame also needs to be created and initialized
             // independently.
-            if options.kind.is_encoder() {
+            if kind.is_encoder() {
                 let hw_frames_ctx = unsafe { av_hwframe_ctx_alloc(context_mut.hw_device_ctx) };
                 if hw_frames_ctx.is_null() {
                     return Err(CreateVideoContextError::AllocAVHardwareFrameContextError);
                 }
 
-                if let Some(size) = options.frame_size {
-                    unsafe {
-                        let frames_ctx =
-                            &mut *((&mut *hw_frames_ctx).data as *mut AVHWFramesContext);
-                        frames_ctx.sw_format = AVPixelFormat::AV_PIX_FMT_NV12;
-                        frames_ctx.format = AVPixelFormat::AV_PIX_FMT_QSV;
-                        frames_ctx.width = size.width as i32;
-                        frames_ctx.height = size.height as i32;
-                        frames_ctx.initial_pool_size = 5;
-                    }
+                let size = frame_size.expect("qsv encoder needs init hardware frame for size");
+                unsafe {
+                    let frames_ctx = &mut *((&mut *hw_frames_ctx).data as *mut AVHWFramesContext);
+                    frames_ctx.sw_format = AVPixelFormat::AV_PIX_FMT_NV12;
+                    frames_ctx.format = AVPixelFormat::AV_PIX_FMT_QSV;
+                    frames_ctx.width = size.width as i32;
+                    frames_ctx.height = size.height as i32;
+                    frames_ctx.initial_pool_size = 5;
                 }
 
                 if unsafe { av_hwframe_ctx_init(hw_frames_ctx) } != 0 {
@@ -206,6 +195,34 @@ pub fn create_video_context(
     Ok(codec)
 }
 
+#[cfg(target_os = "linux")]
+pub fn create_video_context(
+    context: &mut *mut AVCodecContext,
+    kind: CodecType,
+) -> Result<*const AVCodec, CreateVideoContextError> {
+    let codec = match kind {
+        CodecType::Encoder(kind) => {
+            let codec: &str = kind.into();
+            unsafe { avcodec_find_encoder_by_name(c_str!(codec)) }
+        }
+        CodecType::Decoder(kind) => {
+            let codec: &str = kind.into();
+            unsafe { avcodec_find_decoder_by_name(c_str!(codec)) }
+        }
+    };
+
+    if codec.is_null() {
+        return Err(CreateVideoContextError::NotFoundAVCodec);
+    }
+
+    *context = unsafe { avcodec_alloc_context3(codec) };
+    if context.is_null() {
+        return Err(CreateVideoContextError::AllocAVContextError);
+    }
+
+    Ok(codec)
+}
+
 #[derive(Error, Debug)]
 pub enum CreateVideoFrameError {
     #[error("failed to alloc av frame")]
@@ -219,7 +236,6 @@ pub enum CreateVideoFrameError {
 pub fn create_video_frame(
     frame: &mut *mut AVFrame,
     context: *const AVCodecContext,
-    kind: CodecType,
 ) -> Result<(), CreateVideoFrameError> {
     *frame = unsafe { av_frame_alloc() };
     if frame.is_null() {
@@ -235,7 +251,7 @@ pub fn create_video_frame(
 
     // qsv needs to indicate the use of hardware textures, otherwise qsv will return
     // software textures.
-    if kind.is_qsv() {
+    if !context_ref.hw_device_ctx.is_null() {
         if unsafe { av_hwframe_get_buffer(context_ref.hw_frames_ctx, *frame, 0) } != 0 {
             return Err(CreateVideoFrameError::AllocHardwareAVFrameBufferError);
         }
@@ -250,17 +266,12 @@ pub fn create_video_frame(
 
 pub fn set_option(context: &mut AVCodecContext, key: &str, value: i64) {
     unsafe {
-        av_opt_set_int(context.priv_data, Strings::from(key).as_ptr(), value, 0);
+        av_opt_set_int(context.priv_data, c_str!(key), value, 0);
     }
 }
 
 pub fn set_str_option(context: &mut AVCodecContext, key: &str, value: &str) {
     unsafe {
-        av_opt_set(
-            context.priv_data,
-            Strings::from(key).as_ptr(),
-            Strings::from(value).as_ptr(),
-            0,
-        );
+        av_opt_set(context.priv_data, c_str!(key), c_str!(value), 0);
     }
 }

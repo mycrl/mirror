@@ -1,7 +1,8 @@
 [package]
-name = "audio"
+name = "resample"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
 rubato = "0.15.0"
+common = { path = "../common" }

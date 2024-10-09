@@ -26,15 +26,22 @@
 
 typedef enum
 {
-    RGBA,
-    NV12,
-    I420,
+    VIDEO_FORMAT_BGRA,
+    VIDEO_FORMAT_RGBA,
+    VIDEO_FORMAT_NV12,
+    VIDEO_FORMAT_I420,
 } VideoFormat;
+
+typedef enum
+{
+    VIDEO_SUB_FORMAT_D3D11,
+    VIDEO_SUB_FORMAT_SW,
+} VideoSubFormat;
 
 typedef struct
 {
     VideoFormat format;
-    bool hardware;
+    VideoSubFormat sub_format;
     uint32_t width;
     uint32_t height;
     void* data[3];
@@ -50,9 +57,9 @@ typedef struct
 
 typedef enum
 {
-    xSourceTypeCamera = 1,
-    xSourceTypeScreen = 2,
-    xSourceTypeAudio = 3,
+    SOURCE_TYPE_CAMERA,
+    SOURCE_TYPE_SCREEN,
+    SOURCE_TYPE_AUDIO,
 } SourceType;
 
 typedef struct
@@ -72,22 +79,23 @@ typedef struct
 } Sources;
 
 typedef enum {
-    xVideoDecoderTypeD3D11,
-    xVideoDecoderTypeQsv,
-    xVideoDecoderTypeCuda,
+    VIDEO_DECODER_H264,
+    VIDEO_DECODER_D3D11,
+    VIDEO_DECODER_QSV,
+    VIDEO_DECODER_CUDA,
 } VideoDecoderType;
 
 typedef enum 
 {
-    xVideoEncoderTypeX264,
-    xVideoEncoderTypeQsv,
-    xVideoEncoderTypeCuda,
+    VIDEO_ENCODER_X264,
+    VIDEO_ENCODER_QSV,
+    VIDEO_ENCODER_CUDA,
 } VideoEncoderType;
 
 typedef enum 
 {
-    xVideoRenderBackendDx11,
-    xVideoRenderBackendWgpu,
+    RENDER_BACKEND_DX11,
+    RENDER_BACKEND_WGPU,
 } VideoRenderBackend;
 
 typedef struct
@@ -321,6 +329,52 @@ EXPORT void mirror_receiver_destroy(Receiver receiver);
 
 typedef const void* WindowHandle;
 typedef const void* Render;
+
+#ifdef WIN32
+
+/**
+ * Raw window handle for Win32.
+ * 
+ * This variant is used on Windows systems.
+ */
+EXPORT WindowHandle create_window_handle_for_win32(HWND hwnd, uint32_t width, uint32_t height);
+
+#endif // WIN32
+
+#ifdef LINUX
+
+/**
+ * A raw window handle for Xlib.
+ *
+ * This variant is likely to show up anywhere someone manages to get X11
+ * working that Xlib can be built for, which is to say, most (but not all)
+ * Unix systems.
+ */
+EXPORT WindowHandle create_window_handle_for_xlib(uint64_t hwnd, void* display, int screen, uint32_t width, uint32_t height);
+
+/**
+ * A raw window handle for Xcb.
+ *
+ * This variant is likely to show up anywhere someone manages to get X11
+ * working that XCB can be built for, which is to say, most (but not all)
+ * Unix systems.
+ */
+EXPORT WindowHandle create_window_handle_for_xcb(uint32_t hwnd, void* display, int screen, uint32_t width, uint32_t height);
+
+/**
+ * A raw window handle for Wayland.
+ *
+ * This variant should be expected anywhere Wayland works, which is
+ * currently some subset of unix systems.
+ */
+EXPORT WindowHandle create_window_handle_for_wayland(void* hwnd, void* display, uint32_t width, uint32_t height);
+
+#endif
+
+/**
+ * Destroy the window handle.
+ */
+EXPORT void window_handle_destroy(WindowHandle hwnd);
 
 /**
  * Creating a window renderer.

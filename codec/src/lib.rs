@@ -10,15 +10,16 @@ pub use self::{
         create_opus_identification_header, AudioDecoder, AudioDecoderError, AudioEncoder,
         AudioEncoderError, AudioEncoderSettings,
     },
+    util::{CreateVideoContextError, CreateVideoFrameError},
     video::{
         VideoDecoder, VideoDecoderError, VideoDecoderSettings, VideoDecoderType, VideoEncoder,
         VideoEncoderError, VideoEncoderSettings, VideoEncoderType,
     },
 };
 
+use common::strings::Strings;
 use ffmpeg_sys_next::*;
 use log::Level;
-use utils::strings::Strings;
 
 pub fn is_hardware_encoder(kind: VideoEncoderType) -> bool {
     match kind {
@@ -72,6 +73,10 @@ impl Into<Level> for LoggerLevel {
         }
     }
 }
+
+#[cfg(target_os = "linux")]
+#[allow(non_camel_case_types)]
+type va_list = *mut __va_list_tag;
 
 extern "C" {
     // Write formatted data from variable argument list to sized buffer

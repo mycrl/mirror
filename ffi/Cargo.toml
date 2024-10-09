@@ -1,5 +1,5 @@
 [package]
-name = "mirror-desktop"
+name = "mirror-ffi"
 version = "0.1.0"
 edition = "2021"
 
@@ -11,11 +11,12 @@ name = "mirror"
 anyhow = "1.0.82"
 bytes = "1.5"
 log = "0.4.20"
-utils = { path = "../utils" }
+common = { path = "../common" }
 
 [target.'cfg(target_os = "android")'.dependencies]
 jni = "0.21.1"
 num_cpus = "1.16.0"
+parking_lot = "0.12"
 transport = { path = "../transport" }
 
 [target.'cfg(any(target_os = "windows", target_os = "linux"))'.dependencies]

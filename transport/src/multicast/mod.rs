@@ -12,7 +12,7 @@ use fragments::FragmentEncoder;
 use once_cell::sync::Lazy;
 use tokio::{runtime::Runtime, sync::mpsc::unbounded_channel};
 
-use crate::{
+use self::{
     dequeue::Dequeue,
     fragments::{Fragment, FragmentDecoder},
 };

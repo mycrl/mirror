@@ -25,7 +25,7 @@ public:
 #ifdef WIN32
     SimpleRender(Args& args, HWND hwnd);
 #else
-    SimpleRender(Args& args);
+    SimpleRender(Args& args, uint64_t window_handle, void* display);
 #endif
 
     ~SimpleRender();
@@ -36,16 +36,13 @@ public:
     void Close();
     void Create();
 
-#ifdef LINUX
-    void RunEventLoop(std::function<bool(SDL_Event*)> handler);
-#endif // LINUX
-
     bool IsRender = true;
 private:
     Args& _args;
     Render _renderer = nullptr;
-#ifdef WIN32
     WindowHandle _window_handle = nullptr;
+
+#ifdef WIN32
     HWND _hwnd;
 #endif
 };

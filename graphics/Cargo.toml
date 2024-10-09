@@ -9,6 +9,5 @@ thiserror = "1.0.63"
 smallvec = "1.13.2"
 wgpu = { git = "https://github.com/gfx-rs/wgpu", rev = "8e787eb70a98c260f44b129128037d9a28d2c9ae" }
 bytemuck = { version = "1.17.1", features = ["derive"] }
-utils = { path = "../utils" }
-
-minstant = "0.1"
+common = { path = "../common" }
+resample = { path = "../resample" }

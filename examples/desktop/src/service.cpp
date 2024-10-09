@@ -19,7 +19,7 @@ void close_proc(void* ctx)
 }
 
 #ifdef WIN32
-MirrorServiceExt::MirrorServiceExt(Args& args, HWND hwnd, HINSTANCE hinstance)
+MirrorServiceExt::MirrorServiceExt(Args& args, HWND hwnd)
     : _args(args)
 {
     MirrorDescriptor mirror_options;
@@ -31,9 +31,18 @@ MirrorServiceExt::MirrorServiceExt(Args& args, HWND hwnd, HINSTANCE hinstance)
     Render = new SimpleRender(args, hwnd);
 }
 #else
-MirrorServiceExt::MirrorServiceExt(Args& args) : _args(args)
+MirrorServiceExt::MirrorServiceExt(Args& args,
+                                   uint64_t window_handle,
+                                   void* display)
+    : _args(args)
 {
-    _render = new SimpleRender(args);
+    MirrorDescriptor mirror_options;
+    mirror_options.server = const_cast<char*>(_args.ArgsParams.server.c_str());
+    mirror_options.multicast = const_cast<char*>("239.0.0.1");
+    mirror_options.mtu = 1400;
+
+    _mirror = mirror_create(mirror_options);
+    Render = new SimpleRender(args, window_handle, display);
 }
 #endif
 
@@ -55,7 +64,7 @@ bool MirrorServiceExt::CreateMirrorSender()
         return true;
     }
 
-    auto video_sources = mirror_get_sources(xSourceTypeScreen);
+    auto video_sources = mirror_get_sources(SOURCE_TYPE_CAMERA);
 
     VideoDescriptor video_options;
     video_options.encoder.codec = _args.ArgsParams.encoder;
@@ -73,7 +82,7 @@ bool MirrorServiceExt::CreateMirrorSender()
         }
     }
 
-    auto audio_sources = mirror_get_sources(xSourceTypeAudio);
+    auto audio_sources = mirror_get_sources(SOURCE_TYPE_AUDIO);
 
     AudioDescriptor audio_options;
     audio_options.encoder.sample_rate = 48000;
@@ -89,7 +98,7 @@ bool MirrorServiceExt::CreateMirrorSender()
 
     SenderDescriptor options;
     options.video = &video_options;
-    options.audio = &audio_options;
+    options.audio = nullptr;
     options.multicast = false;
 
     FrameSink sink;
@@ -102,7 +111,10 @@ bool MirrorServiceExt::CreateMirrorSender()
     Render->SetTitle("sender");
     Render->IsRender = false;
 
-    _sender = mirror_create_sender(_mirror, _args.ArgsParams.id, options, sink);
+    _sender = mirror_create_sender(_mirror,
+                                   _args.ArgsParams.id,
+                                   options,
+                                   sink);
     if (_sender == nullptr)
     {
         return false;
@@ -167,10 +179,3 @@ void MirrorServiceExt::Close()
 
     Render->Close();
 }
-
-#ifdef LINUX
-void MirrorServiceExt::RunEventLoop(std::function<bool(SDL_Event*)> handler)
-{
-    _render->RunEventLoop(handler);
-}
-#endif // LINUX

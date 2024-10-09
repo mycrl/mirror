@@ -1,9 +1,8 @@
 use std::{ffi::c_int, ptr::null_mut};
 
+use common::{c_str, frame::AudioFrame};
 use ffmpeg_sys_next::*;
-use frame::AudioFrame;
 use thiserror::Error;
-use utils::strings::Strings;
 
 use crate::util::{set_option, set_str_option};
 
@@ -40,7 +39,7 @@ unsafe impl Send for AudioDecoder {}
 
 impl AudioDecoder {
     pub fn new() -> Result<Self, AudioDecoderError> {
-        let codec = unsafe { avcodec_find_decoder_by_name(Strings::from("libopus").as_ptr()) };
+        let codec = unsafe { avcodec_find_decoder_by_name(c_str!("libopus")) };
         if codec.is_null() {
             return Err(AudioDecoderError::NotFoundAVCodec);
         }
@@ -231,7 +230,7 @@ unsafe impl Send for AudioEncoder {}
 
 impl AudioEncoder {
     pub fn new(options: AudioEncoderSettings) -> Result<Self, AudioEncoderError> {
-        let codec = unsafe { avcodec_find_encoder_by_name(Strings::from("libopus").as_ptr()) };
+        let codec = unsafe { avcodec_find_encoder_by_name(c_str!("libopus")) };
         if codec.is_null() {
             return Err(AudioEncoderError::NotFoundAVCodec);
         }

@@ -1,20 +1,21 @@
 use crate::{CaptureHandler, FrameArrived, Source, SourceType, VideoCaptureSourceDescription};
 
 use std::{
-    sync::{atomic::AtomicBool, Arc, Mutex},
+    sync::{atomic::AtomicBool, Arc},
     thread,
     time::Duration,
 };
 
-use anyhow::{anyhow, Result};
-use frame::{VideoFormat, VideoFrame};
-use graphics::dx11::{Resource, VideoTransform, VideoTransformDescriptor};
-use utils::{
+use common::{
     atomic::EasyAtomic,
+    frame::{VideoFormat, VideoFrame, VideoSubFormat},
     win32::{EasyTexture, MediaThreadClass},
     Size,
 };
 
+use parking_lot::Mutex;
+use resample::win32::{Resource, VideoResampler, VideoResamplerDescriptor};
+use thiserror::Error;
 use windows::{
     core::Interface,
     Win32::Graphics::{
@@ -31,6 +32,24 @@ use windows_capture::{
     settings::{ColorFormat, CursorCaptureSettings, DrawBorderSettings, Settings},
 };
 
+#[derive(Debug, Error)]
+pub enum ScreenCaptureError {
+    #[error(transparent)]
+    CreateThreadError(#[from] std::io::Error),
+    #[error(transparent)]
+    MonitorError(#[from] windows_capture::monitor::Error),
+    #[error(transparent)]
+    FrameError(#[from] windows_capture::frame::Error),
+    #[error(transparent)]
+    Win32Error(#[from] windows::core::Error),
+    #[error("not found a screen source")]
+    NotFoundScreenSource,
+    #[error("capture control error")]
+    CaptureControlError(String),
+    #[error("start capture error")]
+    StartCaptureError(String),
+}
+
 struct SharedResource(ID3D11Texture2D);
 
 unsafe impl Sync for SharedResource {}
@@ -43,7 +62,7 @@ struct WindowsCapture {
 
 impl GraphicsCaptureApiHandler for WindowsCapture {
     type Flags = Context;
-    type Error = anyhow::Error;
+    type Error = ScreenCaptureError;
 
     fn new(mut ctx: Self::Flags) -> Result<Self, Self::Error> {
         let status: Arc<AtomicBool> = Arc::new(AtomicBool::new(true));
@@ -52,10 +71,14 @@ impl GraphicsCaptureApiHandler for WindowsCapture {
         let mut frame = VideoFrame::default();
         frame.width = ctx.options.size.width;
         frame.height = ctx.options.size.height;
-        frame.hardware = ctx.options.hardware;
         frame.format = VideoFormat::NV12;
+        frame.sub_format = if ctx.options.hardware {
+            VideoSubFormat::D3D11
+        } else {
+            VideoSubFormat::SW
+        };
 
-        let mut transform = VideoTransform::new(VideoTransformDescriptor {
+        let mut transform = VideoResampler::new(VideoResamplerDescriptor {
             direct3d: ctx.options.direct3d.clone(),
             input: Resource::Default(
                 DXGI_FORMAT_R8G8B8A8_UNORM,
@@ -83,13 +106,13 @@ impl GraphicsCaptureApiHandler for WindowsCapture {
 
                 let mut func = || {
                     while let Some(shared_resource) = shared_resource_.upgrade() {
-                        if let Some(resource) = shared_resource.lock().unwrap().take() {
+                        if let Some(resource) = shared_resource.lock().take() {
                             let texture = direct3d.open_shared_texture(resource.0.get_shared()?)?;
                             let view = transform.create_input_view(&texture, 0)?;
                             transform.process(Some(view))?;
                         }
 
-                        if frame.hardware {
+                        if frame.sub_format == VideoSubFormat::D3D11 {
                             frame.data[0] = transform.get_output().as_raw();
                             frame.data[1] = 0 as *const _;
 
@@ -116,7 +139,7 @@ impl GraphicsCaptureApiHandler for WindowsCapture {
                         thread::sleep(Duration::from_millis(1000 / ctx.options.fps as u64));
                     }
 
-                    Ok::<_, anyhow::Error>(())
+                    Ok::<_, ScreenCaptureError>(())
                 };
 
                 if let Err(e) = func() {
@@ -148,7 +171,6 @@ impl GraphicsCaptureApiHandler for WindowsCapture {
         if self.status.get() {
             self.shared_resource
                 .lock()
-                .unwrap()
                 .replace(SharedResource(frame.texture()?));
         } else {
             log::info!("windows screen capture control stop");
@@ -172,11 +194,11 @@ struct Context {
 }
 
 #[derive(Default)]
-pub struct ScreenCapture(Mutex<Option<CaptureControl<WindowsCapture, anyhow::Error>>>);
+pub struct ScreenCapture(Mutex<Option<CaptureControl<WindowsCapture, ScreenCaptureError>>>);
 
 impl CaptureHandler for ScreenCapture {
     type Frame = VideoFrame;
-    type Error = anyhow::Error;
+    type Error = ScreenCaptureError;
     type CaptureDescriptor = VideoCaptureSourceDescription;
 
     fn get_sources() -> Result<Vec<Source>, Self::Error> {
@@ -204,16 +226,13 @@ impl CaptureHandler for ScreenCapture {
         let source = Monitor::enumerate()?
             .into_iter()
             .find(|it| it.name().ok() == Some(options.source.name.clone()))
-            .ok_or_else(|| anyhow!("not found the source"))?;
+            .ok_or_else(|| ScreenCaptureError::NotFoundScreenSource)?;
 
         // Start capturing the screen. This runs in a free thread. If it runs in the
         // current thread, you will encounter problems with Winrt runtime
         // initialization.
-        if let Some(control) = self
-            .0
-            .lock()
-            .unwrap()
-            .replace(WindowsCapture::start_free_threaded(Settings::new(
+        if let Some(control) = self.0.lock().replace(
+            WindowsCapture::start_free_threaded(Settings::new(
                 source,
                 CursorCaptureSettings::WithoutCursor,
                 DrawBorderSettings::Default,
@@ -224,17 +243,22 @@ impl CaptureHandler for ScreenCapture {
                     source,
                 },
                 None,
-            ))?)
-        {
-            control.stop()?;
+            ))
+            .map_err(|e| ScreenCaptureError::StartCaptureError(e.to_string()))?,
+        ) {
+            control
+                .stop()
+                .map_err(|e| ScreenCaptureError::CaptureControlError(e.to_string()))?;
         }
 
         Ok(())
     }
 
     fn stop(&self) -> Result<(), Self::Error> {
-        if let Some(control) = self.0.lock().unwrap().take() {
-            control.stop()?;
+        if let Some(control) = self.0.lock().take() {
+            control
+                .stop()
+                .map_err(|e| ScreenCaptureError::CaptureControlError(e.to_string()))?;
         }
 
         Ok(())
