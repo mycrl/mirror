@@ -50,6 +50,7 @@ impl CaptureHandler for ScreenCapture {
     type Error = ScreenCaptureError;
     type CaptureDescriptor = VideoCaptureSourceDescription;
 
+    // x11 Capture does not currently support multiple screens.
     fn get_sources() -> Result<Vec<Source>, Self::Error> {
         Ok(vec![Source {
             index: 0,
@@ -139,11 +140,14 @@ impl Capture {
             fmt_ctx: null_mut(),
         };
 
+        // Currently you can only capture the screen in the x11 desktop environment.
         let format = unsafe { av_find_input_format(c_str!("x11grab")) };
         if format.is_null() {
             return Err(ScreenCaptureError::NotFoundInputFormat);
         }
 
+        // It's just in BGRA format, which is probably all that's available in the x11
+        // desktop environment.
         let mut format_options = null_mut();
         for (k, v) in [
             ("pix_fmt".to_string(), "bgr0".to_string()),
@@ -175,6 +179,7 @@ impl Capture {
             return Err(ScreenCaptureError::NotFoundInputStream);
         }
 
+        // Desktop capture generally has only one stream.
         let streams = unsafe { std::slice::from_raw_parts(ctx_ref.streams, 1) };
         let stream = unsafe { &*(streams[0]) };
         let codecpar = unsafe { &*stream.codecpar };
@@ -213,6 +218,8 @@ impl Capture {
             );
         }
 
+        // The captured frames are in BGRA format and need to be converted to NV12 and
+        // also scaled to match the output resolution.
         this.sws_ctx = unsafe {
             sws_getContext(
                 codecpar.width,

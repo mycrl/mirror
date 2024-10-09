@@ -41,6 +41,9 @@ impl CaptureHandler for CameraCapture {
 
     fn get_sources() -> Result<Vec<Source>, Self::Error> {
         let mut sources = Vec::with_capacity(5);
+
+        // Multiple handles may exist for the same camera device, filtered out here for
+        // `VIDEO_CAPTURE` type devices.
         for item in enum_devices() {
             if let (Some(name), Some(id)) =
                 (item.name(), item.path().to_str().map(|s| s.to_string()))
@@ -74,6 +77,8 @@ impl CaptureHandler for CameraCapture {
         let status = Arc::downgrade(&self.0);
         self.0.update(true);
 
+        // Fixed to YUYV, there may be compatibility issues here as not all devices may
+        // support YUYV.
         let device = Device::with_path(options.source.id)?;
         {
             let mut format = device.format()?;
@@ -157,6 +162,7 @@ impl SWScale {
             );
         }
 
+        // The captures are all YUYV, here converted to NV12.
         unsafe {
             let frame_mut = &mut *this.frame;
             frame_mut.format = AVPixelFormat::AV_PIX_FMT_YUYV422 as i32;
