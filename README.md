@@ -2,11 +2,8 @@
 <br/>
 <br/>
 <div align="center">
-   <img src="./logo.svg" width="170px"/>
+   <h1>MIRROR</h1>
 </div>
-<br/>
-<br/>
-<br/>
 <div align="center">
   <strong>Cross-platform casting SDK, support Android, Windows, Linux</strong>
 </div>
