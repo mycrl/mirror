@@ -1,82 +1,22 @@
+use crate::{
+    codec::{CodecError, CodecType, VideoDecoderType, VideoEncoderType},
+    util::{
+        create_video_context, create_video_frame, set_option, set_str_option,
+        CreateVideoContextError, CreateVideoFrameError,
+    },
+};
+
 use std::{ffi::c_int, ptr::null_mut};
 
 use common::frame::{VideoFormat, VideoFrame, VideoSubFormat};
 use ffmpeg_sys_next::*;
 use thiserror::Error;
 
+#[cfg(any(target_os = "windows", target_os = "macos"))]
+use common::Size;
+
 #[cfg(target_os = "windows")]
-use common::{win32::Direct3DDevice, Size};
-
-use crate::{
-    util::{
-        create_video_context, create_video_frame, set_option, set_str_option, CodecType,
-        CreateVideoContextError, CreateVideoFrameError,
-    },
-    CodecError,
-};
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum VideoDecoderType {
-    H264,
-    D3D11,
-    Qsv,
-    Cuda,
-}
-
-impl Into<&'static str> for VideoDecoderType {
-    fn into(self) -> &'static str {
-        match self {
-            Self::H264 => "h264",
-            Self::D3D11 => "d3d11va",
-            Self::Qsv => "h264_qsv",
-            Self::Cuda => "h264_cuvid",
-        }
-    }
-}
-
-impl TryFrom<&str> for VideoDecoderType {
-    type Error = CodecError;
-
-    fn try_from(value: &str) -> Result<Self, Self::Error> {
-        Ok(match value {
-            "h264" => Self::H264,
-            "d3d11va" => Self::D3D11,
-            "h264_qsv" => Self::Qsv,
-            "h264_cuvid" => Self::Cuda,
-            _ => return Err(CodecError::NotSupportCodec),
-        })
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum VideoEncoderType {
-    X264,
-    Qsv,
-    Cuda,
-}
-
-impl Into<&'static str> for VideoEncoderType {
-    fn into(self) -> &'static str {
-        match self {
-            Self::X264 => "libx264",
-            Self::Qsv => "h264_qsv",
-            Self::Cuda => "h264_nvenc",
-        }
-    }
-}
-
-impl TryFrom<&str> for VideoEncoderType {
-    type Error = CodecError;
-
-    fn try_from(value: &str) -> Result<Self, Self::Error> {
-        Ok(match value {
-            "libx264" => Self::X264,
-            "h264_qsv" => Self::Qsv,
-            "h264_cuvid" => Self::Cuda,
-            _ => return Err(CodecError::NotSupportCodec),
-        })
-    }
-}
+use common::win32::Direct3DDevice;
 
 #[derive(Debug, Clone)]
 pub struct VideoDecoderSettings {
@@ -92,6 +32,8 @@ pub struct VideoDecoderSettings {
 
 #[derive(Error, Debug)]
 pub enum VideoDecoderError {
+    #[error(transparent)]
+    CodecError(#[from] CodecError),
     #[error(transparent)]
     CreateVideoContextError(#[from] CreateVideoContextError),
     #[error(transparent)]
@@ -123,9 +65,8 @@ unsafe impl Send for VideoDecoder {}
 
 impl VideoDecoder {
     pub fn new(options: VideoDecoderSettings) -> Result<Self, VideoDecoderError> {
-        // TODO: linux does not currently support hardware codecs
-        if cfg!(target_os = "linux") {
-            assert_eq!(options.codec, VideoDecoderType::H264);
+        if !CodecType::from(options.codec).is_supported() {
+            return Err(VideoDecoderError::CodecError(CodecError::NotSupportCodec));
         }
 
         let mut this = Self {
@@ -139,13 +80,16 @@ impl VideoDecoder {
         #[cfg(target_os = "windows")]
         let codec = create_video_context(
             &mut this.context,
-            CodecType::Decoder(options.codec),
+            CodecType::from(options.codec),
             None,
             options.direct3d,
         )?;
 
         #[cfg(target_os = "linux")]
-        let codec = create_video_context(&mut this.context, CodecType::Decoder(options.codec))?;
+        let codec = create_video_context(&mut this.context, CodecType::from(options.codec))?;
+
+        #[cfg(target_os = "macos")]
+        let codec = create_video_context(&mut this.context, CodecType::from(options.codec), None)?;
 
         let context_mut = unsafe { &mut *this.context };
         context_mut.delay = 0;
@@ -368,6 +312,8 @@ pub struct VideoEncoderSettings {
 #[derive(Error, Debug)]
 pub enum VideoEncoderError {
     #[error(transparent)]
+    CodecError(#[from] CodecError),
+    #[error(transparent)]
     CreateVideoContextError(#[from] CreateVideoContextError),
     #[error(transparent)]
     CreateVideoFrameError(#[from] CreateVideoFrameError),
@@ -391,9 +337,8 @@ unsafe impl Send for VideoEncoder {}
 
 impl VideoEncoder {
     pub fn new(options: VideoEncoderSettings) -> Result<Self, VideoEncoderError> {
-        // TODO: linux does not currently support hardware codecs
-        if cfg!(target_os = "linux") {
-            assert_eq!(options.codec, VideoEncoderType::X264);
+        if !CodecType::from(options.codec).is_supported() {
+            return Err(VideoEncoderError::CodecError(CodecError::NotSupportCodec));
         }
 
         let mut this = Self {
@@ -406,7 +351,7 @@ impl VideoEncoder {
         #[cfg(target_os = "windows")]
         let codec = create_video_context(
             &mut this.context,
-            CodecType::Encoder(options.codec),
+            CodecType::from(options.codec),
             Some(Size {
                 width: options.width,
                 height: options.height,
@@ -415,7 +360,17 @@ impl VideoEncoder {
         )?;
 
         #[cfg(target_os = "linux")]
-        let codec = create_video_context(&mut this.context, CodecType::Encoder(options.codec))?;
+        let codec = create_video_context(&mut this.context, CodecType::from(options.codec))?;
+
+        #[cfg(target_os = "macos")]
+        let codec = create_video_context(
+            &mut this.context,
+            CodecType::from(options.codec),
+            Some(Size {
+                width: options.width,
+                height: options.height,
+            }),
+        )?;
 
         let context_mut = unsafe { &mut *this.context };
         context_mut.delay = 0;
@@ -480,6 +435,7 @@ impl VideoEncoder {
                 set_option(context_mut, "preset", 7);
                 set_option(context_mut, "tune", 3);
             }
+            VideoEncoderType::VideoToolBox => {}
         };
 
         if unsafe { avcodec_open2(this.context, codec, null_mut()) } != 0 {
@@ -568,7 +524,7 @@ impl VideoEncoder {
             #[cfg(target_os = "linux")]
             let num = context_ref.frame_number;
 
-            #[cfg(target_os = "windows")]
+            #[cfg(any(target_os = "windows", target_os = "macos"))]
             let num = context_ref.frame_num;
 
             av_rescale_q(num.into(), context_ref.pkt_timebase, context_ref.time_base)

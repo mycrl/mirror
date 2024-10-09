@@ -3,10 +3,13 @@ use std::sync::Arc;
 use crate::{helper::CompatibilityLayerError, Vertex};
 
 #[cfg(target_os = "windows")]
-use crate::helper::win32::Dx11OnWgpuCompatibilityLayer;
+use crate::helper::win32::Dx11OnWgpuCompatibilityLayer as CompatibilityLayer;
 
 #[cfg(target_os = "linux")]
-use crate::helper::linux::VulkanOnWgpuCompatibilityLayer;
+use crate::helper::linux::VulkanOnWgpuCompatibilityLayer as CompatibilityLayer;
+
+#[cfg(target_os = "macos")]
+use crate::helper::linux::MetalOnWgpuCompatibilityLayer as CompatibilityLayer;
 
 use common::Size;
 use smallvec::SmallVec;
@@ -28,12 +31,6 @@ use wgpu::{
     TextureSampleType, TextureUsages, TextureView, TextureViewDescriptor, TextureViewDimension,
     VertexState,
 };
-
-#[cfg(target_os = "windows")]
-type CompatibilityLayer = Dx11OnWgpuCompatibilityLayer;
-
-#[cfg(target_os = "linux")]
-type CompatibilityLayer = VulkanOnWgpuCompatibilityLayer;
 
 #[derive(Debug, Error)]
 pub enum FromNativeResourceError {
@@ -596,6 +593,9 @@ impl Texture2DSource {
         let compatibility = CompatibilityLayer::new(options.device.clone(), options.direct3d);
 
         #[cfg(target_os = "linux")]
+        let compatibility = CompatibilityLayer::new(options.device.clone());
+
+        #[cfg(target_os = "macos")]
         let compatibility = CompatibilityLayer::new(options.device.clone());
 
         Self {

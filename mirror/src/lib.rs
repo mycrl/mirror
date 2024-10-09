@@ -1,7 +1,5 @@
 mod receiver;
 mod render;
-
-#[cfg(any(target_os = "windows", target_os = "linux"))]
 mod sender;
 
 pub use self::{
@@ -145,7 +143,6 @@ impl Mirror {
     /// Create a sender, specify a bound NIC address, you can pass callback to
     /// get the device screen or sound callback, callback can be null, if it is
     /// null then it means no callback data is needed.
-    #[cfg(any(target_os = "windows", target_os = "linux"))]
     pub fn create_sender<T: AVFrameStream + 'static>(
         &self,
         id: u32,

@@ -201,14 +201,14 @@ impl AudioQueue {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Backend {
-    Dx11,
-    Wgpu,
+    Direct3D11,
+    WebGPU,
 }
 
 pub enum VideoRender<'a> {
-    Wgpu(Renderer<'a>),
+    WebGPU(Renderer<'a>),
     #[cfg(target_os = "windows")]
-    Dx11(Dx11Renderer),
+    Direct3D11(Dx11Renderer),
 }
 
 impl<'a> VideoRender<'a> {
@@ -228,9 +228,9 @@ impl<'a> VideoRender<'a> {
 
         Ok(match backend {
             #[cfg(not(target_os = "windows"))]
-            Backend::Dx11 => unimplemented!("not supports dx11 backend"),
+            Backend::Direct3D11 => unimplemented!("not supports dx11 backend"),
             #[cfg(target_os = "windows")]
-            Backend::Dx11 => Self::Dx11(Dx11Renderer::new(
+            Backend::Direct3D11 => Self::Direct3D11(Dx11Renderer::new(
                 match window.into() {
                     SurfaceTarget::Window(window) => match window.window_handle().unwrap().as_raw()
                     {
@@ -248,7 +248,7 @@ impl<'a> VideoRender<'a> {
                 size,
                 direct3d,
             )?),
-            Backend::Wgpu => Self::Wgpu(Renderer::new(RendererOptions {
+            Backend::WebGPU => Self::WebGPU(Renderer::new(RendererOptions {
                 #[cfg(target_os = "windows")]
                 direct3d,
                 window,
@@ -266,7 +266,7 @@ impl<'a> VideoRender<'a> {
                         .cloned()
                         .ok_or_else(|| RendererError::VideoInvalidD3D11Texture)?;
 
-                    let texture = Texture2DResource::Texture(graphics::Texture2DRaw::Dx11(
+                    let texture = Texture2DResource::Texture(graphics::Texture2DRaw::Direct3D11(
                         &dx_tex,
                         frame.data[1] as u32,
                     ));
@@ -279,8 +279,8 @@ impl<'a> VideoRender<'a> {
                     };
 
                     match self {
-                        Self::Dx11(render) => render.submit(texture)?,
-                        Self::Wgpu(render) => render.submit(texture)?,
+                        Self::Direct3D11(render) => render.submit(texture)?,
+                        Self::WebGPU(render) => render.submit(texture)?,
                     }
                 }
             }
@@ -383,8 +383,8 @@ impl<'a> VideoRender<'a> {
 
                 match self {
                     #[cfg(target_os = "windows")]
-                    Self::Dx11(render) => render.submit(texture)?,
-                    Self::Wgpu(render) => render.submit(texture)?,
+                    Self::Direct3D11(render) => render.submit(texture)?,
+                    Self::WebGPU(render) => render.submit(texture)?,
                 }
             }
         }

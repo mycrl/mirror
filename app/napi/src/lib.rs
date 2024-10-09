@@ -192,17 +192,17 @@ pub enum Backend {
     /// Use Direct3D 11.x as a rendering backend, this is not a cross-platform
     /// option and is only available on windows, on some Direct3D 11 only
     /// devices.
-    Dx11,
+    Direct3D11,
     /// This is a new cross-platform backend, and on windows the latency may be
     /// a bit higher than the Direct3D 11 backend.
-    Wgpu,
+    WebGPU,
 }
 
 impl Into<VideoRenderBackend> for Backend {
     fn into(self) -> VideoRenderBackend {
         match self {
-            Self::Dx11 => VideoRenderBackend::Dx11,
-            Self::Wgpu => VideoRenderBackend::Wgpu,
+            Self::Direct3D11 => VideoRenderBackend::Direct3D11,
+            Self::WebGPU => VideoRenderBackend::WebGPU,
         }
     }
 }
@@ -464,7 +464,7 @@ impl MirrorService {
                         id,
                         options.into(),
                         Viewer::new(
-                            Backend::Wgpu,
+                            Backend::WebGPU,
                             callback
                                 .build_threadsafe_function::<()>()
                                 .build_callback(|_| Ok(()))?,

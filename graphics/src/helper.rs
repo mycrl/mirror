@@ -180,3 +180,18 @@ pub mod linux {
         }
     }
 }
+
+#[cfg(target_os = "macos")]
+pub mod linux {
+    use std::sync::Arc;
+
+    use wgpu::Device;
+
+    pub struct MetalOnWgpuCompatibilityLayer {}
+
+    impl MetalOnWgpuCompatibilityLayer {
+        pub fn new(_device: Arc<Device>) -> Self {
+            Self {}
+        }
+    }
+}

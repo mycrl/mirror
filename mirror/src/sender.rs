@@ -20,7 +20,7 @@ use common::{
 };
 
 use codec::{
-    create_opus_identification_header, AudioEncoder, AudioEncoderSettings, VideoEncoder,
+    create_opus_identification_header, AudioEncoder, AudioEncoderSettings, CodecType, VideoEncoder,
     VideoEncoderSettings, VideoEncoderType,
 };
 
@@ -333,7 +333,7 @@ impl MirrorSender {
         if let Some((source, options)) = options.video {
             capture_options.video = Some(SourceCaptureDescriptor {
                 description: VideoCaptureSourceDescription {
-                    hardware: codec::is_hardware_encoder(options.codec),
+                    hardware: CodecType::from(options.codec).is_hardware(),
                     fps: options.frame_rate,
                     size: Size {
                         width: options.width,

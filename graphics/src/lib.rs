@@ -76,7 +76,7 @@ impl<'a> Renderer<'a> {
             } else if cfg!(target_os = "linux") {
                 Backends::VULKAN
             } else {
-                Backends::default()
+                Backends::METAL
             },
             ..Default::default()
         });
