@@ -55,7 +55,7 @@ impl CaptureHandler for ScreenCapture {
             index: 0,
             is_default: true,
             kind: SourceType::Screen,
-            id: "default display".to_string(),
+            id: ":0.0".to_string(),
             name: "default display".to_string(),
         }])
     }
@@ -67,16 +67,27 @@ impl CaptureHandler for ScreenCapture {
     ) -> Result<(), Self::Error> {
         let mut capture = Capture::new(&options)?;
 
+        let status = Arc::downgrade(&self.0);
+        self.0.update(true);
+
         thread::Builder::new()
             .name("LinuxScreenCaptureThread".to_string())
             .spawn(move || {
                 let mut frame = VideoFrame::default();
                 frame.width = options.size.width;
                 frame.height = options.size.height;
-                frame.format = VideoFormat::NV12;
                 frame.sub_format = VideoSubFormat::SW;
+                frame.format = VideoFormat::NV12;
 
                 while let Some(avframe) = capture.read() {
+                    if let Some(status) = status.upgrade() {
+                        if !status.get() {
+                            break;
+                        }
+                    } else {
+                        break;
+                    }
+
                     let format = unsafe { std::mem::transmute::<_, AVPixelFormat>(avframe.format) };
                     match format {
                         AVPixelFormat::AV_PIX_FMT_NV12 => {
@@ -119,10 +130,6 @@ unsafe impl Sync for Capture {}
 
 impl Capture {
     fn new(options: &VideoCaptureSourceDescription) -> Result<Self, ScreenCaptureError> {
-        unsafe {
-            avdevice_register_all();
-        }
-
         let mut this = Self {
             packet: unsafe { av_packet_alloc() },
             frame: unsafe { av_frame_alloc() },
@@ -132,17 +139,27 @@ impl Capture {
             fmt_ctx: null_mut(),
         };
 
-        let format = unsafe { av_find_input_format(c_str!("kmsgrab")) };
+        let format = unsafe { av_find_input_format(c_str!("x11grab")) };
         if format.is_null() {
             return Err(ScreenCaptureError::NotFoundInputFormat);
+        }
+
+        let mut format_options = null_mut();
+        for (k, v) in [
+            ("pix_fmt".to_string(), "bgr0".to_string()),
+            ("framerete".to_string(), options.fps.to_string()),
+        ] {
+            unsafe {
+                av_dict_set(&mut format_options, c_str!(k), c_str!(v), 0);
+            }
         }
 
         if unsafe {
             avformat_open_input(
                 &mut this.fmt_ctx,
-                c_str!("/dev/dri/card0"),
+                c_str!(options.source.id.as_str()),
                 format,
-                null_mut(),
+                &mut format_options,
             )
         } != 0
         {
@@ -160,8 +177,9 @@ impl Capture {
 
         let streams = unsafe { std::slice::from_raw_parts(ctx_ref.streams, 1) };
         let stream = unsafe { &*(streams[0]) };
+        let codecpar = unsafe { &*stream.codecpar };
 
-        let codec = unsafe { avcodec_find_decoder((&*stream.codecpar).codec_id) };
+        let codec = unsafe { avcodec_find_decoder(codecpar.codec_id) };
         if codec.is_null() {
             return Err(ScreenCaptureError::NotFoundDecoder);
         }
@@ -179,15 +197,31 @@ impl Capture {
             return Err(ScreenCaptureError::NotOpenDecoder);
         }
 
+        let scale_frame_mut = unsafe { &mut *this.scaled_frame };
+        unsafe {
+            scale_frame_mut.format = AVPixelFormat::AV_PIX_FMT_NV12 as i32;
+            scale_frame_mut.width = options.size.width as i32;
+            scale_frame_mut.height = options.size.height as i32;
+
+            av_image_alloc(
+                scale_frame_mut.data.as_mut_ptr(),
+                scale_frame_mut.linesize.as_mut_ptr(),
+                scale_frame_mut.width,
+                scale_frame_mut.height,
+                std::mem::transmute(scale_frame_mut.format),
+                32,
+            );
+        }
+
         this.sws_ctx = unsafe {
             sws_getContext(
-                (&*stream.codecpar).width,
-                (&*stream.codecpar).height,
-                std::mem::transmute((&*stream.codecpar).format),
+                codecpar.width,
+                codecpar.height,
+                AVPixelFormat::AV_PIX_FMT_BGR0,
                 options.size.width as i32,
                 options.size.height as i32,
-                AVPixelFormat::AV_PIX_FMT_NV12,
-                SWS_BILINEAR,
+                std::mem::transmute(scale_frame_mut.format),
+                SWS_FAST_BILINEAR,
                 null_mut(),
                 null_mut(),
                 null(),
@@ -196,22 +230,6 @@ impl Capture {
 
         if this.sws_ctx.is_null() {
             return Err(ScreenCaptureError::CreateSWScaleContextError);
-        }
-
-        unsafe {
-            let frame_mut = &mut *this.scaled_frame;
-            frame_mut.format = AVPixelFormat::AV_PIX_FMT_NV12 as i32;
-            frame_mut.width = options.size.width as i32;
-            frame_mut.height = options.size.height as i32;
-
-            av_image_alloc(
-                frame_mut.data.as_mut_ptr(),
-                frame_mut.linesize.as_mut_ptr(),
-                frame_mut.width,
-                frame_mut.height,
-                AVPixelFormat::AV_PIX_FMT_NV12,
-                32,
-            );
         }
 
         Ok(this)
@@ -277,6 +295,18 @@ impl Drop for Capture {
         if !self.frame.is_null() {
             unsafe {
                 av_frame_free(&mut self.frame);
+            }
+        }
+
+        if !self.scaled_frame.is_null() {
+            unsafe {
+                av_frame_free(&mut self.scaled_frame);
+            }
+        }
+
+        if !self.sws_ctx.is_null() {
+            unsafe {
+                sws_freeContext(self.sws_ctx);
             }
         }
     }

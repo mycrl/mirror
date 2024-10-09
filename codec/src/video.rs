@@ -123,6 +123,11 @@ unsafe impl Send for VideoDecoder {}
 
 impl VideoDecoder {
     pub fn new(options: VideoDecoderSettings) -> Result<Self, VideoDecoderError> {
+        // TODO: linux does not currently support hardware codecs
+        if cfg!(target_os = "linux") {
+            assert_eq!(options.codec, VideoDecoderType::H264);
+        }
+
         let mut this = Self {
             context: null_mut(),
             parser: null_mut(),
@@ -386,6 +391,11 @@ unsafe impl Send for VideoEncoder {}
 
 impl VideoEncoder {
     pub fn new(options: VideoEncoderSettings) -> Result<Self, VideoEncoderError> {
+        // TODO: linux does not currently support hardware codecs
+        if cfg!(target_os = "linux") {
+            assert_eq!(options.codec, VideoEncoderType::X264);
+        }
+
         let mut this = Self {
             context: null_mut(),
             packet: null_mut(),

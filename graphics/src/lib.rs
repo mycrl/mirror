@@ -6,9 +6,10 @@ use std::sync::Arc;
 
 use self::vertex::Vertex;
 
-pub use self::texture::{
-    FromNativeResourceError, Texture, Texture2DBuffer, Texture2DRaw, Texture2DResource,
-};
+pub use self::texture::{FromNativeResourceError, Texture, Texture2DBuffer, Texture2DResource};
+
+#[cfg(target_os = "windows")]
+pub use self::texture::Texture2DRaw;
 
 use common::Size;
 use pollster::FutureExt;

@@ -21,38 +21,6 @@
 
 Pure software screen projection is different from Miracast, AirPlay, etc., which need to rely on hardware support. This project was not designed to work on a wide area network, but works well in a local area network environment.
 
-## Roadmap
-
--   [x] Low Latency Incompletely Reliable Transmission (SRT)
--   [x] UDP multicast transport layer (optional)
--   [ ] H264 codec
-    -   [x] Windows hardware acceleration (D3D11)
-    -   [ ] Linux hardware acceleration (Vulkan)
-    -   [x] Android hardware acceleration
-    -   [x] Software coding (optional)
--   [x] Opus codec
-    -   [x] Windows
-    -   [x] Linux
-    -   [x] Android
--   [ ] Audio and video capture
-    -   [x] Windows screen and camera capture
-    -   [ ] Linux screen and camera capture
-    -   [x] Android screen and camera capture
-    -   [x] Cross-platform audio capture
--   [x] Audio and video rendering
-    -   [x] Cross-platform hardware-accelerated rendering
-    -   [x] D3D11 rendering (optional)
-    -   [x] Cross-platform low-latency audio playback
--   [ ] Cross-platform hardware/software texture hardware scaling and format conversion
--   [ ] App
-    -   [x] Windows
-    -   [ ] Linux
-    -   [ ] Android
--   [ ] Examples
-    -   [x] Windows
-    -   [ ] Linux
-    -   [x] Android
-
 ## Build Instructions
 
 #### Requirements
@@ -71,7 +39,7 @@ Pure software screen projection is different from Miracast, AirPlay, etc., which
 
 ```sh
 sudo apt-get update
-sudo apt-get install tclsh pkg-config cmake libssl-dev build-essential libasound2-dev libsdl2-dev
+sudo apt-get install tclsh pkg-config cmake libssl-dev build-essential libasound2-dev libsdl2-dev libmfx-dev v4l-utils
 ```
 
 ---

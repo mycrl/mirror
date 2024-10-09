@@ -64,7 +64,7 @@ bool MirrorServiceExt::CreateMirrorSender()
         return true;
     }
 
-    auto video_sources = mirror_get_sources(SOURCE_TYPE_SCREEN);
+    auto video_sources = mirror_get_sources(SOURCE_TYPE_CAMERA);
 
     VideoDescriptor video_options;
     video_options.encoder.codec = _args.ArgsParams.encoder;

@@ -42,41 +42,30 @@ pub enum FromNativeResourceError {
 }
 
 #[derive(Debug)]
+#[cfg(target_os = "windows")]
 pub enum Texture2DRaw<'a> {
-    #[cfg(target_os = "windows")]
     Dx11(&'a ID3D11Texture2D, u32),
-    #[cfg(target_os = "linux")]
-    GL(&'a usize),
 }
 
+#[cfg(target_os = "windows")]
 impl<'a> Texture2DRaw<'a> {
-    #[allow(unused)]
     pub(crate) fn texture<'b>(
         &self,
         compatibility: &'b mut CompatibilityLayer,
     ) -> Result<&'b WGPUTexture, FromNativeResourceError> {
         Ok(match self {
-            #[cfg(target_os = "windows")]
             Self::Dx11(dx11, index) => compatibility.from_hal(dx11, *index)?,
-            #[cfg(target_os = "linux")]
-            Self::GL(gl) => todo!(),
-            _ => unimplemented!("not supports native texture"),
         })
     }
 
     pub(crate) fn size(&self) -> Size {
         match self {
-            #[cfg(target_os = "windows")]
             Self::Dx11(dx11, _) => {
                 let desc = dx11.desc();
                 Size {
                     width: desc.Width,
                     height: desc.Height,
                 }
-            }
-            #[cfg(target_os = "linux")]
-            Self::GL(_gl) => {
-                todo!()
             }
         }
     }
@@ -90,6 +79,7 @@ pub struct Texture2DBuffer<'a> {
 
 #[derive(Debug)]
 pub enum Texture2DResource<'a> {
+    #[cfg(target_os = "windows")]
     Texture(Texture2DRaw<'a>),
     Buffer(Texture2DBuffer<'a>),
 }
@@ -97,11 +87,13 @@ pub enum Texture2DResource<'a> {
 impl<'a> Texture2DResource<'a> {
     /// Get the hardware texture, here does not deal with software texture, so
     /// if it is software texture directly return None.
+    #[allow(unused_variables)]
     pub(crate) fn texture<'b>(
         &self,
         compatibility: &'b mut CompatibilityLayer,
     ) -> Result<Option<&'b WGPUTexture>, FromNativeResourceError> {
         Ok(match self {
+            #[cfg(target_os = "windows")]
             Texture2DResource::Texture(texture) => Some(texture.texture(compatibility)?),
             Texture2DResource::Buffer(_) => None,
         })
@@ -109,6 +101,7 @@ impl<'a> Texture2DResource<'a> {
 
     pub(crate) fn size(&self) -> Size {
         match self {
+            #[cfg(target_os = "windows")]
             Texture2DResource::Texture(texture) => texture.size(),
             Texture2DResource::Buffer(texture) => texture.size,
         }
@@ -700,6 +693,7 @@ impl Texture2DSource {
         }
 
         // Only software textures need to be updated to the sample via update.
+        #[allow(unreachable_patterns)]
         if let Some(sample) = &self.sample {
             match &texture {
                 Texture::Bgra(Texture2DResource::Buffer(buffer)) => {
