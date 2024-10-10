@@ -1,6 +1,6 @@
 use std::{ffi::c_void, fmt::Debug, ptr::null_mut};
 
-use common::{win32::windows::Win32::Foundation::HWND, Size};
+use common::{logger, win32::windows::Win32::Foundation::HWND, Size};
 use mirror::{
     raw_window_handle::{
         DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, RawWindowHandle,
@@ -8,6 +8,32 @@ use mirror::{
     },
     AVFrameSink, AudioFrame, VideoFrame,
 };
+
+/// Windows yes! The Windows dynamic library has an entry, so just
+/// initialize the logger and set the process priority at the entry.
+#[no_mangle]
+#[allow(non_snake_case)]
+extern "system" fn DllMain(
+    _module: u32,
+    call_reason: usize,
+    _reserved: *const std::ffi::c_void,
+) -> bool {
+    match call_reason {
+            1 /* DLL_PROCESS_ATTACH */ => {
+                let _ = logger::init(log::LevelFilter::Info, None);
+                std::panic::set_hook(Box::new(|info| {
+                    log::error!(
+                        "pnaic: location={:?}, message={:?}",
+                        info.location(),
+                        info.payload().downcast_ref::<String>(),
+                    );
+                }));
+
+                true
+            },
+            _ => true,
+        }
+}
 
 // In fact, this is a package that is convenient for recording errors. If the
 // result is an error message, it is output to the log. This function does not
