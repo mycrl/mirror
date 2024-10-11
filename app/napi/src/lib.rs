@@ -119,7 +119,7 @@ impl Events {
 #[allow(unused_variables)]
 pub fn startup(user_data: Option<String>) -> napi::Result<()> {
     let func = || {
-        logger::init(
+        logger::init_logger(
             log::LevelFilter::Info,
             user_data.as_ref().map(|x| x.as_str()),
         )?;

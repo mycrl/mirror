@@ -20,4 +20,3 @@ transport = { path = "../transport" }
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
 mirror = { path = "../mirror" }
-winit = "0.30.5"

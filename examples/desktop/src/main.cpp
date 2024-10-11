@@ -193,9 +193,10 @@ int main(int argc, char* argv[])
         }
     }
 
-    mirror_shutdown();
     renderer_destroy(renderer);
     window_handle_destroy(window_handle);
+    mirror_shutdown();
+    
     SDL_DestroyWindow(window);
     SDL_Quit();
 }

@@ -26,7 +26,7 @@ pub enum LoggerInitError {
 }
 
 #[allow(unused_variables)]
-fn init_logger(level: LevelFilter, path: Option<&str>) -> Result<(), LoggerInitError> {
+pub fn init_logger(level: LevelFilter, path: Option<&str>) -> Result<(), LoggerInitError> {
     let mut logger = Dispatch::new()
         .level(level)
         .level_for("wgpu", LevelFilter::Warn)
@@ -78,10 +78,6 @@ fn init_logger(level: LevelFilter, path: Option<&str>) -> Result<(), LoggerInitE
 
     logger.apply()?;
     Ok(())
-}
-
-pub fn init(level: LevelFilter, path: Option<&str>) -> Result<(), LoggerInitError> {
-    init_logger(level, path)
 }
 
 #[repr(C)]

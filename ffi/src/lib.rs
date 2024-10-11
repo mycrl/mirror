@@ -604,14 +604,14 @@ pub mod desktop {
     #[no_mangle]
     pub extern "C" fn mirror_startup() -> bool {
         let func = || {
-            logger::init(log::LevelFilter::Info, None)?;
-            // std::panic::set_hook(Box::new(|info| {
-            //     log::error!(
-            //         "pnaic: location={:?}, message={:?}",
-            //         info.location(),
-            //         info.payload().downcast_ref::<String>(),
-            //     );
-            // }));
+            logger::init_logger(log::LevelFilter::Info, None)?;
+            std::panic::set_hook(Box::new(|info| {
+                log::error!(
+                    "pnaic: location={:?}, message={:?}",
+                    info.location(),
+                    info.payload().downcast_ref::<String>(),
+                );
+            }));
 
             startup()?;
             Ok::<_, anyhow::Error>(())
