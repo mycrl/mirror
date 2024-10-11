@@ -1,6 +1,5 @@
 mod audio;
 mod codec;
-mod util;
 mod video;
 
 use std::ffi::{c_char, c_int, c_void};
@@ -14,8 +13,10 @@ pub use self::{
         create_opus_identification_header, AudioDecoder, AudioDecoderError, AudioEncoder,
         AudioEncoderError, AudioEncoderSettings,
     },
-    codec::{CodecError, CodecType, VideoDecoderType, VideoEncoderType},
-    util::{CreateVideoContextError, CreateVideoFrameError},
+    codec::{
+        CodecError, CodecType, CreateVideoContextError, CreateVideoFrameError, VideoDecoderType,
+        VideoEncoderType,
+    },
     video::{
         VideoDecoder, VideoDecoderError, VideoDecoderSettings, VideoEncoder, VideoEncoderError,
         VideoEncoderSettings,

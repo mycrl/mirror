@@ -58,7 +58,7 @@ pub struct AudioDescriptor {
 }
 
 #[derive(Debug)]
-pub struct MirrorSenderDescriptor {
+pub struct SenderDescriptor {
     pub video: Option<(Source, VideoDescriptor)>,
     pub audio: Option<(Source, AudioDescriptor)>,
     pub multicast: bool,
@@ -290,19 +290,19 @@ impl FrameArrived for AudioSender {
     }
 }
 
-pub struct MirrorSender {
+pub struct Sender {
     pub(crate) adapter: Arc<StreamSenderAdapter>,
     status: Arc<AtomicBool>,
     sink: Arc<dyn AVFrameStream>,
     capture: Capture,
 }
 
-impl MirrorSender {
+impl Sender {
     // Create a sender. The capture of the sender is started following the sender,
     // but both video capture and audio capture can be empty, which means you can
     // create a sender that captures nothing.
     pub fn new<T: AVFrameStream + 'static>(
-        options: MirrorSenderDescriptor,
+        options: SenderDescriptor,
         sink: T,
     ) -> Result<Self, SenderError> {
         log::info!("create sender");
@@ -381,7 +381,7 @@ impl MirrorSender {
     }
 }
 
-impl Drop for MirrorSender {
+impl Drop for Sender {
     fn drop(&mut self) {
         log::info!("sender drop");
 

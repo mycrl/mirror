@@ -231,7 +231,7 @@ ipcMain.handle("close-sender", async (_event) => {
                 Config.channel,
                 {
                     video: Config.decoder,
-                    backend: Backend.Wgpu,
+                    backend: Backend.WebGPU,
                 },
                 () => {
                     Log("info", "receiver close callback");
@@ -288,7 +288,7 @@ ipcMain.handle("set-settings", (_event, settings: typeof Config) => {
                 Config.channel,
                 {
                     video: VideoDecoderType.Qsv,
-                    backend: Backend.Wgpu,
+                    backend: Backend.WebGPU,
                 },
                 () => {
                     Log("info", "receiver close callback");

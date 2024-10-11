@@ -18,7 +18,7 @@ public:
 #ifdef WIN32
         VideoEncoderType encoder = VIDEO_ENCODER_QSV;
         VideoDecoderType decoder = VIDEO_DECODER_D3D11;
-#elif LINUX
+#else
         VideoEncoderType encoder = VIDEO_ENCODER_X264;
         VideoDecoderType decoder = VIDEO_DECODER_H264;
 #endif

@@ -13,23 +13,21 @@ if(MSVC)
     add_executable(example WIN32 src/main.cpp 
                     src/args.h 
                     src/args.cpp 
-                    src/render.h 
-                    src/render.cpp 
                     src/service.h 
                     src/service.cpp)
 else()
     add_executable(example src/main.cpp 
                     src/args.h 
                     src/args.cpp 
-                    src/render.h 
-                    src/render.cpp 
                     src/service.h 
                     src/service.cpp)
 endif()
 
 include_directories("../../ffi/include")
 
-if(UNIX)
+if(APPLE)
+    include_directories("/opt/homebrew/opt/sdl2/include/SDL2")
+elseif(UNIX AND NOT APPLE)
     include_directories("/usr/include/SDL2"
                         "/usr/include")
 endif()
@@ -49,9 +47,10 @@ else()
     target_link_directories(example PRIVATE "../../target/release")
 endif()
 
-if(UNIX)
-    include_directories(example PRIVATE
-                        "/usr/lib/x86_64-linux-gnu")
+if(APPLE)
+    target_link_directories(example PRIVATE "/opt/homebrew/opt/sdl2/lib")
+elseif(UNIX AND NOT APPLE)
+    target_link_directories(example PRIVATE "/usr/lib/x86_64-linux-gnu")
 endif()
 
 # Debug/Release target in build header.
@@ -62,7 +61,9 @@ endif()
 # Build header.
 if(WIN32)
     add_compile_definitions(WIN32 _WINDOWS)
-else()
+elseif(APPLE)
+    add_compile_definitions(APPLE)
+elseif(UNIX AND NOT APPLE)
     add_compile_definitions(LINUX SDL_VIDEO_DRIVER_X11)
 endif()
 
@@ -74,9 +75,7 @@ if(WIN32)
                           ntdll
                           bcrypt
                           mirror.dll.lib)
-endif()
-
-if(UNIX)
+elseif(UNIX)
     target_link_libraries(example
                           libmirror.so
                           SDL2)

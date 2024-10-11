@@ -8,24 +8,16 @@ extern "C"
 }
 
 #include "./args.h"
-#include "./render.h"
 
 class MirrorServiceExt
 {
 public:
-#ifdef WIN32
-    MirrorServiceExt(Args& args, HWND hwnd);
-#else
-    MirrorServiceExt(Args& args, uint64_t window_handle, void* display);
-#endif
-
+    MirrorServiceExt(Args& args);
     ~MirrorServiceExt();
 
-    bool CreateMirrorSender();
-    bool CreateMirrorReceiver();
+    bool CreateMirrorSender(Render render);
+    bool CreateMirrorReceiver(Render render);
     void Close();
-
-    SimpleRender* Render = nullptr;
 private:
     Args& _args;
     Mirror _mirror = nullptr;

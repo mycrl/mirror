@@ -64,8 +64,8 @@ const Replace = (file, filters) =>
         }
     }
 
-    await Command(`cargo build ${Args.release ? '--release' : ''} -p mirror-ffi`)
-    await Command(`cargo build ${Args.release ? '--release' : ''} -p service`)
+    await Command(`cargo build ${Args.release ? '--release' : ''} -p mirror-shared`)
+    await Command(`cargo build ${Args.release ? '--release' : ''} -p mirror-service`)
 
     /* download ffmpeg librarys for windows */
     if (process.platform == 'win32')
@@ -102,8 +102,6 @@ const Replace = (file, filters) =>
         ['./examples/desktop/src/main.cpp', './build/examples/src/main.cpp'],
         ['./examples/desktop/src/args.cpp', './build/examples/src/args.cpp'],
         ['./examples/desktop/src/args.h', './build/examples/src/args.h'],
-        ['./examples/desktop/src/render.cpp', './build/examples/src/render.cpp'],
-        ['./examples/desktop/src/render.h', './build/examples/src/render.h'],
         ['./examples/desktop/src/service.cpp', './build/examples/src/service.cpp'],
         ['./examples/desktop/src/service.h', './build/examples/src/service.h'],
         ['./examples/desktop/CMakeLists.txt', './build/examples/CMakeLists.txt'],
@@ -120,7 +118,7 @@ const Replace = (file, filters) =>
     {
         for (const item of [
             [`./examples/desktop/build/${Profile}/example.exe`, './build/bin/example.exe'],
-            [`./target/${Profile.toLowerCase()}/service.exe`, './build/server/mirror-service.exe'],
+            [`./target/${Profile.toLowerCase()}/mirror-service.exe`, './build/server/mirror-service.exe'],
             [`./target/${Profile.toLowerCase()}/mirror.dll.lib`, './build/lib/mirror.dll.lib'],
             [`./target/${Profile.toLowerCase()}/mirror.dll`, './build/bin/mirror.dll'],
             [`./target/ffmpeg/bin/avcodec-61.dll`, './build/bin/avcodec-61.dll'],
@@ -135,8 +133,10 @@ const Replace = (file, filters) =>
     {
         for (const item of [
             [`./examples/desktop/build/example`, './build/bin/example'],
-            [`./target/${Profile.toLowerCase()}/service`, './build/server/mirror-service'],
-            [`./target/${Profile.toLowerCase()}/libmirror.so`, './build/bin/libmirror.so'],
+            [`./target/${Profile.toLowerCase()}/mirror-service`, './build/server/mirror-service'],
+            process.platform == 'darwin' ? 
+                [`./target/${Profile.toLowerCase()}/libmirror.dylib`, './build/bin/libmirror.dylib']: 
+                [`./target/${Profile.toLowerCase()}/libmirror.so`, './build/bin/libmirror.so'],
         ])
         {
             fs.copyFileSync(...item)
@@ -147,7 +147,7 @@ const Replace = (file, filters) =>
     {
         for (const item of [
             ['./target/debug/mirror.pdb', './build/bin/mirror.pdb'],
-            ['./target/debug/service.pdb', './build/server/service.pdb'],
+            ['./target/debug/mirror-service.pdb', './build/server/mirror-service.pdb'],
         ])
         {
             if (!Args.release)
@@ -174,9 +174,11 @@ const Replace = (file, filters) =>
     {
         await Command('npm i', { cwd: join(__dirname, './app') })
         await Command('npm run package', { cwd: join(__dirname, './app') })
-        fs.cpSync(`./app/dist/${process.platform == 'win32' ? 'win' : 'linux'}-unpacked`,
-            './build/bin',
-            { force: true, recursive: true })
+
+        let output = process.platform == 'win32' ? 
+            'win-unpacked' : 
+            (process.platform == 'darwin' ? 'mac-arm64' : 'linux-unpacked')
+        fs.cpSync(`./app/dist/${output}`, './build/bin', { force: true, recursive: true })
     }
 
     /* async block end */

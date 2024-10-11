@@ -2,14 +2,12 @@
 
 bool video_proc(void* ctx, VideoFrame* frame)
 {
-    auto mirror = (MirrorServiceExt*)ctx;
-    return mirror->Render->OnVideoFrame(frame);
+    return renderer_on_video((Render)ctx, frame);
 }
 
 bool audio_proc(void* ctx, AudioFrame* frame)
 {
-    auto mirror = (MirrorServiceExt*)ctx;
-    return mirror->Render->OnAudioFrame(frame);
+    return renderer_on_audio((Render)ctx, frame);
 }
 
 void close_proc(void* ctx)
@@ -18,9 +16,7 @@ void close_proc(void* ctx)
     mirror->Close();
 }
 
-#ifdef WIN32
-MirrorServiceExt::MirrorServiceExt(Args& args, HWND hwnd)
-    : _args(args)
+MirrorServiceExt::MirrorServiceExt(Args& args) : _args(args)
 {
     MirrorDescriptor mirror_options;
     mirror_options.server = const_cast<char*>(_args.ArgsParams.server.c_str());
@@ -28,23 +24,7 @@ MirrorServiceExt::MirrorServiceExt(Args& args, HWND hwnd)
     mirror_options.mtu = 1400;
 
     _mirror = mirror_create(mirror_options);
-    Render = new SimpleRender(args, hwnd);
 }
-#else
-MirrorServiceExt::MirrorServiceExt(Args& args,
-                                   uint64_t window_handle,
-                                   void* display)
-    : _args(args)
-{
-    MirrorDescriptor mirror_options;
-    mirror_options.server = const_cast<char*>(_args.ArgsParams.server.c_str());
-    mirror_options.multicast = const_cast<char*>("239.0.0.1");
-    mirror_options.mtu = 1400;
-
-    _mirror = mirror_create(mirror_options);
-    Render = new SimpleRender(args, window_handle, display);
-}
-#endif
 
 MirrorServiceExt::~MirrorServiceExt()
 {
@@ -57,7 +37,7 @@ MirrorServiceExt::~MirrorServiceExt()
     }
 }
 
-bool MirrorServiceExt::CreateMirrorSender()
+bool MirrorServiceExt::CreateMirrorSender(Render render)
 {
     if (_sender != nullptr)
     {
@@ -105,11 +85,7 @@ bool MirrorServiceExt::CreateMirrorSender()
     sink.video = video_proc;
     sink.audio = audio_proc;
     sink.close = close_proc;
-    sink.ctx = this;
-
-    Render->Create();
-    Render->SetTitle("sender");
-    Render->IsRender = false;
+    sink.ctx = (void*)render;
 
     _sender = mirror_create_sender(_mirror,
                                    _args.ArgsParams.id,
@@ -124,7 +100,7 @@ bool MirrorServiceExt::CreateMirrorSender()
     return true;
 }
 
-bool MirrorServiceExt::CreateMirrorReceiver()
+bool MirrorServiceExt::CreateMirrorReceiver(Render render)
 {
     if (_receiver != nullptr)
     {
@@ -135,11 +111,7 @@ bool MirrorServiceExt::CreateMirrorReceiver()
     sink.video = video_proc;
     sink.audio = audio_proc;
     sink.close = close_proc;
-    sink.ctx = this;
-
-    Render->Create();
-    Render->SetTitle("receiver");
-    Render->IsRender = true;
+    sink.ctx = (void*)render;
 
     _receiver = mirror_create_receiver(_mirror,
                                        _args.ArgsParams.id,
@@ -176,6 +148,4 @@ void MirrorServiceExt::Close()
         mirror_receiver_destroy(_receiver);
         _receiver = nullptr;
     }
-
-    Render->Close();
 }

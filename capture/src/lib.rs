@@ -99,7 +99,6 @@ pub trait CaptureHandler: Sync + Send {
     ) -> Result<(), Self::Error>;
 }
 
-#[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SourceType {
     Camera,

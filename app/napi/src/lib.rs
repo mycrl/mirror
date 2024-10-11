@@ -7,9 +7,8 @@ use std::{
 use anyhow::anyhow;
 use crossbeam_utils::sync::Parker;
 use mirror::{
-    AVFrameSink, AVFrameStream, AudioFrame, Capture, Close, Mirror, MirrorReceiver,
-    MirrorReceiverDescriptor, MirrorSender, MirrorSenderDescriptor, Render, TransportDescriptor,
-    VideoFrame, VideoRenderBackend,
+    AVFrameSink, AVFrameStream, AudioFrame, Capture, Close, GraphicsBackend, Mirror, Receiver,
+    ReceiverDescriptor, Renderer, Sender, SenderDescriptor, TransportDescriptor, VideoFrame,
 };
 
 use napi::{
@@ -198,11 +197,11 @@ pub enum Backend {
     WebGPU,
 }
 
-impl Into<VideoRenderBackend> for Backend {
-    fn into(self) -> VideoRenderBackend {
+impl Into<GraphicsBackend> for Backend {
+    fn into(self) -> GraphicsBackend {
         match self {
-            Self::Direct3D11 => VideoRenderBackend::Direct3D11,
-            Self::WebGPU => VideoRenderBackend::WebGPU,
+            Self::Direct3D11 => GraphicsBackend::Direct3D11,
+            Self::WebGPU => GraphicsBackend::WebGPU,
         }
     }
 }
@@ -243,6 +242,8 @@ pub enum VideoDecoderType {
     Qsv,
     /// h264_cvuid
     Cuda,
+    /// h264 videotoolbox
+    VideoToolBox,
 }
 
 impl Into<mirror::VideoDecoderType> for VideoDecoderType {
@@ -251,6 +252,7 @@ impl Into<mirror::VideoDecoderType> for VideoDecoderType {
             Self::D3D11 => mirror::VideoDecoderType::D3D11,
             Self::Cuda => mirror::VideoDecoderType::Cuda,
             Self::Qsv => mirror::VideoDecoderType::Qsv,
+            Self::VideoToolBox => mirror::VideoDecoderType::VideoToolBox,
         }
     }
 }
@@ -264,6 +266,8 @@ pub enum VideoEncoderType {
     Qsv,
     /// h264_nvenc
     Cuda,
+    /// h264 videotoolbox
+    VideoToolBox,
 }
 
 impl Into<mirror::VideoEncoderType> for VideoEncoderType {
@@ -272,6 +276,7 @@ impl Into<mirror::VideoEncoderType> for VideoEncoderType {
             Self::X264 => mirror::VideoEncoderType::X264,
             Self::Cuda => mirror::VideoEncoderType::Cuda,
             Self::Qsv => mirror::VideoEncoderType::Qsv,
+            Self::VideoToolBox => mirror::VideoEncoderType::VideoToolBox,
         }
     }
 }
@@ -394,9 +399,9 @@ pub struct MirrorSenderServiceDescriptor {
     pub multicast: bool,
 }
 
-impl Into<MirrorSenderDescriptor> for MirrorSenderServiceDescriptor {
-    fn into(self) -> MirrorSenderDescriptor {
-        MirrorSenderDescriptor {
+impl Into<SenderDescriptor> for MirrorSenderServiceDescriptor {
+    fn into(self) -> SenderDescriptor {
+        SenderDescriptor {
             video: self.video.map(|it| (it.source.into(), it.settings.into())),
             audio: self.audio.map(|it| (it.source.into(), it.settings.into())),
             multicast: self.multicast,
@@ -411,9 +416,9 @@ pub struct MirrorReceiverServiceDescriptor {
     pub backend: Backend,
 }
 
-impl Into<MirrorReceiverDescriptor> for MirrorReceiverServiceDescriptor {
-    fn into(self) -> MirrorReceiverDescriptor {
-        MirrorReceiverDescriptor {
+impl Into<ReceiverDescriptor> for MirrorReceiverServiceDescriptor {
+    fn into(self) -> ReceiverDescriptor {
+        ReceiverDescriptor {
             video: self.video.into(),
         }
     }
@@ -514,7 +519,7 @@ impl MirrorService {
 }
 
 #[napi]
-pub struct MirrorSenderService(Option<MirrorSender>);
+pub struct MirrorSenderService(Option<Sender>);
 
 #[napi]
 impl MirrorSenderService {
@@ -544,7 +549,7 @@ impl MirrorSenderService {
 }
 
 #[napi]
-pub struct MirrorReceiverService(Option<MirrorReceiver>);
+pub struct MirrorReceiverService(Option<Receiver>);
 
 #[napi]
 impl MirrorReceiverService {
@@ -557,7 +562,7 @@ impl MirrorReceiverService {
 struct Viewer {
     callback: ThreadsafeFunction<(), JsUnknown, (), false>,
     initialized: AtomicBool,
-    render: Render<'static>,
+    render: Renderer<'static>,
 }
 
 impl AVFrameStream for Viewer {}
@@ -602,7 +607,7 @@ impl Viewer {
     ) -> anyhow::Result<Self> {
         let window = WINDOW.read().as_ref().cloned().unwrap();
         let inner_size = window.inner_size();
-        let render = Render::new(
+        let render = Renderer::new(
             backend.into(),
             window,
             Size {

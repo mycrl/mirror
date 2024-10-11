@@ -1,9 +1,6 @@
-use crate::{
-    codec::{CodecError, CodecType, VideoDecoderType, VideoEncoderType},
-    util::{
-        create_video_context, create_video_frame, set_option, set_str_option,
-        CreateVideoContextError, CreateVideoFrameError,
-    },
+use crate::codec::{
+    create_video_context, create_video_frame, set_option, set_str_option, CodecError, CodecType,
+    CreateVideoContextError, CreateVideoFrameError, VideoDecoderType, VideoEncoderType,
 };
 
 use std::{ffi::c_int, ptr::null_mut};

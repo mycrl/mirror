@@ -9,13 +9,12 @@
 #include <windows.h>
 #endif
 
-#ifdef LINUX
+#ifndef WIN32
 #include <SDL.h>
 #include <SDL_syswm.h>
 #endif
 
 #include "./args.h"
-#include "./render.h"
 #include "./service.h"
 
 extern "C"
@@ -134,20 +133,39 @@ int main(int argc, char* argv[])
     Args args = Args(argc >= 2 ? std::string(argv[1]) : "");
 
     SDL_Init(SDL_INIT_EVENTS);
+#ifdef LINUX
     SDL_Window* window = SDL_CreateWindow("example",
                                           0,
                                           0,
                                           args.ArgsParams.width,
                                           args.ArgsParams.height,
-                                          SDL_WINDOW_OPENGL);
+                                          SDL_WINDOW_VULKAN);
+#else
+    SDL_Window* window = SDL_CreateWindow("example",
+                                          0,
+                                          0,
+                                          args.ArgsParams.width,
+                                          args.ArgsParams.height,
+                                          SDL_WINDOW_METAL);   
+#endif
 
     SDL_SysWMinfo info;
     SDL_VERSION(&info.version);
     SDL_GetWindowWMInfo(window, &info);
 
-    auto display = info.info.x11.display;
-    auto window_handle = info.info.x11.window;
-    mirror_service = new MirrorServiceExt(args, (uint64_t)window_handle, display);
+#ifdef LINUX
+    auto window_handle = create_window_handle_for_xlib(info.info.x11.window, 
+                                                       info.info.x11.display,
+                                                       args.ArgsParams.width, 
+                                                       args.ArgsParams.height);
+#else
+    auto window_handle = create_window_handle_for_appkit(info.info.cocoa.window, 
+                                                        args.ArgsParams.width, 
+                                                        args.ArgsParams.height);
+#endif
+
+    auto renderer = renderer_create(window_handle, RENDER_BACKEND_WGPU);
+    mirror_service = new MirrorServiceExt(args);
 
     SDL_Event event;
     while (SDL_WaitEvent(&event) == 1) {
@@ -160,11 +178,11 @@ int main(int argc, char* argv[])
             switch (event.key.keysym.sym)
             {
             case SDLK_r:
-                mirror_service->CreateMirrorReceiver();
+                mirror_service->CreateMirrorReceiver(window_handle);
 
                 break;
             case SDLK_s:
-                mirror_service->CreateMirrorSender();
+                mirror_service->CreateMirrorSender(window_handle);
 
                 break;
             case SDLK_k:
@@ -176,6 +194,8 @@ int main(int argc, char* argv[])
     }
 
     mirror_shutdown();
+    renderer_destroy(renderer);
+    window_handle_destroy(window_handle);
     SDL_DestroyWindow(window);
     SDL_Quit();
 }
