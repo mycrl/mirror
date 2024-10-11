@@ -19,4 +19,5 @@ members = [
     "service",
     "transport",
     "app/napi",
+    "renderer",
 ]
