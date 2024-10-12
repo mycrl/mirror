@@ -41,7 +41,7 @@ pub enum FromNativeResourceError {
 #[derive(Debug)]
 #[cfg(target_os = "windows")]
 pub enum Texture2DRaw<'a> {
-    Dx11(&'a ID3D11Texture2D, u32),
+    ID3D11Texture2D(&'a ID3D11Texture2D, u32),
 }
 
 #[cfg(target_os = "windows")]
@@ -51,13 +51,13 @@ impl<'a> Texture2DRaw<'a> {
         compatibility: &'b mut CompatibilityLayer,
     ) -> Result<&'b WGPUTexture, FromNativeResourceError> {
         Ok(match self {
-            Self::Dx11(dx11, index) => compatibility.from_hal(dx11, *index)?,
+            Self::ID3D11Texture2D(dx11, index) => compatibility.from_hal(dx11, *index)?,
         })
     }
 
     pub(crate) fn size(&self) -> Size {
         match self {
-            Self::Dx11(dx11, _) => {
+            Self::ID3D11Texture2D(dx11, _) => {
                 let desc = dx11.desc();
                 Size {
                     width: desc.Width,

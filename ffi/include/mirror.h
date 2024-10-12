@@ -83,6 +83,7 @@ typedef enum {
     VIDEO_DECODER_D3D11,
     VIDEO_DECODER_QSV,
     VIDEO_DECODER_CUDA,
+    VIDEO_DECODER_VIDEOTOOLBOX,
 } VideoDecoderType;
 
 typedef enum 
@@ -90,6 +91,7 @@ typedef enum
     VIDEO_ENCODER_X264,
     VIDEO_ENCODER_QSV,
     VIDEO_ENCODER_CUDA,
+    VIDEO_ENCODER_VIDEOTOOLBOX,
 } VideoEncoderType;
 
 typedef enum 
@@ -346,7 +348,7 @@ EXPORT WindowHandle create_window_handle_for_win32(HWND hwnd, uint32_t width, ui
  * working that Xlib can be built for, which is to say, most (but not all)
  * Unix systems.
  */
-EXPORT WindowHandle create_window_handle_for_xlib(uint64_t hwnd, void* display, int screen, uint32_t width, uint32_t height);
+EXPORT WindowHandle create_window_handle_for_xlib(uint32_t hwnd, void* display, int screen, uint32_t width, uint32_t height);
 
 /**
  * A raw window handle for Xcb.

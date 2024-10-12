@@ -1,6 +1,8 @@
+#[cfg(not(target_os = "windows"))]
+use std::ptr::null_mut;
+
 use common::c_str;
 use ffmpeg_sys_next::*;
-use std::ptr::null_mut;
 use thiserror::Error;
 
 #[cfg(any(target_os = "windows", target_os = "macos"))]

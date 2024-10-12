@@ -1184,7 +1184,7 @@ pub mod desktop {
     #[derive(Debug, Clone)]
     pub enum RawWindowHandleRef {
         Win32(*mut c_void, Size),
-        Xlib(u64, *mut c_void, c_int, Size),
+        Xlib(u32, *mut c_void, c_int, Size),
         Xcb(u32, *mut c_void, c_int, Size),
         Wayland(*mut c_void, *mut c_void, Size),
         AppKit(*mut c_void, Size),
@@ -1297,7 +1297,7 @@ pub mod desktop {
     #[no_mangle]
     #[cfg(target_os = "linux")]
     extern "C" fn create_window_handle_for_xlib(
-        hwnd: u64,
+        hwnd: u32,
         display: *mut c_void,
         screen: c_int,
         width: u32,

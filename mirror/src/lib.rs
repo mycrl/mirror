@@ -407,6 +407,7 @@ impl<'a> VideoRender<'a> {
                 window,
                 size,
             })?),
+            #[allow(unreachable_patterns)]
             _ => unimplemented!("not supports the {:?} backend", backend),
         })
     }
@@ -420,10 +421,9 @@ impl<'a> VideoRender<'a> {
                         .cloned()
                         .ok_or_else(|| RendererError::VideoInvalidD3D11Texture)?;
 
-                    let texture = Texture2DResource::Texture(graphics::Texture2DRaw::Direct3D11(
-                        &dx_tex,
-                        frame.data[1] as u32,
-                    ));
+                    let texture = Texture2DResource::Texture(
+                        graphics::Texture2DRaw::ID3D11Texture2D(&dx_tex, frame.data[1] as u32),
+                    );
 
                     let texture = match frame.format {
                         VideoFormat::BGRA => Texture::Bgra(texture),
