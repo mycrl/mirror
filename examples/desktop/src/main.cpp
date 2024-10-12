@@ -14,6 +14,10 @@
 #include <SDL_syswm.h>
 #endif
 
+#ifdef __OBJC__
+#import <Cocoa/Cocoa.h>
+#endif
+
 #include "./args.h"
 #include "./service.h"
 
@@ -153,15 +157,19 @@ int main(int argc, char* argv[])
     SDL_VERSION(&info.version);
     SDL_GetWindowWMInfo(window, &info);
 
+#ifdef __OBJC__
+    NSWindow *nsWindow = (NSWindow *)info.info.cocoa.window;
+    NSView *nsView = [nsWindow contentView];
+    auto window_handle = create_window_handle_for_appkit(nsView, 
+                                                            args.ArgsParams.width, 
+                                                            args.ArgsParams.height);
+#endif
+
 #ifdef LINUX
     auto window_handle = create_window_handle_for_xlib(info.info.x11.window, 
                                                        info.info.x11.display,
                                                        args.ArgsParams.width, 
                                                        args.ArgsParams.height);
-#else
-    auto window_handle = create_window_handle_for_appkit(info.info.cocoa.window, 
-                                                        args.ArgsParams.width, 
-                                                        args.ArgsParams.height);
 #endif
 
     auto renderer = renderer_create(window_handle, RENDER_BACKEND_WGPU);

@@ -9,6 +9,13 @@ if (NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE "Debug")
 endif()
 
+# Enabling Objective-C++ on Macos.
+if(APPLE)
+    enable_language(OBJCXX)
+    set_source_files_properties(src/main.cpp PROPERTIES LANGUAGE OBJCXX)
+endif()
+
+# Windows requires a win32 subsystem.
 if(MSVC)
     add_executable(example WIN32 src/main.cpp 
                     src/args.h 
@@ -53,30 +60,37 @@ elseif(UNIX AND NOT APPLE)
     target_link_directories(example PRIVATE "/usr/lib/x86_64-linux-gnu")
 endif()
 
-# Debug/Release target in build header.
-if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-    add_compile_definitions(DEBUG)
-endif()
-
-# Build header.
-if(WIN32)
-    add_compile_definitions(WIN32 _WINDOWS)
-elseif(APPLE)
-    add_compile_definitions(APPLE)
-elseif(UNIX AND NOT APPLE)
-    add_compile_definitions(LINUX SDL_VIDEO_DRIVER_X11)
-endif()
-
 # Introduce other runtime necessary library files.
-if(WIN32)
+if(MSVC)
     target_link_libraries(example
                           ws2_32
                           userenv
                           ntdll
                           bcrypt
                           mirror.dll.lib)
-elseif(UNIX)
+elseif(UNIX AND NOT APPLE)
     target_link_libraries(example
                           libmirror.so
                           SDL2)
+elseif(UNIX)
+    target_link_libraries(example
+                          libmirror.so
+                          SDL2
+                          "-framework Cocoa")
+endif()
+
+# Debug/Release target in build header.
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    add_compile_definitions(DEBUG)
+endif()
+
+# Build header.
+if(MSVC)
+    add_compile_definitions(WIN32 
+                            _WINDOWS)
+elseif(APPLE)
+    add_compile_definitions(MACOS)
+elseif(UNIX AND NOT APPLE)
+    add_compile_definitions(LINUX 
+                            SDL_VIDEO_DRIVER_X11)
 endif()

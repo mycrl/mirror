@@ -367,7 +367,7 @@ EXPORT WindowHandle create_window_handle_for_wayland(void* hwnd, void* display, 
 
 #endif
 
-#ifdef APPLE
+#ifdef MACOS
 
 /**
  * A raw window handle for AppKit.

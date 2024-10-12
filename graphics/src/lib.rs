@@ -18,10 +18,9 @@ use thiserror::Error;
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
     Backends, Buffer, BufferUsages, Color, CommandEncoderDescriptor, CompositeAlphaMode, Device,
-    DeviceDescriptor, Features, IndexFormat, Instance, InstanceDescriptor, LoadOp, MemoryHints,
-    Operations, PowerPreference, PresentMode, Queue, RenderPassColorAttachment,
-    RenderPassDescriptor, RequestAdapterOptions, StoreOp, Surface, TextureFormat, TextureUsages,
-    TextureViewDescriptor,
+    DeviceDescriptor, IndexFormat, Instance, InstanceDescriptor, LoadOp, MemoryHints, Operations,
+    PowerPreference, PresentMode, Queue, RenderPassColorAttachment, RenderPassDescriptor,
+    RequestAdapterOptions, StoreOp, Surface, TextureFormat, TextureUsages, TextureViewDescriptor,
 };
 
 pub use wgpu::{rwh as raw_window_handle, SurfaceTarget};
@@ -42,6 +41,7 @@ pub enum GraphicsError {
     FromNativeResourceError(#[from] FromNativeResourceError),
 }
 
+#[derive(Debug)]
 pub struct RendererOptions<T> {
     #[cfg(target_os = "windows")]
     pub direct3d: common::win32::Direct3DDevice,
@@ -96,8 +96,8 @@ impl<'a> Renderer<'a> {
             .request_device(
                 &DeviceDescriptor {
                     label: None,
-                    required_features: adapter.features() | Features::TEXTURE_FORMAT_NV12,
                     memory_hints: MemoryHints::Performance,
+                    required_features: adapter.features(),
                     required_limits: adapter.limits(),
                 },
                 None,
@@ -107,14 +107,21 @@ impl<'a> Renderer<'a> {
         let device = Arc::new(device);
         let queue = Arc::new(queue);
 
-        // Configure surface as RGBA, RGBA this format compatibility is the best, in
-        // order to unnecessary trouble, directly fixed to RGBA is the best.
+        // Configure surface as BGRA, BGRA this format compatibility is the best, in
+        // order to unnecessary trouble, directly fixed to BGRA is the best.
         {
             let mut config = surface
                 .get_default_config(&adapter, options.size.width, options.size.height)
                 .ok_or_else(|| GraphicsError::NotFoundSurfaceDefaultConfig)?;
 
-            config.present_mode = PresentMode::Mailbox;
+            config.present_mode = if cfg!(target_os = "windows") {
+                PresentMode::Mailbox
+            } else if cfg!(target_os = "linux") {
+                PresentMode::Fifo
+            } else {
+                PresentMode::Immediate
+            };
+
             config.format = TextureFormat::Bgra8Unorm;
             config.alpha_mode = CompositeAlphaMode::Opaque;
             config.usage = TextureUsages::RENDER_ATTACHMENT;
