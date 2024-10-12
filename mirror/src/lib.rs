@@ -96,6 +96,15 @@ pub fn shutdown() -> Result<(), MirrorError> {
     Ok(())
 }
 
+#[cfg(target_os = "windows")]
+pub fn init_d3d() -> Result<(), MirrorError> {
+    if DIRECT_3D_DEVICE.read().is_none() {
+        DIRECT_3D_DEVICE.write().replace(Direct3DDevice::new()?);
+    }
+
+    Ok(())
+}
+
 pub trait Close: Sync + Send {
     /// Callback when the sender is closed. This may be because the external
     /// side actively calls the close, or the audio and video packets cannot be
@@ -132,12 +141,7 @@ impl Mirror {
         log::info!("create mirror: options={:?}", options);
 
         // Check if the D3D device has been created. If not, create a global one.
-        #[cfg(target_os = "windows")]
-        {
-            if DIRECT_3D_DEVICE.read().is_none() {
-                DIRECT_3D_DEVICE.write().replace(Direct3DDevice::new()?);
-            }
-        }
+        init_d3d()?;
 
         Ok(Self(Transport::new(options)?))
     }

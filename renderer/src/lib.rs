@@ -2,6 +2,7 @@ use std::{ffi::c_void, fmt::Debug, ptr::null_mut};
 
 use common::{logger, win32::windows::Win32::Foundation::HWND, Size};
 use mirror::{
+    init_d3d,
     raw_window_handle::{
         DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, RawWindowHandle,
         Win32WindowHandle, WindowHandle,
@@ -28,6 +29,10 @@ extern "system" fn DllMain(
                         info.payload().downcast_ref::<String>(),
                     );
                 }));
+
+                if let Err(e) = common::win32::startup() {
+                    log::warn!("{:?}", e);
+                }
 
                 true
             },
@@ -137,8 +142,9 @@ extern "C" fn renderer_create(
     assert!(!window_handle.is_null());
 
     let window = unsafe { &*window_handle };
-
     let func = || {
+        init_d3d()?;
+
         Ok::<RawRenderer, anyhow::Error>(RawRenderer(mirror::Render::new(
             backend.into(),
             window,
