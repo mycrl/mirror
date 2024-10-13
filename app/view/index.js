@@ -35,12 +35,14 @@ const VideoDecoderType = {
     D3D11: 0,
     Qsv: 1,
     Cuda: 2,
+    VideoToolBox: 3,
 }
 
 const VideoEncoderType = {
     X264: 0,
     Qsv: 1,
     Cuda: 2,
+    VideoToolBox: 3,
 }
 
 window.onload = () => new Vue({

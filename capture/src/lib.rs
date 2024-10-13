@@ -1,28 +1,42 @@
-pub mod audio;
+mod audio;
 
 #[cfg(target_os = "windows")]
-pub mod win32 {
-    mod camera;
-    mod screen;
-
-    pub use self::{
-        camera::{CameraCapture, CameraCaptureError},
-        screen::{ScreenCapture, ScreenCaptureError},
-    };
+mod win32 {
+    pub mod camera;
+    pub mod screen;
 }
 
 #[cfg(target_os = "linux")]
-pub mod linux {
-    mod camera;
-    mod screen;
-
-    pub use self::{
-        camera::{CameraCapture, CameraCaptureError},
-        screen::{ScreenCapture, ScreenCaptureError},
-    };
+mod linux {
+    pub mod camera;
+    pub mod screen;
 }
 
-use self::audio::AudioCapture;
+#[cfg(target_os = "macos")]
+mod macos {
+    pub mod camera;
+    pub mod screen;
+}
+
+pub use self::audio::{AudioCapture, AudioCaptureError};
+
+#[cfg(target_os = "windows")]
+pub use self::win32::{
+    camera::{CameraCapture, CameraCaptureError},
+    screen::{ScreenCapture, ScreenCaptureError},
+};
+
+#[cfg(target_os = "linux")]
+pub use self::linux::{
+    camera::{CameraCapture, CameraCaptureError},
+    screen::{ScreenCapture, ScreenCaptureError},
+};
+
+#[cfg(target_os = "macos")]
+pub use self::macos::{
+    camera::{CameraCapture, CameraCaptureError},
+    screen::{ScreenCapture, ScreenCaptureError},
+};
 
 use common::{
     frame::{AudioFrame, VideoFrame},
@@ -30,12 +44,6 @@ use common::{
 };
 
 use thiserror::Error;
-
-#[cfg(target_os = "windows")]
-use win32::{CameraCapture, ScreenCapture};
-
-#[cfg(target_os = "linux")]
-use linux::{CameraCapture, ScreenCapture};
 
 #[cfg(target_os = "windows")]
 use common::win32::Direct3DDevice;
@@ -50,19 +58,11 @@ pub fn startup() {
 #[derive(Debug, Error)]
 pub enum CaptureError {
     #[error(transparent)]
-    AudioCaptureError(#[from] audio::AudioCaptureError),
+    AudioCaptureError(#[from] AudioCaptureError),
     #[error(transparent)]
-    #[cfg(target_os = "linux")]
-    ScreenCaptureError(#[from] linux::ScreenCaptureError),
+    ScreenCaptureError(#[from] ScreenCaptureError),
     #[error(transparent)]
-    #[cfg(target_os = "linux")]
-    CameraCaptureError(#[from] linux::CameraCaptureError),
-    #[error(transparent)]
-    #[cfg(target_os = "windows")]
-    ScreenCaptureError(#[from] win32::ScreenCaptureError),
-    #[error(transparent)]
-    #[cfg(target_os = "windows")]
-    CameraCaptureError(#[from] win32::CameraCaptureError),
+    CameraCaptureError(#[from] CameraCaptureError),
 }
 
 pub trait FrameArrived: Sync + Send {
@@ -99,7 +99,6 @@ pub trait CaptureHandler: Sync + Send {
     ) -> Result<(), Self::Error>;
 }
 
-#[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SourceType {
     Camera,

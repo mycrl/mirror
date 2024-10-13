@@ -83,6 +83,7 @@ typedef enum {
     VIDEO_DECODER_D3D11,
     VIDEO_DECODER_QSV,
     VIDEO_DECODER_CUDA,
+    VIDEO_DECODER_VIDEOTOOLBOX,
 } VideoDecoderType;
 
 typedef enum 
@@ -90,13 +91,14 @@ typedef enum
     VIDEO_ENCODER_X264,
     VIDEO_ENCODER_QSV,
     VIDEO_ENCODER_CUDA,
+    VIDEO_ENCODER_VIDEOTOOLBOX,
 } VideoEncoderType;
 
 typedef enum 
 {
     RENDER_BACKEND_DX11,
     RENDER_BACKEND_WGPU,
-} VideoRenderBackend;
+} GraphicsBackend;
 
 typedef struct
 {
@@ -279,8 +281,6 @@ EXPORT Mirror mirror_create(MirrorDescriptor options);
  */
 EXPORT void mirror_destroy(Mirror mirror);
 
-#ifndef MACOS
-
 /**
  * Get capture sources.
  */
@@ -313,8 +313,6 @@ EXPORT void mirror_sender_set_multicast(Sender sender, bool is_multicast);
  * Close sender.
  */
 EXPORT void mirror_sender_destroy(Sender sender);
-
-#endif // !MACOS
 
 /**
  * Create a receiver, specify a bound NIC address, you can pass callback to
@@ -350,7 +348,7 @@ EXPORT WindowHandle create_window_handle_for_win32(HWND hwnd, uint32_t width, ui
  * working that Xlib can be built for, which is to say, most (but not all)
  * Unix systems.
  */
-EXPORT WindowHandle create_window_handle_for_xlib(uint64_t hwnd, void* display, int screen, uint32_t width, uint32_t height);
+EXPORT WindowHandle create_window_handle_for_xlib(uint32_t hwnd, void* display, int screen, uint32_t width, uint32_t height);
 
 /**
  * A raw window handle for Xcb.
@@ -371,6 +369,19 @@ EXPORT WindowHandle create_window_handle_for_wayland(void* hwnd, void* display, 
 
 #endif
 
+#ifdef MACOS
+
+/**
+ * A raw window handle for AppKit.
+ *
+ * This variant is likely to be used on macOS, although Mac Catalyst 
+ * ($arch-apple-ios-macabi targets, which can notably use UIKit or AppKit) can 
+ * also use it despite being target_os = "ios".
+ */
+EXPORT WindowHandle create_window_handle_for_appkit(void* view, uint32_t width, uint32_t height);
+
+#endif
+
 /**
  * Destroy the window handle.
  */
@@ -379,7 +390,7 @@ EXPORT void window_handle_destroy(WindowHandle hwnd);
 /**
  * Creating a window renderer.
  */
-EXPORT Render renderer_create(WindowHandle hwnd, VideoRenderBackend backend);
+EXPORT Render renderer_create(WindowHandle hwnd, GraphicsBackend backend);
 
 /**
  * Push the video frame into the renderer, which will update the window texture.

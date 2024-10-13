@@ -22,6 +22,9 @@ pub mod strings;
 #[cfg(target_os = "windows")]
 pub mod win32;
 
+#[cfg(target_os = "macos")]
+pub mod macos;
+
 #[derive(Debug, Clone, Copy)]
 pub struct Size {
     pub width: u32,

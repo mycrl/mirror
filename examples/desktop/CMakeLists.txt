@@ -9,27 +9,51 @@ if (NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE "Debug")
 endif()
 
-if(MSVC)
-    add_executable(example WIN32 src/main.cpp 
-                    src/args.h 
-                    src/args.cpp 
-                    src/render.h 
-                    src/render.cpp 
-                    src/service.h 
-                    src/service.cpp)
-else()
-    add_executable(example src/main.cpp 
-                    src/args.h 
-                    src/args.cpp 
-                    src/render.h 
-                    src/render.cpp 
-                    src/service.h 
-                    src/service.cpp)
+# Enabling Objective-C++ on Macos.
+if(APPLE)
+    enable_language(OBJCXX)
+    set_source_files_properties(src/main.cpp PROPERTIES LANGUAGE OBJCXX)
 endif()
 
-include_directories("../../ffi/include")
+# Used to download or initialize third-party dependent libraries.
+set(THIRD_PARTY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party")
 
-if(UNIX)
+# Check whether the third-party dependent library directory is created.
+if (NOT EXISTS "${THIRD_PARTY_DIR}")
+    if (WIN32)
+        execute_process(COMMAND powershell.exe -Command "mkdir ${THIRD_PARTY_DIR}")
+    else()
+        execute_process(COMMAND mkdir "${THIRD_PARTY_DIR}")
+    endif()
+endif()
+
+# Clone the cmdline repository.
+if (NOT EXISTS "${THIRD_PARTY_DIR}/cmdline")
+    if (WIN32)
+        execute_process(
+            WORKING_DIRECTORY "${THIRD_PARTY_DIR}"
+            COMMAND powershell.exe -Command "git clone https://github.com/mycrl/cmdline")
+    else()
+        execute_process(
+            WORKING_DIRECTORY "${THIRD_PARTY_DIR}"
+            COMMAND bash -c "git clone https://github.com/mycrl/cmdline")
+    endif()
+endif()
+
+# Windows requires a win32 subsystem.
+if(MSVC)
+    add_executable(example WIN32 src/main.cpp)
+else()
+    add_executable(example src/main.cpp)
+endif()
+
+# Add third-party libraries to the search path.
+include_directories("../../ffi/include"
+                    "${THIRD_PARTY_DIR}/cmdline")
+
+if(APPLE)
+    include_directories("/opt/homebrew/opt/sdl2/include/SDL2")
+elseif(UNIX AND NOT APPLE)
     include_directories("/usr/include/SDL2"
                         "/usr/include")
 endif()
@@ -49,9 +73,29 @@ else()
     target_link_directories(example PRIVATE "../../target/release")
 endif()
 
-if(UNIX)
-    include_directories(example PRIVATE
-                        "/usr/lib/x86_64-linux-gnu")
+if(APPLE)
+    target_link_directories(example PRIVATE "/opt/homebrew/opt/sdl2/lib")
+elseif(UNIX AND NOT APPLE)
+    target_link_directories(example PRIVATE "/usr/lib/x86_64-linux-gnu")
+endif()
+
+# Introduce other runtime necessary library files.
+if(MSVC)
+    target_link_libraries(example
+                          ws2_32
+                          userenv
+                          ntdll
+                          bcrypt
+                          mirror.dll.lib)
+elseif(UNIX AND NOT APPLE)
+    target_link_libraries(example
+                          libmirror.so
+                          SDL2)
+elseif(UNIX)
+    target_link_libraries(example
+                          libmirror.so
+                          SDL2
+                          "-framework Cocoa")
 endif()
 
 # Debug/Release target in build header.
@@ -60,24 +104,12 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
 endif()
 
 # Build header.
-if(WIN32)
-    add_compile_definitions(WIN32 _WINDOWS)
-else()
-    add_compile_definitions(LINUX SDL_VIDEO_DRIVER_X11)
-endif()
-
-# Introduce other runtime necessary library files.
-if(WIN32)
-    target_link_libraries(example
-                          ws2_32
-                          userenv
-                          ntdll
-                          bcrypt
-                          mirror.dll.lib)
-endif()
-
-if(UNIX)
-    target_link_libraries(example
-                          libmirror.so
-                          SDL2)
+if(MSVC)
+    add_compile_definitions(WIN32 
+                            _WINDOWS)
+elseif(APPLE)
+    add_compile_definitions(MACOS)
+elseif(UNIX AND NOT APPLE)
+    add_compile_definitions(LINUX 
+                            SDL_VIDEO_DRIVER_X11)
 endif()

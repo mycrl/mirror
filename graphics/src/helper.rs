@@ -9,6 +9,12 @@ pub enum CompatibilityLayerError {
     NotFoundDxBackend,
     #[error("dx11 shared handle is invalid")]
     InvalidDxSharedHandle,
+    #[error("not found wgpu metal device")]
+    NotFoundMetalBackend,
+    #[error("failed to create metal texture cache")]
+    CreateMetalTextureCacheError,
+    #[error("failed to create metal texture")]
+    CreateMetalTextureError,
 }
 
 #[cfg(target_os = "windows")]
@@ -166,15 +172,15 @@ pub mod win32 {
     }
 }
 
-#[cfg(target_os = "linux")]
-pub mod linux {
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+pub mod any {
     use std::sync::Arc;
 
     use wgpu::Device;
 
-    pub struct VulkanOnWgpuCompatibilityLayer {}
+    pub struct EmptyOnWgpuCompatibilityLayer {}
 
-    impl VulkanOnWgpuCompatibilityLayer {
+    impl EmptyOnWgpuCompatibilityLayer {
         pub fn new(_device: Arc<Device>) -> Self {
             Self {}
         }

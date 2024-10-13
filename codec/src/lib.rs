@@ -1,52 +1,27 @@
 mod audio;
-mod util;
+mod codec;
 mod video;
 
 use std::ffi::{c_char, c_int, c_void};
-use std::fmt;
+
+use common::strings::Strings;
+use ffmpeg_sys_next::*;
+use log::Level;
 
 pub use self::{
     audio::{
         create_opus_identification_header, AudioDecoder, AudioDecoderError, AudioEncoder,
         AudioEncoderError, AudioEncoderSettings,
     },
-    util::{CreateVideoContextError, CreateVideoFrameError},
+    codec::{
+        CodecError, CodecType, CreateVideoContextError, CreateVideoFrameError, VideoDecoderType,
+        VideoEncoderType,
+    },
     video::{
-        VideoDecoder, VideoDecoderError, VideoDecoderSettings, VideoDecoderType, VideoEncoder,
-        VideoEncoderError, VideoEncoderSettings, VideoEncoderType,
+        VideoDecoder, VideoDecoderError, VideoDecoderSettings, VideoEncoder, VideoEncoderError,
+        VideoEncoderSettings,
     },
 };
-
-use common::strings::Strings;
-use ffmpeg_sys_next::*;
-use log::Level;
-
-pub fn is_hardware_encoder(kind: VideoEncoderType) -> bool {
-    match kind {
-        VideoEncoderType::Qsv => true,
-        VideoEncoderType::Cuda => true,
-        _ => false,
-    }
-}
-
-#[derive(Debug)]
-pub enum CodecError {
-    NotSupportCodec,
-}
-
-impl std::error::Error for CodecError {}
-
-impl fmt::Display for CodecError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                Self::NotSupportCodec => "NotSupportCodec",
-            }
-        )
-    }
-}
 
 #[repr(C)]
 #[derive(Debug)]

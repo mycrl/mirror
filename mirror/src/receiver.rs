@@ -24,7 +24,7 @@ pub enum ReceiverError {
 }
 
 #[derive(Debug, Clone)]
-pub struct MirrorReceiverDescriptor {
+pub struct ReceiverDescriptor {
     pub video: VideoDecoderType,
 }
 
@@ -139,18 +139,18 @@ fn create_audio_decoder(
     Ok(())
 }
 
-pub struct MirrorReceiver {
+pub struct Receiver {
     pub(crate) adapter: Arc<StreamMultiReceiverAdapter>,
     status: Arc<AtomicBool>,
     sink: Arc<dyn AVFrameStream>,
 }
 
-impl MirrorReceiver {
+impl Receiver {
     /// Create a receiving end. The receiving end is much simpler to implement.
     /// You only need to decode the data in the queue and call it back to the
     /// sink.
     pub fn new<T: AVFrameStream + 'static>(
-        options: MirrorReceiverDescriptor,
+        options: ReceiverDescriptor,
         sink: T,
     ) -> Result<Self, ReceiverError> {
         log::info!("create receiver");
@@ -167,7 +167,7 @@ impl MirrorReceiver {
             VideoDecoderSettings {
                 codec: options.video,
                 #[cfg(target_os = "windows")]
-                direct3d: crate::DIRECT_3D_DEVICE.read().clone(),
+                direct3d: Some(crate::get_direct3d()),
             },
         )?;
 
@@ -179,7 +179,7 @@ impl MirrorReceiver {
     }
 }
 
-impl Drop for MirrorReceiver {
+impl Drop for Receiver {
     fn drop(&mut self) {
         log::info!("receiver drop");
 

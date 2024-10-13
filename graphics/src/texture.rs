@@ -3,10 +3,10 @@ use std::sync::Arc;
 use crate::{helper::CompatibilityLayerError, Vertex};
 
 #[cfg(target_os = "windows")]
-use crate::helper::win32::Dx11OnWgpuCompatibilityLayer;
+use crate::helper::win32::Dx11OnWgpuCompatibilityLayer as CompatibilityLayer;
 
-#[cfg(target_os = "linux")]
-use crate::helper::linux::VulkanOnWgpuCompatibilityLayer;
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+use crate::helper::any::EmptyOnWgpuCompatibilityLayer as CompatibilityLayer;
 
 use common::Size;
 use smallvec::SmallVec;
@@ -29,12 +29,6 @@ use wgpu::{
     VertexState,
 };
 
-#[cfg(target_os = "windows")]
-type CompatibilityLayer = Dx11OnWgpuCompatibilityLayer;
-
-#[cfg(target_os = "linux")]
-type CompatibilityLayer = VulkanOnWgpuCompatibilityLayer;
-
 #[derive(Debug, Error)]
 pub enum FromNativeResourceError {
     #[error(transparent)]
@@ -42,25 +36,26 @@ pub enum FromNativeResourceError {
 }
 
 #[derive(Debug)]
-#[cfg(target_os = "windows")]
-pub enum Texture2DRaw<'a> {
-    Dx11(&'a ID3D11Texture2D, u32),
+pub enum Texture2DRaw {
+    #[cfg(target_os = "windows")]
+    ID3D11Texture2D(ID3D11Texture2D, u32),
 }
 
-#[cfg(target_os = "windows")]
-impl<'a> Texture2DRaw<'a> {
+impl Texture2DRaw {
+    #[cfg(target_os = "windows")]
     pub(crate) fn texture<'b>(
         &self,
         compatibility: &'b mut CompatibilityLayer,
     ) -> Result<&'b WGPUTexture, FromNativeResourceError> {
         Ok(match self {
-            Self::Dx11(dx11, index) => compatibility.from_hal(dx11, *index)?,
+            Self::ID3D11Texture2D(dx11, index) => compatibility.from_hal(dx11, *index)?,
         })
     }
 
+    #[cfg(target_os = "windows")]
     pub(crate) fn size(&self) -> Size {
         match self {
-            Self::Dx11(dx11, _) => {
+            Self::ID3D11Texture2D(dx11, _) => {
                 let desc = dx11.desc();
                 Size {
                     width: desc.Width,
@@ -80,7 +75,7 @@ pub struct Texture2DBuffer<'a> {
 #[derive(Debug)]
 pub enum Texture2DResource<'a> {
     #[cfg(target_os = "windows")]
-    Texture(Texture2DRaw<'a>),
+    Texture(Texture2DRaw),
     Buffer(Texture2DBuffer<'a>),
 }
 
@@ -591,21 +586,21 @@ pub struct Texture2DSource {
 }
 
 impl Texture2DSource {
-    pub fn new(options: Texture2DSourceOptions) -> Self {
+    pub fn new(options: Texture2DSourceOptions) -> Result<Self, FromNativeResourceError> {
         #[cfg(target_os = "windows")]
         let compatibility = CompatibilityLayer::new(options.device.clone(), options.direct3d);
 
-        #[cfg(target_os = "linux")]
+        #[cfg(any(target_os = "linux", target_os = "macos"))]
         let compatibility = CompatibilityLayer::new(options.device.clone());
 
-        Self {
+        Ok(Self {
             device: options.device,
             queue: options.queue,
             bind_group_layout: None,
             pipeline: None,
             sample: None,
             compatibility,
-        }
+        })
     }
 
     /// If it is a hardware texture, it will directly create view for the

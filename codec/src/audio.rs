@@ -1,10 +1,10 @@
+use crate::codec::{set_option, set_str_option};
+
 use std::{ffi::c_int, ptr::null_mut};
 
 use common::{c_str, frame::AudioFrame};
 use ffmpeg_sys_next::*;
 use thiserror::Error;
-
-use crate::util::{set_option, set_str_option};
 
 #[derive(Error, Debug)]
 pub enum AudioDecoderError {

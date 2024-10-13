@@ -20,7 +20,7 @@ use common::{
 };
 
 use codec::{
-    create_opus_identification_header, AudioEncoder, AudioEncoderSettings, VideoEncoder,
+    create_opus_identification_header, AudioEncoder, AudioEncoderSettings, CodecType, VideoEncoder,
     VideoEncoderSettings, VideoEncoderType,
 };
 
@@ -58,7 +58,7 @@ pub struct AudioDescriptor {
 }
 
 #[derive(Debug)]
-pub struct MirrorSenderDescriptor {
+pub struct SenderDescriptor {
     pub video: Option<(Source, VideoDescriptor)>,
     pub audio: Option<(Source, AudioDescriptor)>,
     pub multicast: bool,
@@ -290,19 +290,19 @@ impl FrameArrived for AudioSender {
     }
 }
 
-pub struct MirrorSender {
+pub struct Sender {
     pub(crate) adapter: Arc<StreamSenderAdapter>,
     status: Arc<AtomicBool>,
     sink: Arc<dyn AVFrameStream>,
     capture: Capture,
 }
 
-impl MirrorSender {
+impl Sender {
     // Create a sender. The capture of the sender is started following the sender,
     // but both video capture and audio capture can be empty, which means you can
     // create a sender that captures nothing.
     pub fn new<T: AVFrameStream + 'static>(
-        options: MirrorSenderDescriptor,
+        options: SenderDescriptor,
         sink: T,
     ) -> Result<Self, SenderError> {
         log::info!("create sender");
@@ -333,7 +333,7 @@ impl MirrorSender {
         if let Some((source, options)) = options.video {
             capture_options.video = Some(SourceCaptureDescriptor {
                 description: VideoCaptureSourceDescription {
-                    hardware: codec::is_hardware_encoder(options.codec),
+                    hardware: CodecType::from(options.codec).is_hardware(),
                     fps: options.frame_rate,
                     size: Size {
                         width: options.width,
@@ -341,10 +341,7 @@ impl MirrorSender {
                     },
                     source,
                     #[cfg(target_os = "windows")]
-                    direct3d: crate::DIRECT_3D_DEVICE
-                        .read()
-                        .clone()
-                        .expect("D3D device was not initialized successfully!"),
+                    direct3d: crate::get_direct3d(),
                 },
                 arrived: VideoSender::new(
                     &status,
@@ -357,7 +354,7 @@ impl MirrorSender {
                         height: options.height,
                         bit_rate: options.bit_rate,
                         #[cfg(target_os = "windows")]
-                        direct3d: crate::DIRECT_3D_DEVICE.read().clone(),
+                        direct3d: Some(crate::get_direct3d()),
                     },
                     &sink,
                 )?,
@@ -381,7 +378,7 @@ impl MirrorSender {
     }
 }
 
-impl Drop for MirrorSender {
+impl Drop for Sender {
     fn drop(&mut self) {
         log::info!("sender drop");
 
