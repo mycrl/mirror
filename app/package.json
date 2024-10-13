@@ -18,7 +18,7 @@
     },
     "homepage": "https://github.com/mycrl/mirror#readme",
     "dependencies": {
-        "mirror-napi": "file:./napi"
+        "mirror-napi": "file:../sdk/napi"
     },
     "devDependencies": {
         "7zip-bin": "5.2.0",

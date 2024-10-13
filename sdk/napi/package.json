@@ -4,13 +4,7 @@
     "main": "index.js",
     "types": "index.d.ts",
     "napi": {
-        "name": "mirror",
-        "triples": {
-            "defaults": false,
-            "additional": [
-                "x86_64-pc-windows-msvc"
-            ]
-        }
+        "name": "mirror"
     },
     "license": "MIT",
     "devDependencies": {
