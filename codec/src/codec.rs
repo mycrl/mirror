@@ -179,7 +179,7 @@ impl CodecType {
         match self {
             Self::Encoder(kind) => avcodec_find_encoder_by_name(c_str!(kind.to_string())),
             Self::Decoder(kind) => {
-                if *kind == VideoDecoderType::D3D11 {
+                if *kind == VideoDecoderType::D3D11 || *kind == VideoDecoderType::VideoToolBox {
                     avcodec_find_decoder(AVCodecID::AV_CODEC_ID_H264)
                 } else {
                     avcodec_find_decoder_by_name(c_str!(kind.to_string()))

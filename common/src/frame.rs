@@ -61,6 +61,7 @@ pub enum VideoFormat {
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VideoSubFormat {
+    CvPixelBufferRef,
     D3D11,
     SW,
 }

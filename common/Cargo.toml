@@ -28,3 +28,7 @@ features = [
     "Win32_Media_MediaFoundation",
     "Win32_Security",
 ]
+
+
+[target.'cfg(target_os = "macos")'.dependencies]
+core-video-sys = { git = "https://github.com/mycrl/rust-core-video-sys" }

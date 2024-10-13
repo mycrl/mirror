@@ -77,6 +77,16 @@ pub fn init_logger(level: LevelFilter, path: Option<&str>) -> Result<(), LoggerI
     }
 
     logger.apply()?;
+
+    #[cfg(not(debug_assertions))]
+    std::panic::set_hook(Box::new(|info| {
+        log::error!(
+            "pnaic: location={:?}, message={:?}",
+            info.location(),
+            info.payload().downcast_ref::<String>(),
+        );
+    }));
+
     Ok(())
 }
 
@@ -142,4 +152,13 @@ impl log::Log for AndroidLogger {
 pub fn init_with_android(level: LevelFilter) {
     log::set_boxed_logger(Box::new(AndroidLogger)).unwrap();
     log::set_max_level(level);
+
+    #[cfg(not(debug_assertions))]
+    std::panic::set_hook(Box::new(|info| {
+        log::error!(
+            "pnaic: location={:?}, message={:?}",
+            info.location(),
+            info.payload().downcast_ref::<String>(),
+        );
+    }));
 }

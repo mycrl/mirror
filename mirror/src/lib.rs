@@ -35,6 +35,9 @@ use common::win32::{
     startup as win32_startup, windows::Win32::Foundation::HWND, Direct3DDevice, ProcessPriority,
 };
 
+#[cfg(target_os = "macos")]
+use common::macos::{CVPixelBufferRef, PixelBufferRef};
+
 #[cfg(target_os = "windows")]
 use graphics::dx11::Dx11Renderer;
 use graphics::{
@@ -302,7 +305,7 @@ impl AudioRender {
 
 impl Drop for AudioRender {
     fn drop(&mut self) {
-        let _ = self.stream.pause();
+        // let _ = self.stream.pause();
     }
 }
 
@@ -387,7 +390,7 @@ impl<'a> VideoRender<'a> {
                 match window.into() {
                     SurfaceTarget::Window(window) => match window.window_handle().unwrap().as_raw()
                     {
-                        graphics::raw_window_handle::RawWindowHandle::Win32(window) => {
+                        raw_window_handle::RawWindowHandle::Win32(window) => {
                             HWND(window.hwnd.get() as _)
                         }
                         _ => unimplemented!(
@@ -414,28 +417,53 @@ impl<'a> VideoRender<'a> {
 
     pub fn send(&mut self, frame: &VideoFrame) -> Result<(), RendererError> {
         match frame.sub_format {
+            #[cfg(target_os = "windows")]
             VideoSubFormat::D3D11 => {
-                #[cfg(target_os = "windows")]
-                {
-                    let dx_tex = d3d_texture_borrowed_raw(&(frame.data[0] as *mut _))
-                        .cloned()
-                        .ok_or_else(|| RendererError::VideoInvalidD3D11Texture)?;
+                let dx_tex = d3d_texture_borrowed_raw(&(frame.data[0] as *mut _))
+                    .cloned()
+                    .ok_or_else(|| RendererError::VideoInvalidD3D11Texture)?;
 
-                    let texture = Texture2DResource::Texture(
-                        graphics::Texture2DRaw::ID3D11Texture2D(&dx_tex, frame.data[1] as u32),
-                    );
+                let texture = Texture2DResource::Texture(graphics::Texture2DRaw::ID3D11Texture2D(
+                    &dx_tex,
+                    frame.data[1] as u32,
+                ));
 
-                    let texture = match frame.format {
-                        VideoFormat::BGRA => Texture::Bgra(texture),
-                        VideoFormat::RGBA => Texture::Rgba(texture),
-                        VideoFormat::NV12 => Texture::Nv12(texture),
-                        VideoFormat::I420 => unimplemented!("no hardware texture for I420"),
-                    };
+                let texture = match frame.format {
+                    VideoFormat::BGRA => Texture::Bgra(texture),
+                    VideoFormat::RGBA => Texture::Rgba(texture),
+                    VideoFormat::NV12 => Texture::Nv12(texture),
+                    VideoFormat::I420 => unimplemented!("no hardware texture for I420"),
+                };
 
-                    match self {
-                        Self::Direct3D11(render) => render.submit(texture)?,
-                        Self::WebGPU(render) => render.submit(texture)?,
-                    }
+                match self {
+                    Self::Direct3D11(render) => render.submit(texture)?,
+                    Self::WebGPU(render) => render.submit(texture)?,
+                }
+            }
+            #[cfg(target_os = "macos")]
+            VideoSubFormat::CvPixelBufferRef => {
+                let pixel_buffer = PixelBufferRef::from(frame.data[0] as CVPixelBufferRef);
+                let linesize = pixel_buffer.linesize();
+                let data = pixel_buffer.data();
+                let size = pixel_buffer.size();
+
+                let buffers = [
+                    unsafe {
+                        from_raw_parts(data[0] as *const _, linesize[0] * size.height as usize)
+                    },
+                    unsafe {
+                        from_raw_parts(data[1] as *const _, linesize[1] * size.height as usize)
+                    },
+                    &[],
+                ];
+
+                match self {
+                    Self::WebGPU(render) => render.submit(Texture::Nv12(
+                        Texture2DResource::Buffer(Texture2DBuffer {
+                            buffers: &buffers,
+                            size,
+                        }),
+                    ))?,
                 }
             }
             VideoSubFormat::SW => {
@@ -458,7 +486,7 @@ impl<'a> VideoRender<'a> {
                     // alternatives. In other contexts "RGBA" means any layout.
                     VideoFormat::BGRA | VideoFormat::RGBA => [
                         unsafe {
-                            std::slice::from_raw_parts(
+                            from_raw_parts(
                                 frame.data[0] as *const _,
                                 frame.linesize[0] * frame.height as usize,
                             )
@@ -485,13 +513,13 @@ impl<'a> VideoRender<'a> {
                     // primaries of most images are BT.709.
                     VideoFormat::NV12 => [
                         unsafe {
-                            std::slice::from_raw_parts(
+                            from_raw_parts(
                                 frame.data[0] as *const _,
                                 frame.linesize[0] * frame.height as usize,
                             )
                         },
                         unsafe {
-                            std::slice::from_raw_parts(
+                            from_raw_parts(
                                 frame.data[1] as *const _,
                                 frame.linesize[1] * frame.height as usize,
                             )
@@ -500,19 +528,19 @@ impl<'a> VideoRender<'a> {
                     ],
                     VideoFormat::I420 => [
                         unsafe {
-                            std::slice::from_raw_parts(
+                            from_raw_parts(
                                 frame.data[0] as *const _,
                                 frame.linesize[0] * frame.height as usize,
                             )
                         },
                         unsafe {
-                            std::slice::from_raw_parts(
+                            from_raw_parts(
                                 frame.data[1] as *const _,
                                 frame.linesize[1] * frame.height as usize,
                             )
                         },
                         unsafe {
-                            std::slice::from_raw_parts(
+                            from_raw_parts(
                                 frame.data[2] as *const _,
                                 frame.linesize[2] * frame.height as usize,
                             )
@@ -541,6 +569,7 @@ impl<'a> VideoRender<'a> {
                     Self::WebGPU(render) => render.submit(texture)?,
                 }
             }
+            _ => unimplemented!("not suppports the frame format = {:?}", frame.sub_format),
         }
 
         Ok(())

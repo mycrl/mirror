@@ -111,14 +111,6 @@ pub mod android {
     #[allow(non_snake_case)]
     pub extern "system" fn JNI_OnLoad(vm: JavaVM, _: *mut c_void) -> i32 {
         logger::init_with_android(log::LevelFilter::Info);
-        std::panic::set_hook(Box::new(|info| {
-            log::error!(
-                "pnaic: location={:?}, message={:?}",
-                info.location(),
-                info.payload().downcast_ref::<String>(),
-            );
-        }));
-
         transport::startup();
         JVM.lock().unwrap().replace(vm);
 
@@ -567,10 +559,6 @@ pub mod desktop {
     fn checker<T, E: Debug>(result: Result<T, E>) -> Result<T, E> {
         if let Err(e) = &result {
             log::error!("{:?}", e);
-
-            if cfg!(debug_assertions) {
-                println!("{:#?}", e);
-            }
         }
 
         result
@@ -605,13 +593,6 @@ pub mod desktop {
     pub extern "C" fn mirror_startup() -> bool {
         let func = || {
             logger::init_logger(log::LevelFilter::Info, None)?;
-            std::panic::set_hook(Box::new(|info| {
-                log::error!(
-                    "pnaic: location={:?}, message={:?}",
-                    info.location(),
-                    info.payload().downcast_ref::<String>(),
-                );
-            }));
 
             startup()?;
             Ok::<_, anyhow::Error>(())
@@ -1250,7 +1231,9 @@ pub mod desktop {
                 // working that Xlib can be built for, which is to say, most (but not all)
                 // Unix systems.
                 Self::Xlib(window, _, _, _) => unsafe {
-                    WindowHandle::borrow_raw(RawWindowHandle::Xlib(XlibWindowHandle::new(*window)))
+                    WindowHandle::borrow_raw(RawWindowHandle::Xlib(XlibWindowHandle::new(
+                        (*window).into(),
+                    )))
                 },
                 // This variant is likely to show up anywhere someone manages to get X11
                 // working that XCB can be built for, which is to say, most (but not all)

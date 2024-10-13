@@ -98,6 +98,9 @@ void cli_parse(std::string cmd)
 #ifdef WIN32
     args.add<std::string>("encoder", '\0', "video encoder", false, "h264_qsv");
     args.add<std::string>("decoder", '\0', "video decoder", false, "d3d11va");
+#elif MACOS
+    args.add<std::string>("encoder", '\0', "video encoder", false, "h264_videotoolbox");
+    args.add<std::string>("decoder", '\0', "video decoder", false, "h264_videotoolbox");
 #else
     args.add<std::string>("encoder", '\0', "video encoder", false, "libx264");
     args.add<std::string>("decoder", '\0', "video decoder", false, "h264");
@@ -109,7 +112,10 @@ void cli_parse(std::string cmd)
     args.add<int>("fps", '\0', "video frame rate/s", false, 24);
     args.add<int>("id", '\0', "channel number", false, 0);
 
-    args.parse_check(cmd);
+    if (cmd.length() > 0)
+    {
+        args.parse_check(cmd);
+    }
 
     OPTIONS.encoder = encoder_from_str(args.get<std::string>("encoder"));
     OPTIONS.decoder = decoder_from_str(args.get<std::string>("decoder"));
@@ -128,7 +134,7 @@ public:
         MirrorDescriptor mirror_options;
         mirror_options.server = const_cast<char*>(OPTIONS.server.c_str());
         mirror_options.multicast = const_cast<char*>("239.0.0.1");
-        mirror_options.mtu = 1400;
+        mirror_options.mtu = 1500;
 
         _mirror = mirror_create(mirror_options);
     }
@@ -400,15 +406,15 @@ int main(int argc, char* argv[])
     SDL_Window* window = SDL_CreateWindow("example",
                                           0,
                                           0,
-                                          args.ArgsParams.width,
-                                          args.ArgsParams.height,
+                                          OPTIONS.width,
+                                          OPTIONS.height,
                                           SDL_WINDOW_VULKAN);
 #else
     SDL_Window* window = SDL_CreateWindow("example",
                                           0,
                                           0,
-                                          args.ArgsParams.width,
-                                          args.ArgsParams.height,
+                                          OPTIONS.width,
+                                          OPTIONS.height,
                                           SDL_WINDOW_METAL);
 #endif
 
@@ -417,22 +423,22 @@ int main(int argc, char* argv[])
     SDL_GetWindowWMInfo(window, &info);
 
 #ifdef __OBJC__
-    NSWindow* nsWindow = (NSWindow*)info.info.cocoa.window;
-    NSView* nsView = [nsWindow contentView];
-    auto window_handle = create_window_handle_for_appkit(nsView,
-                                                         args.ArgsParams.width,
-                                                         args.ArgsParams.height);
+    NSWindow* ns_window = (NSWindow*)info.info.cocoa.window;
+    NSView* ns_view = [ns_window contentView];
+    auto window_handle = create_window_handle_for_appkit(ns_view,
+                                                         OPTIONS.width,
+                                                         OPTIONS.height);
 #endif
 
 #ifdef LINUX
     auto window_handle = create_window_handle_for_xlib(info.info.x11.window,
                                                        info.info.x11.display,
-                                                       args.ArgsParams.width,
-                                                       args.ArgsParams.height);
+                                                       OPTIONS.width,
+                                                       OPTIONS.height);
 #endif
 
-    render = renderer_create(window_handle, RENDER_BACKEND_WGPU);
-    mirror_service = new MirrorServiceExt(args);
+    RENDER = renderer_create(window_handle, RENDER_BACKEND_WGPU);
+    MIRROR_SERVICE = new MirrorService();
 
     SDL_Event event;
     while (SDL_WaitEvent(&event) == 1) {
@@ -445,29 +451,29 @@ int main(int argc, char* argv[])
             switch (event.key.keysym.sym)
             {
             case SDLK_r:
-                mirror_service->CreateMirrorReceiver(render);
+                MIRROR_SERVICE->CreateMirrorReceiver();
 
                 break;
             case SDLK_s:
-                mirror_service->CreateMirrorSender(render);
+                MIRROR_SERVICE->CreateMirrorSender();
 
                 break;
             case SDLK_k:
-                mirror_service->Close();
+                MIRROR_SERVICE->Close();
 
                 break;
             }
         }
     }
 
-    renderer_destroy(render);
+    renderer_destroy(RENDER);
     window_handle_destroy(window_handle);
     mirror_shutdown();
 
     SDL_DestroyWindow(window);
     SDL_Quit();
 
-    delete mirror_service;
+    delete MIRROR_SERVICE;
     return 0;
 }
 

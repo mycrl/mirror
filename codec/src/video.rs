@@ -205,20 +205,19 @@ impl VideoDecoder {
             // D3D11: mfxHDLPair.first contains a ID3D11Texture2D pointer. mfxHDLPair.second
             // contains the texture array index of the frame if the ID3D11Texture2D is an
             // array texture, or always MFX_INFINITE if it is a normal texture.
+            #[cfg(target_os = "windows")]
             AVPixelFormat::AV_PIX_FMT_QSV => {
-                #[cfg(target_os = "windows")]
-                {
-                    let surface = unsafe { &*(frame.data[3] as *const mfxFrameSurface1) };
-                    let hdl = unsafe { &*(surface.Data.MemId as *const mfxHDLPair) };
+                let surface = unsafe { &*(frame.data[3] as *const mfxFrameSurface1) };
+                let hdl = unsafe { &*(surface.Data.MemId as *const mfxHDLPair) };
 
-                    self.frame.data[0] = hdl.first;
-                    self.frame.data[1] = hdl.second;
+                self.frame.data[0] = hdl.first;
+                self.frame.data[1] = hdl.second;
 
-                    self.frame.sub_format = VideoSubFormat::D3D11;
-                    self.frame.format = VideoFormat::NV12;
-                }
+                self.frame.sub_format = VideoSubFormat::D3D11;
+                self.frame.format = VideoFormat::NV12;
             }
             // The d3d11va video frame texture has no stride.
+            #[cfg(target_os = "windows")]
             AVPixelFormat::AV_PIX_FMT_D3D11 => {
                 for i in 0..2 {
                     self.frame.data[i] = frame.data[i] as *const _;
@@ -236,8 +235,14 @@ impl VideoDecoder {
                 self.frame.sub_format = VideoSubFormat::SW;
                 self.frame.format = VideoFormat::I420;
             }
-            #[allow(unreachable_patterns)]
-            _ => unimplemented!("unsupported video frame format"),
+            #[cfg(target_os = "macos")]
+            AVPixelFormat::AV_PIX_FMT_VIDEOTOOLBOX => {
+                self.frame.data[0] = frame.data[3] as _;
+
+                self.frame.sub_format = VideoSubFormat::CvPixelBufferRef;
+                self.frame.format = VideoFormat::BGRA;
+            }
+            _ => unimplemented!("unsupported video frame format = {:?}", format),
         };
 
         Some(&self.frame)

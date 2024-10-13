@@ -6,10 +6,9 @@ use std::sync::Arc;
 
 use self::vertex::Vertex;
 
-pub use self::texture::{FromNativeResourceError, Texture, Texture2DBuffer, Texture2DResource};
-
-#[cfg(target_os = "windows")]
-pub use self::texture::Texture2DRaw;
+pub use self::texture::{
+    FromNativeResourceError, Texture, Texture2DBuffer, Texture2DRaw, Texture2DResource,
+};
 
 use common::Size;
 use pollster::FutureExt;
@@ -146,7 +145,7 @@ impl<'a> Renderer<'a> {
                 direct3d: options.direct3d,
                 device: device.clone(),
                 queue: queue.clone(),
-            }),
+            })?,
             vertex_buffer,
             index_buffer,
             surface,

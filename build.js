@@ -96,14 +96,8 @@ const Replace = (file, filters) =>
     await Command(`cmake --build . --config=${Profile}`, { cwd: join(__dirname, './examples/desktop/build') })
 
     for (const item of [
-        ['./LIBRARYS.txt', './build/bin/LIBRARYS.txt'],
-
         /* examples */
         ['./examples/desktop/src/main.cpp', './build/examples/src/main.cpp'],
-        ['./examples/desktop/src/args.cpp', './build/examples/src/args.cpp'],
-        ['./examples/desktop/src/args.h', './build/examples/src/args.h'],
-        ['./examples/desktop/src/service.cpp', './build/examples/src/service.cpp'],
-        ['./examples/desktop/src/service.h', './build/examples/src/service.h'],
         ['./examples/desktop/CMakeLists.txt', './build/examples/CMakeLists.txt'],
         ['./examples/desktop/README.md', './build/examples/README.md'],
 
