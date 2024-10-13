@@ -341,10 +341,7 @@ impl Sender {
                     },
                     source,
                     #[cfg(target_os = "windows")]
-                    direct3d: crate::DIRECT_3D_DEVICE
-                        .read()
-                        .clone()
-                        .expect("D3D device was not initialized successfully!"),
+                    direct3d: crate::get_direct3d(),
                 },
                 arrived: VideoSender::new(
                     &status,
@@ -357,7 +354,7 @@ impl Sender {
                         height: options.height,
                         bit_rate: options.bit_rate,
                         #[cfg(target_os = "windows")]
-                        direct3d: crate::DIRECT_3D_DEVICE.read().clone(),
+                        direct3d: Some(crate::get_direct3d()),
                     },
                     &sink,
                 )?,

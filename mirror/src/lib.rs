@@ -50,9 +50,6 @@ use resample::AudioResampler;
 use thiserror::Error;
 use transport::Transport;
 
-#[cfg(target_os = "windows")]
-pub(crate) static DIRECT_3D_DEVICE: RwLock<Option<Direct3DDevice>> = RwLock::new(None);
-
 #[derive(Debug, Error)]
 pub enum MirrorError {
     #[error(transparent)]
@@ -144,15 +141,6 @@ pub struct Mirror(Transport);
 impl Mirror {
     pub fn new(options: TransportDescriptor) -> Result<Self, MirrorError> {
         log::info!("create mirror: options={:?}", options);
-
-        // Check if the D3D device has been created. If not, create a global one.
-        #[cfg(target_os = "windows")]
-        {
-            if DIRECT_3D_DEVICE.read().is_none() {
-                DIRECT_3D_DEVICE.write().replace(Direct3DDevice::new()?);
-            }
-        }
-
         Ok(Self(Transport::new(options)?))
     }
 
@@ -186,6 +174,21 @@ impl Mirror {
         self.0.create_receiver(id, &receiver.adapter)?;
         Ok(receiver)
     }
+}
+
+#[cfg(target_os = "windows")]
+static DIRECT_3D_DEVICE: RwLock<Option<Direct3DDevice>> = RwLock::new(None);
+
+// Check if the D3D device has been created. If not, create a global one.
+#[cfg(target_os = "windows")]
+pub(crate) fn get_direct3d() -> Direct3DDevice {
+    if DIRECT_3D_DEVICE.read().is_none() {
+        DIRECT_3D_DEVICE
+            .write()
+            .replace(Direct3DDevice::new().expect("D3D device was not initialized successfully!"));
+    }
+
+    DIRECT_3D_DEVICE.read().as_ref().unwrap().clone()
 }
 
 #[derive(Debug, Error)]
@@ -305,7 +308,7 @@ impl AudioRender {
 
 impl Drop for AudioRender {
     fn drop(&mut self) {
-        // let _ = self.stream.pause();
+        let _ = self.stream.pause();
     }
 }
 
@@ -382,7 +385,7 @@ impl<'a> VideoRender<'a> {
         );
 
         #[cfg(target_os = "windows")]
-        let direct3d = crate::DIRECT_3D_DEVICE.read().as_ref().unwrap().clone();
+        let direct3d = get_direct3d();
 
         Ok(match backend {
             #[cfg(target_os = "windows")]
@@ -419,12 +422,10 @@ impl<'a> VideoRender<'a> {
         match frame.sub_format {
             #[cfg(target_os = "windows")]
             VideoSubFormat::D3D11 => {
-                let dx_tex = d3d_texture_borrowed_raw(&(frame.data[0] as *mut _))
-                    .cloned()
-                    .ok_or_else(|| RendererError::VideoInvalidD3D11Texture)?;
-
                 let texture = Texture2DResource::Texture(graphics::Texture2DRaw::ID3D11Texture2D(
-                    &dx_tex,
+                    d3d_texture_borrowed_raw(&(frame.data[0] as *mut _))
+                        .cloned()
+                        .ok_or_else(|| RendererError::VideoInvalidD3D11Texture)?,
                     frame.data[1] as u32,
                 ));
 

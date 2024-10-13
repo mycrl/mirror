@@ -141,7 +141,7 @@ const Replace = (file, filters) =>
     {
         for (const item of [
             ['./target/debug/mirror.pdb', './build/bin/mirror.pdb'],
-            ['./target/debug/mirror-service.pdb', './build/server/mirror-service.pdb'],
+            ['./target/debug/mirror_service.pdb', './build/server/mirror-service.pdb'],
         ])
         {
             if (!Args.release)

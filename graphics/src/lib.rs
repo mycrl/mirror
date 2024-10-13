@@ -335,7 +335,7 @@ pub mod dx11 {
                 let view = match texture {
                     Texture2DResource::Texture(texture) => match texture {
                         Texture2DRaw::ID3D11Texture2D(texture, index) => {
-                            Some(processor.create_input_view(texture, index)?)
+                            Some(processor.create_input_view(&texture, index)?)
                         }
                     },
                     Texture2DResource::Buffer(texture) => {

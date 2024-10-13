@@ -32,11 +32,11 @@ if (NOT EXISTS "${THIRD_PARTY_DIR}/cmdline")
     if (WIN32)
         execute_process(
             WORKING_DIRECTORY "${THIRD_PARTY_DIR}"
-            COMMAND powershell.exe -Command "git clone https://github.com/tanakh/cmdline")
+            COMMAND powershell.exe -Command "git clone https://github.com/mycrl/cmdline")
     else()
         execute_process(
             WORKING_DIRECTORY "${THIRD_PARTY_DIR}"
-            COMMAND bash -c "git clone https://github.com/tanakh/cmdline")
+            COMMAND bash -c "git clone https://github.com/mycrl/cmdline")
     endif()
 endif()
 

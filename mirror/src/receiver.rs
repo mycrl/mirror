@@ -167,7 +167,7 @@ impl Receiver {
             VideoDecoderSettings {
                 codec: options.video,
                 #[cfg(target_os = "windows")]
-                direct3d: crate::DIRECT_3D_DEVICE.read().clone(),
+                direct3d: Some(crate::get_direct3d()),
             },
         )?;
 
