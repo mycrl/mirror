@@ -171,18 +171,3 @@ pub mod win32 {
         }
     }
 }
-
-#[cfg(any(target_os = "linux", target_os = "macos"))]
-pub mod any {
-    use std::sync::Arc;
-
-    use wgpu::Device;
-
-    pub struct EmptyOnWgpuCompatibilityLayer {}
-
-    impl EmptyOnWgpuCompatibilityLayer {
-        pub fn new(_device: Arc<Device>) -> Self {
-            Self {}
-        }
-    }
-}

@@ -12,7 +12,7 @@ use crate::{helper::CompatibilityLayerError, Vertex};
 use crate::helper::win32::Dx11OnWgpuCompatibilityLayer as CompatibilityLayer;
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]
-use crate::helper::any::EmptyOnWgpuCompatibilityLayer as CompatibilityLayer;
+type CompatibilityLayer = ();
 
 use common::Size;
 use smallvec::SmallVec;
@@ -355,7 +355,7 @@ impl Texture2DSource {
         let compatibility = CompatibilityLayer::new(options.device.clone(), options.direct3d);
 
         #[cfg(any(target_os = "linux", target_os = "macos"))]
-        let compatibility = CompatibilityLayer::new(options.device.clone());
+        let compatibility = ();
 
         Ok(Self {
             device: options.device,
