@@ -4,7 +4,7 @@ use std::{
     thread,
 };
 
-use anyhow::anyhow;
+use anyhow::{anyhow, Result};
 use crossbeam_utils::sync::Parker;
 use mirror::{
     AVFrameSink, AVFrameStream, AudioFrame, Capture, Close, GraphicsBackend, Mirror, Receiver,
@@ -32,22 +32,19 @@ static WINDOW: Lazy<RwLock<Option<Arc<Window>>>> = Lazy::new(|| RwLock::new(None
 static EVENT_LOOP: Lazy<RwLock<Option<EventLoopProxy<AppEvent>>>> = Lazy::new(|| RwLock::new(None));
 
 enum AppEvent {
-    CloseRequested,
-    Show,
-    Hide,
+    Exit,
+    SetVisible(bool),
 }
 
 struct App {
     window: Option<Arc<Window>>,
-    callback: Option<Box<dyn FnOnce(anyhow::Result<()>)>>,
+    callback: Option<Box<dyn FnOnce(Result<()>)>>,
 }
 
-impl ApplicationHandler<AppEvent> for App {
-    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        let callback = self.callback.take().unwrap();
-
-        // The default window created is invisible, and the window is made visible by
-        // receiving external requests.
+impl App {
+    // The default window created is invisible, and the window is made visible by
+    // receiving external requests.
+    fn create_window(&mut self, event_loop: &ActiveEventLoop) -> Result<()> {
         let mut attr = Window::default_attributes();
         attr.visible = false;
         attr.resizable = false;
@@ -55,19 +52,26 @@ impl ApplicationHandler<AppEvent> for App {
         attr.decorations = false;
         attr.fullscreen = Some(Fullscreen::Borderless(None));
 
-        callback((|| {
-            let window = Arc::new(event_loop.create_window(attr)?);
-            let monitor = window
-                .current_monitor()
-                .ok_or_else(|| anyhow!("not found a monitor"))?;
+        let window = Arc::new(event_loop.create_window(attr)?);
+        let size = window
+            .current_monitor()
+            .ok_or_else(|| anyhow!("not found a monitor"))?
+            .size();
 
-            window.set_min_inner_size(Some(monitor.size()));
-            window.set_cursor_hittest(false)?;
+        window.set_min_inner_size(Some(size));
+        window.set_cursor_hittest(false)?;
 
-            self.window = Some(window.clone());
-            WINDOW.write().replace(window);
-            Ok::<_, anyhow::Error>(())
-        })())
+        self.window = Some(window.clone());
+        WINDOW.write().replace(window);
+
+        Ok(())
+    }
+}
+
+impl ApplicationHandler<AppEvent> for App {
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        let callback = self.callback.take().unwrap();
+        callback(self.create_window(event_loop))
     }
 
     fn window_event(
@@ -86,17 +90,12 @@ impl ApplicationHandler<AppEvent> for App {
 
     fn user_event(&mut self, event_loop: &ActiveEventLoop, event: AppEvent) {
         match event {
-            AppEvent::CloseRequested => {
+            AppEvent::Exit => {
                 event_loop.exit();
             }
-            AppEvent::Show => {
+            AppEvent::SetVisible(visible) => {
                 if let Some(window) = self.window.as_ref() {
-                    window.set_visible(true);
-                }
-            }
-            AppEvent::Hide => {
-                if let Some(window) = self.window.as_ref() {
-                    window.set_visible(false);
+                    window.set_visible(visible);
                 }
             }
         }
@@ -177,7 +176,7 @@ pub fn shutdown() -> napi::Result<()> {
     mirror::shutdown().map_err(|e| napi::Error::from_reason(e.to_string()))?;
 
     if let Some(event_loop) = EVENT_LOOP.read().as_ref() {
-        if let Err(_) = event_loop.send_event(AppEvent::CloseRequested) {
+        if let Err(_) = event_loop.send_event(AppEvent::Exit) {
             log::warn!("winit event loop is closed");
         }
     }
@@ -573,7 +572,7 @@ impl AVFrameSink for Viewer {
             self.initialized.update(true);
 
             if let Some(event_loop) = EVENT_LOOP.read().as_ref() {
-                if let Err(_) = event_loop.send_event(AppEvent::Show) {
+                if let Err(_) = event_loop.send_event(AppEvent::SetVisible(true)) {
                     log::warn!("winit event loop is closed");
                 }
             }
@@ -590,7 +589,7 @@ impl AVFrameSink for Viewer {
 impl Close for Viewer {
     fn close(&self) {
         if let Some(event_loop) = EVENT_LOOP.read().as_ref() {
-            if let Err(_) = event_loop.send_event(AppEvent::Hide) {
+            if let Err(_) = event_loop.send_event(AppEvent::SetVisible(false)) {
                 log::warn!("winit event loop is closed");
             }
         }
@@ -604,7 +603,7 @@ impl Viewer {
     fn new(
         backend: Backend,
         callback: ThreadsafeFunction<(), JsUnknown, (), false>,
-    ) -> anyhow::Result<Self> {
+    ) -> Result<Self> {
         let window = WINDOW.read().as_ref().cloned().unwrap();
         let inner_size = window.inner_size();
         let render = Renderer::new(

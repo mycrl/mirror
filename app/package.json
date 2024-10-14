@@ -32,7 +32,7 @@
         "portable": {},
         "extraFiles": [
             {
-                "from": "./napi",
+                "from": "../sdk/napi",
                 "to": "./",
                 "filter": "*.node"
             }
