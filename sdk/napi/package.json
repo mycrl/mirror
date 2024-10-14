@@ -17,7 +17,7 @@
         "artifacts": "napi artifacts",
         "build": "napi build --platform",
         "build:release": "napi build --platform --release",
-        "prepare": "napi build --platform --release",
+        "prepare": "napi build --platform",
         "prepublishOnly": "napi prepublish -t npm",
         "universal": "napi universal",
         "version": "napi version"

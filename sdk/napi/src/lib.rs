@@ -1,3 +1,5 @@
+mod ipc;
+
 use parking_lot::{Mutex, RwLock};
 use std::{
     sync::{atomic::AtomicBool, Arc},
@@ -123,13 +125,13 @@ pub fn startup(user_data: Option<String>) -> napi::Result<()> {
             user_data.as_ref().map(|x| x.as_str()),
         )?;
 
-        std::panic::set_hook(Box::new(|info| {
-            log::error!(
-                "pnaic: location={:?}, message={:?}",
-                info.location(),
-                info.payload().downcast_ref::<String>(),
-            );
-        }));
+        // std::panic::set_hook(Box::new(|info| {
+        //     log::error!(
+        //         "pnaic: location={:?}, message={:?}",
+        //         info.location(),
+        //         info.payload().downcast_ref::<String>(),
+        //     );
+        // }));
 
         {
             let event_loop = EventLoop::<AppEvent>::with_user_event().build()?;
