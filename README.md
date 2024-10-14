@@ -14,6 +14,8 @@
 <br/>
 <br/>
 
+#### 🚧 This project is under development, but the core functionality has been completed and the peripheral sample applications are currently being developed.
+
 Pure software screen projection is different from Miracast, AirPlay, etc., which need to rely on hardware support. This project was not designed to work on a wide area network, but works well in a local area network environment.
 
 ## Build Instructions
