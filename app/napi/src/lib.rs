@@ -557,7 +557,7 @@ impl MirrorReceiverService {
 struct Viewer {
     callback: ThreadsafeFunction<(), JsUnknown, (), false>,
     initialized: AtomicBool,
-    render: Render<'static>,
+    render: Render,
 }
 
 impl AVFrameStream for Viewer {}

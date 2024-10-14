@@ -187,10 +187,10 @@ impl Mirror {
 /// unavailable, for video this can be done by enabling the dx11 feature tobe
 /// implemented with Direct3D 11 Graphics, which works fine on some very old
 /// devices.
-pub struct Render<'a>(Mutex<VideoRender<'a>>, Mutex<AudioRender>);
+pub struct Render(Mutex<VideoRender>, Mutex<AudioRender>);
 
-impl<'a> Render<'a> {
-    pub fn new<T: Into<SurfaceTarget<'a>>>(
+impl Render {
+    pub fn new<'a, T: Into<SurfaceTarget<'a>>>(
         backend: VideoRenderBackend,
         window: T,
         size: Size,
@@ -202,7 +202,7 @@ impl<'a> Render<'a> {
     }
 }
 
-impl<'a> AVFrameSink for Render<'a> {
+impl AVFrameSink for Render {
     /// Renders the audio frame, note that a queue is maintained internally,
     /// here it just pushes the audio to the playback queue, and if the queue is
     /// empty, it fills the mute data to the player by default, so you need to

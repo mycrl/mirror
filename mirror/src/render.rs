@@ -20,9 +20,7 @@ use common::{
     Size,
 };
 
-use graphics::{
-    Renderer, RendererOptions, SurfaceTarget, Texture, Texture2DBuffer, Texture2DResource,
-};
+use graphics::{SurfaceTarget, Texture, Texture2DBuffer, Texture2DResource};
 
 #[cfg(target_os = "windows")]
 use common::win32::{d3d_texture_borrowed_raw, windows::Win32::Foundation::HWND};
@@ -205,14 +203,14 @@ pub enum Backend {
     Wgpu,
 }
 
-pub enum VideoRender<'a> {
-    Wgpu(Renderer<'a>),
+pub enum VideoRender {
+    // Wgpu(Renderer<'a>),
     #[cfg(target_os = "windows")]
     Dx11(Dx11Renderer),
 }
 
-impl<'a> VideoRender<'a> {
-    pub fn new<T: Into<SurfaceTarget<'a>>>(
+impl VideoRender {
+    pub fn new<'a, T: Into<SurfaceTarget<'a>>>(
         backend: Backend,
         window: T,
         size: Size,
@@ -227,9 +225,6 @@ impl<'a> VideoRender<'a> {
         let direct3d = crate::DIRECT_3D_DEVICE.read().as_ref().unwrap().clone();
 
         Ok(match backend {
-            #[cfg(not(target_os = "windows"))]
-            Backend::Dx11 => unimplemented!("not supports dx11 backend"),
-            #[cfg(target_os = "windows")]
             Backend::Dx11 => Self::Dx11(Dx11Renderer::new(
                 match window.into() {
                     SurfaceTarget::Window(window) => match window.window_handle().unwrap().as_raw()
@@ -248,12 +243,13 @@ impl<'a> VideoRender<'a> {
                 size,
                 direct3d,
             )?),
-            Backend::Wgpu => Self::Wgpu(Renderer::new(RendererOptions {
-                #[cfg(target_os = "windows")]
-                direct3d,
-                window,
-                size,
-            })?),
+            // Backend::Wgpu => Self::Wgpu(Renderer::new(RendererOptions {
+            //     #[cfg(target_os = "windows")]
+            //     direct3d,
+            //     window,
+            //     size,
+            // })?),
+            _ => unimplemented!("not supports dx11 backend"),
         })
     }
 
@@ -280,7 +276,7 @@ impl<'a> VideoRender<'a> {
 
                     match self {
                         Self::Dx11(render) => render.submit(texture)?,
-                        Self::Wgpu(render) => render.submit(texture)?,
+                        // Self::Wgpu(render) => render.submit(texture)?,
                     }
                 }
             }
@@ -384,7 +380,7 @@ impl<'a> VideoRender<'a> {
                 match self {
                     #[cfg(target_os = "windows")]
                     Self::Dx11(render) => render.submit(texture)?,
-                    Self::Wgpu(render) => render.submit(texture)?,
+                    // Self::Wgpu(render) => render.submit(texture)?,
                 }
             }
         }

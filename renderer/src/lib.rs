@@ -130,7 +130,7 @@ extern "C" fn window_handle_destroy(window_handle: *mut Window) {
 }
 
 #[repr(C)]
-struct RawRenderer(mirror::Render<'static>);
+struct RawRenderer(mirror::Render);
 
 /// Creating a window renderer.
 #[no_mangle]

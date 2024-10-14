@@ -765,7 +765,7 @@ pub mod desktop {
     }
 
     #[repr(C)]
-    struct RawRenderer(mirror::Render<'static>);
+    struct RawRenderer(mirror::Render);
 
     /// Creating a window renderer.
     #[no_mangle]
