@@ -17,9 +17,6 @@ napi-derive = "3.0.0-alpha.11"
 winit = "0.30.5"
 mirror = { path = "../../mirror" }
 common = { path = "../../common" }
-serde = { version = "1", features = ["derive"] }
-serde_json = "1.0"
-tokio = { version = "1.40.0", features = ["rt", "sync"] }
 
 [build-dependencies]
 napi-build = "1"

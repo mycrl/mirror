@@ -1,5 +1,3 @@
-mod ipc;
-
 use parking_lot::{Mutex, RwLock};
 use std::{
     sync::{atomic::AtomicBool, Arc},
@@ -30,7 +28,7 @@ use winit::{
     window::{Fullscreen, Window, WindowId},
 };
 
-static WINDOW: Lazy<RwLock<Option<Arc<Window>>>> = Lazy::new(|| RwLock::new(None));
+static RENDERER: Lazy<RwLock<Option<Arc<Renderer>>>> = Lazy::new(|| RwLock::new(None));
 static EVENT_LOOP: Lazy<RwLock<Option<EventLoopProxy<AppEvent>>>> = Lazy::new(|| RwLock::new(None));
 
 enum AppEvent {
@@ -64,7 +62,14 @@ impl App {
         window.set_cursor_hittest(false)?;
 
         self.window = Some(window.clone());
-        WINDOW.write().replace(window);
+        RENDERER.write().replace(Arc::new(Renderer::new(
+            GraphicsBackend::WebGPU,
+            window.clone(),
+            Size {
+                width: size.width,
+                height: size.height,
+            },
+        )?));
 
         Ok(())
     }
@@ -125,14 +130,6 @@ pub fn startup(user_data: Option<String>) -> napi::Result<()> {
             user_data.as_ref().map(|x| x.as_str()),
         )?;
 
-        // std::panic::set_hook(Box::new(|info| {
-        //     log::error!(
-        //         "pnaic: location={:?}, message={:?}",
-        //         info.location(),
-        //         info.payload().downcast_ref::<String>(),
-        //     );
-        // }));
-
         {
             let event_loop = EventLoop::<AppEvent>::with_user_event().build()?;
             event_loop.set_control_flow(ControlFlow::Wait);
@@ -184,27 +181,6 @@ pub fn shutdown() -> napi::Result<()> {
     }
 
     Ok(())
-}
-
-#[napi]
-#[derive(Debug, Clone, Copy)]
-pub enum Backend {
-    /// Use Direct3D 11.x as a rendering backend, this is not a cross-platform
-    /// option and is only available on windows, on some Direct3D 11 only
-    /// devices.
-    Direct3D11,
-    /// This is a new cross-platform backend, and on windows the latency may be
-    /// a bit higher than the Direct3D 11 backend.
-    WebGPU,
-}
-
-impl Into<GraphicsBackend> for Backend {
-    fn into(self) -> GraphicsBackend {
-        match self {
-            Self::Direct3D11 => GraphicsBackend::Direct3D11,
-            Self::WebGPU => GraphicsBackend::WebGPU,
-        }
-    }
 }
 
 #[napi(object)]
@@ -414,7 +390,6 @@ impl Into<SenderDescriptor> for MirrorSenderServiceDescriptor {
 #[derive(Debug, Clone, Copy)]
 pub struct MirrorReceiverServiceDescriptor {
     pub video: VideoDecoderType,
-    pub backend: Backend,
 }
 
 impl Into<ReceiverDescriptor> for MirrorReceiverServiceDescriptor {
@@ -470,7 +445,6 @@ impl MirrorService {
                         id,
                         options.into(),
                         Viewer::new(
-                            Backend::WebGPU,
                             callback
                                 .build_threadsafe_function::<()>()
                                 .build_callback(|_| Ok(()))?,
@@ -492,7 +466,6 @@ impl MirrorService {
         callback: Function,
     ) -> napi::Result<MirrorReceiverService> {
         let func = || {
-            let backend = options.backend;
             Ok::<_, anyhow::Error>(MirrorReceiverService(Some(
                 self.0
                     .as_ref()
@@ -501,7 +474,6 @@ impl MirrorService {
                         id,
                         options.into(),
                         Viewer::new(
-                            backend,
                             callback
                                 .build_threadsafe_function::<()>()
                                 .build_callback(|_| Ok(()))?,
@@ -562,8 +534,8 @@ impl MirrorReceiverService {
 
 struct Viewer {
     callback: ThreadsafeFunction<(), JsUnknown, (), false>,
+    render: Arc<Renderer<'static>>,
     initialized: AtomicBool,
-    render: Renderer<'static>,
 }
 
 impl AVFrameStream for Viewer {}
@@ -602,25 +574,25 @@ impl Close for Viewer {
 }
 
 impl Viewer {
-    fn new(
-        backend: Backend,
-        callback: ThreadsafeFunction<(), JsUnknown, (), false>,
-    ) -> Result<Self> {
-        let window = WINDOW.read().as_ref().cloned().unwrap();
-        let inner_size = window.inner_size();
-        let render = Renderer::new(
-            backend.into(),
-            window,
-            Size {
-                width: inner_size.width,
-                height: inner_size.height,
-            },
-        )?;
-
+    fn new(callback: ThreadsafeFunction<(), JsUnknown, (), false>) -> Result<Self> {
         Ok(Self {
-            initialized: AtomicBool::new(false),
             callback,
-            render,
+            initialized: AtomicBool::new(false),
+            render: RENDERER
+                .read()
+                .as_ref()
+                .cloned()
+                .ok_or_else(|| anyhow!("not found renderer"))?,
         })
+    }
+}
+
+impl Drop for Viewer {
+    fn drop(&mut self) {
+        if let Some(event_loop) = EVENT_LOOP.read().as_ref() {
+            if let Err(_) = event_loop.send_event(AppEvent::SetVisible(false)) {
+                log::warn!("winit event loop is closed");
+            }
+        }
     }
 }
