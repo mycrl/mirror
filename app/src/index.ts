@@ -1,6 +1,5 @@
 import { app, screen, BrowserWindow, Tray, nativeImage, ipcMain, Menu } from "electron";
 import {
-    Backend,
     MirrorReceiverService,
     MirrorSenderService,
     MirrorService,
@@ -231,7 +230,6 @@ ipcMain.handle("close-sender", async (_event) => {
                 Config.channel,
                 {
                     video: Config.decoder,
-                    backend: Backend.WebGPU,
                 },
                 () => {
                     Log("info", "receiver close callback");
@@ -288,7 +286,6 @@ ipcMain.handle("set-settings", (_event, settings: typeof Config) => {
                 Config.channel,
                 {
                     video: VideoDecoderType.Qsv,
-                    backend: Backend.WebGPU,
                 },
                 () => {
                     Log("info", "receiver close callback");

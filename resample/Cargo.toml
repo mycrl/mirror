@@ -4,5 +4,5 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-rubato = "0.15.0"
+rubato = "0.16.0"
 common = { path = "../common" }

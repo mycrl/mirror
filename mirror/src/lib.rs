@@ -6,13 +6,7 @@ pub use self::{
     sender::{AudioDescriptor, Sender, SenderDescriptor, SenderError, VideoDescriptor},
 };
 
-use std::{
-    slice::from_raw_parts,
-    sync::{
-        mpsc::{channel, Receiver as MpscReceiver, Sender as MpscSender},
-        Arc,
-    },
-};
+use std::slice::from_raw_parts;
 
 pub use capture::{Capture, Source, SourceType};
 pub use codec::{VideoDecoderType, VideoEncoderType};
@@ -23,11 +17,6 @@ pub use common::{
 
 pub use graphics::raw_window_handle;
 pub use transport::TransportDescriptor;
-
-use cpal::{
-    traits::{DeviceTrait, HostTrait, StreamTrait},
-    Stream, StreamConfig, StreamError,
-};
 
 #[cfg(target_os = "windows")]
 use common::win32::{
@@ -46,7 +35,7 @@ use graphics::{
 };
 
 use parking_lot::{Mutex, RwLock};
-use resample::AudioResampler;
+use rodio::{OutputStream, OutputStreamHandle, Sink};
 use thiserror::Error;
 use transport::Transport;
 
@@ -196,17 +185,9 @@ pub enum RendererError {
     #[error("no output device available")]
     AudioNotFoundOutputDevice,
     #[error(transparent)]
-    AudioDefaultStreamConfigError(#[from] cpal::DefaultStreamConfigError),
+    AudioStreamError(#[from] rodio::StreamError),
     #[error(transparent)]
-    AudioBuildStreamError(#[from] cpal::BuildStreamError),
-    #[error(transparent)]
-    AudioResamplerConstructionError(#[from] resample::ResamplerConstructionError),
-    #[error(transparent)]
-    AudioStreamError(#[from] cpal::StreamError),
-    #[error(transparent)]
-    AudioPlayStreamError(#[from] cpal::PlayStreamError),
-    #[error(transparent)]
-    AudioResampleError(#[from] resample::ResampleError),
+    AudioPlayError(#[from] rodio::PlayError),
     #[error("send audio queue error")]
     AudioSendQueueError,
     #[error(transparent)]
@@ -219,12 +200,58 @@ pub enum RendererError {
     VideoInvalidD3D11Texture,
 }
 
+struct AudioSamples {
+    sample_rate: u32,
+    buffer: Vec<i16>,
+    index: usize,
+    frames: usize,
+}
+
+impl rodio::Source for AudioSamples {
+    fn current_frame_len(&self) -> Option<usize> {
+        Some(self.frames)
+    }
+
+    fn channels(&self) -> u16 {
+        1
+    }
+
+    fn sample_rate(&self) -> u32 {
+        self.sample_rate
+    }
+
+    fn total_duration(&self) -> Option<std::time::Duration> {
+        None
+    }
+}
+
+impl Iterator for AudioSamples {
+    type Item = i16;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let item = self.buffer.get(self.index).map(|it| *it);
+        self.index += 1;
+        item
+    }
+}
+
+impl From<&AudioFrame> for AudioSamples {
+    fn from(frame: &AudioFrame) -> Self {
+        Self {
+            buffer: unsafe { from_raw_parts(frame.data, frame.frames as usize) }.to_vec(),
+            sample_rate: frame.sample_rate,
+            frames: frame.frames as usize,
+            index: 0,
+        }
+    }
+}
+
 pub struct AudioRender {
-    stream: Stream,
-    config: StreamConfig,
-    queue: MpscSender<Vec<i16>>,
-    sampler: Option<AudioResampler>,
-    current_error: Arc<RwLock<Option<StreamError>>>,
+    #[allow(dead_code)]
+    stream: OutputStream,
+    #[allow(dead_code)]
+    stream_handle: OutputStreamHandle,
+    sink: Sink,
 }
 
 unsafe impl Send for AudioRender {}
@@ -232,131 +259,27 @@ unsafe impl Sync for AudioRender {}
 
 impl AudioRender {
     pub fn new() -> Result<Self, RendererError> {
-        let host = cpal::default_host();
-        let device = host
-            .default_output_device()
-            .ok_or_else(|| RendererError::AudioNotFoundOutputDevice)?;
-        let config: StreamConfig = device.default_output_config()?.into();
-        let current_error: Arc<RwLock<Option<StreamError>>> = Default::default();
+        let (stream, stream_handle) = OutputStream::try_default()?;
+        let sink = Sink::try_new(&stream_handle)?;
 
-        let (queue, rx) = channel();
-        let stream = {
-            let current_error_ = Arc::downgrade(&current_error);
-            let mut queue = AudioQueue {
-                queue: rx,
-                current_chunk: None,
-            };
-
-            device.build_output_stream(
-                &config,
-                move |data: &mut [i16], _: &cpal::OutputCallbackInfo| {
-                    queue.read(data, config.channels as usize);
-                },
-                move |err| {
-                    if let Some(current_error) = current_error_.upgrade() {
-                        current_error.write().replace(err);
-                    }
-                },
-                None,
-            )?
-        };
-
+        sink.play();
         Ok(Self {
+            stream_handle,
             stream,
-            queue,
-            config,
-            current_error,
-            sampler: None,
+            sink,
         })
     }
 
     /// Push an audio clip to the queue.
     pub fn send(&mut self, frame: &AudioFrame) -> Result<(), RendererError> {
-        if self.current_error.read().is_some() {
-            if let Some(e) = self.current_error.write().take() {
-                return Err(RendererError::AudioStreamError(e));
-            }
-        }
-
-        if self.sampler.is_none() {
-            self.sampler = Some(AudioResampler::new(
-                frame.sample_rate as f64,
-                self.config.sample_rate.0 as f64,
-                frame.frames as usize,
-            )?);
-
-            // Start playing audio by first push.
-            self.stream.play()?;
-        }
-
-        if let Some(sampler) = &mut self.sampler {
-            self.queue
-                .send(
-                    sampler
-                        .resample(
-                            unsafe { from_raw_parts(frame.data, frame.frames as usize) },
-                            1,
-                        )?
-                        .to_vec(),
-                )
-                .map_err(|_| RendererError::AudioSendQueueError)?;
-        }
-
+        self.sink.append(AudioSamples::from(frame));
         Ok(())
     }
 }
 
 impl Drop for AudioRender {
     fn drop(&mut self) {
-        let _ = self.stream.pause();
-    }
-}
-
-struct AudioQueue {
-    queue: MpscReceiver<Vec<i16>>,
-    current_chunk: Option<std::vec::IntoIter<i16>>,
-}
-
-static MUTE_BUF: [i16; 48000] = [0; 48000];
-
-impl AudioQueue {
-    fn read(&mut self, output: &mut [i16], channels: usize) {
-        let mut index = 0;
-
-        // Copy from queue to player
-        'a: while index < output.len() {
-            // Check if the buffer is empty
-            if let Some(chunk) = &mut self.current_chunk {
-                loop {
-                    // Writing to the player buffer is complete
-                    if index >= output.len() {
-                        break;
-                    }
-
-                    // Read data from the queue buffer and write it to the player buffer. If the
-                    // queue buffer is empty, jump to the step of updating the buffer.
-                    if let Some(item) = chunk.next() {
-                        for i in 0..channels {
-                            output[index + i] = item;
-                        }
-
-                        index += channels;
-                    } else {
-                        self.current_chunk = None;
-                        continue 'a;
-                    }
-                }
-            } else {
-                // If the buffer is empty, take another one from the queue and put it into the
-                // buffer. If the queue is empty, fill it directly with silent data.
-                if let Ok(chunk) = self.queue.try_recv() {
-                    self.current_chunk = Some(chunk.into_iter());
-                } else {
-                    output.copy_from_slice(&MUTE_BUF[..output.len()]);
-                    break;
-                }
-            }
-        }
+        self.sink.pause();
     }
 }
 
@@ -424,8 +347,8 @@ impl<'a> VideoRender<'a> {
             VideoSubFormat::D3D11 => {
                 let texture = Texture2DResource::Texture(graphics::Texture2DRaw::ID3D11Texture2D(
                     d3d_texture_borrowed_raw(&(frame.data[0] as *mut _))
-                        .cloned()
-                        .ok_or_else(|| RendererError::VideoInvalidD3D11Texture)?,
+                        .ok_or_else(|| RendererError::VideoInvalidD3D11Texture)?
+                        .clone(),
                     frame.data[1] as u32,
                 ));
 
@@ -570,6 +493,7 @@ impl<'a> VideoRender<'a> {
                     Self::WebGPU(render) => render.submit(texture)?,
                 }
             }
+            #[allow(unreachable_patterns)]
             _ => unimplemented!("not suppports the frame format = {:?}", frame.sub_format),
         }
 

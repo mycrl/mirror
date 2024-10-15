@@ -386,6 +386,7 @@ int WinMain(HINSTANCE hinstance,
         DispatchMessage(&message);
     }
 
+    MIRROR_SERVICE->Close();
     renderer_destroy(RENDER);
     window_handle_destroy(window_handle);
     DestroyWindow(hwnd);
