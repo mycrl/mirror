@@ -3,7 +3,7 @@
    <h1>MIRROR</h1>
 </div>
 <div align="center">
-  <strong>Cross-platform casting SDK, support Android, Windows, Linux</strong>
+  <strong>A cross-platform screen casting library implemented by rust.</strong>
 </div>
 <div align="center">
   <img src="https://img.shields.io/github/actions/workflow/status/mycrl/mirror/release.yaml?branch=main"/>
@@ -15,6 +15,23 @@
 <br/>
 
 Pure software screen projection is different from Miracast, AirPlay, etc., which need to rely on hardware support. This project was not designed to work on a wide area network, but works well in a local area network environment.
+
+Unlike a solution like DLAN, this project is more akin to airplay, so low latency is the main goal, currently the latency is controlled at around 150-250ms (with some variations on different platforms with different codecs), and maintains a highly easy to use API and very few external dependencies.
+
+The project is cross-platform, but the priority platforms supported are Windows and Android.
+
+<br/>
+<br/>
+
+## Demonstration Video
+
+<div align="center">
+    <video src="./demonstrations.mp4" width="300"></video>
+</div>
+
+## Documentation
+
+The documentation is still being updated, for C/C++ projects, check out this header file: [mirror.h](./ffi/include/mirror.h)
 
 ## Build Instructions
 
@@ -54,8 +71,6 @@ If you don't need to build the examples, just build the dynamic library:
 ```sh
 cargo build --release
 ```
-
-For the required header files: [mirror.h](./ffi/include/mirror.h)
 
 ## License
 
