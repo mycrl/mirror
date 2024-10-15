@@ -163,17 +163,5 @@ const Replace = (file, filters) =>
         ['../../target/release', '../lib'],
     ])
 
-    /* package electron app */
-    if (Args.app)
-    {
-        await Command('npm i', { cwd: join(__dirname, './app') })
-        await Command('npm run package', { cwd: join(__dirname, './app') })
-
-        let output = process.platform == 'win32' ? 
-            'win-unpacked' : 
-            (process.platform == 'darwin' ? 'mac-arm64' : 'linux-unpacked')
-        fs.cpSync(`./app/dist/${output}`, './build/bin', { force: true, recursive: true })
-    }
-
     /* async block end */
 })().catch(console.error)

@@ -18,5 +18,4 @@ members = [
     "mirror",
     "service",
     "transport",
-    "sdk/napi",
 ]
