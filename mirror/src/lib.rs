@@ -28,13 +28,16 @@ use common::win32::{
 use common::macos::{CVPixelBufferRef, PixelBufferRef};
 
 #[cfg(target_os = "windows")]
+use parking_lot::RwLock;
+
+#[cfg(target_os = "windows")]
 use graphics::dx11::Dx11Renderer;
 use graphics::{
     Renderer as WgpuRenderer, RendererOptions as WgpuRendererOptions, SurfaceTarget, Texture,
     Texture2DBuffer, Texture2DResource,
 };
 
-use parking_lot::{Mutex, RwLock};
+use parking_lot::Mutex;
 use rodio::{OutputStream, OutputStreamHandle, Sink};
 use thiserror::Error;
 use transport::Transport;
