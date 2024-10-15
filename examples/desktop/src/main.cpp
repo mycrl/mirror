@@ -157,7 +157,7 @@ public:
             return true;
         }
 
-        auto video_sources = mirror_get_sources(SOURCE_TYPE_CAMERA);
+        auto video_sources = mirror_get_sources(SOURCE_TYPE_SCREEN);
         auto audio_sources = mirror_get_sources(SOURCE_TYPE_AUDIO);
 
         VideoDescriptor video_options;
