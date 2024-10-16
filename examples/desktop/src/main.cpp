@@ -96,7 +96,7 @@ void cli_parse(std::string cmd)
     cmdline::parser args;
 
 #ifdef WIN32
-    args.add<std::string>("encoder", '\0', "video encoder", false, "h264_qsv");
+    args.add<std::string>("encoder", '\0', "video encoder", false, "libx264");
     args.add<std::string>("decoder", '\0', "video decoder", false, "d3d11va");
 #elif MACOS
     args.add<std::string>("encoder", '\0', "video encoder", false, "h264_videotoolbox");
@@ -109,7 +109,7 @@ void cli_parse(std::string cmd)
     args.add<std::string>("server", '\0', "server", false, "192.168.2.88:8088");
     args.add<int>("width", '\0', "video width", false, 1280);
     args.add<int>("height", '\0', "video height", false, 720);
-    args.add<int>("fps", '\0', "video frame rate/s", false, 24);
+    args.add<int>("fps", '\0', "video frame rate/s", false, 30);
     args.add<int>("id", '\0', "channel number", false, 0);
 
     if (cmd.length() > 0)
@@ -190,12 +190,12 @@ public:
 
         SenderDescriptor options;
         options.video = &video_options;
-        options.audio = nullptr;
+        options.audio = &audio_options;
         options.multicast = false;
 
         FrameSink sink;
-        sink.video = MirrorService::video_proc;
-        sink.audio = MirrorService::audio_proc;
+        sink.audio = nullptr;
+        sink.video = nullptr;
         sink.close = MirrorService::close_proc;
         sink.ctx = (void*)this;
 
@@ -376,7 +376,7 @@ int WinMain(HINSTANCE hinstance,
     auto window_handle = create_window_handle_for_win32(hwnd,
                                                         OPTIONS.width,
                                                         OPTIONS.height);
-    RENDER = renderer_create(window_handle, RENDER_BACKEND_WGPU);
+    RENDER = renderer_create(window_handle, RENDER_BACKEND_DX11);
     MIRROR_SERVICE = new MirrorService();
 
     MSG message;
