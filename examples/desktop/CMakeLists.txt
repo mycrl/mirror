@@ -15,41 +15,15 @@ if(APPLE)
     set_source_files_properties(src/main.cpp PROPERTIES LANGUAGE OBJCXX)
 endif()
 
-# Used to download or initialize third-party dependent libraries.
-set(THIRD_PARTY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party")
-
-# Check whether the third-party dependent library directory is created.
-if (NOT EXISTS "${THIRD_PARTY_DIR}")
-    if (WIN32)
-        execute_process(COMMAND powershell.exe -Command "mkdir ${THIRD_PARTY_DIR}")
-    else()
-        execute_process(COMMAND mkdir "${THIRD_PARTY_DIR}")
-    endif()
-endif()
-
-# Clone the cmdline repository.
-if (NOT EXISTS "${THIRD_PARTY_DIR}/cmdline")
-    if (WIN32)
-        execute_process(
-            WORKING_DIRECTORY "${THIRD_PARTY_DIR}"
-            COMMAND powershell.exe -Command "git clone https://github.com/mycrl/cmdline")
-    else()
-        execute_process(
-            WORKING_DIRECTORY "${THIRD_PARTY_DIR}"
-            COMMAND bash -c "git clone https://github.com/mycrl/cmdline")
-    endif()
-endif()
-
 # Windows requires a win32 subsystem.
 if(MSVC)
-    add_executable(example WIN32 src/main.cpp)
+    add_executable(example WIN32 src/main.cpp src/cli.h)
 else()
-    add_executable(example src/main.cpp)
+    add_executable(example src/main.cpp src/cli.h)
 endif()
 
 # Add third-party libraries to the search path.
-include_directories("../../ffi/include"
-                    "${THIRD_PARTY_DIR}/cmdline")
+include_directories("../../ffi/include")
 
 if(APPLE)
     include_directories("/opt/homebrew/opt/sdl2/include/SDL2")
