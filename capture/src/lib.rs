@@ -174,11 +174,12 @@ enum CaptureImplement {
     Audio(AudioCapture),
 }
 
+/// Capture implementations for audio devices and video devices.
 #[derive(Default)]
 pub struct Capture(Vec<CaptureImplement>);
 
 impl Capture {
-    /// Returns a list of devices by type.
+    /// Get all sources that can be used for capture by specifying the type, which is usually an audio or video device.
     #[allow(unreachable_patterns)]
     pub fn get_sources(kind: SourceType) -> Result<Vec<Source>, CaptureError> {
         log::info!("capture get sources, kind={:?}", kind);

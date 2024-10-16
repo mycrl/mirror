@@ -51,7 +51,7 @@ pub enum MirrorError {
     TransportError(#[from] std::io::Error),
 }
 
-/// Initialize the environment, which must be initialized before using the SDK.
+/// Initialize the environment, which must be initialized before using the sdk.
 pub fn startup() -> Result<(), MirrorError> {
     log::info!("mirror startup");
 
@@ -83,7 +83,7 @@ pub fn startup() -> Result<(), MirrorError> {
     Ok(())
 }
 
-/// Cleans up the environment when the SDK exits, and is recommended to be
+/// Cleans up the environment when the sdk exits, and is recommended to be
 /// called when the application exits.
 pub fn shutdown() -> Result<(), MirrorError> {
     log::info!("mirror shutdown");
@@ -249,6 +249,7 @@ impl From<&AudioFrame> for AudioSamples {
     }
 }
 
+/// Audio player that plays the original audio frames directly.
 pub struct AudioRender {
     #[allow(dead_code)]
     stream: OutputStream,
@@ -261,6 +262,7 @@ unsafe impl Send for AudioRender {}
 unsafe impl Sync for AudioRender {}
 
 impl AudioRender {
+    /// Create a video player.
     pub fn new() -> Result<Self, RendererError> {
         let (stream, stream_handle) = OutputStream::try_default()?;
         let sink = Sink::try_new(&stream_handle)?;

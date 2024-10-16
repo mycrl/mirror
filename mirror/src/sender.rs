@@ -41,6 +41,7 @@ pub enum SenderError {
     AudioEncoderError(#[from] codec::AudioEncoderError),
 }
 
+/// Description of video coding.
 #[derive(Debug, Clone)]
 pub struct VideoDescriptor {
     pub codec: VideoEncoderType,
@@ -51,12 +52,14 @@ pub struct VideoDescriptor {
     pub key_frame_interval: u32,
 }
 
+/// Description of the audio encoding.
 #[derive(Debug, Clone, Copy)]
 pub struct AudioDescriptor {
     pub sample_rate: u64,
     pub bit_rate: u64,
 }
 
+/// Transmitter Configuration Description.
 #[derive(Debug)]
 pub struct SenderDescriptor {
     pub video: Option<(Source, VideoDescriptor)>,
