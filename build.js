@@ -119,7 +119,7 @@ const Replace = (file, filters) => {
     else {
         for (const item of [
             [`./examples/cpp/build/example`, './build/bin/example-cpp'],
-            [`./target/${Profile.toLowerCase()}/mirror-example`, './build/server/example'],
+            [`./target/${Profile.toLowerCase()}/mirror-example`, './build/bin/example'],
             [`./target/${Profile.toLowerCase()}/mirror-service`, './build/server/mirror-service'],
             process.platform == 'darwin' ?
                 [`./target/${Profile.toLowerCase()}/libmirror.dylib`, './build/bin/libmirror.dylib'] :
