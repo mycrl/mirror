@@ -283,7 +283,7 @@ int WINAPI WinMain(HINSTANCE hinstance,
     auto window_handle = create_window_handle_for_win32(hwnd,
                                                         OPTIONS.width,
                                                         OPTIONS.height);
-    RENDER = renderer_create(window_handle, RENDER_BACKEND_DX11);
+    RENDER = renderer_create(window_handle, RENDER_BACKEND_WGPU);
     MIRROR_SERVICE = new MirrorService();
 
     MSG message;
