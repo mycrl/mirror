@@ -99,7 +99,10 @@ impl App {
 
     fn create_window(&mut self, event_loop: &ActiveEventLoop) -> Result<()> {
         let mut attr = Window::default_attributes();
-        attr.inner_size = Some(winit::dpi::Size::Physical(PhysicalSize::new(self.cli.width, self.cli.height)));
+        attr.inner_size = Some(winit::dpi::Size::Physical(PhysicalSize::new(
+            self.cli.width,
+            self.cli.height,
+        )));
 
         let window = Arc::new(event_loop.create_window(attr)?);
 
@@ -190,6 +193,8 @@ impl ApplicationHandler<AppEvent> for App {
         event: WindowEvent,
     ) {
         match event {
+            // The user closes the window, and we close the sender and receiver, in that order, and
+            // release the renderer and mirror instances, and finally stop the message loop.
             WindowEvent::CloseRequested => {
                 drop(self.receiver.take());
                 drop(self.sender.take());
@@ -202,6 +207,11 @@ impl ApplicationHandler<AppEvent> for App {
                 if !event.repeat && event.state == ElementState::Released {
                     if let PhysicalKey::Code(key) = event.physical_key {
                         match key {
+                            // When the S key is pressed, the sender is created, but check to see if
+                            // the sender has already been created between sender creation to avoid
+                            // duplicate creation.
+                            //
+                            // The receiving end is the same.
                             KeyCode::KeyS => {
                                 if self.sender.is_none() {
                                     if let Err(e) = self.create_sender() {
@@ -216,6 +226,9 @@ impl ApplicationHandler<AppEvent> for App {
                                     }
                                 }
                             }
+                            // When the S key is pressed, either the transmitter or the receiver
+                            // needs to be turned off. No distinction is made here; both the
+                            // transmitter and the receiver are turned off.
                             KeyCode::KeyK => {
                                 let _ = self.event_proxy.send_event(AppEvent::CloseSender);
                                 let _ = self.event_proxy.send_event(AppEvent::CloseReceiver);
@@ -230,6 +243,8 @@ impl ApplicationHandler<AppEvent> for App {
     }
 
     fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: AppEvent) {
+        // Handle events that close the sender or close the receiver. When a close event
+        // is received, we need to drop the corresponding sender or receiver.
         match event {
             AppEvent::CloseSender => drop(self.sender.take()),
             AppEvent::CloseReceiver => drop(self.receiver.take()),
@@ -244,6 +259,8 @@ impl ApplicationHandler<AppEvent> for App {
     author = env!("CARGO_PKG_AUTHORS"),
 )]
 struct Cli {
+    /// The address to which the mirror service is bound, indicating how to
+    /// connect to the mirror service.
     #[arg(long)]
     server: SocketAddr,
     #[arg(long, default_value_t = 1280)]
@@ -252,6 +269,8 @@ struct Cli {
     height: u32,
     #[arg(long, default_value_t = 24)]
     fps: u8,
+    /// Each sender and receiver need to be bound to a channel, and the receiver
+    /// can only receive the cast screen within the channel.
     #[arg(long, default_value_t = 0)]
     id: u32,
     #[arg(
@@ -269,8 +288,12 @@ struct Cli {
 }
 
 fn main() -> Result<()> {
+    simple_logger::init_with_level(log::Level::Info)?;
+
     let mut cli = Cli::parse();
 
+    // Use different default codecs on different platforms, it is better to use
+    // hardware codecs by default compared to software codecs.
     cli.encoder.replace(if cfg!(target_os = "macos") {
         VideoEncoderType::VideoToolBox
     } else if cfg!(target_os = "windows") {
@@ -287,14 +310,14 @@ fn main() -> Result<()> {
         VideoDecoderType::H264
     });
 
-    simple_logger::init_with_level(log::Level::Info)?;
-
+    // Creates a message loop, which is used to create the main window.
     let event_loop = EventLoop::<AppEvent>::with_user_event().build()?;
     event_loop.set_control_flow(ControlFlow::Wait);
 
     let event_proxy = event_loop.create_proxy();
     event_loop.run_app(&mut App::new(cli, event_proxy))?;
 
+    //When exiting the application, the environment of mirror should be cleaned up.
     shutdown()?;
     Ok(())
 }

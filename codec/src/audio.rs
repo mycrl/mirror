@@ -71,7 +71,7 @@ impl AudioDecoder {
         context_mut.thread_type = FF_THREAD_SLICE;
         context_mut.request_sample_fmt = AVSampleFormat::AV_SAMPLE_FMT_S16;
         context_mut.ch_layout = ch_layout;
-        context_mut.flags |= AV_CODEC_FLAG_LOW_DELAY as i32;
+        context_mut.flags |= AV_CODEC_FLAG_LOW_DELAY as i32 | AVFMT_FLAG_NOBUFFER;
         context_mut.flags2 |= AV_CODEC_FLAG2_FAST;
 
         if unsafe { avcodec_open2(this.context, codec, null_mut()) } != 0 {
@@ -117,7 +117,7 @@ impl AudioDecoder {
                     buf.as_ptr(),
                     buf.len() as c_int,
                     pts as i64,
-                    AV_NOPTS_VALUE,
+                    0,
                     0,
                 )
             };
