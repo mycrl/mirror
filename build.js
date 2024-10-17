@@ -20,8 +20,7 @@ const Command = (cmd, options = {}) => new Promise((
         cwd: __dirname,
         ...options,
     }
-    )) =>
-{
+    )) => {
     ps.stdout.pipe(process.stdout)
     ps.stderr.pipe(process.stderr)
 
@@ -31,19 +30,16 @@ const Command = (cmd, options = {}) => new Promise((
     })
 })
 
-const Replace = (file, filters) =>
-{
+const Replace = (file, filters) => {
     let src = fs.readFileSync(file).toString()
-    for (const item of filters)
-    {
+    for (const item of filters) {
         src = src.replace(...item)
     }
 
     fs.writeFileSync(file, src)
 }
 
-/* async block */ void (async () =>
-{
+/* async block */ void (async () => {
     const Profile = Args.release ? 'Release' : 'Debug'
     const BaseDistributions = 'https://github.com/mycrl/third-party/releases/download/distributions'
 
@@ -56,24 +52,21 @@ const Replace = (file, filters) =>
         './build/include',
         './build/examples',
         './build/examples/cpp',
-    ])
-    {
-        if (!fs.existsSync(path))
-        {
+        './build/examples/rust',
+    ]) {
+        if (!fs.existsSync(path)) {
             fs.mkdirSync(path)
         }
     }
 
     await Command(`cargo build ${Args.release ? '--release' : ''} -p mirror-shared`)
+    await Command(`cargo build ${Args.release ? '--release' : ''} -p mirror-example`)
     await Command(`cargo build ${Args.release ? '--release' : ''} -p mirror-service`)
 
     /* download ffmpeg librarys for windows */
-    if (process.platform == 'win32')
-    {
-        if (!fs.existsSync('./target/ffmpeg'))
-        {
-            if (!fs.existsSync('./target/ffmpeg.zip'))
-            {
+    if (process.platform == 'win32') {
+        if (!fs.existsSync('./target/ffmpeg')) {
+            if (!fs.existsSync('./target/ffmpeg.zip')) {
                 const name = process.platform == 'win32' ?
                     `ffmpeg-windows-x64-${Args.release ? 'release' : 'debug'}.zip` :
                     'ffmpeg-linux-x64-release.zip'
@@ -87,8 +80,7 @@ const Replace = (file, filters) =>
         }
     }
 
-    if (!fs.existsSync('./examples/cpp/build'))
-    {
+    if (!fs.existsSync('./examples/cpp/build')) {
         fs.mkdirSync('./examples/cpp/build')
     }
 
@@ -96,66 +88,62 @@ const Replace = (file, filters) =>
     await Command(`cmake --build . --config=${Profile}`, { cwd: join(__dirname, './examples/cpp/build') })
 
     for (const item of [
+        ['./README.md', './build/README.md'],
+        ['./LICENSE.txt', './build/LICENSE.txt'],
+
         /* examples */
-        ['./examples/cpp/src/main.cpp', './build/examples/src/main.cpp'],
-        ['./examples/cpp/CMakeLists.txt', './build/examples/CMakeLists.txt'],
-        ['./examples/cpp/README.md', './build/examples/README.md'],
+        ['./examples/cpp/src', './build/examples/cpp/src'],
+        ['./examples/cpp/CMakeLists.txt', './build/examples/cpp/CMakeLists.txt'],
+        ['./examples/rust', './build/examples/rust'],
 
         /* inculde */
         ['./ffi/include/mirror.h', './build/include/mirror.h'],
-    ])
-    {
-        fs.copyFileSync(...item)
+    ]) {
+        fs.cpSync(...item, { force: true, recursive: true })
     }
 
-    if (process.platform == 'win32')
-    {
+    if (process.platform == 'win32') {
         for (const item of [
-            [`./examples/cpp/build/${Profile}/example.exe`, './build/bin/example.exe'],
+            [`./examples/cpp/build/${Profile}/example.exe`, './build/bin/example-cpp.exe'],
+            [`./target/${Profile.toLowerCase()}/mirror-example.exe`, './build/bin/example.exe'],
             [`./target/${Profile.toLowerCase()}/mirror-service.exe`, './build/server/mirror-service.exe'],
             [`./target/${Profile.toLowerCase()}/mirror.dll.lib`, './build/lib/mirror.dll.lib'],
             [`./target/${Profile.toLowerCase()}/mirror.dll`, './build/bin/mirror.dll'],
             [`./target/ffmpeg/bin/avcodec-61.dll`, './build/bin/avcodec-61.dll'],
             [`./target/ffmpeg/bin/avutil-59.dll`, './build/bin/avutil-59.dll'],
             [`./target/ffmpeg/bin/swresample-5.dll`, './build/bin/swresample-5.dll'],
-        ])
-        {
-            fs.copyFileSync(...item)
+        ]) {
+            fs.cpSync(...item, { force: true, recursive: true })
         }
     }
-    else
-    {
+    else {
         for (const item of [
-            [`./examples/cpp/build/example`, './build/bin/example'],
+            [`./examples/cpp/build/example`, './build/bin/example-cpp'],
+            [`./target/${Profile.toLowerCase()}/mirror-example`, './build/server/example'],
             [`./target/${Profile.toLowerCase()}/mirror-service`, './build/server/mirror-service'],
-            process.platform == 'darwin' ? 
-                [`./target/${Profile.toLowerCase()}/libmirror.dylib`, './build/bin/libmirror.dylib']: 
+            process.platform == 'darwin' ?
+                [`./target/${Profile.toLowerCase()}/libmirror.dylib`, './build/bin/libmirror.dylib'] :
                 [`./target/${Profile.toLowerCase()}/libmirror.so`, './build/bin/libmirror.so'],
-        ])
-        {
-            fs.copyFileSync(...item)
+        ]) {
+            fs.cpSync(...item, { force: true, recursive: true })
         }
     }
 
-    if (process.platform == 'win32')
-    {
+    if (process.platform == 'win32') {
         for (const item of [
             ['./target/debug/mirror.pdb', './build/bin/mirror.pdb'],
             ['./target/debug/mirror_service.pdb', './build/server/mirror-service.pdb'],
-        ])
-        {
-            if (!Args.release)
-            {
-                fs.copyFileSync(...item)
+        ]) {
+            if (!Args.release) {
+                fs.cpSync(...item, { force: true, recursive: true })
             }
-            else
-            {
+            else {
                 fs.rmSync(item[1], { force: true, recursive: true })
             }
         }
     }
 
-    Replace('./build/examples/CMakeLists.txt', [
+    Replace('./build/examples/cpp/CMakeLists.txt', [
         ['../../sdk/renderer/include', '../include'],
         ['../../sdk/cpp/include', '../include'],
         ['../../frame/include', '../include'],

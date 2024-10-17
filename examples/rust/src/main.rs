@@ -5,6 +5,7 @@ use clap::{
     builder::{PossibleValuesParser, TypedValueParser},
     Parser,
 };
+
 use common::Size;
 use mirror::{
     shutdown, startup, AVFrameSink, AVFrameStream, AudioDescriptor, AudioFrame, Capture, Close,
@@ -16,7 +17,7 @@ use mirror::{
 use winit::{
     application::ApplicationHandler,
     dpi::PhysicalSize,
-    event::WindowEvent,
+    event::{ElementState, WindowEvent},
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy},
     keyboard::{KeyCode, PhysicalKey},
     window::{Window, WindowId},
@@ -97,8 +98,10 @@ impl App {
     }
 
     fn create_window(&mut self, event_loop: &ActiveEventLoop) -> Result<()> {
-        let window = Arc::new(event_loop.create_window(Window::default_attributes())?);
-        window.set_min_inner_size(Some(PhysicalSize::new(self.cli.width, self.cli.height)));
+        let mut attr = Window::default_attributes();
+        attr.inner_size = Some(winit::dpi::Size::Physical(PhysicalSize::new(self.cli.width, self.cli.height)));
+
+        let window = Arc::new(event_loop.create_window(attr)?);
 
         self.renderer.replace(Arc::new(Renderer::new(
             GraphicsBackend::WebGPU,
@@ -116,6 +119,7 @@ impl App {
             mtu: 1500,
         })?);
 
+        startup()?;
         Ok(())
     }
 
@@ -187,26 +191,37 @@ impl ApplicationHandler<AppEvent> for App {
     ) {
         match event {
             WindowEvent::CloseRequested => {
+                drop(self.receiver.take());
+                drop(self.sender.take());
+                drop(self.renderer.take());
+                drop(self.mirror.take());
+
                 event_loop.exit();
             }
             WindowEvent::KeyboardInput { event, .. } => {
-                if let PhysicalKey::Code(key) = event.physical_key {
-                    match key {
-                        KeyCode::KeyS => {
-                            if let Err(e) = self.create_sender() {
-                                log::error!("{:?}", e);
+                if !event.repeat && event.state == ElementState::Released {
+                    if let PhysicalKey::Code(key) = event.physical_key {
+                        match key {
+                            KeyCode::KeyS => {
+                                if self.sender.is_none() {
+                                    if let Err(e) = self.create_sender() {
+                                        log::error!("{:?}", e);
+                                    }
+                                }
                             }
-                        }
-                        KeyCode::KeyR => {
-                            if let Err(e) = self.create_receiver() {
-                                log::error!("{:?}", e);
+                            KeyCode::KeyR => {
+                                if self.receiver.is_none() {
+                                    if let Err(e) = self.create_receiver() {
+                                        log::error!("{:?}", e);
+                                    }
+                                }
                             }
+                            KeyCode::KeyK => {
+                                let _ = self.event_proxy.send_event(AppEvent::CloseSender);
+                                let _ = self.event_proxy.send_event(AppEvent::CloseReceiver);
+                            }
+                            _ => (),
                         }
-                        KeyCode::KeyK => {
-                            let _ = self.event_proxy.send_event(AppEvent::CloseSender);
-                            let _ = self.event_proxy.send_event(AppEvent::CloseReceiver);
-                        }
-                        _ => (),
                     }
                 }
             }
@@ -273,7 +288,6 @@ fn main() -> Result<()> {
     });
 
     simple_logger::init_with_level(log::Level::Info)?;
-    startup()?;
 
     let event_loop = EventLoop::<AppEvent>::with_user_event().build()?;
     event_loop.set_control_flow(ControlFlow::Wait);

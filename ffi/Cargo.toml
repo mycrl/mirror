@@ -6,6 +6,7 @@ edition = "2021"
 [lib]
 crate-type = ["cdylib"]
 name = "mirror"
+doc = false
 
 [dependencies]
 anyhow = "1.0.82"
