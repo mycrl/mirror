@@ -55,7 +55,7 @@ const Replace = (file, filters) =>
         './build/server',
         './build/include',
         './build/examples',
-        './build/examples/src',
+        './build/examples/cpp',
     ])
     {
         if (!fs.existsSync(path))
@@ -87,19 +87,19 @@ const Replace = (file, filters) =>
         }
     }
 
-    if (!fs.existsSync('./examples/desktop/build'))
+    if (!fs.existsSync('./examples/cpp/build'))
     {
-        fs.mkdirSync('./examples/desktop/build')
+        fs.mkdirSync('./examples/cpp/build')
     }
 
-    await Command(`cmake -DCMAKE_BUILD_TYPE=${Profile} ..`, { cwd: join(__dirname, './examples/desktop/build') })
-    await Command(`cmake --build . --config=${Profile}`, { cwd: join(__dirname, './examples/desktop/build') })
+    await Command(`cmake -DCMAKE_BUILD_TYPE=${Profile} ..`, { cwd: join(__dirname, './examples/cpp/build') })
+    await Command(`cmake --build . --config=${Profile}`, { cwd: join(__dirname, './examples/cpp/build') })
 
     for (const item of [
         /* examples */
-        ['./examples/desktop/src/main.cpp', './build/examples/src/main.cpp'],
-        ['./examples/desktop/CMakeLists.txt', './build/examples/CMakeLists.txt'],
-        ['./examples/desktop/README.md', './build/examples/README.md'],
+        ['./examples/cpp/src/main.cpp', './build/examples/src/main.cpp'],
+        ['./examples/cpp/CMakeLists.txt', './build/examples/CMakeLists.txt'],
+        ['./examples/cpp/README.md', './build/examples/README.md'],
 
         /* inculde */
         ['./ffi/include/mirror.h', './build/include/mirror.h'],
@@ -111,7 +111,7 @@ const Replace = (file, filters) =>
     if (process.platform == 'win32')
     {
         for (const item of [
-            [`./examples/desktop/build/${Profile}/example.exe`, './build/bin/example.exe'],
+            [`./examples/cpp/build/${Profile}/example.exe`, './build/bin/example.exe'],
             [`./target/${Profile.toLowerCase()}/mirror-service.exe`, './build/server/mirror-service.exe'],
             [`./target/${Profile.toLowerCase()}/mirror.dll.lib`, './build/lib/mirror.dll.lib'],
             [`./target/${Profile.toLowerCase()}/mirror.dll`, './build/bin/mirror.dll'],
@@ -126,7 +126,7 @@ const Replace = (file, filters) =>
     else
     {
         for (const item of [
-            [`./examples/desktop/build/example`, './build/bin/example'],
+            [`./examples/cpp/build/example`, './build/bin/example'],
             [`./target/${Profile.toLowerCase()}/mirror-service`, './build/server/mirror-service'],
             process.platform == 'darwin' ? 
                 [`./target/${Profile.toLowerCase()}/libmirror.dylib`, './build/bin/libmirror.dylib']: 
@@ -157,7 +157,7 @@ const Replace = (file, filters) =>
 
     Replace('./build/examples/CMakeLists.txt', [
         ['../../sdk/renderer/include', '../include'],
-        ['../../sdk/desktop/include', '../include'],
+        ['../../sdk/cpp/include', '../include'],
         ['../../frame/include', '../include'],
         ['../../target/debug', '../lib'],
         ['../../target/release', '../lib'],

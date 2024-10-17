@@ -306,7 +306,7 @@ int WINAPI WinMain(HINSTANCE hinstance,
 
 int main(int argc, char* argv[])
 {
-    if (parse_argv(argc >= 2 ? std::string(argv[1]) : "")
+    if (parse_argv(argc >= 2 ? std::string(argv[1]) : ""))
     {
         return -1;
     }

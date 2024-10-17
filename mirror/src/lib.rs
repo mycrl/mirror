@@ -103,8 +103,10 @@ pub trait Close: Sync + Send {
     /// Callback when the sender is closed. This may be because the external
     /// side actively calls the close, or the audio and video packets cannot be
     /// sent (the network is disconnected), etc.
-    fn close(&self);
+    fn close(&self) {}
 }
+
+impl Close for () {}
 
 pub trait AVFrameSink: Sync + Send {
     /// Callback occurs when the video frame is updated. The video frame format
@@ -126,6 +128,9 @@ pub trait AVFrameSink: Sync + Send {
     }
 }
 
+impl AVFrameSink for () {}
+
+/// Abstraction of audio and video streams.
 pub trait AVFrameStream: AVFrameSink + Close {}
 
 pub struct Mirror(Transport);

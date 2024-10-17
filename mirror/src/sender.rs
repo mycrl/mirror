@@ -60,7 +60,7 @@ pub struct AudioDescriptor {
 }
 
 /// Transmitter Configuration Description.
-#[derive(Debug)]
+#[derive(Default, Debug)]
 pub struct SenderDescriptor {
     pub video: Option<(Source, VideoDescriptor)>,
     pub audio: Option<(Source, AudioDescriptor)>,

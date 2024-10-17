@@ -18,4 +18,5 @@ members = [
     "mirror",
     "service",
     "transport",
+    "examples/rust",
 ]
