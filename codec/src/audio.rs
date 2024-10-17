@@ -71,7 +71,7 @@ impl AudioDecoder {
         context_mut.thread_type = FF_THREAD_SLICE;
         context_mut.request_sample_fmt = AVSampleFormat::AV_SAMPLE_FMT_S16;
         context_mut.ch_layout = ch_layout;
-        context_mut.flags |= AV_CODEC_FLAG_LOW_DELAY as i32;
+        context_mut.flags |= AV_CODEC_FLAG_LOW_DELAY as i32 | AVFMT_FLAG_NOBUFFER;
         context_mut.flags2 |= AV_CODEC_FLAG2_FAST;
 
         if unsafe { avcodec_open2(this.context, codec, null_mut()) } != 0 {
@@ -117,7 +117,7 @@ impl AudioDecoder {
                     buf.as_ptr(),
                     buf.len() as c_int,
                     pts as i64,
-                    AV_NOPTS_VALUE,
+                    pts as i64,
                     0,
                 )
             };
@@ -318,7 +318,7 @@ impl AudioEncoder {
         }
 
         av_frame.pts = self.pts;
-        self.pts += context_ref.frame_size as i64;
+        self.pts += context_ref.sample_rate as i64 / 10;
 
         true
     }
@@ -576,35 +576,39 @@ pub fn create_opus_identification_header(channel: u8, sample_rate: u32) -> [u8; 
     [
         // AOPUSHDR
         0x41, 0x4f, 0x50, 0x55, 0x53, 0x48, 0x44, 0x52,
-        // ...
         0x13, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        // Opus
-        0x4f, 0x70, 0x75, 0x73,
-        // Head
-        0x48, 0x65, 0x61, 0x64,
+
+        // OpusHead
+        0x4f, 0x70, 0x75, 0x73,  0x48, 0x65, 0x61, 0x64,
+
         // Version
         0x01,
+
         // Channel Count
         channel,
+
         // Pre skip
         0x00, 0x00,
+
         // Input Sample Rate (Hz), eg: 48000
         sample_rate[0],
         sample_rate[1],
         sample_rate[2],
         sample_rate[3],
+
         // Output Gain (Q7.8 in dB) 
         0x00, 0x00,
+
         // Mapping Family
         0x00,
+
         // AOPUSDLY
         0x41, 0x4f, 0x50, 0x55, 0x53, 0x44, 0x4c, 0x59,
-        // ...
         0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
         0xa0, 0x2e, 0x63, 0x00, 0x00, 0x00, 0x00, 0x00,
+        
         // AOPUSPRL
         0x41, 0x4f, 0x50, 0x55, 0x53, 0x50, 0x52, 0x4c, 
-        // ...
         0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
         0x00, 0xb4, 0xc4, 0x04, 0x00, 0x00, 0x00, 0x00,
     ]

@@ -1,12 +1,18 @@
+mod bgra;
+mod i420;
+mod nv12;
+mod rgba;
+
 use std::sync::Arc;
 
+use self::{bgra::Bgra, i420::I420, nv12::Nv12, rgba::Rgba};
 use crate::{helper::CompatibilityLayerError, Vertex};
 
 #[cfg(target_os = "windows")]
 use crate::helper::win32::Dx11OnWgpuCompatibilityLayer as CompatibilityLayer;
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]
-use crate::helper::any::EmptyOnWgpuCompatibilityLayer as CompatibilityLayer;
+type CompatibilityLayer = ();
 
 use common::Size;
 use smallvec::SmallVec;
@@ -23,10 +29,10 @@ use wgpu::{
     ColorTargetState, ColorWrites, Device, Extent3d, FilterMode, FragmentState, ImageCopyTexture,
     ImageDataLayout, IndexFormat, MultisampleState, Origin3d, PipelineCompilationOptions,
     PipelineLayoutDescriptor, PrimitiveState, PrimitiveTopology, Queue, RenderPipeline,
-    RenderPipelineDescriptor, SamplerBindingType, SamplerDescriptor, ShaderStages,
-    Texture as WGPUTexture, TextureAspect, TextureDescriptor, TextureDimension, TextureFormat,
-    TextureSampleType, TextureUsages, TextureView, TextureViewDescriptor, TextureViewDimension,
-    VertexState,
+    RenderPipelineDescriptor, SamplerBindingType, SamplerDescriptor, ShaderModuleDescriptor,
+    ShaderStages, Texture as WGPUTexture, TextureAspect, TextureDescriptor, TextureDimension,
+    TextureFormat, TextureSampleType, TextureUsages, TextureView, TextureViewDescriptor,
+    TextureViewDimension, VertexState,
 };
 
 #[derive(Debug, Error)]
@@ -283,290 +289,48 @@ trait Texture2DSample {
     }
 }
 
-/// RGBA stands for red green blue alpha. While it is sometimes described as a
-/// color space, it is actually a three-channel RGB color model supplemented
-/// with a fourth alpha channel. Alpha indicates how opaque each pixel is and
-/// allows an image to be combined over others using alpha compositing, with
-/// transparent areas and anti-aliasing of the edges of opaque regions. Each
-/// pixel is a 4D vector.
-///
-/// The term does not define what RGB color space is being used. It also does
-/// not state whether or not the colors are premultiplied by the alpha value,
-/// and if they are it does not state what color space that premultiplication
-/// was done in. This means more information than just "RGBA" is needed to
-/// determine how to handle an image.
-///
-/// In some contexts the abbreviation "RGBA" means a specific memory layout
-/// (called RGBA8888 below), with other terms such as "BGRA" used for
-/// alternatives. In other contexts "RGBA" means any layout.
-struct Rgba(WGPUTexture);
-
-impl Rgba {
-    fn new(device: &Device, size: Size) -> Self {
-        Self(Self::create(device, size).next().unwrap())
-    }
-}
-
-impl Texture2DSample for Rgba {
-    fn create_texture_descriptor(size: Size) -> impl IntoIterator<Item = (Size, TextureFormat)> {
-        [(size, TextureFormat::Rgba8Unorm)]
-    }
-
-    fn views_descriptors<'a>(
-        &'a self,
-        texture: Option<&'a WGPUTexture>,
-    ) -> impl IntoIterator<Item = (&'a WGPUTexture, TextureFormat, TextureAspect)> {
-        [(
-            texture.unwrap_or_else(|| &self.0),
-            TextureFormat::Rgba8Unorm,
-            TextureAspect::All,
-        )]
-    }
-
-    fn copy_buffer_descriptors<'a>(
-        &self,
-        buffers: &'a [&'a [u8]],
-    ) -> impl IntoIterator<Item = (&'a [u8], &WGPUTexture, TextureAspect, Size)> {
-        let size = self.0.size();
-        [(
-            buffers[0],
-            &self.0,
-            TextureAspect::All,
-            Size {
-                width: size.width * 4,
-                height: size.height,
-            },
-        )]
-    }
-}
-
-struct Bgra(WGPUTexture);
-
-impl Bgra {
-    fn new(device: &Device, size: Size) -> Self {
-        Self(Self::create(device, size).next().unwrap())
-    }
-}
-
-impl Texture2DSample for Bgra {
-    fn create_texture_descriptor(size: Size) -> impl IntoIterator<Item = (Size, TextureFormat)> {
-        [(size, TextureFormat::Bgra8Unorm)]
-    }
-
-    fn views_descriptors<'a>(
-        &'a self,
-        texture: Option<&'a WGPUTexture>,
-    ) -> impl IntoIterator<Item = (&'a WGPUTexture, TextureFormat, TextureAspect)> {
-        [(
-            texture.unwrap_or_else(|| &self.0),
-            TextureFormat::Bgra8Unorm,
-            TextureAspect::All,
-        )]
-    }
-
-    fn copy_buffer_descriptors<'a>(
-        &self,
-        buffers: &'a [&'a [u8]],
-    ) -> impl IntoIterator<Item = (&'a [u8], &WGPUTexture, TextureAspect, Size)> {
-        let size = self.0.size();
-        [(
-            buffers[0],
-            &self.0,
-            TextureAspect::All,
-            Size {
-                width: size.width * 4,
-                height: size.height,
-            },
-        )]
-    }
-}
-
-/// YCbCr, Y′CbCr, or Y Pb/Cb Pr/Cr, also written as YCBCR or Y′CBCR, is a
-/// family of color spaces used as a part of the color image pipeline in video
-/// and digital photography systems. Y′ is the luma component and CB and CR are
-/// the blue-difference and red-difference chroma components. Y′ (with prime) is
-/// distinguished from Y, which is luminance, meaning that light intensity is
-/// nonlinearly encoded based on gamma corrected RGB primaries.
-///
-/// Y′CbCr color spaces are defined by a mathematical coordinate transformation
-/// from an associated RGB primaries and white point. If the underlying RGB
-/// color space is absolute, the Y′CbCr color space is an absolute color space
-/// as well; conversely, if the RGB space is ill-defined, so is Y′CbCr. The
-/// transformation is defined in equations 32, 33 in ITU-T H.273. Nevertheless
-/// that rule does not apply to P3-D65 primaries used by Netflix with
-/// BT.2020-NCL matrix, so that means matrix was not derived from primaries, but
-/// now Netflix allows BT.2020 primaries (since 2021).[1] The same happens with
-/// JPEG: it has BT.601 matrix derived from System M primaries, yet the
-/// primaries of most images are BT.709.
-///
-/// NV12 is possibly the most commonly-used 8-bit 4:2:0 format. It is the
-/// default for Android camera preview.[19] The entire image in Y is written
-/// out, followed by interleaved lines that go U0, V0, U1, V1, etc.
-struct Nv12(WGPUTexture, WGPUTexture);
-
-impl Nv12 {
-    fn new(device: &Device, size: Size) -> Self {
-        let mut textures = Self::create(device, size);
-        Self(textures.next().unwrap(), textures.next().unwrap())
-    }
-}
-
-impl Texture2DSample for Nv12 {
-    fn create_texture_descriptor(size: Size) -> impl IntoIterator<Item = (Size, TextureFormat)> {
-        [
-            (size, TextureFormat::R8Unorm),
-            (
-                Size {
-                    width: size.width / 2,
-                    height: size.height / 2,
-                },
-                TextureFormat::Rg8Unorm,
-            ),
-        ]
-    }
-
-    fn views_descriptors<'a>(
-        &'a self,
-        texture: Option<&'a WGPUTexture>,
-    ) -> impl IntoIterator<Item = (&'a WGPUTexture, TextureFormat, TextureAspect)> {
-        // When you create a view directly for a texture, the external texture is a
-        // single texture, and you need to create different planes of views on top of
-        // the single texture.
-        if let Some(texture) = texture {
-            [
-                (texture, TextureFormat::R8Unorm, TextureAspect::Plane0),
-                (texture, TextureFormat::Rg8Unorm, TextureAspect::Plane1),
-            ]
-        } else {
-            [
-                (&self.0, TextureFormat::R8Unorm, TextureAspect::All),
-                (&self.1, TextureFormat::Rg8Unorm, TextureAspect::All),
-            ]
-        }
-    }
-
-    fn copy_buffer_descriptors<'a>(
-        &self,
-        buffers: &'a [&'a [u8]],
-    ) -> impl IntoIterator<Item = (&'a [u8], &WGPUTexture, TextureAspect, Size)> {
-        let size = {
-            let size = self.0.size();
-            Size {
-                width: size.width,
-                height: size.height,
-            }
-        };
-
-        [
-            (buffers[0], &self.0, TextureAspect::All, size),
-            (buffers[1], &self.1, TextureAspect::All, size),
-        ]
-    }
-}
-
-/// YCbCr, Y′CbCr, or Y Pb/Cb Pr/Cr, also written as YCBCR or Y′CBCR, is a
-/// family of color spaces used as a part of the color image pipeline in video
-/// and digital photography systems. Y′ is the luma component and CB and CR are
-/// the blue-difference and red-difference chroma components. Y′ (with prime) is
-/// distinguished from Y, which is luminance, meaning that light intensity is
-/// nonlinearly encoded based on gamma corrected RGB primaries.
-///
-/// Y′CbCr color spaces are defined by a mathematical coordinate transformation
-/// from an associated RGB primaries and white point. If the underlying RGB
-/// color space is absolute, the Y′CbCr color space is an absolute color space
-/// as well; conversely, if the RGB space is ill-defined, so is Y′CbCr. The
-/// transformation is defined in equations 32, 33 in ITU-T H.273. Nevertheless
-/// that rule does not apply to P3-D65 primaries used by Netflix with
-/// BT.2020-NCL matrix, so that means matrix was not derived from primaries, but
-/// now Netflix allows BT.2020 primaries (since 2021).[1] The same happens with
-/// JPEG: it has BT.601 matrix derived from System M primaries, yet the
-/// primaries of most images are BT.709.
-struct I420(WGPUTexture, WGPUTexture, WGPUTexture);
-
-impl I420 {
-    fn new(device: &Device, size: Size) -> Self {
-        let mut textures = Self::create(device, size);
-        Self(
-            textures.next().unwrap(),
-            textures.next().unwrap(),
-            textures.next().unwrap(),
-        )
-    }
-}
-
-impl Texture2DSample for I420 {
-    fn create_texture_descriptor(size: Size) -> impl IntoIterator<Item = (Size, TextureFormat)> {
-        [
-            (size, TextureFormat::R8Unorm),
-            (
-                Size {
-                    width: size.width / 2,
-                    height: size.height / 2,
-                },
-                TextureFormat::R8Unorm,
-            ),
-            (
-                Size {
-                    width: size.width / 2,
-                    height: size.height / 2,
-                },
-                TextureFormat::R8Unorm,
-            ),
-        ]
-    }
-
-    fn views_descriptors<'a>(
-        &'a self,
-        _: Option<&'a WGPUTexture>,
-    ) -> impl IntoIterator<Item = (&'a WGPUTexture, TextureFormat, TextureAspect)> {
-        [
-            (&self.0, TextureFormat::R8Unorm, TextureAspect::All),
-            (&self.1, TextureFormat::R8Unorm, TextureAspect::All),
-            (&self.2, TextureFormat::R8Unorm, TextureAspect::All),
-        ]
-    }
-
-    fn copy_buffer_descriptors<'a>(
-        &self,
-        buffers: &'a [&'a [u8]],
-    ) -> impl IntoIterator<Item = (&'a [u8], &WGPUTexture, TextureAspect, Size)> {
-        let size = {
-            let size = self.0.size();
-            Size {
-                width: size.width,
-                height: size.height,
-            }
-        };
-
-        [
-            (buffers[0], &self.0, TextureAspect::All, size),
-            (
-                buffers[1],
-                &self.1,
-                TextureAspect::All,
-                Size {
-                    width: size.width / 2,
-                    height: size.height / 2,
-                },
-            ),
-            (
-                buffers[2],
-                &self.2,
-                TextureAspect::All,
-                Size {
-                    width: size.width / 2,
-                    height: size.height / 2,
-                },
-            ),
-        ]
-    }
-}
-
 enum Texture2DSourceSample {
     Bgra(Bgra),
     Rgba(Rgba),
     Nv12(Nv12),
     I420(I420),
+}
+
+impl Texture2DSourceSample {
+    fn from_texture(device: &Device, texture: &Texture, size: Size) -> Self {
+        match texture {
+            Texture::Bgra(_) => Self::Bgra(Bgra::new(device, size)),
+            Texture::Rgba(_) => Self::Rgba(Rgba::new(device, size)),
+            Texture::Nv12(_) => Self::Nv12(Nv12::new(device, size)),
+            Texture::I420(_) => Self::I420(I420::new(device, size)),
+        }
+    }
+
+    fn fragment(&self) -> ShaderModuleDescriptor {
+        match self {
+            Texture2DSourceSample::Rgba(_) => {
+                include_wgsl!("./shaders/fragment/any.wgsl")
+            }
+            Texture2DSourceSample::Bgra(_) => {
+                include_wgsl!("./shaders/fragment/any.wgsl")
+            }
+            Texture2DSourceSample::Nv12(_) => {
+                include_wgsl!("./shaders/fragment/nv12.wgsl")
+            }
+            Texture2DSourceSample::I420(_) => {
+                include_wgsl!("./shaders/fragment/i420.wgsl")
+            }
+        }
+    }
+
+    fn bind_group_layout(&self, device: &Device) -> BindGroupLayout {
+        match self {
+            Self::Bgra(texture) => texture.bind_group_layout(device),
+            Self::Rgba(texture) => texture.bind_group_layout(device),
+            Self::Nv12(texture) => texture.bind_group_layout(device),
+            Self::I420(texture) => texture.bind_group_layout(device),
+        }
+    }
 }
 
 pub struct Texture2DSourceOptions {
@@ -591,7 +355,7 @@ impl Texture2DSource {
         let compatibility = CompatibilityLayer::new(options.device.clone(), options.direct3d);
 
         #[cfg(any(target_os = "linux", target_os = "macos"))]
-        let compatibility = CompatibilityLayer::new(options.device.clone());
+        let compatibility = ();
 
         Ok(Self {
             device: options.device,
@@ -615,19 +379,8 @@ impl Texture2DSource {
         // Not yet initialized, initialize the environment first.
         if self.sample.is_none() {
             let size = texture.size();
-            let sample = match &texture {
-                Texture::Bgra(_) => Texture2DSourceSample::Bgra(Bgra::new(&self.device, size)),
-                Texture::Rgba(_) => Texture2DSourceSample::Rgba(Rgba::new(&self.device, size)),
-                Texture::Nv12(_) => Texture2DSourceSample::Nv12(Nv12::new(&self.device, size)),
-                Texture::I420(_) => Texture2DSourceSample::I420(I420::new(&self.device, size)),
-            };
-
-            let bind_group_layout = match &sample {
-                Texture2DSourceSample::Bgra(texture) => texture.bind_group_layout(&self.device),
-                Texture2DSourceSample::Rgba(texture) => texture.bind_group_layout(&self.device),
-                Texture2DSourceSample::Nv12(texture) => texture.bind_group_layout(&self.device),
-                Texture2DSourceSample::I420(texture) => texture.bind_group_layout(&self.device),
-            };
+            let sample = Texture2DSourceSample::from_texture(&self.device, &texture, size);
+            let bind_group_layout = sample.bind_group_layout(&self.device);
 
             let pipeline =
                 self.device
@@ -650,20 +403,7 @@ impl Texture2DSource {
                         },
                         fragment: Some(FragmentState {
                             entry_point: Some("main"),
-                            module: &self.device.create_shader_module(match &sample {
-                                Texture2DSourceSample::Rgba(_) => {
-                                    include_wgsl!("./shaders/fragment/any.wgsl")
-                                }
-                                Texture2DSourceSample::Bgra(_) => {
-                                    include_wgsl!("./shaders/fragment/any.wgsl")
-                                }
-                                Texture2DSourceSample::Nv12(_) => {
-                                    include_wgsl!("./shaders/fragment/nv12.wgsl")
-                                }
-                                Texture2DSourceSample::I420(_) => {
-                                    include_wgsl!("./shaders/fragment/i420.wgsl")
-                                }
-                            }),
+                            module: &self.device.create_shader_module(sample.fragment()),
                             compilation_options: PipelineCompilationOptions::default(),
                             targets: &[Some(ColorTargetState {
                                 blend: Some(BlendState::REPLACE),

@@ -144,7 +144,7 @@ impl VideoDecoder {
                     buf.as_ptr(),
                     buf.len() as c_int,
                     pts as i64,
-                    AV_NOPTS_VALUE,
+                    pts as i64,
                     0,
                 )
             };

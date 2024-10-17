@@ -7,7 +7,6 @@
     "scripts": {
         "build:debug": "node --no-deprecation ./build.js",
         "build:release": "node --no-deprecation ./build.js -- --release",
-        "build:app": "node --no-deprecation ./build.js -- --app",
         "fmt": "cargo +nightly fmt"
     },
     "repository": {

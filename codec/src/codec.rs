@@ -1,5 +1,6 @@
 #[cfg(not(target_os = "windows"))]
 use std::ptr::null_mut;
+use std::str::FromStr;
 
 use common::c_str;
 use ffmpeg_sys_next::*;
@@ -34,7 +35,7 @@ pub enum CreateVideoContextError {
     InitAVHardwareFrameContextError,
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Clone, Copy)]
 pub enum CodecError {
     #[error("unsupported codecs")]
     NotSupportCodec,
@@ -62,10 +63,10 @@ impl ToString for VideoDecoderType {
     }
 }
 
-impl TryFrom<&str> for VideoDecoderType {
-    type Error = CodecError;
+impl FromStr for VideoDecoderType {
+    type Err = CodecError;
 
-    fn try_from(value: &str) -> Result<Self, Self::Error> {
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
         Ok(match value {
             "h264" => Self::H264,
             "d3d11va" => Self::D3D11,
@@ -97,10 +98,10 @@ impl ToString for VideoEncoderType {
     }
 }
 
-impl TryFrom<&str> for VideoEncoderType {
-    type Error = CodecError;
+impl FromStr for VideoEncoderType {
+    type Err = CodecError;
 
-    fn try_from(value: &str) -> Result<Self, Self::Error> {
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
         Ok(match value {
             "libx264" => Self::X264,
             "h264_qsv" => Self::Qsv,

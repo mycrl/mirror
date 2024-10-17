@@ -5,8 +5,8 @@
 //  Created by Panda on 2024/4/13.
 //
 
-#include <cmdline.h>
 #include <string>
+#include <vector>
 
 #ifdef WIN32
 #include <windows.h>
@@ -26,105 +26,9 @@ extern "C"
 #include <mirror.h>
 }
 
+#include "./cli.h"
+
 static Render RENDER = nullptr;
-
-static struct
-{
-    VideoEncoderType encoder;
-    VideoDecoderType decoder;
-    std::string server;
-    int width;
-    int height;
-    int fps;
-    int id;
-} OPTIONS = {};
-
-VideoEncoderType encoder_from_str(std::string value)
-{
-    if (value == "libx264")
-    {
-        return VIDEO_ENCODER_X264;
-    }
-    else if (value == "h264_qsv")
-    {
-        return VIDEO_ENCODER_QSV;
-    }
-    else if (value == "h264_nvenc")
-    {
-        return VIDEO_ENCODER_CUDA;
-    }
-    else if (value == "h264_videotoolbox")
-    {
-        return VIDEO_ENCODER_VIDEOTOOLBOX;
-    }
-    else
-    {
-        throw std::runtime_error("invalid encoder");
-    }
-}
-
-VideoDecoderType decoder_from_str(std::string value)
-{
-    if (value == "h264")
-    {
-        return VIDEO_DECODER_H264;
-    }
-    else if (value == "d3d11va")
-    {
-        return VIDEO_DECODER_D3D11;
-    }
-    else if (value == "h264_qsv")
-    {
-        return VIDEO_DECODER_QSV;
-    }
-    else if (value == "h264_cuvid")
-    {
-        return VIDEO_DECODER_CUDA;
-    }
-    else if (value == "h264_videotoolbox")
-    {
-        return VIDEO_DECODER_VIDEOTOOLBOX;
-    }
-    else
-    {
-        throw std::runtime_error("invalid decoder");
-    }
-}
-
-void cli_parse(std::string cmd)
-{
-    cmdline::parser args;
-
-#ifdef WIN32
-    args.add<std::string>("encoder", '\0', "video encoder", false, "h264_qsv");
-    args.add<std::string>("decoder", '\0', "video decoder", false, "d3d11va");
-#elif MACOS
-    args.add<std::string>("encoder", '\0', "video encoder", false, "h264_videotoolbox");
-    args.add<std::string>("decoder", '\0', "video decoder", false, "h264_videotoolbox");
-#else
-    args.add<std::string>("encoder", '\0', "video encoder", false, "libx264");
-    args.add<std::string>("decoder", '\0', "video decoder", false, "h264");
-#endif
-
-    args.add<std::string>("server", '\0', "server", false, "192.168.2.88:8088");
-    args.add<int>("width", '\0', "video width", false, 1280);
-    args.add<int>("height", '\0', "video height", false, 720);
-    args.add<int>("fps", '\0', "video frame rate/s", false, 24);
-    args.add<int>("id", '\0', "channel number", false, 0);
-
-    if (cmd.length() > 0)
-    {
-        args.parse_check(cmd);
-    }
-
-    OPTIONS.encoder = encoder_from_str(args.get<std::string>("encoder"));
-    OPTIONS.decoder = decoder_from_str(args.get<std::string>("decoder"));
-    OPTIONS.server = args.get<std::string>("server");
-    OPTIONS.width = args.get<int>("width");
-    OPTIONS.height = args.get<int>("height");
-    OPTIONS.fps = args.get<int>("fps");
-    OPTIONS.id = args.get<int>("id");
-}
 
 class MirrorService
 {
@@ -157,7 +61,7 @@ public:
             return true;
         }
 
-        auto video_sources = mirror_get_sources(SOURCE_TYPE_CAMERA);
+        auto video_sources = mirror_get_sources(SOURCE_TYPE_SCREEN);
         auto audio_sources = mirror_get_sources(SOURCE_TYPE_AUDIO);
 
         VideoDescriptor video_options;
@@ -190,12 +94,12 @@ public:
 
         SenderDescriptor options;
         options.video = &video_options;
-        options.audio = nullptr;
+        options.audio = &audio_options;
         options.multicast = false;
 
         FrameSink sink;
-        sink.video = MirrorService::video_proc;
-        sink.audio = MirrorService::audio_proc;
+        sink.audio = nullptr;
+        sink.video = nullptr;
         sink.close = MirrorService::close_proc;
         sink.ctx = (void*)this;
 
@@ -333,16 +237,19 @@ LRESULT CALLBACK window_handle_proc(HWND hwnd,
     }
 }
 
-int WinMain(HINSTANCE hinstance,
-            HINSTANCE _prev_instance,
-            LPSTR cmd_line,
-            int _show_cmd)
+int WINAPI WinMain(HINSTANCE hinstance,
+                   HINSTANCE _prev_instance,
+                   LPSTR cmd_line,
+                   int _show_cmd)
 {
-    cli_parse(std::string(cmd_line));
-
     AttachConsole(ATTACH_PARENT_PROCESS);
     freopen("CONIN$", "r+t", stdin);
     freopen("CONOUT$", "w+t", stdout);
+
+    if (parse_argv(std::string(cmd_line)) != 0)
+    {
+        return -1;
+    }
 
     WNDCLASS wc;
     wc.style = CS_OWNDC;
@@ -386,6 +293,7 @@ int WinMain(HINSTANCE hinstance,
         DispatchMessage(&message);
     }
 
+    MIRROR_SERVICE->Close();
     renderer_destroy(RENDER);
     window_handle_destroy(window_handle);
     DestroyWindow(hwnd);
@@ -398,24 +306,28 @@ int WinMain(HINSTANCE hinstance,
 
 int main(int argc, char* argv[])
 {
-    cli_parse(argc >= 2 ? std::string(argv[1]) : "");
+    if (parse_argv(argc >= 2 ? std::string(argv[1]) : ""))
+    {
+        return -1;
+    }
+
     mirror_startup();
 
-    SDL_Init(SDL_INIT_EVENTS);
+        SDL_Init(SDL_INIT_EVENTS);
 #ifdef LINUX
-    SDL_Window* window = SDL_CreateWindow("example",
-                                          0,
-                                          0,
-                                          OPTIONS.width,
-                                          OPTIONS.height,
-                                          SDL_WINDOW_VULKAN);
+        SDL_Window* window = SDL_CreateWindow("example",
+                                              0,
+                                              0,
+                                              OPTIONS.width,
+                                              OPTIONS.height,
+                                              SDL_WINDOW_VULKAN);
 #else
-    SDL_Window* window = SDL_CreateWindow("example",
-                                          0,
-                                          0,
-                                          OPTIONS.width,
-                                          OPTIONS.height,
-                                          SDL_WINDOW_METAL);
+        SDL_Window* window = SDL_CreateWindow("example",
+                                              0,
+                                              0,
+                                              OPTIONS.width,
+                                              OPTIONS.height,
+                                              SDL_WINDOW_METAL);
 #endif
 
     SDL_SysWMinfo info;
@@ -441,7 +353,8 @@ int main(int argc, char* argv[])
     MIRROR_SERVICE = new MirrorService();
 
     SDL_Event event;
-    while (SDL_WaitEvent(&event) == 1) {
+    while (SDL_WaitEvent(&event) == 1)
+    {
         if (event.type == SDL_QUIT)
         {
             break;

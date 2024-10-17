@@ -1,7 +1,0 @@
-/node_modules/
-*.node
-*.d.ts
-index.js
-package-lock.json
-*.dll
-*.pdb

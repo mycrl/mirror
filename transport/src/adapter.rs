@@ -325,16 +325,16 @@ impl PacketFilter {
             return true;
         }
 
+        // The configuration information only needs to be filled into the decoder once.
+        // If it has been initialized, it means that the configuration information has
+        // been received. It is meaningless to receive it again later. Here, duplicate
+        // configuration information is filtered out.
+        if flag == BufferFlag::Config as i32 {
+            return false;
+        }
+
         // The audio does not have keyframes
         if keyframe {
-            // The configuration information only needs to be filled into the decoder once.
-            // If it has been initialized, it means that the configuration information has
-            // been received. It is meaningless to receive it again later. Here, duplicate
-            // configuration information is filtered out.
-            if flag == BufferFlag::Config as i32 {
-                return false;
-            }
-
             // Check whether the current stream is in a readable state. When packet loss
             // occurs, the entire stream should be paused and wait for the next key frame to
             // arrive.

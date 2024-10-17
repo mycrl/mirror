@@ -3,7 +3,7 @@
    <h1>MIRROR</h1>
 </div>
 <div align="center">
-  <strong>Cross-platform casting SDK, support Android, Windows, Linux</strong>
+  <strong>A cross-platform screen casting library implemented by rust.</strong>
 </div>
 <div align="center">
   <img src="https://img.shields.io/github/actions/workflow/status/mycrl/mirror/release.yaml?branch=main"/>
@@ -14,9 +14,14 @@
 <br/>
 <br/>
 
-#### 🚧 This project is under development, but the core functionality has been completed and the peripheral sample applications are currently being developed.
+Pure software screen projection is different from Miracast, AirPlay, etc., which need to rely on hardware support. This project was not designed to work on a wide area network, but works well in a local area network environment.  
 
-Pure software screen projection is different from Miracast, AirPlay, etc., which need to rely on hardware support. This project was not designed to work on a wide area network, but works well in a local area network environment.
+The project is cross-platform, but the priority platforms supported are Windows and Android, Unlike a solution like DLAN, this project is more akin to airplay, so low latency is the main goal, currently the latency is controlled at around 150-250ms (with some variations on different platforms with different codecs), and maintains a highly easy to use API and very few external dependencies.
+
+## Documentation
+
+- Rust: There are still some obstacles to releasing to crates.io, so for rust the documentation is being updated.  
+- C/C++: This project also compiles dynamic link libraries, so for C/C++ projects, use this header file [ffi/include/mirror.h](./ffi/include/mirror.h)
 
 ## Build Instructions
 
@@ -56,8 +61,6 @@ If you don't need to build the examples, just build the dynamic library:
 ```sh
 cargo build --release
 ```
-
-For the required header files: [mirror.h](./ffi/include/mirror.h)
 
 ## License
 

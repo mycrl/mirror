@@ -1,25 +1,13 @@
-use crate::{CaptureHandler, FrameArrived, Source, SourceType, VideoCaptureSourceDescription};
+use crate::{CaptureHandler, FrameArrived, Source, VideoCaptureSourceDescription};
 
-use std::{
-    ptr::{null, null_mut},
-    sync::{atomic::AtomicBool, Arc},
-    thread::{self, sleep},
-    time::Duration,
-};
-
-use common::{
-    atomic::EasyAtomic,
-    c_str,
-    frame::{VideoFormat, VideoFrame, VideoSubFormat},
-};
-
+use common::frame::VideoFrame;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum CameraCaptureError {}
 
 #[derive(Default)]
-pub struct CameraCapture(Arc<AtomicBool>);
+pub struct CameraCapture;
 
 impl CaptureHandler for CameraCapture {
     type Frame = VideoFrame;
@@ -27,19 +15,18 @@ impl CaptureHandler for CameraCapture {
     type CaptureDescriptor = VideoCaptureSourceDescription;
 
     fn get_sources() -> Result<Vec<Source>, Self::Error> {
-        todo!()
+        todo!("camera capture is not supported on macos")
     }
 
     fn start<S: FrameArrived<Frame = Self::Frame> + 'static>(
         &self,
-        options: Self::CaptureDescriptor,
-        mut arrived: S,
+        _options: Self::CaptureDescriptor,
+        mut _arrived: S,
     ) -> Result<(), Self::Error> {
-        todo!()
+        todo!("camera capture is not supported on macos")
     }
 
     fn stop(&self) -> Result<(), Self::Error> {
-        self.0.update(false);
-        Ok(())
+        todo!("camera capture is not supported on macos")
     }
 }
