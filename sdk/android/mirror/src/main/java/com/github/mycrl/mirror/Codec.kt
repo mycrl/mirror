@@ -10,6 +10,7 @@ import android.os.Build
 import android.os.Process
 import android.util.Log
 import android.view.Surface
+import androidx.annotation.RequiresApi
 import java.lang.Exception
 import java.nio.ByteBuffer
 
@@ -306,6 +307,7 @@ class Audio {
         }
     }
 
+    @RequiresApi(Build.VERSION_CODES.R)
     class AudioEncoder(
         private val record: AudioRecord?,
         configure: AudioEncoderConfigure,
@@ -330,6 +332,7 @@ class Audio {
             format.setInteger(MediaFormat.KEY_PCM_ENCODING, AudioFormat.ENCODING_PCM_16BIT)
             format.setInteger(MediaFormat.KEY_CHANNEL_COUNT, configure.channels)
             format.setInteger(MediaFormat.KEY_BIT_RATE, configure.bitRate)
+            format.setInteger(MediaFormat.KEY_DURATION, 100000)
             format.setInteger(MediaFormat.KEY_COMPLEXITY, 0)
 
             codec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_AUDIO_OPUS)
