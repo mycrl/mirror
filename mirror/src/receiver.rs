@@ -5,22 +5,22 @@ use std::{
     thread,
 };
 
-use codec::{AudioDecoder, VideoDecoder, VideoDecoderSettings, VideoDecoderType};
-use common::atomic::EasyAtomic;
+use mirror_codec::{AudioDecoder, VideoDecoder, VideoDecoderSettings, VideoDecoderType};
+use mirror_common::atomic::EasyAtomic;
+use mirror_transport::adapter::{StreamKind, StreamMultiReceiverAdapter, StreamReceiverAdapterExt};
 use thiserror::Error;
-use transport::adapter::{StreamKind, StreamMultiReceiverAdapter, StreamReceiverAdapterExt};
 
 #[cfg(target_os = "windows")]
-use common::win32::MediaThreadClass;
+use mirror_common::win32::MediaThreadClass;
 
 #[derive(Debug, Error)]
 pub enum ReceiverError {
     #[error(transparent)]
     CreateThreadError(#[from] std::io::Error),
     #[error(transparent)]
-    VideoDecoderError(#[from] codec::VideoDecoderError),
+    VideoDecoderError(#[from] mirror_codec::VideoDecoderError),
     #[error(transparent)]
-    AudioDecoderError(#[from] codec::AudioDecoderError),
+    AudioDecoderError(#[from] mirror_codec::AudioDecoderError),
 }
 
 #[derive(Debug, Clone)]

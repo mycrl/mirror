@@ -1,10 +1,10 @@
 [package]
-name = "codec"
+name = "mirror-codec"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
 log = "0.4.20"
 thiserror = "1.0.63"
-common = { path = "../common" }
+mirror-common = { path = "../common", version = "0.1" }
 ffmpeg-sys-next = { git = "https://github.com/mycrl/rust-ffmpeg-sys" }

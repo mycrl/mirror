@@ -1,6 +1,6 @@
 use super::Texture2DSample;
 
-use common::Size;
+use mirror_common::Size;
 use wgpu::{Device, Texture, TextureAspect, TextureFormat};
 
 /// RGBA stands for red green blue alpha. While it is sometimes described as a

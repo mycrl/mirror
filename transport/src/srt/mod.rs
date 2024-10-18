@@ -17,9 +17,9 @@ use std::{
     ptr::null,
 };
 
-use common::strings::Strings;
 use libc::sockaddr;
 use log::{log, Level};
+use mirror_common::strings::Strings;
 
 pub(crate) fn error() -> Error {
     Error::other(

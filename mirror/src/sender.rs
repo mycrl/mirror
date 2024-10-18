@@ -8,23 +8,23 @@ use std::{
 use bytes::BytesMut;
 use thiserror::Error;
 
-use capture::{
+use mirror_capture::{
     AudioCaptureSourceDescription, Capture, CaptureDescriptor, FrameArrived, Source,
     SourceCaptureDescriptor, VideoCaptureSourceDescription,
 };
 
-use common::{
+use mirror_common::{
     atomic::EasyAtomic,
     frame::{AudioFrame, VideoFrame},
     Size,
 };
 
-use codec::{
+use mirror_codec::{
     create_opus_identification_header, AudioEncoder, AudioEncoderSettings, CodecType, VideoEncoder,
     VideoEncoderSettings, VideoEncoderType,
 };
 
-use transport::{
+use mirror_transport::{
     adapter::{BufferFlag, StreamBufferInfo, StreamSenderAdapter},
     package,
 };
@@ -34,11 +34,11 @@ pub enum SenderError {
     #[error(transparent)]
     TransportError(#[from] std::io::Error),
     #[error(transparent)]
-    CaptureError(#[from] capture::CaptureError),
+    CaptureError(#[from] mirror_capture::CaptureError),
     #[error(transparent)]
-    VideoEncoderError(#[from] codec::VideoEncoderError),
+    VideoEncoderError(#[from] mirror_codec::VideoEncoderError),
     #[error(transparent)]
-    AudioEncoderError(#[from] codec::AudioEncoderError),
+    AudioEncoderError(#[from] mirror_codec::AudioEncoderError),
 }
 
 /// Description of video coding.

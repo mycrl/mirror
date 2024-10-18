@@ -10,6 +10,8 @@ jobs:
       matrix:
         os:
           - windows-latest
+          - macos-latest
+          - ubuntu-latest
         target:
           - debug
           - release
@@ -26,6 +28,15 @@ jobs:
             target/
           key: "${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.lock') }}"
 
+      # installation of dependencies
+      - name: Installation of dependencies
+        if: runner.os == 'Macos'
+        run: brew install ffmpeg cmake
+
+      - name: Installation of dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get install tclsh pkg-config cmake libssl-dev build-essential libavcodec-dev libavdevice-dev libavformat-dev libasound2-dev libsdl2-dev libmfx-dev v4l-utils -y
+
       # use auto build script
       - name: Build distributions
         run: |
@@ -33,15 +44,40 @@ jobs:
           npm run build:${{ matrix.target }}
 
       # compress shared libraries
-      - name: Compress distributions
+      - name: Compress distributions (Windows)
+        if: runner.os == 'Windows'
         run: Compress-Archive -Path ./build -DestinationPath ./windows-x64-${{ matrix.target }}.zip
 
-      - name: Upload artifact
+      - name: Compress distributions (Macos)
+        if: runner.os == 'Macos'
+        run: tar -czvf macos-arm64-${{ matrix.target }}.tar.gz -C ./build .
+
+      - name: Compress distributions (Linux)
+        if: runner.os == 'Linux'
+        run: tar -czvf linux-x64-${{ matrix.target }}-gnu.tar.gz -C ./build .
+
+      # upload to artifact
+      - name: Upload artifact (Windows)
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v4
         with:
           name: windows-x64-${{ matrix.target }}
           path: ./windows-x64-${{ matrix.target }}.zip
+
+      - name: Upload artifact (Macos)
+        if: runner.os == 'Macos'
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-arm64-${{ matrix.target }}
+          path: ./macos-arm64-${{ matrix.target }}.tar.gz
+
+      - name: Upload artifact (Linux)
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-x64-${{ matrix.target }}
+          path: ./linux-x64-${{ matrix.target }}-gnu.tar.gz
+
   deploy:
     needs: build
     runs-on: ubuntu-latest
@@ -57,7 +93,7 @@ jobs:
           GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
         with:
           tag_name: ${{ github.ref_name }}
-          name: Last Main Branch Auto build
+          name: ${{ github.ref_name }}
           draft: false
           prerelease: false
           files: artifacts/**/*

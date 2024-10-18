@@ -1,16 +1,14 @@
-#[cfg(not(target_os = "windows"))]
-use std::ptr::null_mut;
 use std::str::FromStr;
 
-use common::c_str;
 use ffmpeg_sys_next::*;
+use mirror_common::c_str;
 use thiserror::Error;
 
 #[cfg(any(target_os = "windows", target_os = "macos"))]
-use common::Size;
+use mirror_common::Size;
 
 #[cfg(target_os = "windows")]
-use common::win32::{windows::core::Interface, Direct3DDevice};
+use mirror_common::win32::{windows::core::Interface, Direct3DDevice};
 
 #[derive(Error, Debug)]
 pub enum CreateVideoContextError {
@@ -24,7 +22,7 @@ pub enum CreateVideoContextError {
     MissingDirect3DDevice,
     #[cfg(target_os = "windows")]
     #[error(transparent)]
-    SetMultithreadProtectedError(#[from] common::win32::windows::core::Error),
+    SetMultithreadProtectedError(#[from] mirror_common::win32::windows::core::Error),
     #[error("failed to init av hardware device context")]
     InitAVHardwareDeviceContextError,
     #[error("failed to init qsv device context")]
@@ -339,13 +337,13 @@ pub fn create_video_context(
     }
 
     if kind.is_hardware() {
-        let mut hw_device_ctx = null_mut();
+        let mut hw_device_ctx = std::ptr::null_mut();
         if unsafe {
             av_hwdevice_ctx_create(
                 &mut hw_device_ctx,
                 AVHWDeviceType::AV_HWDEVICE_TYPE_VIDEOTOOLBOX,
-                null_mut(),
-                null_mut(),
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
                 0,
             )
         } != 0

@@ -21,7 +21,7 @@ use std::{
 };
 
 use bytes::{BufMut, Bytes, BytesMut};
-use common::atomic::EasyAtomic;
+use mirror_common::atomic::EasyAtomic;
 use parking_lot::{Mutex, RwLock};
 use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;

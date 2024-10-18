@@ -10,7 +10,7 @@ pub use self::texture::{
     FromNativeResourceError, Texture, Texture2DBuffer, Texture2DRaw, Texture2DResource,
 };
 
-use common::Size;
+use mirror_common::Size;
 use pollster::FutureExt;
 use texture::{Texture2DSource, Texture2DSourceOptions};
 use thiserror::Error;
@@ -43,7 +43,7 @@ pub enum GraphicsError {
 #[derive(Debug)]
 pub struct RendererOptions<T> {
     #[cfg(target_os = "windows")]
-    pub direct3d: common::win32::Direct3DDevice,
+    pub direct3d: mirror_common::win32::Direct3DDevice,
     pub window: T,
     pub size: Size,
 }
@@ -199,7 +199,7 @@ impl<'a> Renderer<'a> {
 
 #[cfg(target_os = "windows")]
 pub mod dx11 {
-    use common::{
+    use mirror_common::{
         win32::{
             windows::Win32::{
                 Foundation::HWND,
@@ -216,8 +216,8 @@ pub mod dx11 {
         },
         Size,
     };
-    use resample::win32::{Resource, VideoResampler, VideoResamplerDescriptor};
 
+    use mirror_resample::win32::{Resource, VideoResampler, VideoResamplerDescriptor};
     use thiserror::Error;
 
     use crate::{Texture, Texture2DRaw, Texture2DResource};
@@ -225,7 +225,7 @@ pub mod dx11 {
     #[derive(Debug, Error)]
     pub enum Dx11GraphicsError {
         #[error(transparent)]
-        WindowsError(#[from] common::win32::windows::core::Error),
+        WindowsError(#[from] mirror_common::win32::windows::core::Error),
     }
 
     pub struct Dx11Renderer {

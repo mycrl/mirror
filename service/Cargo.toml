@@ -7,8 +7,8 @@ edition = "2021"
 anyhow = "1.0.79"
 log = "0.4.20"
 simple_logger = "4"
-common = { path = "../common" }
-transport = { path = "../transport" }
+mirror-common = { path = "../common", version = "0.1" }
+mirror-transport = { path = "../transport", version = "0.1" }
 clap = { version = "4", features = ["derive"] }
 tokio = { version = "1.37.0", features = ["full"] }
 mimalloc = { version = "*", default-features = false }

@@ -5,7 +5,7 @@ use std::{
     mem::size_of,
 };
 
-use common::strings::Strings;
+use mirror_common::strings::Strings;
 
 use super::{error, srt_getsockflag, srt_setsockflag, SRTSOCKET, SRT_SOCKOPT, SRT_TRANSTYPE};
 

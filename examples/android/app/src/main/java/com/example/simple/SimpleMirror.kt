@@ -135,7 +135,7 @@ class SimpleMirrorService : Service() {
         private val AudioConfigure = object : Audio.AudioEncoder.AudioEncoderConfigure {
             override val channalConfig = AudioFormat.CHANNEL_IN_MONO
             override val sampleBits = AudioFormat.ENCODING_PCM_16BIT
-            override val sampleRate = 44100
+            override val sampleRate = 48000
             override val bitRate = 64000
             override val channels = 1
         }
@@ -270,13 +270,7 @@ class SimpleMirrorService : Service() {
         builder.setAudioFormat(format.build())
         builder.setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY)
         builder.setTransferMode(AudioTrack.MODE_STREAM)
-        builder.setBufferSizeInBytes(
-            AudioTrack.getMinBufferSize(
-                AudioConfigure.sampleRate,
-                AudioFormat.CHANNEL_OUT_MONO,
-                AudioFormat.ENCODING_PCM_16BIT
-            ) * 2
-        )
+        builder.setBufferSizeInBytes(AudioConfigure.sampleRate / 10 * 2)
 
         return builder.build()
     }
@@ -295,13 +289,7 @@ class SimpleMirrorService : Service() {
         val builder = AudioRecord.Builder()
         builder.setAudioFormat(format.build())
         builder.setAudioPlaybackCaptureConfig(configure.build())
-        builder.setBufferSizeInBytes(
-            AudioRecord.getMinBufferSize(
-                AudioConfigure.sampleRate,
-                AudioFormat.CHANNEL_IN_MONO,
-                AudioFormat.ENCODING_PCM_16BIT
-            ) * 2
-        )
+        builder.setBufferSizeInBytes(AudioConfigure.sampleRate / 10 * 2)
 
         return builder.build()
     }

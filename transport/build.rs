@@ -1,6 +1,7 @@
 use std::{env, fs, path::Path, process::Command};
 
 use anyhow::{anyhow, Result};
+use which::which;
 
 fn is_exsit(dir: &str) -> bool {
     fs::metadata(dir).is_ok()
@@ -30,6 +31,14 @@ fn exec(command: &str, work_dir: &str) -> Result<String> {
 }
 
 fn main() -> Result<()> {
+    if which("cmake").is_err() {
+        panic!("
+            You don't have cmake installed, compiling srt requires cmake to do it, now it's unavoidable, you need to install cmake.
+                On debian/ubuntu, you can install it with `sudo apt install cmake`.
+                On window, it requires you to go to the official cmake website to load the installation file.
+        ");
+    }
+
     let target = env::var("TARGET")?;
     let out_dir = env::var("OUT_DIR")?;
 

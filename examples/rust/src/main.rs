@@ -6,7 +6,6 @@ use clap::{
     Parser,
 };
 
-use common::Size;
 use mirror::{
     shutdown, startup, AVFrameSink, AVFrameStream, AudioDescriptor, AudioFrame, Capture, Close,
     GraphicsBackend, Mirror, Receiver, ReceiverDescriptor, Renderer, Sender, SenderDescriptor,
@@ -14,6 +13,7 @@ use mirror::{
     VideoFrame,
 };
 
+use mirror_common::Size;
 use winit::{
     application::ApplicationHandler,
     dpi::PhysicalSize,

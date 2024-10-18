@@ -330,6 +330,7 @@ class Audio {
             format.setInteger(MediaFormat.KEY_PCM_ENCODING, AudioFormat.ENCODING_PCM_16BIT)
             format.setInteger(MediaFormat.KEY_CHANNEL_COUNT, configure.channels)
             format.setInteger(MediaFormat.KEY_BIT_RATE, configure.bitRate)
+            format.setInteger(MediaFormat.KEY_DURATION, 100000)
             format.setInteger(MediaFormat.KEY_COMPLEXITY, 0)
 
             codec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_AUDIO_OPUS)

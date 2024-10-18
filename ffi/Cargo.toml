@@ -11,13 +11,13 @@ doc = false
 [dependencies]
 anyhow = "1.0.82"
 log = "0.4.20"
-common = { path = "../common" }
+mirror-common = { path = "../common", version = "0.1" }
 
 [target.'cfg(target_os = "android")'.dependencies]
 bytes = "1.5"
 jni = "0.21.1"
 num_cpus = "1.16.0"
-transport = { path = "../transport" }
+mirror-transport = { path = "../transport", version = "0.1" }
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
-mirror = { path = "../mirror" }
+mirror = { path = "../mirror", version = "0.1" }
