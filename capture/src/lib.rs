@@ -46,7 +46,7 @@ use mirror_common::{
 use thiserror::Error;
 
 #[cfg(target_os = "windows")]
-use common::win32::Direct3DDevice;
+use mirror_common::win32::Direct3DDevice;
 
 #[cfg(target_os = "linux")]
 pub fn startup() {

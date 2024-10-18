@@ -47,7 +47,7 @@ use thiserror::Error;
 pub enum MirrorError {
     #[error(transparent)]
     #[cfg(target_os = "windows")]
-    Win32Error(#[from] common::win32::windows::core::Error),
+    Win32Error(#[from] mirror_common::win32::windows::core::Error),
     #[error(transparent)]
     TransportError(#[from] std::io::Error),
 }
@@ -356,12 +356,13 @@ impl<'a> VideoRender<'a> {
         match frame.sub_format {
             #[cfg(target_os = "windows")]
             VideoSubFormat::D3D11 => {
-                let texture = Texture2DResource::Texture(graphics::Texture2DRaw::ID3D11Texture2D(
-                    d3d_texture_borrowed_raw(&(frame.data[0] as *mut _))
-                        .ok_or_else(|| RendererError::VideoInvalidD3D11Texture)?
-                        .clone(),
-                    frame.data[1] as u32,
-                ));
+                let texture =
+                    Texture2DResource::Texture(mirror_graphics::Texture2DRaw::ID3D11Texture2D(
+                        d3d_texture_borrowed_raw(&(frame.data[0] as *mut _))
+                            .ok_or_else(|| RendererError::VideoInvalidD3D11Texture)?
+                            .clone(),
+                        frame.data[1] as u32,
+                    ));
 
                 let texture = match frame.format {
                     VideoFormat::BGRA => Texture::Bgra(texture),

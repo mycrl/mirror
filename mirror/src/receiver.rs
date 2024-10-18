@@ -11,7 +11,7 @@ use mirror_transport::adapter::{StreamKind, StreamMultiReceiverAdapter, StreamRe
 use thiserror::Error;
 
 #[cfg(target_os = "windows")]
-use common::win32::MediaThreadClass;
+use mirror_common::win32::MediaThreadClass;
 
 #[derive(Debug, Error)]
 pub enum ReceiverError {

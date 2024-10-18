@@ -111,7 +111,7 @@ pub mod android {
     #[allow(non_snake_case)]
     pub extern "system" fn JNI_OnLoad(vm: JavaVM, _: *mut c_void) -> i32 {
         logger::init_with_android(log::LevelFilter::Info);
-        transport::startup();
+        mirror_transport::startup();
         JVM.lock().unwrap().replace(vm);
 
         JNI_VERSION_1_6
@@ -160,7 +160,7 @@ pub mod android {
     #[no_mangle]
     #[allow(non_snake_case)]
     pub extern "system" fn JNI_OnUnload(_: JavaVM, _: *mut c_void) {
-        transport::shutdown();
+        mirror_transport::shutdown();
     }
 
     pub fn copy_from_byte_array(env: &JNIEnv, array: &JByteArray) -> anyhow::Result<BytesMut> {
@@ -247,7 +247,7 @@ pub mod android {
             JNIEnv,
         };
 
-        use transport::adapter::{StreamBufferInfo, StreamKind};
+        use mirror_transport::adapter::{StreamBufferInfo, StreamKind};
 
         /// /**
         ///  * Streaming data information.

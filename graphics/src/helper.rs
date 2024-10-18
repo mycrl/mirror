@@ -4,7 +4,7 @@ use thiserror::Error;
 pub enum CompatibilityLayerError {
     #[cfg(target_os = "windows")]
     #[error(transparent)]
-    DxError(#[from] common::win32::windows::core::Error),
+    DxError(#[from] mirror_common::win32::windows::core::Error),
     #[error("not found wgpu dx12 device")]
     NotFoundDxBackend,
     #[error("dx11 shared handle is invalid")]
@@ -23,7 +23,7 @@ pub mod win32 {
 
     use super::CompatibilityLayerError;
 
-    use common::win32::{
+    use mirror_common::win32::{
         windows::Win32::Graphics::{
             Direct3D11::{
                 ID3D11Texture2D, D3D11_RESOURCE_MISC_SHARED, D3D11_TEXTURE2D_DESC,
