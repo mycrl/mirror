@@ -4,7 +4,6 @@ mod manager;
 use std::{
     ffi::{c_char, c_int, c_void},
     ptr::null,
-    sync::Arc,
 };
 
 use common::{
@@ -47,8 +46,8 @@ pub struct AudioInfo {
 
 #[repr(C)]
 struct RawOutputCallback {
-    video: Option<extern "C" fn(ctx: *const c_void, frame: *const VideoFrame)>,
-    audio: Option<extern "C" fn(ctx: *const c_void, frame: *const AudioFrame)>,
+    video: Option<extern "C" fn(ctx: *mut c_void, frame: *const VideoFrame)>,
+    audio: Option<extern "C" fn(ctx: *mut c_void, frame: *const AudioFrame)>,
     ctx: *const c_void,
 }
 
@@ -147,7 +146,7 @@ pub trait AVFrameSink {
     /// }
     /// ```
     #[allow(unused_variables)]
-    fn video(&self, frmae: &VideoFrame) {}
+    fn video(&mut self, frmae: &VideoFrame) {}
     /// This function is called when obs pushes frames internally, and the
     /// format of the audio frame is fixed to PCM.
     ///
@@ -166,24 +165,24 @@ pub trait AVFrameSink {
     /// }
     /// ```
     #[allow(unused_variables)]
-    fn audio(&self, frame: &AudioFrame) {}
+    fn audio(&mut self, frame: &AudioFrame) {}
 }
 
 impl AVFrameSink for () {}
 
-struct Context(Arc<dyn AVFrameSink>);
+struct Context(Box<dyn AVFrameSink>);
 
-extern "C" fn video_sink_proc(ctx: *const c_void, frame: *const VideoFrame) {
+extern "C" fn video_sink_proc(ctx: *mut c_void, frame: *const VideoFrame) {
     if !ctx.is_null() {
-        unsafe { &*(ctx as *const Context) }
+        unsafe { &mut *(ctx as *mut Context) }
             .0
             .video(unsafe { &*frame });
     }
 }
 
-extern "C" fn audio_sink_proc(ctx: *const c_void, frame: *const AudioFrame) {
+extern "C" fn audio_sink_proc(ctx: *mut c_void, frame: *const AudioFrame) {
     if !ctx.is_null() {
-        unsafe { &*(ctx as *const Context) }
+        unsafe { &mut *(ctx as *mut Context) }
             .0
             .audio(unsafe { &*frame });
     }
@@ -223,7 +222,7 @@ pub fn set_frame_sink<S: AVFrameSink + 'static>(sink: Option<S>) {
     let previous = unsafe {
         capture_set_output_callback(
             sink.map(|it| RawOutputCallback {
-                ctx: Box::into_raw(Box::new(Context(Arc::new(it)))) as *const c_void,
+                ctx: Box::into_raw(Box::new(Context(Box::new(it)))) as *const c_void,
                 video: Some(video_sink_proc),
                 audio: Some(audio_sink_proc),
             })
@@ -276,5 +275,7 @@ pub fn stop() {
 
 // quit obs environment, remove logger.
 pub fn quit() {
-    unsafe { let _ = capture_remove_logger(); }
+    unsafe {
+        let _ = capture_remove_logger();
+    }
 }

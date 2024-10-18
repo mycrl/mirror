@@ -175,11 +175,6 @@ void raw_video_callback(void* _, video_data* frame)
 
 void raw_audio_callback(void* _, size_t mix_idx, audio_data* data)
 {
-    if (!GLOBAL_MUTEX.try_lock())
-    {
-        return;
-    }
-
     if (GLOBAL.allow_obs && GLOBAL.initialized)
     {
         if (GLOBAL.output_callback.audio != nullptr &&
@@ -188,11 +183,10 @@ void raw_audio_callback(void* _, size_t mix_idx, audio_data* data)
         {
             GLOBAL.audio_frame.data = data->data[0];
             GLOBAL.audio_frame.frames = data->frames;
+            GLOBAL.audio_frame.sample_rate = GLOBAL.audio_info.samples_per_sec;
             GLOBAL.output_callback.audio(GLOBAL.output_callback.ctx, &GLOBAL.audio_frame);
         }
     }
-
-    GLOBAL_MUTEX.unlock();
 }
 
 // export api
@@ -235,7 +229,7 @@ void capture_init(VideoInfo* video_info, AudioInfo* audio_info)
     GLOBAL.video_frame.rect.width = video_info->width;
     GLOBAL.video_frame.rect.height = video_info->height;
     GLOBAL.audio_info.samples_per_sec = audio_info->samples_per_sec;
-    GLOBAL.audio_info.speakers = SPEAKERS_STEREO;
+    GLOBAL.audio_info.speakers = SPEAKERS_MONO;
 }
 
 int capture_start()

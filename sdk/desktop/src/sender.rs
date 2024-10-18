@@ -30,16 +30,16 @@ impl VideoSender {
     fn new(
         adapter: &Arc<StreamSenderAdapter>,
         settings: &VideoEncoderSettings,
-    ) -> anyhow::Result<Arc<Self>> {
-        Ok(Arc::new(Self {
+    ) -> anyhow::Result<Self> {
+        Ok(Self {
             encoder: VideoEncoder::new(settings)?,
             adapter: Arc::downgrade(adapter),
-        }))
+        })
     }
 
     // Copy the audio and video frames to the encoder and notify the encoding
     // thread.
-    fn sink(&self, frame: &VideoFrame) {
+    fn sink(&mut self, frame: &VideoFrame) {
         if let Some(adapter) = self.adapter.upgrade() {
             // Push the audio and video frames into the encoder.
             if self.encoder.send_frame(frame) {
@@ -61,7 +61,7 @@ impl VideoSender {
 
 struct AudioSender {
     adapter: Weak<StreamSenderAdapter>,
-    buffer: Mutex<BytesMut>,
+    buffer: BytesMut,
     encoder: AudioEncoder,
     frames: usize,
 }
@@ -76,26 +76,25 @@ impl AudioSender {
     fn new(
         adapter: &Arc<StreamSenderAdapter>,
         settings: &AudioEncoderSettings,
-    ) -> anyhow::Result<Arc<Self>> {
-        Ok(Arc::new(AudioSender {
+    ) -> anyhow::Result<Self> {
+        Ok(AudioSender {
             encoder: AudioEncoder::new(settings)?,
             adapter: Arc::downgrade(adapter),
-            buffer: Mutex::new(BytesMut::with_capacity(48000)),
+            buffer: BytesMut::with_capacity(48000),
             frames: settings.sample_rate as usize / 1000 * 100,
-        }))
+        })
     }
 
     // Copy the audio and video frames to the encoder and notify the encoding
     // thread.
-    fn sink(&self, frame: &AudioFrame) {
+    fn sink(&mut self, frame: &AudioFrame) {
         if let Some(adapter) = self.adapter.upgrade() {
-            let mut buffer = self.buffer.lock().unwrap();
-            buffer.extend_from_slice(unsafe {
+            self.buffer.extend_from_slice(unsafe {
                 std::slice::from_raw_parts(frame.data, frame.frames as usize * 2)
             });
 
-            if buffer.len() >= self.frames * 2 {
-                let payload = buffer.split_to(self.frames * 2);
+            if self.buffer.len() >= self.frames * 2 {
+                let payload = self.buffer.split_to(self.frames * 2);
                 let frame = AudioFrame {
                     format: AudioFormat::AUDIO_S16,
                     frames: self.frames as u32,
@@ -123,13 +122,13 @@ impl AudioSender {
 }
 
 pub(crate) struct SenderObserver {
-    video: Arc<VideoSender>,
-    audio: Arc<AudioSender>,
+    video: VideoSender,
+    audio: AudioSender,
     sink: FrameSink,
 }
 
 impl AVFrameSink for SenderObserver {
-    fn video(&self, frame: &VideoFrame) {
+    fn video(&mut self, frame: &VideoFrame) {
         self.video.sink(frame);
 
         // Push the video frames to the external device, which can be used for rendering
@@ -137,7 +136,7 @@ impl AVFrameSink for SenderObserver {
         (self.sink.video)(frame);
     }
 
-    fn audio(&self, frame: &AudioFrame) {
+    fn audio(&mut self, frame: &AudioFrame) {
         self.audio.sink(frame);
 
         // Push the audio frame to the external device, which can then play it on the

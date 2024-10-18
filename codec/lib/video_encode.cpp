@@ -44,6 +44,8 @@ VideoEncoder* codec_create_video_encoder(VideoEncoderSettings* settings)
     codec->context->flags2 |= AV_CODEC_FLAG2_FAST;
 	codec->context->flags |= AV_CODEC_FLAG_LOW_DELAY | AV_CODEC_FLAG_GLOBAL_HEADER;
 	codec->context->profile = FF_PROFILE_H264_BASELINE;
+    codec->context->thread_count = 4;
+    codec->context->thread_type = FF_THREAD_SLICE;
 
 	int bit_rate = settings->bit_rate;
 	if (name == "h264_qsv")
@@ -213,7 +215,7 @@ Packet* codec_video_encoder_read_packet(VideoEncoder* codec)
 	codec->output_packet->buffer = codec->packet->data;
 	codec->output_packet->flags = codec->packet->flags;
 	codec->output_packet->len = codec->packet->size;
-    codec->output_packet->timestamp = codec->packet->pts;
+    codec->output_packet->timestamp = (uint64_t)codec->packet->pts;
 
 	return codec->output_packet;
 }

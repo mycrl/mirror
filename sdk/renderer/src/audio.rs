@@ -23,9 +23,10 @@ pub struct AudioPlayer {
 impl AudioPlayer {
     pub fn new() -> Result<Self> {
         let host = cpal::default_host();
+
         let device = host
             .default_output_device()
-            .ok_or_else(|| anyhow!("no output device available"))?;
+            .ok_or_else(|| anyhow!("not found a output device"))?;
         let config: StreamConfig = device.default_output_config()?.into();
         let current_error: Arc<RwLock<Option<StreamError>>> = Default::default();
 

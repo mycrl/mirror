@@ -12,7 +12,7 @@ MirrorServiceExt::MirrorServiceExt(Args& args, HWND hwnd, HINSTANCE hinstance)
     _options.video.frame_rate = args.ArgsParams.fps;
     _options.video.key_frame_interval = 21;
     _options.video.bit_rate = 500 * 1024 * 8;
-    _options.audio.sample_rate = 48000;
+    _options.audio.sample_rate = 24000;
     _options.audio.bit_rate = 64000;
     _options.server = const_cast<char*>(args.ArgsParams.server.c_str());
     _options.multicast = const_cast<char*>("239.0.0.1");
@@ -60,7 +60,7 @@ bool MirrorServiceExt::CreateMirrorSender()
     settings.method = CaptureMethod::WGC;
     
     DeviceManagerService::Start();
-    auto devices = DeviceManagerService::GetDevices(DeviceKind::Video, &settings);
+    auto devices = DeviceManagerService::GetDevices(DeviceKind::Screen, &settings);
     if (devices.device_list.size() == 0)
     {
         return false;
@@ -73,7 +73,7 @@ bool MirrorServiceExt::CreateMirrorSender()
         return false;
     }
 
-    _sender.value().SetMulticast(true);
+    _sender.value().SetMulticast(false);
     _render->SetTitle("sender");
     return true;
 }
