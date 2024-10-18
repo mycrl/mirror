@@ -7,7 +7,7 @@ use tokio::{
     net::TcpListener,
 };
 
-use transport::Signal;
+use mirror_transport::Signal;
 
 pub async fn start_server(bind: SocketAddr, route: Arc<Route>) -> Result<(), Error> {
     let listener = TcpListener::bind(bind).await?;

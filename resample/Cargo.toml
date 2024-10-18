@@ -1,8 +1,8 @@
 [package]
-name = "resample"
+name = "mirror-resample"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
 rubato = "0.16.0"
-common = { path = "../common" }
+mirror-common = { path = "../common", version = "0.1" }

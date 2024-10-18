@@ -8,8 +8,8 @@ use std::{net::SocketAddr, process::exit, sync::Arc, thread};
 
 use anyhow::Result;
 use clap::Parser;
+use mirror_transport::srt::{cleanup, startup};
 use tokio::runtime::Runtime;
-use transport::srt::{cleanup, startup};
 
 // #[global_allocator]
 // static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;

@@ -8,7 +8,7 @@ use std::{
 };
 
 use bytes::{Bytes, BytesMut};
-use common::atomic::{AtomicOption, EasyAtomic};
+use mirror_common::atomic::{AtomicOption, EasyAtomic};
 use parking_lot::Mutex;
 
 #[repr(i32)]

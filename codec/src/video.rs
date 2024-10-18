@@ -5,15 +5,15 @@ use crate::codec::{
 
 use std::{ffi::c_int, ptr::null_mut};
 
-use common::frame::{VideoFormat, VideoFrame, VideoSubFormat};
 use ffmpeg_sys_next::*;
+use mirror_common::frame::{VideoFormat, VideoFrame, VideoSubFormat};
 use thiserror::Error;
 
 #[cfg(any(target_os = "windows", target_os = "macos"))]
-use common::Size;
+use mirror_common::Size;
 
 #[cfg(target_os = "windows")]
-use common::win32::Direct3DDevice;
+use mirror_common::win32::Direct3DDevice;
 
 #[derive(Debug, Clone)]
 pub struct VideoDecoderSettings {

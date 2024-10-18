@@ -8,39 +8,40 @@ pub use self::{
 
 use std::slice::from_raw_parts;
 
-pub use capture::{Capture, Source, SourceType};
-pub use codec::{VideoDecoderType, VideoEncoderType};
-pub use common::{
+pub use mirror_capture::{Capture, Source, SourceType};
+pub use mirror_codec::{VideoDecoderType, VideoEncoderType};
+pub use mirror_common::{
     frame::{AudioFrame, VideoFormat, VideoFrame, VideoSubFormat},
     Size,
 };
 
-pub use graphics::raw_window_handle;
-pub use transport::TransportDescriptor;
+pub use mirror_graphics::raw_window_handle;
+pub use mirror_transport::TransportDescriptor;
 
 #[cfg(target_os = "windows")]
-use common::win32::{
+use mirror_common::win32::{
     d3d_texture_borrowed_raw, set_process_priority, shutdown as win32_shutdown,
     startup as win32_startup, windows::Win32::Foundation::HWND, Direct3DDevice, ProcessPriority,
 };
 
 #[cfg(target_os = "macos")]
-use common::macos::{CVPixelBufferRef, PixelBufferRef};
+use mirror_common::macos::{CVPixelBufferRef, PixelBufferRef};
 
 #[cfg(target_os = "windows")]
 use parking_lot::RwLock;
 
 #[cfg(target_os = "windows")]
-use graphics::dx11::Dx11Renderer;
-use graphics::{
+use mirror_graphics::dx11::Dx11Renderer;
+
+use mirror_graphics::{
     Renderer as WgpuRenderer, RendererOptions as WgpuRendererOptions, SurfaceTarget, Texture,
     Texture2DBuffer, Texture2DResource,
 };
 
+use mirror_transport::Transport;
 use parking_lot::Mutex;
 use rodio::{OutputStream, OutputStreamHandle, Sink};
 use thiserror::Error;
-use transport::Transport;
 
 #[derive(Debug, Error)]
 pub enum MirrorError {
@@ -71,12 +72,12 @@ pub fn startup() -> Result<(), MirrorError> {
     }
 
     #[cfg(target_os = "linux")]
-    capture::startup();
+    mirror_capture::startup();
 
-    codec::startup();
+    mirror_codec::startup();
     log::info!("codec initialized");
 
-    transport::startup();
+    mirror_transport::startup();
     log::info!("transport initialized");
 
     log::info!("all initialized");
@@ -88,8 +89,8 @@ pub fn startup() -> Result<(), MirrorError> {
 pub fn shutdown() -> Result<(), MirrorError> {
     log::info!("mirror shutdown");
 
-    codec::shutdown();
-    transport::shutdown();
+    mirror_codec::shutdown();
+    mirror_transport::shutdown();
 
     #[cfg(target_os = "windows")]
     if let Err(e) = win32_shutdown() {
@@ -200,9 +201,9 @@ pub enum RendererError {
     AudioSendQueueError,
     #[error(transparent)]
     #[cfg(target_os = "windows")]
-    VideoDx11GraphicsError(#[from] graphics::dx11::Dx11GraphicsError),
+    VideoDx11GraphicsError(#[from] mirror_graphics::dx11::Dx11GraphicsError),
     #[error(transparent)]
-    VideoGraphicsError(#[from] graphics::GraphicsError),
+    VideoGraphicsError(#[from] mirror_graphics::GraphicsError),
     #[error("invalid d3d11texture2d texture")]
     #[cfg(target_os = "windows")]
     VideoInvalidD3D11Texture,

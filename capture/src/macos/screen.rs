@@ -1,6 +1,6 @@
 use crate::{CaptureHandler, FrameArrived, Source, VideoCaptureSourceDescription};
 
-use common::frame::VideoFrame;
+use mirror_common::frame::VideoFrame;
 use thiserror::Error;
 
 #[derive(Error, Debug)]

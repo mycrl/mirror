@@ -1,5 +1,5 @@
 [package]
-name = "capture"
+name = "mirror-capture"
 version = "0.1.0"
 edition = "2021"
 
@@ -9,9 +9,9 @@ cpal = "0.15.3"
 once_cell = "1.19.0"
 log = "0.4.20"
 parking_lot = "0.12"
-common = { path = "../common" }
-resample = { path = "../resample" }
-graphics = { path = "../graphics" }
+mirror-common = { path = "../common", version = "0.1" }
+mirror-resample = { path = "../resample", version = "0.1" }
+mirror-graphics = { path = "../graphics", version = "0.1" }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows-capture = { git = "https://github.com/mycrl/windows-capture" }

@@ -38,7 +38,7 @@ pub use self::macos::{
     screen::{ScreenCapture, ScreenCaptureError},
 };
 
-use common::{
+use mirror_common::{
     frame::{AudioFrame, VideoFrame},
     Size,
 };

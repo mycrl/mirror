@@ -10,7 +10,7 @@ pub use self::texture::{
     FromNativeResourceError, Texture, Texture2DBuffer, Texture2DRaw, Texture2DResource,
 };
 
-use common::Size;
+use mirror_common::Size;
 use pollster::FutureExt;
 use texture::{Texture2DSource, Texture2DSourceOptions};
 use thiserror::Error;
