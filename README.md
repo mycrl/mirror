@@ -14,13 +14,13 @@
 <br/>
 <br/>
 
-Pure software screen projection is different from Miracast, AirPlay, etc., which need to rely on hardware support. This project was not designed to work on a wide area network, but works well in a local area network environment.  
+Pure software screen projection is different from Miracast, AirPlay, etc., which need to rely on hardware support. This project was not designed to work on a wide area network, but works well in a local area network environment.
 
 The project is cross-platform, but the priority platforms supported are Windows and Android, Unlike a solution like DLAN, this project is more akin to airplay, so low latency is the main goal, currently the latency is controlled at around 150-250ms (with some variations on different platforms with different codecs), and maintains a highly easy to use API and very few external dependencies.
 
 ## Documentation
 
-- Rust: There are still some obstacles to releasing to crates.io, so for rust the documentation is being updated.  
+- Rust: There are still some obstacles to releasing to crates.io, so for rust the documentation is being updated.
 - C/C++: This project also compiles dynamic link libraries, so for C/C++ projects, use this header file [ffi/include/mirror.h](./ffi/include/mirror.h)
 
 ## Build Instructions
@@ -40,7 +40,7 @@ The project is cross-platform, but the priority platforms supported are Windows 
 
 ```sh
 sudo apt-get update
-sudo apt-get install tclsh pkg-config cmake libssl-dev build-essential libasound2-dev libsdl2-dev libmfx-dev v4l-utils
+sudo apt-get install tclsh pkg-config cmake libssl-dev build-essential libavcodec-dev libavdevice-dev libavformat-dev libasound2-dev libsdl2-dev libmfx-dev v4l-utils
 ```
 
 ---
