@@ -9,12 +9,8 @@ SimpleRender::SimpleRender(Args& args,
     , _args(args)
     , _hwnd(hwnd)
 {
-    Size size;
-    size.width = args.ArgsParams.width;
-    size.height = args.ArgsParams.height;
-
-    _window_handle = renderer_create_window_handle(hwnd, hinstance);
-    _renderer = renderer_create(size, _window_handle);
+    _window_handle = create_window_handle_for_win32(hwnd, args.ArgsParams.width, args.ArgsParams.height);
+    _renderer = renderer_create(_window_handle, RENDER_BACKEND_DX11);
 }
 #endif
 

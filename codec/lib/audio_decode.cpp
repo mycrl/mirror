@@ -27,7 +27,6 @@ AudioDecoder* codec_create_audio_decoder(const char* codec_name)
 	}
 
 	codec->context->thread_count = 4;
-    codec->context->thread_type = FF_THREAD_SLICE;
 	codec->context->request_sample_fmt = AV_SAMPLE_FMT_S16;
 	codec->context->ch_layout = AV_CHANNEL_LAYOUT_MONO;
 	codec->context->flags |= AV_CODEC_FLAG_LOW_DELAY;
@@ -120,7 +119,7 @@ bool codec_audio_decoder_send_packet(AudioDecoder* codec,
 								   buf,
 								   size,
                                    packet->timestamp,
-								   packet->timestamp,
+								   AV_NOPTS_VALUE,
 								   0);
 		if (ret < 0)
 		{

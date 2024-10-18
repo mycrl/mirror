@@ -31,8 +31,6 @@ AudioEncoder* codec_create_audio_encoder(AudioEncoderSettings* settings)
 		return nullptr;
 	}
 
-    codec->context->thread_count = 4;
-    codec->context->thread_type = FF_THREAD_SLICE;
     codec->context->sample_fmt = AV_SAMPLE_FMT_S16;
     codec->context->ch_layout = AV_CHANNEL_LAYOUT_MONO;
     codec->context->flags |= AV_CODEC_FLAG_LOW_DELAY;
@@ -41,11 +39,9 @@ AudioEncoder* codec_create_audio_encoder(AudioEncoderSettings* settings)
 	codec->context->bit_rate = settings->bit_rate;
 	codec->context->sample_rate = settings->sample_rate;
 	codec->context->time_base = av_make_q(1, settings->sample_rate);
-    codec->context->pkt_timebase = av_make_q(1, settings->sample_rate);
 
     av_opt_set(codec->context->priv_data, "frame_duration", "100", 0);
 	av_opt_set_int(codec->context->priv_data, "application", 2051, 0);
-    av_opt_set_int(codec->context->priv_data, "vbr", 0, 0);
 	
 	if (avcodec_open2(codec->context, codec->codec, nullptr) != 0)
 	{
@@ -83,7 +79,7 @@ bool codec_audio_encoder_copy_frame(AudioEncoder* codec, AudioFrame* frame)
 		return false;
 	}
 
-	codec->frame->nb_samples = codec->context->frame_size;
+	codec->frame->nb_samples = frame->frames;
 	codec->frame->format = codec->context->sample_fmt;
 	codec->frame->ch_layout = codec->context->ch_layout;
 
@@ -95,10 +91,13 @@ bool codec_audio_encoder_copy_frame(AudioEncoder* codec, AudioFrame* frame)
 	av_samples_fill_arrays(codec->frame->data, 
 						   codec->frame->linesize, 
 						   frame->data, 
-						   1,
+						   1, 
 						   frame->frames, 
 						   AV_SAMPLE_FMT_S16, 
-						   1);
+						   0);
+
+	codec->frame->pts = codec->pts;
+	codec->pts += codec->context->frame_size;
 
 	return true;
 }
@@ -139,8 +138,7 @@ Packet* codec_audio_encoder_read_packet(AudioEncoder* codec)
 	codec->output_packet->buffer = codec->packet->data;
 	codec->output_packet->len = codec->packet->size;
 	codec->output_packet->flags = codec->packet->flags;
-    codec->output_packet->timestamp = codec->pts;
-    codec->pts += codec->context->sample_rate / 10;
+    codec->output_packet->timestamp = codec->packet->pts;
     
 	return codec->output_packet;
 }

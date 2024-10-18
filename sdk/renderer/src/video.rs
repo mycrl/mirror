@@ -21,7 +21,7 @@ pub struct Size {
 
 #[allow(unused)]
 pub enum WindowHandle {
-    Win32(*mut c_void),
+    Win32(*mut c_void, u32, u32),
 }
 
 pub struct VideoRender {
@@ -35,17 +35,23 @@ unsafe impl Send for VideoRender {}
 unsafe impl Sync for VideoRender {}
 
 impl VideoRender {
-    pub fn new(size: Size, handle: &WindowHandle) -> Result<Self> {
-        log::info!("renderer: create video render, size={:?}", size);
-
+    pub fn new(handle: &WindowHandle) -> Result<Self> {
         if unsafe { SDL_Init(SDL_INIT_VIDEO) } != 0 {
             return error();
         }
 
-        let window = unsafe {
-            SDL_CreateWindowFrom(match handle {
-                WindowHandle::Win32(hwnd) => *hwnd,
-            })
+        let (window, size) = unsafe {
+            let (w, s) = match handle {
+                WindowHandle::Win32(hwnd, width, height) => (
+                    *hwnd,
+                    Size {
+                        width: *width,
+                        height: *height,
+                    },
+                ),
+            };
+
+            (SDL_CreateWindowFrom(w), s)
         };
 
         if window.is_null() {

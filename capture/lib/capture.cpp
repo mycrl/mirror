@@ -183,7 +183,6 @@ void raw_audio_callback(void* _, size_t mix_idx, audio_data* data)
         {
             GLOBAL.audio_frame.data = data->data[0];
             GLOBAL.audio_frame.frames = data->frames;
-            GLOBAL.audio_frame.sample_rate = GLOBAL.audio_info.samples_per_sec;
             GLOBAL.output_callback.audio(GLOBAL.output_callback.ctx, &GLOBAL.audio_frame);
         }
     }

@@ -35,8 +35,6 @@ VideoDecoder* codec_create_video_decoder(const char* codec_name)
         return nullptr;
     }
 
-    codec->context->thread_count = 4;
-    codec->context->thread_type = FF_THREAD_SLICE;
     codec->context->delay = 0;
     codec->context->max_samples = 1;
     codec->context->has_b_frames = 0;

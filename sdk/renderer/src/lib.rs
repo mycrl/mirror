@@ -46,18 +46,19 @@ extern "system" fn DllMain(
 /// Create the window handle used by the SDK through the original window handle.
 #[no_mangle]
 #[cfg(target_os = "windows")]
-extern "C" fn renderer_create_window_handle(
-    hwnd: *mut std::ffi::c_void,
-    _hinstance: *mut std::ffi::c_void,
+extern "C" fn create_window_handle_for_win32(
+    hwnd: *mut c_void,
+    width: u32,
+    height: u32,
 ) -> *const WindowHandle {
     assert!(!hwnd.is_null());
 
-    Box::into_raw(Box::new(WindowHandle::Win32(hwnd)))
+    Box::into_raw(Box::new(WindowHandle::Win32(hwnd, width, height)))
 }
 
 /// Destroy the window handle without affecting external window handles.
 #[no_mangle]
-extern "C" fn renderer_window_handle_destroy(handle: *const WindowHandle) {
+extern "C" fn window_handle_destroy(handle: *const WindowHandle) {
     assert!(!handle.is_null());
 
     let _ = unsafe { Box::from_raw(handle as *mut WindowHandle) };
@@ -70,12 +71,12 @@ struct RawRenderer {
 
 /// Creating a window renderer.
 #[no_mangle]
-extern "C" fn renderer_create(size: RawSize, handle: *const WindowHandle) -> *mut RawRenderer {
+extern "C" fn renderer_create(handle: *const WindowHandle, _backend: i32) -> *mut RawRenderer {
     assert!(!handle.is_null());
 
     let func = || {
         Ok::<RawRenderer, anyhow::Error>(RawRenderer {
-            video: VideoRender::new(size.into(), unsafe { &*handle })?,
+            video: VideoRender::new(unsafe { &*handle })?,
             audio: AudioPlayer::new()?,
         })
     };
@@ -109,16 +110,6 @@ extern "C" fn renderer_on_audio(render: *mut RawRenderer, frame: *const AudioFra
         .send(unsafe { &*frame })
         .map_err(|e| log::error!("{:?}", e))
         .is_ok()
-}
-
-/// Adjust the size of the renderer. When the window size changes, the internal
-/// size of the renderer needs to be updated, otherwise this will cause abnormal
-/// rendering.
-#[no_mangle]
-extern "C" fn renderer_resise(render: *mut RawRenderer, _size: RawSize) -> bool {
-    assert!(!render.is_null());
-
-    true
 }
 
 /// Destroy the window renderer.

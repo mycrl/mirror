@@ -146,7 +146,7 @@ pub trait AVFrameSink {
     /// }
     /// ```
     #[allow(unused_variables)]
-    fn video(&mut self, frmae: &VideoFrame) {}
+    fn video(&self, frmae: &VideoFrame) {}
     /// This function is called when obs pushes frames internally, and the
     /// format of the audio frame is fixed to PCM.
     ///
@@ -165,7 +165,7 @@ pub trait AVFrameSink {
     /// }
     /// ```
     #[allow(unused_variables)]
-    fn audio(&mut self, frame: &AudioFrame) {}
+    fn audio(&self, frame: &AudioFrame) {}
 }
 
 impl AVFrameSink for () {}

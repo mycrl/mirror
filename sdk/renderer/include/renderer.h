@@ -23,31 +23,26 @@
 
 #include <frame.h>
 
-typedef struct
+typedef enum 
 {
-	int width;
-	int height;
-} Size;
+    RENDER_BACKEND_DX11,
+    RENDER_BACKEND_WGPU,
+} VideoRenderBackend;
 
 typedef const void* WindowHandle;
 typedef const void* Render;
 
-/**
- * Create the window handle used by the SDK through the original window handle.
- */
-#ifdef WIN32
-EXPORT WindowHandle renderer_create_window_handle(HWND hwnd, HINSTANCE hinstance);
-#endif // WIN32
+EXPORT WindowHandle create_window_handle_for_win32(HWND hwnd, uint32_t width, uint32_t height);
 
 /**
- * Destroy the window handle without affecting external window handles.
+ * Destroy the window handle.
  */
-EXPORT void renderer_window_handle_destroy(WindowHandle handle);
+EXPORT void window_handle_destroy(WindowHandle hwnd);
 
 /**
  * Creating a window renderer.
  */
-EXPORT Render renderer_create(Size size, WindowHandle window);
+EXPORT Render renderer_create(WindowHandle hwnd, VideoRenderBackend backend);
 
 /**
  * Push the video frame into the renderer, which will update the window texture.
@@ -58,13 +53,6 @@ EXPORT bool renderer_on_video(Render render, VideoFrame* frame);
  * Push the audio frame into the renderer, which will append to audio queue.
  */
 EXPORT bool renderer_on_audio(Render render, AudioFrame* frame);
-
-/**
- * Adjust the size of the renderer. When the window size changes, the internal 
- * size of the renderer needs to be updated, otherwise this will cause 
- * abnormal rendering.
- */
-EXPORT bool renderer_resise(Render render, Size size);
 
 /**
  * Destroy the window renderer.
