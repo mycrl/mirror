@@ -64,4 +64,4 @@ cargo build --release
 
 ## License
 
-[GPL](./LICENSE) Copyright (c) 2024 Lazy Panda.
+[MIT](./LICENSE) Copyright (c) 2024 mycrl.

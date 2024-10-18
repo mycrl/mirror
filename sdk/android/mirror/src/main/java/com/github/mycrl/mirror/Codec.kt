@@ -307,7 +307,6 @@ class Audio {
         }
     }
 
-    @RequiresApi(Build.VERSION_CODES.R)
     class AudioEncoder(
         private val record: AudioRecord?,
         configure: AudioEncoderConfigure,
