@@ -25,9 +25,11 @@ The project is cross-platform, but the priority platforms supported are Windows 
 
 ## Examples
 
-- [Android](./examples/android) - This is an android studio project.
-- [C++](./examples/cpp) - The build product is `build/bin/example-cpp`.
-- [Rust](./examples/rust) - The build product is `build/bin/example`.
+> Automated builds can be downloaded from the github release page.
+
+- [Android](./examples/android) - this is an android studio project.
+- [C++](./examples/cpp) - the build product is `build/bin/example-cpp`.
+- [Rust](./examples/rust) - the build product is `build/bin/example`.
 
 ## Build Instructions
 
