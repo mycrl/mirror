@@ -1,7 +1,7 @@
 #### Examples
 
 ```sh
-./example --id=0 --width=1920 --height=1080 --fps=30 --encoder=libx264 --decoder=h264 --server=127.0.0.1:8080
+./example-cpp --id=0 --width=1920 --height=1080 --fps=30 --encoder=libx264 --decoder=h264 --server=127.0.0.1:8080
 ```
 
 #### Args
