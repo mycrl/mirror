@@ -26,3 +26,4 @@ tokio = { version = "1.37.0", features = [
 
 [build-dependencies]
 anyhow = "1.0.79"
+which = "6.0.3"
