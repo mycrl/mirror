@@ -31,4 +31,4 @@ features = [
 
 
 [target.'cfg(target_os = "macos")'.dependencies]
-core-video-sys = { git = "https://github.com/mycrl/rust-core-video-sys" }
+core-video-sys = { version = "0.1.4", default-features = false }
