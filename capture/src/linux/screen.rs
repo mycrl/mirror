@@ -7,7 +7,7 @@ use std::{
     time::Duration,
 };
 
-use common::{
+use mirror_common::{
     atomic::EasyAtomic,
     c_str,
     frame::{VideoFormat, VideoFrame, VideoSubFormat},

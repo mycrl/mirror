@@ -6,7 +6,7 @@ use std::{
     thread,
 };
 
-use common::{
+use mirror_common::{
     atomic::EasyAtomic,
     frame::{VideoFormat, VideoFrame, VideoSubFormat},
     Size,

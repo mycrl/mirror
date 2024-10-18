@@ -1,5 +1,3 @@
-#[cfg(not(target_os = "windows"))]
-use std::ptr::null_mut;
 use std::str::FromStr;
 
 use ffmpeg_sys_next::*;
@@ -339,13 +337,13 @@ pub fn create_video_context(
     }
 
     if kind.is_hardware() {
-        let mut hw_device_ctx = null_mut();
+        let mut hw_device_ctx = std::ptr::null_mut();
         if unsafe {
             av_hwdevice_ctx_create(
                 &mut hw_device_ctx,
                 AVHWDeviceType::AV_HWDEVICE_TYPE_VIDEOTOOLBOX,
-                null_mut(),
-                null_mut(),
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
                 0,
             )
         } != 0
