@@ -10,7 +10,6 @@ import android.os.Build
 import android.os.Process
 import android.util.Log
 import android.view.Surface
-import androidx.annotation.RequiresApi
 import java.lang.Exception
 import java.nio.ByteBuffer
 

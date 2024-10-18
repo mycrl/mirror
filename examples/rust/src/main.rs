@@ -12,8 +12,8 @@ use mirror::{
     SourceType, TransportDescriptor, VideoDecoderType, VideoDescriptor, VideoEncoderType,
     VideoFrame,
 };
-use mirror_common::Size;
 
+use mirror_common::Size;
 use winit::{
     application::ApplicationHandler,
     dpi::PhysicalSize,

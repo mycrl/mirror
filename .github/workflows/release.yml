@@ -2,7 +2,7 @@ name: publish release
 on:
   push:
     tags:
-      - "v*"
+      - v*
 jobs:
   build:
     runs-on: "${{ matrix.os }}"
@@ -77,6 +77,7 @@ jobs:
         with:
           name: linux-x64-${{ matrix.target }}
           path: ./linux-x64-${{ matrix.target }}-gnu.tar.gz
+
   deploy:
     needs: build
     runs-on: ubuntu-latest

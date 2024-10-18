@@ -5,7 +5,6 @@ import android.media.AudioTrack
 import android.os.Build
 import android.util.Log
 import android.view.Surface
-import androidx.annotation.RequiresApi
 import kotlin.Exception
 
 interface MirrorAdapterConfigure {
