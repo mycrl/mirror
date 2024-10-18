@@ -76,7 +76,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: linux-x64-${{ matrix.target }}
-          path: ./linux-x64-${{ matrix.target }}.tar.gz
+          path: ./linux-x64-${{ matrix.target }}-gnu.tar.gz
   deploy:
     needs: build
     runs-on: ubuntu-latest
