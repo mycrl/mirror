@@ -26,7 +26,7 @@ jobs:
             ~/.cargo/git/db/
             node_modules/
             target/
-          key: "${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.lock') }}"
+          key: "${{ matrix.os }}-cargo-${{ matrix.target }}"
 
       # installation of dependencies
       - name: Installation of dependencies
