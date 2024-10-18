@@ -35,7 +35,7 @@ jobs:
 
       - name: Installation of dependencies
         if: runner.os == 'Linux'
-        run: sudo apt-get install tclsh pkg-config cmake libssl-dev build-essential libavcodec-dev libavdevice-dev libavformat-dev libasound2-dev libsdl2-dev libmfx-dev v4l-utils -y
+        run: sudo apt install tclsh pkg-config cmake libssl-dev build-essential libavcodec-dev libavdevice-dev libavformat-dev libasound2-dev libsdl2-dev libmfx-dev v4l-utils -y
 
       # use auto build script
       - name: Build distributions

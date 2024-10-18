@@ -171,7 +171,7 @@ impl GraphicsCaptureApiHandler for WindowsCapture {
         if self.status.get() {
             self.shared_resource
                 .lock()
-                .replace(SharedResource(frame.texture()?));
+                .replace(SharedResource(frame.texture_ref().clone()));
         } else {
             log::info!("windows screen capture control stop");
 
