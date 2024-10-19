@@ -6,7 +6,7 @@
   <strong>A cross-platform screen casting library implemented by rust.</strong>
 </div>
 <div align="center">
-  <img src="https://img.shields.io/github/actions/workflow/status/mycrl/mirror/release.yml?branch=main"/>
+  <img src="https://img.shields.io/github/actions/workflow/status/mycrl/mirror/release.yml"/>
   <img src="https://img.shields.io/github/license/mycrl/mirror"/>
   <img src="https://img.shields.io/github/issues/mycrl/mirror"/>
   <img src="https://img.shields.io/github/stars/mycrl/mirror"/>
