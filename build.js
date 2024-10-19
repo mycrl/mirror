@@ -66,17 +66,13 @@ const Replace = (file, filters) => {
     /* download ffmpeg librarys for windows */
     if (process.platform == 'win32') {
         if (!fs.existsSync('./target/ffmpeg')) {
-            if (!fs.existsSync('./target/ffmpeg.zip')) {
-                const name = process.platform == 'win32' ?
-                    `ffmpeg-windows-x64-${Args.release ? 'release' : 'debug'}.zip` :
-                    'ffmpeg-linux-x64-release.zip'
-
+            if (!fs.existsSync('./target/ffmpeg-windows-x64.zip')) {
                 console.log('Start download ffmpeg...')
-                await download(`${BaseDistributions}/${name}`, './target')
-                fs.renameSync(`./target/${name}`, './target/ffmpeg.zip')
+                await download(`${BaseDistributions}/ffmpeg-windows-x64.zip`, './target')
             }
 
-            await (await unzipper.Open.file('./target/ffmpeg.zip')).extract({ path: './target' })
+            await (await unzipper.Open.file('./target/ffmpeg-windows-x64.zip')).extract({ path: './target' })
+            fs.rmdirSync(`./target/ffmpeg-windows-x64.zip`)
         }
     }
 
