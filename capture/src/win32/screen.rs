@@ -19,13 +19,15 @@ use thiserror::Error;
 use windows::{
     core::Interface,
     Win32::Graphics::{
-        Direct3D11::ID3D11Texture2D,
-        Dxgi::Common::{DXGI_FORMAT_NV12, DXGI_FORMAT_R8G8B8A8_UNORM},
+        Direct3D11::{
+            ID3D11Texture2D, D3D11_RESOURCE_MISC_SHARED, D3D11_TEXTURE2D_DESC, D3D11_USAGE_DEFAULT,
+        },
+        Dxgi::Common::{DXGI_FORMAT_NV12, DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_SAMPLE_DESC},
     },
 };
 
 use windows_capture::{
-    capture::{CaptureControl, GraphicsCaptureApiHandler},
+    capture::{CaptureControl, GraphicsCaptureApiHandler, RawDirect3DDevice},
     frame::Frame,
     graphics_capture_api::InternalCaptureControl,
     monitor::Monitor,
@@ -50,13 +52,14 @@ pub enum ScreenCaptureError {
     StartCaptureError(String),
 }
 
-struct SharedResource(ID3D11Texture2D);
+struct Surface(ID3D11Texture2D);
 
-unsafe impl Sync for SharedResource {}
-unsafe impl Send for SharedResource {}
+unsafe impl Sync for Surface {}
+unsafe impl Send for Surface {}
 
 struct WindowsCapture {
-    shared_resource: Arc<Mutex<Option<SharedResource>>>,
+    texture: ID3D11Texture2D,
+    raw_device: RawDirect3DDevice,
     status: Arc<AtomicBool>,
 }
 
@@ -64,9 +67,50 @@ impl GraphicsCaptureApiHandler for WindowsCapture {
     type Flags = Context;
     type Error = ScreenCaptureError;
 
-    fn new(mut ctx: Self::Flags) -> Result<Self, Self::Error> {
+    fn new(raw_device: RawDirect3DDevice, mut ctx: Self::Flags) -> Result<Self, Self::Error> {
         let status: Arc<AtomicBool> = Arc::new(AtomicBool::new(true));
-        let shared_resource: Arc<Mutex<Option<SharedResource>>> = Default::default();
+
+        // Because windows-capture and this library implementation use different devices
+        // and contexts, the problem needs to be solved with an intermediate texture,
+        // for which a cross-device shared resource handle is created, then
+        // windows-capture writes the frame to the intermediate texture, and the
+        // following capture thread creates the texture view from this intermediate
+        // texture as well The following capture thread also creates the texture view
+        // from this intermediate texture.
+        let (texture, surface) = {
+            let desc = D3D11_TEXTURE2D_DESC {
+                Width: ctx.source.width()?,
+                Height: ctx.source.height()?,
+                MipLevels: 1,
+                ArraySize: 1,
+                Format: DXGI_FORMAT_R8G8B8A8_UNORM,
+                SampleDesc: DXGI_SAMPLE_DESC {
+                    Count: 1,
+                    Quality: 0,
+                },
+                BindFlags: 0,
+                CPUAccessFlags: 0,
+                Usage: D3D11_USAGE_DEFAULT,
+                MiscFlags: D3D11_RESOURCE_MISC_SHARED.0 as u32,
+            };
+
+            let mut tex = None;
+            unsafe {
+                raw_device
+                    .device
+                    .CreateTexture2D(&desc, None, Some(&mut tex))?;
+            }
+
+            let texture = tex.unwrap();
+
+            // Use as input to VideoResampler by sharing resources across devices.
+            let surface = ctx
+                .options
+                .direct3d
+                .open_shared_texture(texture.get_shared()?)?;
+
+            (texture, Surface(surface))
+        };
 
         let mut frame = VideoFrame::default();
         frame.width = ctx.options.size.width;
@@ -78,8 +122,9 @@ impl GraphicsCaptureApiHandler for WindowsCapture {
             VideoSubFormat::SW
         };
 
+        // Convert texture formats and scale sizes.
         let mut transform = VideoResampler::new(VideoResamplerDescriptor {
-            direct3d: ctx.options.direct3d.clone(),
+            direct3d: ctx.options.direct3d,
             input: Resource::Default(
                 DXGI_FORMAT_R8G8B8A8_UNORM,
                 Size {
@@ -96,21 +141,16 @@ impl GraphicsCaptureApiHandler for WindowsCapture {
             ),
         })?;
 
-        let direct3d = ctx.options.direct3d;
         let status_ = Arc::downgrade(&status);
-        let shared_resource_ = Arc::downgrade(&shared_resource);
         thread::Builder::new()
             .name("WindowsScreenCaptureThread".to_string())
             .spawn(move || {
                 let thread_class_guard = MediaThreadClass::Capture.join().ok();
 
                 let mut func = || {
-                    while let Some(shared_resource) = shared_resource_.upgrade() {
-                        if let Some(resource) = shared_resource.lock().take() {
-                            let texture = direct3d.open_shared_texture(resource.0.get_shared()?)?;
-                            let view = transform.create_input_view(&texture, 0)?;
-                            transform.process(Some(view))?;
-                        }
+                    loop {
+                        let view = transform.create_input_view(&surface.0, 0)?;
+                        transform.process(Some(view))?;
 
                         if frame.sub_format == VideoSubFormat::D3D11 {
                             frame.data[0] = transform.get_output().as_raw();
@@ -158,8 +198,9 @@ impl GraphicsCaptureApiHandler for WindowsCapture {
             })?;
 
         Ok(Self {
-            shared_resource,
+            raw_device,
             status,
+            texture,
         })
     }
 
@@ -169,9 +210,12 @@ impl GraphicsCaptureApiHandler for WindowsCapture {
         control: InternalCaptureControl,
     ) -> Result<(), Self::Error> {
         if self.status.get() {
-            self.shared_resource
-                .lock()
-                .replace(SharedResource(frame.texture_ref().clone()));
+            // Updates the texture in the frame to the middle texture.
+            unsafe {
+                self.raw_device
+                    .context
+                    .CopyResource(&self.texture, frame.as_raw_texture());
+            }
         } else {
             log::info!("windows screen capture control stop");
 
@@ -242,7 +286,6 @@ impl CaptureHandler for ScreenCapture {
                     options,
                     source,
                 },
-                None,
             ))
             .map_err(|e| ScreenCaptureError::StartCaptureError(e.to_string()))?,
         ) {
