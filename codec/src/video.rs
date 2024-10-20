@@ -522,14 +522,11 @@ impl VideoEncoder {
         let av_frame = unsafe { &mut *self.frame };
         av_frame.pts = unsafe {
             let context_ref = &*self.context;
-
-            #[cfg(target_os = "linux")]
-            let num = context_ref.frame_number;
-
-            #[cfg(any(target_os = "windows", target_os = "macos"))]
-            let num = context_ref.frame_num;
-
-            av_rescale_q(num.into(), context_ref.pkt_timebase, context_ref.time_base)
+            av_rescale_q(
+                context_ref.frame_num,
+                context_ref.pkt_timebase,
+                context_ref.time_base,
+            )
         };
 
         if unsafe { avcodec_send_frame(self.context, self.frame) } != 0 {
