@@ -345,6 +345,7 @@ int main(int argc, char* argv[])
 #ifdef LINUX
     auto window_handle = create_window_handle_for_xlib(info.info.x11.window,
                                                        info.info.x11.display,
+                                                       0,
                                                        OPTIONS.width,
                                                        OPTIONS.height);
 #endif

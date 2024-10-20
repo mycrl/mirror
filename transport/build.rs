@@ -31,6 +31,8 @@ fn exec(command: &str, work_dir: &str) -> Result<String> {
 }
 
 fn main() -> Result<()> {
+    println!("cargo:rerun-if-changed=./build.rs");
+
     if which("cmake").is_err() {
         panic!("
             You don't have cmake installed, compiling srt requires cmake to do it, now it's unavoidable, you need to install cmake.

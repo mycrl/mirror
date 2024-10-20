@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
-use ffmpeg_sys_next::*;
 use mirror_common::c_str;
+use mirror_ffmpeg_sys::*;
 use thiserror::Error;
 
 #[cfg(any(target_os = "windows", target_os = "macos"))]

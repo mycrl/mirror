@@ -13,7 +13,7 @@ use mirror_common::{
     frame::{VideoFormat, VideoFrame, VideoSubFormat},
 };
 
-use ffmpeg_sys_next::*;
+use mirror_ffmpeg_sys::*;
 use thiserror::Error;
 
 #[derive(Error, Debug)]

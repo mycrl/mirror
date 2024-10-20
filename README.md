@@ -6,7 +6,7 @@
   <strong>A cross-platform screen casting library implemented by rust.</strong>
 </div>
 <div align="center">
-  <img src="https://img.shields.io/github/actions/workflow/status/mycrl/mirror/release.yml?branch=main"/>
+  <img src="https://img.shields.io/github/actions/workflow/status/mycrl/mirror/release.yml"/>
   <img src="https://img.shields.io/github/license/mycrl/mirror"/>
   <img src="https://img.shields.io/github/issues/mycrl/mirror"/>
   <img src="https://img.shields.io/github/stars/mycrl/mirror"/>
@@ -48,7 +48,7 @@ The project is cross-platform, but the priority platforms supported are Windows 
 
 ```sh
 sudo apt-get update
-sudo apt-get install tclsh pkg-config cmake libssl-dev build-essential libavcodec-dev libavdevice-dev libavformat-dev libasound2-dev libsdl2-dev libmfx-dev v4l-utils
+sudo apt-get install tclsh pkg-config cmake libssl-dev build-essential libavcodec-dev libavdevice-dev libavformat-dev libasound2-dev libsdl2-dev libmfx-dev libva-dev v4l-utils
 ```
 
 ---

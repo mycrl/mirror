@@ -18,9 +18,5 @@
     "bugs": {
         "url": "https://github.com/mycrl/mirror/issues"
     },
-    "homepage": "https://github.com/mycrl/mirror#readme",
-    "dependencies": {
-        "download": "8.0.0",
-        "unzipper": "0.12.2"
-    }
+    "homepage": "https://github.com/mycrl/mirror#readme"
 }

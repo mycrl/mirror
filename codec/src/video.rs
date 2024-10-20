@@ -5,8 +5,8 @@ use crate::codec::{
 
 use std::{ffi::c_int, ptr::null_mut};
 
-use ffmpeg_sys_next::*;
 use mirror_common::frame::{VideoFormat, VideoFrame, VideoSubFormat};
+use mirror_ffmpeg_sys::*;
 use thiserror::Error;
 
 #[cfg(any(target_os = "windows", target_os = "macos"))]
@@ -94,12 +94,12 @@ impl VideoDecoder {
         context_mut.has_b_frames = 0;
         context_mut.skip_alpha = true as i32;
         context_mut.flags |= AV_CODEC_FLAG_LOW_DELAY as i32;
-        context_mut.flags2 |= AV_CODEC_FLAG2_FAST;
-        context_mut.hwaccel_flags |= AV_HWACCEL_FLAG_IGNORE_LEVEL;
+        context_mut.flags2 |= AV_CODEC_FLAG2_FAST as i32;
+        context_mut.hwaccel_flags |= AV_HWACCEL_FLAG_IGNORE_LEVEL as i32;
 
         #[cfg(target_os = "windows")]
         {
-            context_mut.hwaccel_flags |= AV_HWACCEL_FLAG_UNSAFE_OUTPUT;
+            context_mut.hwaccel_flags |= AV_HWACCEL_FLAG_UNSAFE_OUTPUT as i32;
         }
 
         if options.codec == VideoDecoderType::Qsv {
@@ -379,9 +379,9 @@ impl VideoEncoder {
         context_mut.max_samples = 1;
         context_mut.has_b_frames = 0;
         context_mut.max_b_frames = 0;
-        context_mut.flags2 |= AV_CODEC_FLAG2_FAST;
+        context_mut.flags2 |= AV_CODEC_FLAG2_FAST as i32;
         context_mut.flags |= AV_CODEC_FLAG_LOW_DELAY as i32 | AV_CODEC_FLAG_GLOBAL_HEADER as i32;
-        context_mut.profile = FF_PROFILE_H264_BASELINE;
+        context_mut.profile = FF_PROFILE_H264_BASELINE as i32;
 
         // The QSV encoder can only use qsv frames. Although the internal structure is a
         // platform-specific hardware texture, you cannot directly tell qsv a specific
@@ -390,7 +390,7 @@ impl VideoEncoder {
             context_mut.pix_fmt = AVPixelFormat::AV_PIX_FMT_QSV;
         } else {
             context_mut.thread_count = 4;
-            context_mut.thread_type = FF_THREAD_SLICE;
+            context_mut.thread_type = FF_THREAD_SLICE as i32;
             context_mut.pix_fmt = AVPixelFormat::AV_PIX_FMT_NV12;
         }
 
@@ -522,14 +522,11 @@ impl VideoEncoder {
         let av_frame = unsafe { &mut *self.frame };
         av_frame.pts = unsafe {
             let context_ref = &*self.context;
-
-            #[cfg(target_os = "linux")]
-            let num = context_ref.frame_number;
-
-            #[cfg(any(target_os = "windows", target_os = "macos"))]
-            let num = context_ref.frame_num;
-
-            av_rescale_q(num.into(), context_ref.pkt_timebase, context_ref.time_base)
+            av_rescale_q(
+                context_ref.frame_num,
+                context_ref.pkt_timebase,
+                context_ref.time_base,
+            )
         };
 
         if unsafe { avcodec_send_frame(self.context, self.frame) } != 0 {

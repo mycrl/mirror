@@ -21,5 +21,10 @@ version = "0.58.0"
 features = ["Win32_Media", "Win32_Media_MediaFoundation"]
 
 [target.'cfg(target_os = "linux")'.dependencies]
-ffmpeg-sys-next = { git = "https://github.com/mycrl/rust-ffmpeg-sys" }
 v4l = "0.14.0"
+mirror-ffmpeg-sys = { version = "0.1", features = [
+    "swscale",
+    "avformat",
+    "avcodec",
+    "avutil",
+] }

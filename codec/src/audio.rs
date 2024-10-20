@@ -2,8 +2,8 @@ use crate::codec::{set_option, set_str_option};
 
 use std::{ffi::c_int, ptr::null_mut};
 
-use ffmpeg_sys_next::*;
 use mirror_common::{c_str, frame::AudioFrame};
+use mirror_ffmpeg_sys::*;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -68,11 +68,11 @@ impl AudioDecoder {
 
         let context_mut = unsafe { &mut *this.context };
         context_mut.thread_count = 4;
-        context_mut.thread_type = FF_THREAD_SLICE;
+        context_mut.thread_type = FF_THREAD_SLICE as i32;
         context_mut.request_sample_fmt = AVSampleFormat::AV_SAMPLE_FMT_S16;
         context_mut.ch_layout = ch_layout;
-        context_mut.flags |= AV_CODEC_FLAG_LOW_DELAY as i32 | AVFMT_FLAG_NOBUFFER;
-        context_mut.flags2 |= AV_CODEC_FLAG2_FAST;
+        context_mut.flags |= AV_CODEC_FLAG_LOW_DELAY as i32 | AVFMT_FLAG_NOBUFFER as i32;
+        context_mut.flags2 |= AV_CODEC_FLAG2_FAST as i32;
 
         if unsafe { avcodec_open2(this.context, codec, null_mut()) } != 0 {
             return Err(AudioDecoderError::OpenAVCodecError);
@@ -258,11 +258,11 @@ impl AudioEncoder {
         };
 
         context_mut.thread_count = 4;
-        context_mut.thread_type = FF_THREAD_SLICE;
+        context_mut.thread_type = FF_THREAD_SLICE as i32;
         context_mut.sample_fmt = AVSampleFormat::AV_SAMPLE_FMT_S16;
         context_mut.ch_layout = ch_layout;
         context_mut.flags |= AV_CODEC_FLAG_LOW_DELAY as i32;
-        context_mut.flags2 |= AV_CODEC_FLAG2_FAST;
+        context_mut.flags2 |= AV_CODEC_FLAG2_FAST as i32;
 
         context_mut.bit_rate = options.bit_rate as i64;
         context_mut.sample_rate = options.sample_rate as i32;

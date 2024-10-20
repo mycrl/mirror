@@ -51,7 +51,7 @@ use mirror_common::win32::Direct3DDevice;
 #[cfg(target_os = "linux")]
 pub fn startup() {
     unsafe {
-        ffmpeg_sys_next::avdevice_register_all();
+        mirror_ffmpeg_sys::avdevice_register_all();
     }
 }
 

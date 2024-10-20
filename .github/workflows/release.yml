@@ -31,11 +31,13 @@ jobs:
       # installation of dependencies
       - name: Installation of dependencies
         if: runner.os == 'Macos'
-        run: brew install ffmpeg cmake
+        run: brew install ffmpeg@7 cmake
 
       - name: Installation of dependencies
         if: runner.os == 'Linux'
-        run: sudo apt install tclsh pkg-config cmake libssl-dev build-essential libavcodec-dev libavdevice-dev libavformat-dev libasound2-dev libsdl2-dev libmfx-dev v4l-utils -y
+        run: |
+          sudo apt update
+          sudo apt install tclsh pkg-config cmake libssl-dev build-essential libavcodec-dev libavdevice-dev libavformat-dev libasound2-dev libsdl2-dev libmfx-dev libva-dev v4l-utils -y
 
       # use auto build script
       - name: Build distributions

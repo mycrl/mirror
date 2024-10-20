@@ -12,7 +12,7 @@ use mirror_common::{
     Size,
 };
 
-use ffmpeg_sys_next::*;
+use mirror_ffmpeg_sys::*;
 use thiserror::Error;
 use v4l::{
     buffer::Type,
