@@ -5,8 +5,8 @@ use crate::codec::{
 
 use std::{ffi::c_int, ptr::null_mut};
 
-use ffmpeg_sys_next::*;
 use mirror_common::frame::{VideoFormat, VideoFrame, VideoSubFormat};
+use mirror_ffmpeg_sys::*;
 use thiserror::Error;
 
 #[cfg(any(target_os = "windows", target_os = "macos"))]
