@@ -1,7 +1,5 @@
 const { exec } = require('node:child_process')
 const { join } = require('node:path')
-const download = require('download')
-const unzipper = require('unzipper')
 const fs = require('node:fs')
 
 const Args = process
@@ -65,16 +63,23 @@ const Replace = (file, filters) => {
     /* download ffmpeg librarys for windows */
     if (process.platform == 'win32' || process.platform == 'linux') {
         const name = `ffmpeg-n7.1-latest-${process.platform == 'win32' ? 'win64' : 'linux64'}-gpl-shared-7.1`
+        const baseUri = 'https://github.com/BtbN/FFmpeg-Builds/releases/download/latest'
 
         if (!fs.existsSync('./target/ffmpeg')) {
-            if (!fs.existsSync('./target/ffmpeg')) {
-                console.log('Start download ffmpeg...')
-                await download(`https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/${name}.zip`, './target')
+            if (process.platform == 'win32') {
+                await Command(`Invoke-WebRequest -Uri ${baseUri}/${name}.zip -OutFile ffmpeg.zip`, { cwd: './target' })
+            } else {
+                await Command(`wget ${baseUri}/${name}.tar.xz -O ffmpeg.tar.xz -q`, { cwd: './target' })
             }
 
-            await (await unzipper.Open.file(`./target/${name}.zip`)).extract({ path: './target' })
+            if (process.platform == 'win32') {
+                await Command('Expand-Archive -Path ffmpeg.zip -DestinationPath ./', { cwd: './target' })
+            } else {
+                await Command('tar -xf ffmpeg.tar.xz', { cwd: './target' })
+            }
+            
             fs.renameSync(`./target/${name}`, './target/ffmpeg')
-            fs.rmSync(`./target/${name}`)
+            fs.rmSync(`./target/ffmpeg.${process.platform == 'win32' ? 'zip' : 'tar.xz'}`)
         }
     }
 
