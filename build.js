@@ -135,14 +135,7 @@ const Replace = (file, filters) => {
             [`./target/${Profile.toLowerCase()}/mirror-example`, './build/bin/example'],
             [`./target/${Profile.toLowerCase()}/mirror-service`, './build/server/mirror-service'],
             [`./target/${Profile.toLowerCase()}/libmirror.so`, './build/bin/libmirror.so'],
-            [`./target/ffmpeg/lib/libavcodec.so.61.19.100.so`, './build/lib/libavcodec.so.61.19.100.so'],
-            [`./target/ffmpeg/lib/libavdevice.so.61.3.100.so`, './build/lib/libavdevice.so.61.3.100.so'],
-            [`./target/ffmpeg/lib/libavfilter.so.10.4.100.so`, './build/lib/libavfilter.so.10.4.100.so'],
-            [`./target/ffmpeg/lib/libavformat.so.61.7.100.so`, './build/lib/libavformat.so.61.7.100.so'],
-            [`./target/ffmpeg/lib/libavutil.so.59.39.100.so`, './build/lib/libavutil.so.59.39.100.so'],
-            [`./target/ffmpeg/lib/libpostproc.so.58.3.100.so`, './build/lib/libpostproc.so.58.3.100.so'],
-            [`./target/ffmpeg/lib/libswresample.so.5.3.100.so`, './build/lib/libswresample.so.5.3.100.so'],
-            [`./target/ffmpeg/lib/libswscale.so.8.3.100.so`, './build/lib/libswscale.so.8.3.100.so'],
+            [`./target/ffmpeg/lib`, './build/lib'],
         ]) {
             fs.cpSync(...item, { force: true, recursive: true })
         }
