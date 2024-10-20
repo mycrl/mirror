@@ -22,3 +22,9 @@ features = ["Win32_Media", "Win32_Media_MediaFoundation"]
 
 [target.'cfg(target_os = "linux")'.dependencies]
 v4l = "0.14.0"
+mirror-ffmpeg-sys = { version = "0.1", features = [
+    "swscale",
+    "avformat",
+    "avcodec",
+    "avutil",
+] }

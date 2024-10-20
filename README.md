@@ -48,7 +48,7 @@ The project is cross-platform, but the priority platforms supported are Windows 
 
 ```sh
 sudo apt-get update
-sudo apt-get install tclsh pkg-config cmake libssl-dev build-essential libavcodec-dev libavdevice-dev libavformat-dev libasound2-dev libsdl2-dev libmfx-dev v4l-utils
+sudo apt-get install tclsh pkg-config cmake libssl-dev build-essential libavcodec-dev libavdevice-dev libavformat-dev libasound2-dev libsdl2-dev libmfx-dev libva-dev v4l-utils
 ```
 
 ---

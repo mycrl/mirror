@@ -31,7 +31,6 @@ fn exec(command: &str, work_dir: &str) -> Result<String> {
 }
 
 fn main() -> Result<()> {
-    println!("cargo:rerun-if-changed=./src/srt");
     println!("cargo:rerun-if-changed=./build.rs");
 
     if which("cmake").is_err() {
