@@ -31,7 +31,7 @@ jobs:
       # installation of dependencies
       - name: Installation of dependencies
         if: runner.os == 'Macos'
-        run: brew install ffmpeg cmake
+        run: brew install ffmpeg@7 cmake
 
       - name: Installation of dependencies
         if: runner.os == 'Linux'
