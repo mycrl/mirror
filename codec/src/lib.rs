@@ -4,8 +4,9 @@ mod video;
 
 use std::ffi::{c_char, c_int, c_void};
 
+use ffmpeg_sys_next::*;
 use log::Level;
-use mirror_common::{ffmpeg::*, strings::Strings};
+use mirror_common::strings::Strings;
 
 pub use self::{
     audio::{

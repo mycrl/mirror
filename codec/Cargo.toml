@@ -6,8 +6,5 @@ edition = "2021"
 [dependencies]
 log = "0.4.20"
 thiserror = "1.0.63"
-
-[dependencies.mirror-common]
-version = "0.1"
-path = "../common"
-features = ["avcodec", "avutil", "avdevice"]
+mirror-common = { path = "../common", version = "0.1" }
+ffmpeg-sys-next = { git = "https://github.com/mycrl/rust-ffmpeg-sys" }

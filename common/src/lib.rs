@@ -1,5 +1,4 @@
 pub mod atomic;
-pub mod ffmpeg;
 pub mod frame;
 pub mod logger;
 pub mod strings;
