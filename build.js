@@ -41,7 +41,6 @@ const Replace = (file, filters) => {
 
 /* async block */ void (async () => {
     const Profile = Args.release ? 'Release' : 'Debug'
-    const BaseDistributions = 'https://github.com/mycrl/third-party/releases/download/distributions'
 
     for (const path of [
         './target',
@@ -68,11 +67,11 @@ const Replace = (file, filters) => {
         if (!fs.existsSync('./target/ffmpeg')) {
             if (!fs.existsSync('./target/ffmpeg-windows-x64.zip')) {
                 console.log('Start download ffmpeg...')
-                await download(`${BaseDistributions}/ffmpeg-windows-x64.zip`, './target')
+                await download(`https://github.com/mycrl/mirror-ffmpeg-sys/releases/download/distributions/ffmpeg-windows-x64.zip`, './target')
             }
 
             await (await unzipper.Open.file('./target/ffmpeg-windows-x64.zip')).extract({ path: './target' })
-            fs.rmdirSync(`./target/ffmpeg-windows-x64.zip`)
+            fs.rmSync('./target/ffmpeg-windows-x64.zip')
         }
     }
 
