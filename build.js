@@ -65,13 +65,14 @@ const Replace = (file, filters) => {
     /* download ffmpeg librarys for windows */
     if (process.platform == 'win32') {
         if (!fs.existsSync('./target/ffmpeg')) {
-            if (!fs.existsSync('./target/ffmpeg-windows-x64.zip')) {
+            if (!fs.existsSync('./target/ffmpeg')) {
                 console.log('Start download ffmpeg...')
-                await download(`https://github.com/mycrl/mirror-ffmpeg-sys/releases/download/distributions/ffmpeg-windows-x64.zip`, './target')
+                await download(`https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n7.1-latest-win64-gpl-shared-7.1.zip`, './target')
             }
 
-            await (await unzipper.Open.file('./target/ffmpeg-windows-x64.zip')).extract({ path: './target' })
-            fs.rmSync('./target/ffmpeg-windows-x64.zip')
+            await (await unzipper.Open.file('./target/ffmpeg-n7.1-latest-win64-gpl-shared-7.1.zip')).extract({ path: './target' })
+            fs.renameSync('./target/ffmpeg-n7.1-latest-win64-gpl-shared-7.1', './target/ffmpeg')
+            fs.rmSync('./target/ffmpeg-n7.1-latest-win64-gpl-shared-7.1.zip')
         }
     }
 
