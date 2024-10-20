@@ -43,6 +43,7 @@ const Replace = (file, filters) => {
     for (const path of [
         './target',
         './build',
+        './build/doc',
         './build/bin',
         './build/lib',
         './build/server',
@@ -59,6 +60,7 @@ const Replace = (file, filters) => {
     await Command(`cargo build ${Args.release ? '--release' : ''} -p mirror-shared`)
     await Command(`cargo build ${Args.release ? '--release' : ''} -p mirror-example`)
     await Command(`cargo build ${Args.release ? '--release' : ''} -p mirror-service`)
+    await Command(`cargo doc --no-deps`)
 
     /* download ffmpeg librarys for windows */
     if (process.platform == 'win32' || process.platform == 'linux') {
@@ -101,6 +103,9 @@ const Replace = (file, filters) => {
 
         /* inculde */
         ['./ffi/include/mirror.h', './build/include/mirror.h'],
+
+        /* doc */
+        ['./target/doc', './build/doc'],
     ]) {
         fs.cpSync(...item, { force: true, recursive: true })
     }
