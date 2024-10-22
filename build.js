@@ -18,26 +18,31 @@ const Command = (cmd, options = {}) => new Promise((
         cwd: __dirname,
         ...options,
     }
-    )) => {
+    )) =>
+{
     ps.stdout.pipe(process.stdout)
     ps.stderr.pipe(process.stderr)
 
     ps.on('error', reject)
-    ps.on('close', code => {
+    ps.on('close', code =>
+    {
         code == 0 ? resolve() : reject(code || 0)
     })
 })
 
-const Replace = (file, filters) => {
+const Replace = (file, filters) =>
+{
     let src = fs.readFileSync(file).toString()
-    for (const item of filters) {
+    for (const item of filters)
+    {
         src = src.replace(...item)
     }
 
     fs.writeFileSync(file, src)
 }
 
-/* async block */ void (async () => {
+/* async block */ void (async () =>
+{
     const Profile = Args.release ? 'Release' : 'Debug'
 
     for (const path of [
@@ -51,8 +56,10 @@ const Replace = (file, filters) => {
         './build/examples',
         './build/examples/cpp',
         './build/examples/rust',
-    ]) {
-        if (!fs.existsSync(path)) {
+    ])
+    {
+        if (!fs.existsSync(path))
+        {
             fs.mkdirSync(path)
         }
     }
@@ -63,29 +70,36 @@ const Replace = (file, filters) => {
     await Command(`cargo doc --no-deps`)
 
     /* download ffmpeg librarys for windows */
-    if (process.platform == 'win32' || process.platform == 'linux') {
+    if (process.platform == 'win32' || process.platform == 'linux')
+    {
         const name = `ffmpeg-n7.1-latest-${process.platform == 'win32' ? 'win64' : 'linux64'}-gpl-shared-7.1`
         const baseUri = 'https://github.com/BtbN/FFmpeg-Builds/releases/download/latest'
 
-        if (!fs.existsSync('./target/ffmpeg')) {
-            if (process.platform == 'win32') {
+        if (!fs.existsSync('./target/ffmpeg'))
+        {
+            if (process.platform == 'win32')
+            {
                 await Command(`Invoke-WebRequest -Uri ${baseUri}/${name}.zip -OutFile ffmpeg.zip`, { cwd: './target' })
-            } else {
+            } else
+            {
                 await Command(`wget ${baseUri}/${name}.tar.xz -O ffmpeg.tar.xz -q`, { cwd: './target' })
             }
 
-            if (process.platform == 'win32') {
+            if (process.platform == 'win32')
+            {
                 await Command('Expand-Archive -Path ffmpeg.zip -DestinationPath ./', { cwd: './target' })
-            } else {
+            } else
+            {
                 await Command('tar -xf ffmpeg.tar.xz', { cwd: './target' })
             }
-            
+
             fs.renameSync(`./target/${name}`, './target/ffmpeg')
             fs.rmSync(`./target/ffmpeg.${process.platform == 'win32' ? 'zip' : 'tar.xz'}`)
         }
     }
 
-    if (!fs.existsSync('./examples/cpp/build')) {
+    if (!fs.existsSync('./examples/cpp/build'))
+    {
         fs.mkdirSync('./examples/cpp/build')
     }
 
@@ -106,11 +120,13 @@ const Replace = (file, filters) => {
 
         /* doc */
         ['./target/doc', './build/doc'],
-    ]) {
+    ])
+    {
         fs.cpSync(...item, { force: true, recursive: true })
     }
 
-    if (process.platform == 'win32') {
+    if (process.platform == 'win32')
+    {
         for (const item of [
             [`./examples/cpp/build/${Profile}/example.exe`, './build/bin/example-cpp.exe'],
             [`./target/${Profile.toLowerCase()}/mirror-example.exe`, './build/bin/example.exe'],
@@ -120,41 +136,50 @@ const Replace = (file, filters) => {
             [`./target/ffmpeg/bin/avcodec-61.dll`, './build/bin/avcodec-61.dll'],
             [`./target/ffmpeg/bin/avutil-59.dll`, './build/bin/avutil-59.dll'],
             [`./target/ffmpeg/bin/swresample-5.dll`, './build/bin/swresample-5.dll'],
-        ]) {
+        ])
+        {
             fs.cpSync(...item, { force: true, recursive: true })
         }
     }
-    else if (process.platform == 'darwin') {
+    else if (process.platform == 'darwin')
+    {
         for (const item of [
             [`./examples/cpp/build/example`, './build/bin/example-cpp'],
             [`./target/${Profile.toLowerCase()}/mirror-example`, './build/bin/example'],
             [`./target/${Profile.toLowerCase()}/mirror-service`, './build/server/mirror-service'],
             [`./target/${Profile.toLowerCase()}/libmirror.dylib`, './build/bin/libmirror.dylib'],
-        ]) {
+        ])
+        {
             fs.cpSync(...item, { force: true, recursive: true })
         }
     }
-    else if (process.platform == 'linux') {
+    else if (process.platform == 'linux')
+    {
         for (const item of [
             [`./examples/cpp/build/example`, './build/bin/example-cpp'],
             [`./target/${Profile.toLowerCase()}/mirror-example`, './build/bin/example'],
             [`./target/${Profile.toLowerCase()}/mirror-service`, './build/server/mirror-service'],
             [`./target/${Profile.toLowerCase()}/libmirror.so`, './build/bin/libmirror.so'],
             [`./target/ffmpeg/lib`, './build/lib'],
-        ]) {
+        ])
+        {
             fs.cpSync(...item, { force: true, recursive: true })
         }
     }
 
-    if (process.platform == 'win32') {
+    if (process.platform == 'win32')
+    {
         for (const item of [
             ['./target/debug/mirror.pdb', './build/bin/mirror.pdb'],
             ['./target/debug/mirror_service.pdb', './build/server/mirror-service.pdb'],
-        ]) {
-            if (!Args.release) {
+        ])
+        {
+            if (!Args.release)
+            {
                 fs.cpSync(...item, { force: true, recursive: true })
             }
-            else {
+            else
+            {
                 fs.rmSync(item[1], { force: true, recursive: true })
             }
         }
