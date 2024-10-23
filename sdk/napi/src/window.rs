@@ -35,7 +35,7 @@ pub struct LinuxNativeWindowHandle {
     /// typedef unsigned long int XID;
     ///
     /// typedef XID Window;
-    pub window: u32,
+    pub window: JsBigInt,
     pub display: JsBigInt,
     pub screen: i32,
     pub width: u32,
@@ -113,7 +113,9 @@ impl HasWindowHandle for NativeWindowHandle {
             // working that Xlib can be built for, which is to say, most (but not all)
             // Unix systems.
             Self::Linux(LinuxNativeWindowHandle { window, .. }) => unsafe {
-                WindowHandle::borrow_raw(RawWindowHandle::Xlib(XlibWindowHandle::new(*window)))
+                WindowHandle::borrow_raw(RawWindowHandle::Xlib(XlibWindowHandle::new(
+                    window.get_u64().unwrap().0,
+                )))
             },
             // This variant is likely to be used on macOS, although Mac Catalyst
             // ($arch-apple-ios-macabi targets, which can notably use UIKit or AppKit) can also
