@@ -129,8 +129,6 @@ pub trait AVFrameSink: Sync + Send {
     }
 }
 
-impl AVFrameSink for () {}
-
 /// Abstraction of audio and video streams.
 pub trait AVFrameStream: AVFrameSink + Close {}
 
