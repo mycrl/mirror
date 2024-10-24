@@ -109,7 +109,7 @@ pub struct VideoFrame {
     pub height: u32,
     /// If the subformat is SW, the data layout is determined according to the
     /// format and the data corresponds to the plane of the corresponding
-    /// format, All other sub formats use data[0].
+    /// format, All other sub formats use `data[0]`.
     pub data: [*const c_void; 3],
     pub linesize: [usize; 3],
 }

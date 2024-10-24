@@ -1,16 +1,26 @@
 use crate::route::Route;
 
-use std::{io::Error, net::SocketAddr, sync::Arc};
+use std::{io::Error, net::SocketAddr, sync::Arc, time::Duration};
 
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::TcpListener,
+    time::sleep,
 };
 
 use mirror_transport::Signal;
 
 pub async fn start_server(bind: SocketAddr, route: Arc<Route>) -> Result<(), Error> {
     let listener = TcpListener::bind(bind).await?;
+
+    let route_ = route.clone();
+    tokio::spawn(async move {
+        loop {
+            route_.ping();
+            sleep(Duration::from_secs(5)).await;
+        }
+    });
+
     loop {
         match listener.accept().await {
             Ok((mut socket, addr)) => {
