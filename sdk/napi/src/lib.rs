@@ -438,7 +438,7 @@ impl MirrorService {
 }
 
 #[napi]
-pub struct MirrorSenderService(Option<Sender>);
+pub struct MirrorSenderService(Option<Sender<EmptyWindow>>);
 
 #[napi]
 impl MirrorSenderService {
@@ -468,7 +468,7 @@ impl MirrorSenderService {
 }
 
 #[napi]
-pub struct MirrorReceiverService(Option<Receiver>);
+pub struct MirrorReceiverService(Option<Receiver<Window>>);
 
 #[napi]
 impl MirrorReceiverService {

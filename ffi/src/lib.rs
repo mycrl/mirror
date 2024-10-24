@@ -545,10 +545,10 @@ pub mod desktop {
             Win32WindowHandle, WindowHandle, XcbDisplayHandle, XcbWindowHandle, XlibDisplayHandle,
             XlibWindowHandle,
         },
-        shutdown, startup, AVFrameSink, AVFrameStream, AudioDescriptor, AudioFrame, Capture, Close,
-        GraphicsBackend, Mirror, Receiver, ReceiverDescriptor, Renderer, Sender, SenderDescriptor,
-        Source, SourceType, TransportDescriptor, VideoDecoderType, VideoDescriptor,
-        VideoEncoderType, VideoFrame,
+        shutdown, startup, AVFrameObserver, AVFrameSink, AVFrameStream, AudioDescriptor,
+        AudioFrame, Capture, GraphicsBackend, Mirror, Receiver, ReceiverDescriptor, Renderer,
+        Sender, SenderDescriptor, Source, SourceType, TransportDescriptor, VideoDecoderType,
+        VideoDescriptor, VideoEncoderType, VideoFrame,
     };
 
     use mirror_common::{logger, strings::Strings, Size};
@@ -640,6 +640,7 @@ pub mod desktop {
         log::info!("extern api: mirror create");
 
         let func = || Ok(Mirror::new(options.try_into()?)?);
+
         checker(func())
             .map(|mirror| Box::into_raw(Box::new(RawMirror(mirror))))
             .unwrap_or_else(|_: anyhow::Error| null_mut()) as *const _
@@ -760,6 +761,7 @@ pub mod desktop {
     #[repr(C)]
     #[derive(Clone, Copy)]
     pub struct RawAVFrameStream {
+        pub initialized: Option<extern "C" fn(ctx: *const c_void)>,
         /// Callback occurs when the video frame is updated. The video frame
         /// format is fixed to NV12. Be careful not to call blocking
         /// methods inside the callback, which will seriously slow down
@@ -845,7 +847,15 @@ pub mod desktop {
         }
     }
 
-    impl Close for RawAVFrameStream {
+    impl AVFrameObserver for RawAVFrameStream {
+        fn initialized(&self) {
+            if let Some(callback) = &self.initialized {
+                callback(self.ctx);
+
+                log::info!("extern api: call initialized callback");
+            }
+        }
+
         fn close(&self) {
             if let Some(callback) = &self.close {
                 callback(self.ctx);
@@ -976,7 +986,7 @@ pub mod desktop {
     }
 
     #[repr(C)]
-    pub struct RawSender(Sender);
+    pub struct RawSender(Sender<RawAVFrameStream>);
 
     /// Create a sender, specify a bound NIC address, you can pass callback to
     /// get the device screen or sound callback, callback can be null, if it is
@@ -1034,7 +1044,7 @@ pub mod desktop {
     }
 
     #[repr(C)]
-    pub struct RawReceiver(Receiver);
+    pub struct RawReceiver(Receiver<RawAVFrameStream>);
 
     #[repr(C)]
     #[derive(Debug, Clone, Copy)]

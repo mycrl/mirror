@@ -25,8 +25,7 @@ use mirror_codec::{
 };
 
 use mirror_transport::{
-    adapter::{BufferFlag, StreamBufferInfo, StreamSenderAdapter},
-    package,
+    copy_from_slice as package_copy_from_slice, BufferFlag, StreamBufferInfo, StreamSenderAdapter,
 };
 
 #[derive(Debug, Error)]
@@ -67,14 +66,14 @@ pub struct SenderDescriptor {
     pub multicast: bool,
 }
 
-struct VideoSender {
+struct VideoSender<T: AVFrameStream + 'static> {
     status: Weak<AtomicBool>,
-    sink: Weak<dyn AVFrameStream>,
+    sink: Weak<T>,
     adapter: Weak<StreamSenderAdapter>,
     encoder: VideoEncoder,
 }
 
-impl VideoSender {
+impl<T: AVFrameStream + 'static> VideoSender<T> {
     // Encoding is a relatively complex task. If you add encoding tasks to the
     // pipeline that pushes frames, it will slow down the entire pipeline.
     //
@@ -85,7 +84,7 @@ impl VideoSender {
         status: &Arc<AtomicBool>,
         adapter: &Arc<StreamSenderAdapter>,
         settings: VideoEncoderSettings,
-        sink: &Arc<dyn AVFrameStream>,
+        sink: &Arc<T>,
     ) -> Result<Self, SenderError> {
         Ok(Self {
             sink: Arc::downgrade(sink),
@@ -109,7 +108,7 @@ impl VideoSender {
                 while let Some((buffer, flags, timestamp)) = self.encoder.read() {
                     if let Some(adapter) = self.adapter.upgrade() {
                         if !adapter.send(
-                            package::copy_from_slice(buffer),
+                            package_copy_from_slice(buffer),
                             StreamBufferInfo::Video(flags, timestamp),
                         ) {
                             log::warn!("video send packet to adapter failed");
@@ -145,7 +144,7 @@ impl VideoSender {
     }
 }
 
-impl FrameArrived for VideoSender {
+impl<T: AVFrameStream + 'static> FrameArrived for VideoSender<T> {
     type Frame = VideoFrame;
 
     fn sink(&mut self, frame: &Self::Frame) -> bool {
@@ -164,16 +163,16 @@ impl FrameArrived for VideoSender {
     }
 }
 
-struct AudioSender {
+struct AudioSender<T: AVFrameStream + 'static> {
     status: Weak<AtomicBool>,
-    sink: Weak<dyn AVFrameStream>,
+    sink: Weak<T>,
     adapter: Weak<StreamSenderAdapter>,
     encoder: AudioEncoder,
     chunk_count: usize,
     buffer: BytesMut,
 }
 
-impl AudioSender {
+impl<T: AVFrameStream + 'static> AudioSender<T> {
     // Encoding is a relatively complex task. If you add encoding tasks to the
     // pipeline that pushes frames, it will slow down the entire pipeline.
     //
@@ -184,13 +183,13 @@ impl AudioSender {
         status: &Arc<AtomicBool>,
         adapter: &Arc<StreamSenderAdapter>,
         settings: AudioEncoderSettings,
-        sink: &Arc<dyn AVFrameStream>,
+        sink: &Arc<T>,
     ) -> Result<Self, SenderError> {
         // Create an opus header data. The opus decoder needs this data to obtain audio
         // information. Here, actively add an opus header information to the queue, and
         // the transport layer will automatically cache it.
         adapter.send(
-            package::copy_from_slice(&create_opus_identification_header(
+            package_copy_from_slice(&create_opus_identification_header(
                 1,
                 settings.sample_rate as u32,
             )),
@@ -237,7 +236,7 @@ impl AudioSender {
                         // multiple packets until they are empty.
                         while let Some((buffer, flags, timestamp)) = self.encoder.read() {
                             if !adapter.send(
-                                package::copy_from_slice(buffer),
+                                package_copy_from_slice(buffer),
                                 StreamBufferInfo::Audio(flags, timestamp),
                             ) {
                                 log::warn!("audio send packet to adapter failed");
@@ -274,7 +273,7 @@ impl AudioSender {
     }
 }
 
-impl FrameArrived for AudioSender {
+impl<T: AVFrameStream + 'static> FrameArrived for AudioSender<T> {
     type Frame = AudioFrame;
 
     fn sink(&mut self, frame: &Self::Frame) -> bool {
@@ -293,27 +292,23 @@ impl FrameArrived for AudioSender {
     }
 }
 
-pub struct Sender {
+pub struct Sender<T: AVFrameStream + 'static> {
     pub(crate) adapter: Arc<StreamSenderAdapter>,
     status: Arc<AtomicBool>,
-    sink: Arc<dyn AVFrameStream>,
+    sink: Arc<T>,
     capture: Capture,
 }
 
-impl Sender {
+impl<T: AVFrameStream + 'static> Sender<T> {
     // Create a sender. The capture of the sender is started following the sender,
     // but both video capture and audio capture can be empty, which means you can
     // create a sender that captures nothing.
-    pub fn new<T: AVFrameStream + 'static>(
-        options: SenderDescriptor,
-        sink: T,
-    ) -> Result<Self, SenderError> {
+    pub fn new(options: SenderDescriptor, sink: Arc<T>) -> Result<Self, SenderError> {
         log::info!("create sender");
 
         let mut capture_options = CaptureDescriptor::default();
         let adapter = StreamSenderAdapter::new(options.multicast);
         let status = Arc::new(AtomicBool::new(false));
-        let sink: Arc<dyn AVFrameStream> = Arc::new(sink);
 
         if let Some((source, options)) = options.audio {
             capture_options.audio = Some(SourceCaptureDescriptor {
@@ -381,7 +376,7 @@ impl Sender {
     }
 }
 
-impl Drop for Sender {
+impl<T: AVFrameStream + 'static> Drop for Sender<T> {
     fn drop(&mut self) {
         log::info!("sender drop");
 

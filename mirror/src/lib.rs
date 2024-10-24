@@ -6,7 +6,7 @@ pub use self::{
     sender::{AudioDescriptor, Sender, SenderDescriptor, SenderError, VideoDescriptor},
 };
 
-use std::slice::from_raw_parts;
+use std::{slice::from_raw_parts, sync::Arc};
 
 pub use mirror_capture::{Capture, Source, SourceType};
 pub use mirror_codec::{VideoDecoderType, VideoEncoderType};
@@ -100,14 +100,18 @@ pub fn shutdown() -> Result<(), MirrorError> {
     Ok(())
 }
 
-pub trait Close: Sync + Send {
+pub trait AVFrameObserver: Sync + Send {
+    /// The stream has been initialized, which has no special meaning for the
+    /// sender, but for the receiver, this event is triggered when the receiver
+    /// can receive the stream.
+    fn initialized(&self) {}
     /// Callback when the sender is closed. This may be because the external
     /// side actively calls the close, or the audio and video packets cannot be
     /// sent (the network is disconnected), etc.
     fn close(&self) {}
 }
 
-impl Close for () {}
+impl AVFrameObserver for () {}
 
 pub trait AVFrameSink: Sync + Send {
     /// Callback occurs when the video frame is updated. The video frame format
@@ -130,7 +134,7 @@ pub trait AVFrameSink: Sync + Send {
 }
 
 /// Abstraction of audio and video streams.
-pub trait AVFrameStream: AVFrameSink + Close {}
+pub trait AVFrameStream: AVFrameSink + AVFrameObserver {}
 
 pub struct Mirror(Transport);
 
@@ -148,11 +152,13 @@ impl Mirror {
         id: u32,
         options: SenderDescriptor,
         sink: T,
-    ) -> Result<Sender, SenderError> {
+    ) -> Result<Sender<T>, SenderError> {
         log::info!("create sender: id={}, options={:?}", id, options);
 
+        let sink = Arc::new(sink);
         let sender = Sender::new(options, sink)?;
         self.0.create_sender(id, &sender.adapter)?;
+
         Ok(sender)
     }
 
@@ -163,11 +169,15 @@ impl Mirror {
         id: u32,
         options: ReceiverDescriptor,
         sink: T,
-    ) -> Result<Receiver, ReceiverError> {
+    ) -> Result<Receiver<T>, ReceiverError> {
         log::info!("create receiver: id={}, options={:?}", id, options);
 
-        let receiver = Receiver::new(options, sink)?;
-        self.0.create_receiver(id, &receiver.adapter)?;
+        let sink = Arc::new(sink);
+        let receiver = Receiver::new(options, sink.clone())?;
+        self.0.create_receiver(id, &receiver.adapter, move || {
+            sink.initialized();
+        })?;
+
         Ok(receiver)
     }
 }

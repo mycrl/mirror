@@ -7,10 +7,10 @@ use clap::{
 };
 
 use mirror::{
-    shutdown, startup, AVFrameSink, AVFrameStream, AudioDescriptor, AudioFrame, Capture, Close,
-    GraphicsBackend, Mirror, Receiver, ReceiverDescriptor, Renderer, Sender, SenderDescriptor,
-    SourceType, TransportDescriptor, VideoDecoderType, VideoDescriptor, VideoEncoderType,
-    VideoFrame,
+    shutdown, startup, AVFrameObserver, AVFrameSink, AVFrameStream, AudioDescriptor, AudioFrame,
+    Capture, GraphicsBackend, Mirror, Receiver, ReceiverDescriptor, Renderer, Sender,
+    SenderDescriptor, SourceType, TransportDescriptor, VideoDecoderType, VideoDescriptor,
+    VideoEncoderType, VideoFrame,
 };
 
 use mirror_common::Size;
@@ -51,7 +51,7 @@ impl AVFrameSink for Canvas {
     }
 }
 
-impl Close for Canvas {
+impl AVFrameObserver for Canvas {
     fn close(&self) {
         let _ = self.event_proxy.send_event(match self.kind {
             StreamKind::Receiver => AppEvent::CloseReceiver,
@@ -72,8 +72,8 @@ struct App {
     window: Option<Arc<Window>>,
     renderer: Option<Arc<Renderer<'static>>>,
     mirror: Option<Mirror>,
-    sender: Option<Sender>,
-    receiver: Option<Receiver>,
+    sender: Option<Sender<Canvas>>,
+    receiver: Option<Receiver<Canvas>>,
 }
 
 impl App {

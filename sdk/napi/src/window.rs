@@ -6,7 +6,7 @@ use mirror::{
         RawDisplayHandle, RawWindowHandle, Win32WindowHandle, WindowHandle, XlibDisplayHandle,
         XlibWindowHandle,
     },
-    AVFrameSink, AVFrameStream, AudioFrame, Close, Renderer, Size, VideoFrame,
+    AVFrameObserver, AVFrameSink, AVFrameStream, AudioFrame, Renderer, Size, VideoFrame,
 };
 
 use napi::{
@@ -147,7 +147,7 @@ impl AVFrameSink for Window {
     }
 }
 
-impl Close for Window {
+impl AVFrameObserver for Window {
     fn close(&self) {
         self.callback
             .call((), ThreadsafeFunctionCallMode::NonBlocking);
@@ -161,7 +161,7 @@ pub struct EmptyWindow(pub ThreadsafeFunction<(), JsUnknown, (), false>);
 impl AVFrameStream for EmptyWindow {}
 impl AVFrameSink for EmptyWindow {}
 
-impl Close for EmptyWindow {
+impl AVFrameObserver for EmptyWindow {
     fn close(&self) {
         self.0.call((), ThreadsafeFunctionCallMode::NonBlocking);
     }
