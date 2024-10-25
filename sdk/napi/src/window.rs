@@ -1,168 +1,229 @@
-use std::{ffi::c_void, ptr::NonNull, sync::Arc};
+use crate::{Events, MirrorBackend};
 
-use mirror::{
-    raw_window_handle::{
-        AppKitWindowHandle, DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle,
-        RawDisplayHandle, RawWindowHandle, Win32WindowHandle, WindowHandle, XlibDisplayHandle,
-        XlibWindowHandle,
-    },
-    AVFrameObserver, AVFrameSink, AVFrameStream, AudioFrame, Renderer, Size, VideoFrame,
-};
+use std::sync::Arc;
 
+use anyhow::anyhow;
+use mirror::{AVFrameObserver, AVFrameSink, AVFrameStream, AudioFrame, Renderer, VideoFrame};
 use napi::{
     threadsafe_function::{ThreadsafeFunction, ThreadsafeFunctionCallMode},
-    JsBigInt, JsUnknown,
+    JsUnknown,
 };
 
 use napi_derive::napi;
+use winit::{
+    application::ApplicationHandler,
+    dpi::{PhysicalPosition, PhysicalSize},
+    event::WindowEvent,
+    event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
+    window::{Fullscreen, Window as WinitWindow, WindowId},
+};
+
+pub type Callback = ThreadsafeFunction<Events, JsUnknown, Events, false>;
 
 #[napi(object)]
-#[derive(Clone)]
-pub struct WindowsNativeWindowHandle {
-    /// A handle to a window.
-    ///
-    /// This type is declared in WinDef.h as follows:
-    ///
-    /// typedef HANDLE HWND;
-    pub hwnd: JsBigInt,
+#[derive(Debug, Default, Clone, Copy)]
+pub struct Position {
+    pub x: i32,
+    pub y: i32,
+}
+
+impl Into<winit::dpi::Position> for Position {
+    fn into(self) -> winit::dpi::Position {
+        winit::dpi::Position::Physical(PhysicalPosition::new(self.x, self.y))
+    }
+}
+
+#[napi(object)]
+#[derive(Debug, Default, Clone, Copy)]
+pub struct Size {
     pub width: u32,
     pub height: u32,
 }
 
-#[napi(object)]
-#[derive(Clone)]
-pub struct LinuxNativeWindowHandle {
-    /// typedef unsigned long int XID;
-    ///
-    /// typedef XID Window;
-    pub window: JsBigInt,
-    pub display: JsBigInt,
-    pub screen: i32,
-    pub width: u32,
-    pub height: u32,
+impl Into<winit::dpi::Size> for Size {
+    fn into(self) -> winit::dpi::Size {
+        winit::dpi::Size::Physical(PhysicalSize::new(self.width, self.height))
+    }
 }
 
-#[napi(object)]
-#[derive(Clone)]
-pub struct MacosNativeWindowHandle {
-    /// The infrastructure for drawing, printing, and handling events in an app.
-    ///
-    /// AppKit handles most of your app’s NSView management. Unless you’re
-    /// implementing a concrete subclass of NSView or working intimately with
-    /// the content of the view hierarchy at runtime, you don’t need to know
-    /// much about this class’s interface. For any view, there are many methods
-    /// that you can use as-is. The following methods are commonly used.
-    pub ns_view: JsBigInt,
-    pub width: u32,
-    pub height: u32,
-}
-
-/// A window handle for a particular windowing system.
-#[derive(Clone)]
-pub enum NativeWindowHandle {
-    Windows(WindowsNativeWindowHandle),
-    Linux(LinuxNativeWindowHandle),
-    Macos(MacosNativeWindowHandle),
-}
-
-unsafe impl Send for NativeWindowHandle {}
-unsafe impl Sync for NativeWindowHandle {}
-
-impl NativeWindowHandle {
-    pub fn size(&self) -> Size {
-        match self {
-            Self::Windows(WindowsNativeWindowHandle { width, height, .. })
-            | Self::Linux(LinuxNativeWindowHandle { width, height, .. })
-            | Self::Macos(MacosNativeWindowHandle { width, height, .. }) => Size {
-                width: *width,
-                height: *height,
-            },
+impl Into<mirror::Size> for Size {
+    fn into(self) -> mirror::Size {
+        mirror::Size {
+            width: self.width,
+            height: self.height,
         }
     }
 }
 
-impl HasDisplayHandle for NativeWindowHandle {
-    fn display_handle(&self) -> Result<DisplayHandle<'_>, HandleError> {
-        Ok(match self {
-            Self::Macos(_) => DisplayHandle::appkit(),
-            Self::Windows(_) => DisplayHandle::windows(),
-            // This variant is likely to show up anywhere someone manages to get X11 working
-            // that Xlib can be built for, which is to say, most (but not all) Unix systems.
-            Self::Linux(LinuxNativeWindowHandle {
-                display, screen, ..
-            }) => unsafe {
-                DisplayHandle::borrow_raw(RawDisplayHandle::Xlib(XlibDisplayHandle::new(
-                    NonNull::new(display.get_i64().unwrap().0 as *mut c_void),
-                    *screen,
-                )))
-            },
-        })
-    }
+#[napi(object)]
+#[derive(Debug, Default, Clone)]
+pub struct WindowDescriptor {
+    pub backend: MirrorBackend,
+    pub title: String,
+    pub size: Size,
+    pub position: Position,
+    pub resizable: bool,
+    pub maximized: bool,
+    pub visible: bool,
+    pub transparent: bool,
+    pub blur: bool,
+    pub decorations: bool,
+    pub active: bool,
+    pub fullscreen: bool,
 }
 
-impl HasWindowHandle for NativeWindowHandle {
-    fn window_handle(&self) -> Result<WindowHandle<'_>, HandleError> {
-        Ok(match self {
-            // This variant is used on Windows systems.
-            Self::Windows(WindowsNativeWindowHandle { hwnd, .. }) => unsafe {
-                WindowHandle::borrow_raw(RawWindowHandle::Win32(Win32WindowHandle::new(
-                    std::num::NonZeroIsize::new(hwnd.get_i64().unwrap().0 as isize).unwrap(),
-                )))
-            },
-            // This variant is likely to show up anywhere someone manages to get X11
-            // working that Xlib can be built for, which is to say, most (but not all)
-            // Unix systems.
-            Self::Linux(LinuxNativeWindowHandle { window, .. }) => unsafe {
-                WindowHandle::borrow_raw(RawWindowHandle::Xlib(XlibWindowHandle::new(
-                    window.get_u64().unwrap().0,
-                )))
-            },
-            // This variant is likely to be used on macOS, although Mac Catalyst
-            // ($arch-apple-ios-macabi targets, which can notably use UIKit or AppKit) can also
-            // use it despite being target_os = "ios".
-            Self::Macos(MacosNativeWindowHandle { ns_view, .. }) => unsafe {
-                WindowHandle::borrow_raw(RawWindowHandle::AppKit(AppKitWindowHandle::new(
-                    std::ptr::NonNull::new_unchecked(ns_view.get_i64().unwrap().0 as *mut c_void),
-                )))
-            },
-        })
-    }
-}
-
-/// Renders video frames and audio/video frames to the native window.
+#[napi]
+#[derive(Clone)]
 pub struct Window {
-    pub callback: ThreadsafeFunction<(), JsUnknown, (), false>,
-    pub renderer: Arc<Renderer<'static>>,
+    options: WindowDescriptor,
+    window: Option<Arc<WinitWindow>>,
 }
 
-impl AVFrameStream for Window {}
-
-impl AVFrameSink for Window {
-    fn video(&self, frame: &VideoFrame) -> bool {
-        self.renderer.video(frame)
+#[napi]
+impl Window {
+    #[napi(constructor)]
+    pub fn new(options: WindowDescriptor) -> napi::Result<Self> {
+        Ok(Self {
+            window: None,
+            options,
+        })
     }
 
-    fn audio(&self, frame: &AudioFrame) -> bool {
-        self.renderer.audio(frame)
+    #[napi]
+    pub fn set_visible(&self, visible: bool) {
+        if let Some(window) = self.window.as_ref() {
+            window.set_visible(visible);
+        }
+    }
+
+    #[napi]
+    pub fn set_fullscreen(&self, fullscreen: bool) {
+        if let Some(window) = self.window.as_ref() {
+            window.set_fullscreen(if fullscreen {
+                Some(Fullscreen::Borderless(None))
+            } else {
+                None
+            });
+        }
+    }
+
+    #[napi]
+    pub fn start(&mut self) -> napi::Result<()> {
+        let mut func = || {
+            let event_loop = EventLoop::new()?;
+            event_loop.set_control_flow(ControlFlow::Wait);
+            event_loop.run_app(self)?;
+
+            Ok::<(), anyhow::Error>(())
+        };
+
+        func().map_err(|e| napi::Error::from_reason(e.to_string()))
+    }
+
+    pub(crate) fn create_renderer(&self) -> Result<Renderer, anyhow::Error> {
+        if let Some(window) = self.window.as_ref() {
+            Ok(Renderer::new(
+                self.options.backend.into(),
+                window,
+                self.options.size.into(),
+            )?)
+        } else {
+            Err(anyhow!("window is not created"))
+        }
     }
 }
 
-impl AVFrameObserver for Window {
-    fn close(&self) {
-        self.callback
-            .call((), ThreadsafeFunctionCallMode::NonBlocking);
+impl ApplicationHandler for Window {
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        let mut func = move || {
+            let mut attr = WinitWindow::default_attributes();
+            attr.title = self.options.title.clone();
+            attr.inner_size = Some(self.options.size.into());
+            attr.position = Some(self.options.position.into());
+            attr.resizable = self.options.resizable;
+            attr.maximized = self.options.maximized;
+            attr.visible = self.options.visible;
+            attr.transparent = self.options.transparent;
+            attr.blur = self.options.blur;
+            attr.decorations = self.options.decorations;
+            attr.active = self.options.active;
+            attr.fullscreen = if self.options.fullscreen {
+                Some(Fullscreen::Borderless(None))
+            } else {
+                None
+            };
+
+            let window = Arc::new(event_loop.create_window(attr)?);
+            self.window.replace(window.clone());
+
+            Ok::<(), anyhow::Error>(())
+        };
+
+        if func().is_err() {
+            event_loop.exit();
+        }
+    }
+
+    fn window_event(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        _window_id: WindowId,
+        event: WindowEvent,
+    ) {
+        match event {
+            WindowEvent::CloseRequested => {
+                event_loop.exit();
+            }
+            _ => (),
+        }
     }
 }
 
 /// This is an empty window implementation that doesn't render any audio or
 /// video and is only used to handle close events.
-pub struct EmptyWindow(pub ThreadsafeFunction<(), JsUnknown, (), false>);
+pub struct EmptyWindow(pub Callback);
 
 impl AVFrameStream for EmptyWindow {}
 impl AVFrameSink for EmptyWindow {}
 
 impl AVFrameObserver for EmptyWindow {
     fn close(&self) {
-        self.0.call((), ThreadsafeFunctionCallMode::NonBlocking);
+        self.0
+            .call(Events::Closed, ThreadsafeFunctionCallMode::NonBlocking);
+    }
+}
+
+/// Renders video frames and audio/video frames to the native window.
+pub struct NativeWindow(pub Callback);
+
+impl AVFrameStream for NativeWindow {}
+
+impl AVFrameSink for NativeWindow {
+    fn audio(&self, frame: &AudioFrame) -> bool {
+        if let Some(renderer) = self.renderer.as_ref() {
+            renderer.audio(frame)
+        } else {
+            true
+        }
+    }
+
+    fn video(&self, frame: &VideoFrame) -> bool {
+        if let Some(renderer) = self.renderer.as_ref() {
+            renderer.video(frame)
+        } else {
+            true
+        }
+    }
+}
+
+impl AVFrameObserver for NativeWindow {
+    fn initialized(&self) {
+        self.0
+            .call(Events::Initialized, ThreadsafeFunctionCallMode::NonBlocking);
+    }
+
+    fn close(&self) {
+        self.0
+            .call(Events::Closed, ThreadsafeFunctionCallMode::NonBlocking);
     }
 }

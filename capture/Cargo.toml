@@ -14,7 +14,7 @@ mirror-resample = { path = "../resample", version = "0.1" }
 mirror-graphics = { path = "../graphics", version = "0.1" }
 
 [target.'cfg(target_os = "windows")'.dependencies]
-windows-capture = { git = "https://github.com/mycrl/windows-capture" }
+windows-capture = { version = "1.4.0" }
 
 [target.'cfg(target_os = "windows")'.dependencies.windows]
 version = "0.58.0"

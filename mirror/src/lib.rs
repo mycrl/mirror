@@ -39,7 +39,6 @@ use mirror_graphics::{
 };
 
 use mirror_transport::Transport;
-use parking_lot::Mutex;
 use rodio::{OutputStream, OutputStreamHandle, Sink};
 use thiserror::Error;
 
@@ -290,7 +289,7 @@ impl AudioRender {
     }
 
     /// Push an audio clip to the queue.
-    pub fn send(&mut self, frame: &AudioFrame) -> Result<(), RendererError> {
+    pub fn send(&self, frame: &AudioFrame) -> Result<(), RendererError> {
         self.sink.append(AudioSamples::from(frame));
         Ok(())
     }
@@ -360,7 +359,7 @@ impl<'a> VideoRender<'a> {
         })
     }
 
-    pub fn send(&mut self, frame: &VideoFrame) -> Result<(), RendererError> {
+    pub fn send(&self, frame: &VideoFrame) -> Result<(), RendererError> {
         match frame.sub_format {
             #[cfg(target_os = "windows")]
             VideoSubFormat::D3D11 => {
@@ -529,7 +528,10 @@ impl<'a> VideoRender<'a> {
 /// unavailable, for video this can be done by enabling the dx11 feature tobe
 /// implemented with Direct3D 11 Graphics, which works fine on some very old
 /// devices.
-pub struct Renderer<'a>(Mutex<VideoRender<'a>>, Mutex<AudioRender>);
+pub struct Renderer<'a> {
+    video: VideoRender<'a>, 
+    audio: AudioRender,
+}
 
 impl<'a> Renderer<'a> {
     pub fn new<T: Into<SurfaceTarget<'a>>>(
@@ -537,10 +539,10 @@ impl<'a> Renderer<'a> {
         window: T,
         size: Size,
     ) -> Result<Self, RendererError> {
-        Ok(Self(
-            Mutex::new(VideoRender::new(backend, window, size)?),
-            Mutex::new(AudioRender::new()?),
-        ))
+        Ok(Self {
+            video: VideoRender::new(backend, window, size)?,
+            audio: AudioRender::new()?,
+        })
     }
 }
 
@@ -550,7 +552,7 @@ impl<'a> AVFrameSink for Renderer<'a> {
     /// empty, it fills the mute data to the player by default, so you need to
     /// pay attention to the push rate.
     fn audio(&self, frame: &AudioFrame) -> bool {
-        if let Err(e) = self.1.lock().send(frame) {
+        if let Err(e) = self.audio.send(frame) {
             log::error!("{:?}", e);
 
             return false;
@@ -562,7 +564,7 @@ impl<'a> AVFrameSink for Renderer<'a> {
     /// Renders video frames and can automatically handle rendering of hardware
     /// textures and rendering textures.
     fn video(&self, frame: &VideoFrame) -> bool {
-        if let Err(e) = self.0.lock().send(frame) {
+        if let Err(e) = self.video.send(frame) {
             log::error!("{:?}", e);
 
             return false;

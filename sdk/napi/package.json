@@ -1,6 +1,6 @@
 {
     "name": "mirror-napi",
-    "version": "0.0.0",
+    "version": "0.1.0",
     "main": "index.js",
     "types": "index.d.ts",
     "napi": {
@@ -27,5 +27,8 @@
         "prepublishOnly": "napi prepublish -t npm",
         "universal": "napi universal",
         "version": "napi version"
+    },
+    "optionalDependencies": {
+        "mirror-napi-win32-x64-msvc": "0.1.0"
     }
 }

@@ -11,6 +11,7 @@ pub use self::texture::{
 };
 
 use mirror_common::Size;
+use parking_lot::Mutex;
 use pollster::FutureExt;
 use texture::{Texture2DSource, Texture2DSourceOptions};
 use thiserror::Error;
@@ -62,7 +63,7 @@ pub struct Renderer<'a> {
     queue: Arc<Queue>,
     vertex_buffer: Buffer,
     index_buffer: Buffer,
-    source: Texture2DSource,
+    source: Mutex<Texture2DSource>,
 }
 
 impl<'a> Renderer<'a> {
@@ -140,12 +141,12 @@ impl<'a> Renderer<'a> {
         });
 
         Ok(Self {
-            source: Texture2DSource::new(Texture2DSourceOptions {
+            source: Mutex::new(Texture2DSource::new(Texture2DSourceOptions {
                 #[cfg(target_os = "windows")]
                 direct3d: options.direct3d,
                 device: device.clone(),
                 queue: queue.clone(),
-            })?,
+            })?),
             vertex_buffer,
             index_buffer,
             surface,
@@ -158,8 +159,8 @@ impl<'a> Renderer<'a> {
     // not render this texture immediately, the processing flow will enter the
     // render queue and wait for the queue to automatically schedule the rendering
     // to the surface.
-    pub fn submit(&mut self, texture: Texture) -> Result<(), GraphicsError> {
-        if let Some((pipeline, bind_group)) = self.source.get_view(texture)? {
+    pub fn submit(&self, texture: Texture) -> Result<(), GraphicsError> {
+        if let Some((pipeline, bind_group)) = self.source.lock().get_view(texture)? {
             let output = self.surface.get_current_texture()?;
             let view = output
                 .texture
@@ -218,6 +219,7 @@ pub mod dx11 {
     };
 
     use mirror_resample::win32::{Resource, VideoResampler, VideoResamplerDescriptor};
+    use parking_lot::Mutex;
     use thiserror::Error;
 
     use crate::{Texture, Texture2DRaw, Texture2DResource};
@@ -232,7 +234,7 @@ pub mod dx11 {
         direct3d: Direct3DDevice,
         swap_chain: IDXGISwapChain,
         render_target_view: ID3D11RenderTargetView,
-        video_processor: Option<VideoResampler>,
+        video_processor: Mutex<Option<VideoResampler>>,
     }
 
     unsafe impl Send for Dx11Renderer {}
@@ -294,7 +296,7 @@ pub mod dx11 {
             }
 
             Ok(Self {
-                video_processor: None,
+                video_processor: Mutex::new(None),
                 render_target_view,
                 swap_chain,
                 direct3d,
@@ -302,14 +304,15 @@ pub mod dx11 {
         }
 
         /// Draw this pixel buffer to the configured SurfaceTexture.
-        pub fn submit(&mut self, texture: Texture) -> Result<(), Dx11GraphicsError> {
+        pub fn submit(&self, texture: Texture) -> Result<(), Dx11GraphicsError> {
             unsafe {
                 self.direct3d
                     .context
                     .ClearRenderTargetView(&self.render_target_view, &[0.0, 0.0, 0.0, 1.0]);
             }
 
-            if self.video_processor.is_none() {
+            let mut video_processor = self.video_processor.lock();
+            if video_processor.is_none() {
                 let size = texture.size();
                 let format = match texture {
                     Texture::Nv12(_) => DXGI_FORMAT_NV12,
@@ -317,7 +320,7 @@ pub mod dx11 {
                     _ => unimplemented!("not supports texture format"),
                 };
 
-                self.video_processor = Some(VideoResampler::new(VideoResamplerDescriptor {
+                video_processor.replace(VideoResampler::new(VideoResamplerDescriptor {
                     direct3d: self.direct3d.clone(),
                     input: Resource::Default(format, size),
                     output: Resource::Texture(unsafe {
@@ -326,7 +329,7 @@ pub mod dx11 {
                 })?);
             }
 
-            if let Some(processor) = &mut self.video_processor {
+            if let Some(processor) = video_processor.as_mut() {
                 let texture = match texture {
                     Texture::Rgba(texture) | Texture::Nv12(texture) => texture,
                     _ => unimplemented!("not supports texture format"),
