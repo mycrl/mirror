@@ -2,7 +2,6 @@ package com.github.mycrl.mirror
 
 import android.media.AudioRecord
 import android.media.AudioTrack
-import android.os.Build
 import android.util.Log
 import android.view.Surface
 import kotlin.Exception
@@ -18,13 +17,13 @@ abstract class MirrorReceiver {
      *  You need to provide a surface to the receiver, which will decode and render the received
      *  video stream to this surface.
      */
-    abstract val surface: Surface;
+    abstract val surface: Surface
 
     /**
      * You need to provide an audio track to the receiver, which will decode the received audio
      * stream and play it using this audio track.
      */
-    abstract val track: AudioTrack?;
+    abstract val track: AudioTrack?
 
     /**
      * You can choose to implement this function, and the underlying transport layer will give you a c
@@ -55,10 +54,10 @@ abstract class MirrorReceiver {
  * Create a mirror service, note that observer can be null, when observer is null, it will not
  * automatically respond to any sender push.
  */
-class MirrorService constructor(
-    private val server: String,
-    private val multicast: String,
-    private val mtu: Int,
+class MirrorService(
+    server: String,
+    multicast: String,
+    mtu: Int,
 ) {
     private val mirror: Mirror = Mirror(server, multicast, mtu)
 
@@ -120,7 +119,7 @@ class MirrorService constructor(
             init {
                 videoDecoder.start()
                 audioDecoder?.start()
-                observer.onStart(ReceiverAdapterWrapper { -> close() })
+                observer.onStart(ReceiverAdapterWrapper { close() })
             }
 
             override fun sink(kind: Int, flags: Int, timestamp: Long, buf: ByteArray): Boolean {
@@ -130,13 +129,13 @@ class MirrorService constructor(
                     }
 
                     when (kind) {
-                        StreamKind.Video -> {
+                        StreamKind.VIDEO -> {
                             if (videoDecoder.isRunning) {
                                 videoDecoder.sink(buf, flags, timestamp)
                             }
                         }
 
-                        StreamKind.Audio -> {
+                        StreamKind.AUDIO -> {
                             if (audioDecoder != null && audioDecoder.isRunning) {
                                 audioDecoder.sink(buf, flags, timestamp)
                             }
@@ -181,10 +180,10 @@ class MirrorService constructor(
     }
 }
 
-class MirrorSender constructor(
+class MirrorSender(
     private val sender: SenderAdapterWrapper,
-    private val configure: MirrorAdapterConfigure,
-    private val record: AudioRecord?,
+    configure: MirrorAdapterConfigure,
+    record: AudioRecord?,
 ) {
     private val videoEncoder: Video.VideoEncoder =
         Video.VideoEncoder(configure.video, object : ByteArraySinker() {

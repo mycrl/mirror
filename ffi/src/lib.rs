@@ -350,9 +350,9 @@ pub mod android {
     pub extern "system" fn Java_com_github_mycrl_mirror_Mirror_releaseStreamReceiverAdapter(
         _env: JNIEnv,
         _this: JClass,
-        ptr: *const Arc<StreamReceiverAdapter>,
+        ptr: *const Arc<AndroidStreamReceiverAdapter>,
     ) {
-        unsafe { Box::from_raw(ptr as *mut Arc<StreamReceiverAdapter>) }.close();
+        unsafe { Box::from_raw(ptr as *mut Arc<AndroidStreamReceiverAdapter>) }.close();
     }
 
     /// /**

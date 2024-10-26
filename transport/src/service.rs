@@ -36,7 +36,7 @@ where
                 let pong_bytes = Signal::Pong.encode();
 
                 while let Ok(size) = socket.read(&mut buf) {
-                    log::info!("signal socket read buf, size={}", size);
+                    log::trace!("signal socket read buf, size={}", size);
 
                     if size == 0 {
                         break;
