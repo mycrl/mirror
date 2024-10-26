@@ -4,13 +4,7 @@
     "main": "index.js",
     "types": "index.d.ts",
     "napi": {
-        "name": "mirror",
-        "triples": {
-            "defaults": false,
-            "additional": [
-                "x86_64-pc-windows-msvc"
-            ]
-        }
+        "name": "mirror"
     },
     "license": "MIT",
     "devDependencies": {
@@ -20,9 +14,8 @@
         "node": ">= 10"
     },
     "scripts": {
-        "artifacts": "napi artifacts",
-        "build": "napi build --platform --release",
         "build:debug": "napi build --platform",
+        "artifacts": "napi artifacts",
         "prepare": "napi build --platform --release",
         "prepublishOnly": "napi prepublish -t npm",
         "universal": "napi universal",

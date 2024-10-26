@@ -11,6 +11,7 @@ import {
     MirrorVideoDecoderType,
     MirrorVideoEncoderType,
     Events,
+    MirrorNativeWindowHandle,
 } from "mirror-napi";
 import { join } from "node:path";
 import * as fs from "node:fs";
@@ -83,7 +84,7 @@ const trayWindow = new BrowserWindow({
     skipTaskbar: true,
     show: false,
     webPreferences: {
-        preload: join(__dirname, "../view/preload.js"),
+        preload: join(__dirname, "./preload.js"),
     },
 });
 
@@ -105,15 +106,32 @@ const baseWindow = new BaseWindow({
     transparent: false,
 });
 
-const icon = nativeImage.createFromPath(join(__dirname, "../../logo.ico"));
-const tray = new Tray(icon);
+const logo =
+    process.platform == "darwin"
+        ? nativeImage.createFromPath(join(__dirname, "../logoTemplate.png"))
+        : nativeImage.createFromPath(join(__dirname, "../logo.ico"));
 
-tray.setTitle("mirror");
+if (process.platform == "darwin") {
+    logo.setTemplateImage(true);
+}
+
+const tray = new Tray(logo);
+
+if (process.platform == "win32") {
+    tray.setTitle("mirror");
+}
+
 tray.setToolTip("service is running");
 tray.setContextMenu(
     Menu.buildFromTemplate([
         {
-            label: "Open DevTools",
+            label: "打开主界面",
+            click: () => {
+                tray.emit("double-click", {}, { x: 0, y: 0 });
+            },
+        },
+        {
+            label: "切换开发人员工具",
             click: () => {
                 trayWindow.webContents.openDevTools({
                     mode: "detach",
@@ -121,7 +139,7 @@ tray.setContextMenu(
             },
         },
         {
-            label: "Exit",
+            label: "退出",
             click: () => {
                 app.exit();
             },
@@ -135,7 +153,7 @@ function Notify(level: "info" | "warning" | "error", info: string) {
         content: info,
         iconType: level,
         largeIcon: false,
-        icon,
+        icon: logo,
     });
 
     setTimeout(() => {
@@ -178,23 +196,33 @@ function closeMirror() {
 
 function createMirror(settings: typeof Config): boolean {
     try {
-        const { width, height } = display.size;
-        const hwnd = baseWindow.getNativeWindowHandle();
-
         closeMirror();
+
+        const { width, height } = display.size;
+        const handle = baseWindow.getNativeWindowHandle();
+
+        let hwnd: MirrorNativeWindowHandle = {};
+
+        if (process.platform == "win32") {
+            hwnd.windows = {
+                hwnd: endianness() == "LE" ? handle.readBigInt64LE() : handle.readBigInt64BE(),
+                width: 1280,
+                height: 720,
+            };
+        } else if (process.platform == "darwin") {
+            hwnd.macos = {
+                nsView: endianness() == "LE" ? handle.readBigInt64LE() : handle.readBigInt64BE(),
+                width: 1280,
+                height: 720,
+            };
+        }
 
         mirror = new MirrorService({
             backend: MirrorBackend.WebGPU,
             multicast: settings.multicast,
             server: settings.server,
             mtu: settings.mtu,
-            windowHandle: {
-                windows: {
-                    hwnd: endianness() == "LE" ? hwnd.readBigInt64LE() : hwnd.readBigInt64BE(),
-                    width: 1280,
-                    height: 720,
-                },
-            },
+            windowHandle: hwnd,
         });
     } catch (e: any) {
         Log("error", e);
@@ -286,7 +314,7 @@ function createReceiver(): boolean {
         receiver = mirror.createReceiver(
             Config.channel,
             {
-                video: MirrorVideoDecoderType.Qsv,
+                video: Config.decoder,
             },
             (event) => {
                 if (event == Events.Closed) {

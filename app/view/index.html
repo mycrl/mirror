@@ -1,230 +1,258 @@
 <html>
-<head>
-    <meta charset="UTF-8" />
-    <meta content="text/html;charset=utf-8" http-equiv="Content-Type" />
-    <script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
-    <script src="./index.js"></script>
-    <link rel="stylesheet" href="./index.css" />
-</head>
-<body>
-    <div id="app">
-        <div id="arrow"
-             :class="working ? 'settings-hide' : (settings.status ? 'settings-max': 'settings-min')">
-            <div id="arrow-item"></div>
-        </div>
+    <head>
+        <meta charset="UTF-8" />
+        <meta content="text/html;charset=utf-8" http-equiv="Content-Type" />
+        <script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
+        <script src="./index.js"></script>
+        <link rel="stylesheet" href="./index.css" />
+    </head>
+    <body>
+        <div id="app">
+            <div
+                id="arrow"
+                :class="working ? 'settings-hide' : (settings.status ? 'settings-max': 'settings-min')"
+            >
+                <div id="arrow-item"></div>
+            </div>
 
-        <div id="view"
-             :class="working ? 'settings-hide' : (settings.status ? 'settings-max': 'settings-min')">
-            <!--
+            <div
+                id="view"
+                :class="working ? 'settings-hide' : (settings.status ? 'settings-max': 'settings-min')"
+            >
+                <!--
             close
             -->
-            <img id="clsoe" src="./icon/close.svg" @click="close" />
+                <img id="clsoe" src="./icon/close.svg" @click="close" />
 
-            <!--
+                <!--
             start/stop sender button
             -->
-            <div id="switch">
-                <div id="box">
-                    <div id="ring" :style="ring.style"></div>
-                    <button @click="switchSender">
-                        <img src="./icon/cast.svg" v-show="!working" />
-                        <img src="./icon/power-off.svg" v-show="working" />
-                    </button>
+                <div id="switch">
+                    <div id="box">
+                        <div id="ring" :style="ring.style"></div>
+                        <button @click="switchSender">
+                            <img src="./icon/cast.svg" v-show="!working" />
+                            <img src="./icon/power-off.svg" v-show="working" />
+                        </button>
+                    </div>
                 </div>
-            </div>
 
-            <!--
+                <!--
             devices
             -->
-            <div id="devices">
-                <div id="kinds">
-                    <div class="kind"
-                         :class="sources.kind == SourceType.Screen ? 'kind-selected' : null">
-                        <img src="./icon/screen.svg"
-                             width="20px"
-                             @click="kindSelect(SourceType.Screen)" />
-                        <p style="top: -5px">·</p>
+                <div id="devices">
+                    <div id="kinds">
+                        <div
+                            class="kind"
+                            :class="sources.kind == SourceType.Screen ? 'kind-selected' : null"
+                        >
+                            <img
+                                src="./icon/screen.svg"
+                                width="20px"
+                                @click="kindSelect(SourceType.Screen)"
+                            />
+                            <p style="top: -5px">·</p>
+                        </div>
+                        <div
+                            class="kind"
+                            :class="sources.kind == SourceType.Audio ? 'kind-selected' : null"
+                        >
+                            <img
+                                src="./icon/audio.svg"
+                                width="17px"
+                                style="top: 1px"
+                                @click="kindSelect(SourceType.Audio)"
+                            />
+                            <p style="top: -2px">·</p>
+                        </div>
+                        <div
+                            class="kind"
+                            :class="sources.kind == SourceType.Camera ? 'kind-selected' : null"
+                        >
+                            <img
+                                src="./icon/camera.svg"
+                                width="21px"
+                                style="top: -1px"
+                                @click="kindSelect(SourceType.Camera)"
+                            />
+                            <p style="top: -7px">·</p>
+                        </div>
                     </div>
-                    <div class="kind"
-                         :class="sources.kind == SourceType.Audio ? 'kind-selected' : null">
-                        <img src="./icon/audio.svg"
-                             width="17px"
-                             style="top: 1px"
-                             @click="kindSelect(SourceType.Audio)" />
-                        <p style="top: -2px">·</p>
-                    </div>
-                    <div class="kind"
-                         :class="sources.kind == SourceType.Camera ? 'kind-selected' : null">
-                        <img src="./icon/camera.svg"
-                             width="21px"
-                             style="top: -1px"
-                             @click="kindSelect(SourceType.Camera)" />
-                        <p style="top: -7px">·</p>
-                    </div>
-                </div>
-                <div id="values">
-                    <select v-if="sources.kind == SourceType.Audio"
+                    <div id="values">
+                        <select
+                            v-if="sources.kind == SourceType.Audio"
                             v-model="sources.audioIndex"
-                            :title="sources.audios[sources.audioIndex]?.name">
-                        <option v-for="(item, index) of sources.audios" :value="index">
-                            {{ item.name }}
-                        </option>
-                    </select>
-                    <select v-else
+                            :title="sources.audios[sources.audioIndex]?.name"
+                        >
+                            <option v-for="(item, index) of sources.audios" :value="index">
+                                {{ item.name }}
+                            </option>
+                        </select>
+                        <select
+                            v-else
                             v-model="sources.videoIndex"
-                            :title="sources.videos[sources.videoIndex]?.name">
-                        <option v-for="(item, index) of sources.videos" :value="index">
-                            {{ item.name }}
-                        </option>
-                    </select>
+                            :title="sources.videos[sources.videoIndex]?.name"
+                        >
+                            <option v-for="(item, index) of sources.videos" :value="index">
+                                {{ item.name }}
+                            </option>
+                        </select>
+                    </div>
                 </div>
-            </div>
 
-            <!--
+                <!--
             channel number
             -->
-            <div id="id">
-                <p>channel:</p>
-                <span>#{{ settings.value.channel }}</span>
-            </div>
+                <div id="id">
+                    <p>channel:</p>
+                    <span>#{{ settings.value.channel }}</span>
+                </div>
 
-            <!--
+                <!--
             settings
             -->
-            <div id="settings">
-                <div id="card">
-                    <!--
+                <div id="settings">
+                    <div id="card">
+                        <!--
                     settings switch button
                     -->
-                    <div id="settings-switch">
-                        <img :src="settings.status ? './icon/down.svg' : './icon/settings.svg'"
-                             @click="settingsSwitch" />
-                    </div>
+                        <div id="settings-switch">
+                            <img
+                                :src="settings.status ? './icon/down.svg' : './icon/settings.svg'"
+                                @click="settingsSwitch"
+                            />
+                        </div>
 
-                    <!--
+                        <!--
                     settings values
                     -->
-                    <div id="items">
-                        <!--
+                        <div id="items">
+                            <!--
                         channel number
                         -->
-                        <div class="item">
-                            <div class="key">
-                                <span>Channel:</span>
+                            <div class="item">
+                                <div class="key">
+                                    <span>Channel:</span>
+                                </div>
+                                <div class="value">
+                                    <input type="number" v-model="settings.value.channel" />
+                                </div>
                             </div>
-                            <div class="value">
-                                <input type="number" v-model="settings.value.channel" />
-                            </div>
-                        </div>
 
-                        <!--
+                            <!--
                         server
                         -->
-                        <div class="item">
-                            <div class="key">
-                                <span>Server:</span>
+                            <div class="item">
+                                <div class="key">
+                                    <span>Server:</span>
+                                </div>
+                                <div class="value">
+                                    <input type="text" v-model="settings.value.server" />
+                                </div>
                             </div>
-                            <div class="value">
-                                <input type="text" v-model="settings.value.server" />
-                            </div>
-                        </div>
 
-                        <!--
+                            <!--
                         video encoder
                         -->
-                        <div class="item">
-                            <div class="key">
-                                <span>Encoder:</span>
+                            <div class="item">
+                                <div class="key">
+                                    <span>Encoder:</span>
+                                </div>
+                                <div class="value">
+                                    <select v-model="settings.value.encoder">
+                                        <option
+                                            v-for="item of Object.keys(VideoEncoderType)"
+                                            :value="VideoEncoderType[item]"
+                                        >
+                                            {{ item }}
+                                        </option>
+                                    </select>
+                                </div>
                             </div>
-                            <div class="value">
-                                <select v-model="settings.value.encoder">
-                                    <option :value="VideoEncoderType.X264">x264</option>
-                                    <option :value="VideoEncoderType.Qsv">qsv</option>
-                                    <option :value="VideoEncoderType.Cuda">nvenc</option>
-                                </select>
-                            </div>
-                        </div>
 
-                        <!--
+                            <!--
                         video decoder
                         -->
-                        <div class="item">
-                            <div class="key">
-                                <span>Decoder:</span>
+                            <div class="item">
+                                <div class="key">
+                                    <span>Decoder:</span>
+                                </div>
+                                <div class="value">
+                                    <select v-model="settings.value.decoder">
+                                        <option
+                                            v-for="item of Object.keys(VideoDecoderType)"
+                                            :value="VideoDecoderType[item]"
+                                        >
+                                            {{ item }}
+                                        </option>
+                                    </select>
+                                </div>
                             </div>
-                            <div class="value">
-                                <select v-model="settings.value.decoder">
-                                    <option :value="VideoDecoderType.D3D11">d3d11</option>
-                                    <option :value="VideoDecoderType.Qsv">qsv</option>
-                                    <option :value="VideoDecoderType.Cuda">cuvid</option>
-                                </select>
-                            </div>
-                        </div>
 
-                        <!--
+                            <!--
                         video size
                         -->
-                        <div class="item">
-                            <div class="key">
-                                <span>Size:</span>
+                            <div class="item">
+                                <div class="key">
+                                    <span>Size:</span>
+                                </div>
+                                <div class="value">
+                                    <input type="text" v-model="settings.value.width" />
+                                    <input type="text" v-model="settings.value.height" />
+                                </div>
                             </div>
-                            <div class="value">
-                                <input type="text" v-model="settings.value.width" />
-                                <input type="text" v-model="settings.value.height" />
-                            </div>
-                        </div>
 
-                        <!--
+                            <!--
                         video fps
                         -->
-                        <div class="item">
-                            <div class="key">
-                                <span>FPS:</span>
+                            <div class="item">
+                                <div class="key">
+                                    <span>FPS:</span>
+                                </div>
+                                <div class="value">
+                                    <input type="text" v-model="settings.value.frameRate" />
+                                </div>
                             </div>
-                            <div class="value">
-                                <input type="text" v-model="settings.value.frameRate" />
-                            </div>
-                        </div>
 
-                        <!--
+                            <!--
                         video bit rate
                         -->
-                        <div class="item">
-                            <div class="key">
-                                <span>BitRate:</span>
+                            <div class="item">
+                                <div class="key">
+                                    <span>BitRate:</span>
+                                </div>
+                                <div class="value">
+                                    <input type="text" v-model="settings.value.bitRate" />
+                                </div>
                             </div>
-                            <div class="value">
-                                <input type="text" v-model="settings.value.bitRate" />
-                            </div>
-                        </div>
 
-                        <!--
+                            <!--
                         udp multicast ip
                         -->
-                        <div class="item">
-                            <div class="key">
-                                <span>Multicast:</span>
+                            <div class="item">
+                                <div class="key">
+                                    <span>Multicast:</span>
+                                </div>
+                                <div class="value">
+                                    <input type="text" v-model="settings.value.multicast" />
+                                </div>
                             </div>
-                            <div class="value">
-                                <input type="text" v-model="settings.value.multicast" />
-                            </div>
-                        </div>
 
-                        <!--
+                            <!--
                         network MTU
                         -->
-                        <div class="item">
-                            <div class="key">
-                                <span>MTU:</span>
-                            </div>
-                            <div class="value">
-                                <input type="text" v-model="settings.value.mtu" />
+                            <div class="item">
+                                <div class="key">
+                                    <span>MTU:</span>
+                                </div>
+                                <div class="value">
+                                    <input type="text" v-model="settings.value.mtu" />
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-    </div>
-</body>
+    </body>
 </html>
