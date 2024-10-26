@@ -9,6 +9,7 @@ class StreamKind {
 
 abstract class ReceiverAdapter {
     abstract fun sink(kind: Int, flags: Int, timestamp: Long, buf: ByteArray): Boolean
+    abstract fun online()
     abstract fun close()
 }
 

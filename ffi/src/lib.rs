@@ -18,10 +18,8 @@ pub mod android {
 
     use mirror_common::logger;
     use mirror_transport::{
-        adapter::{
-            StreamKind, StreamReceiverAdapter, StreamReceiverAdapterExt, StreamSenderAdapter,
-        },
-        package, Transport, TransportDescriptor,
+        with_capacity as package_with_capacity, StreamKind, StreamReceiverAdapter,
+        StreamReceiverAdapterExt, StreamSenderAdapter, Transport, TransportDescriptor,
     };
 
     // Each function is accessible at a fixed offset through the JNIEnv argument.
@@ -165,7 +163,7 @@ pub mod android {
 
     pub fn copy_from_byte_array(env: &JNIEnv, array: &JByteArray) -> anyhow::Result<BytesMut> {
         let size = env.get_array_length(array)? as usize;
-        let mut bytes = package::with_capacity(size);
+        let mut bytes = package_with_capacity(size);
         let start = bytes.len() - size;
 
         env.get_byte_array_region(array, 0, unsafe {
@@ -177,6 +175,7 @@ pub mod android {
 
     pub struct AndroidStreamReceiverAdapter {
         pub callback: GlobalRef,
+        pub inner: Arc<StreamReceiverAdapter>,
     }
 
     impl AndroidStreamReceiverAdapter {
@@ -238,6 +237,15 @@ pub mod android {
                 Ok(())
             });
         }
+
+        pub(crate) fn online(&self) {
+            let mut env = get_current_env();
+            catcher(&mut env, |env| {
+                env.call_method(self.callback.as_obj(), "online", "()V", &[])?;
+
+                Ok(())
+            });
+        }
     }
 
     mod objects {
@@ -247,7 +255,7 @@ pub mod android {
             JNIEnv,
         };
 
-        use mirror_transport::adapter::{StreamBufferInfo, StreamKind};
+        use mirror_transport::{StreamBufferInfo, StreamKind};
 
         /// /**
         ///  * Streaming data information.
@@ -300,19 +308,19 @@ pub mod android {
         mut env: JNIEnv,
         _this: JClass,
         callback: JObject,
-    ) -> *const Arc<StreamReceiverAdapter> {
+    ) -> *const Arc<AndroidStreamReceiverAdapter> {
         catcher(&mut env, |env| {
-            let adapter = AndroidStreamReceiverAdapter {
+            let adapter = Arc::new(AndroidStreamReceiverAdapter {
                 callback: env.new_global_ref(callback)?,
-            };
+                inner: StreamReceiverAdapter::new(),
+            });
 
-            let stream_adapter = StreamReceiverAdapter::new();
-            let stream_adapter_ = Arc::downgrade(&stream_adapter);
+            let adapter_ = Arc::downgrade(&adapter);
             thread::Builder::new()
                 .name("MirrorJniStreamReceiverThread".to_string())
                 .spawn(move || {
-                    while let Some(stream_adapter) = stream_adapter_.upgrade() {
-                        if let Some((buf, kind, flags, timestamp)) = stream_adapter.next() {
+                    while let Some(adapter) = adapter_.upgrade() {
+                        if let Some((buf, kind, flags, timestamp)) = adapter.inner.next() {
                             if !adapter.sink(buf, kind, flags, timestamp) {
                                 break;
                             }
@@ -323,10 +331,12 @@ pub mod android {
 
                     log::info!("StreamReceiverAdapter is closed");
 
-                    adapter.close();
+                    if let Some(adapter) = adapter_.upgrade() {
+                        adapter.close();
+                    }
                 })?;
 
-            Ok(Box::into_raw(Box::new(stream_adapter)))
+            Ok(Box::into_raw(Box::new(adapter)))
         })
         .unwrap_or_else(null_mut)
     }
@@ -519,10 +529,14 @@ pub mod android {
         _this: JClass,
         mirror: *const Transport,
         id: i32,
-        adapter: *const Arc<StreamReceiverAdapter>,
+        adapter: *const Arc<AndroidStreamReceiverAdapter>,
     ) -> i32 {
         catcher(&mut env, |_| {
-            unsafe { &*mirror }.create_receiver(id as u32, unsafe { &*adapter })?;
+            let adapter = unsafe { &*adapter };
+            unsafe { &*mirror }.create_receiver(id as u32, &adapter.inner, move || {
+                adapter.online();
+            })?;
+
             Ok(true)
         })
         .unwrap_or(false) as i32

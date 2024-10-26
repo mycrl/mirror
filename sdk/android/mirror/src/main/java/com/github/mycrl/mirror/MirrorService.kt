@@ -44,6 +44,11 @@ abstract class MirrorReceiver {
      * and you can actively release this receiver by calling the release method of the adapter.
      */
     open fun onStart(adapter: ReceiverAdapterWrapper) {}
+
+    /**
+     * For the receiving side, this function will be called back when the sending side is created.
+     */
+    open fun onLine() {}
 }
 
 /**
@@ -149,6 +154,10 @@ class MirrorService constructor(
 
                     return false
                 }
+            }
+
+            override fun online() {
+                observer.onLine()
             }
 
             override fun close() {
