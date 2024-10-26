@@ -6,13 +6,13 @@ mod rgba;
 use std::sync::Arc;
 
 use self::{bgra::Bgra, i420::I420, nv12::Nv12, rgba::Rgba};
-use crate::{helper::CompatibilityLayerError, Vertex};
+use crate::{interop::InteropError, Vertex};
 
 #[cfg(target_os = "windows")]
-use crate::helper::win32::Dx11OnWgpuCompatibilityLayer as CompatibilityLayer;
+use crate::interop::win32::Interop;
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]
-type CompatibilityLayer = ();
+type Interop = ();
 
 use mirror_common::Size;
 use smallvec::SmallVec;
@@ -38,7 +38,7 @@ use wgpu::{
 #[derive(Debug, Error)]
 pub enum FromNativeResourceError {
     #[error(transparent)]
-    CompatibilityLayerError(#[from] CompatibilityLayerError),
+    InteropError(#[from] InteropError),
 }
 
 #[derive(Debug)]
@@ -51,10 +51,10 @@ impl Texture2DRaw {
     #[cfg(target_os = "windows")]
     pub(crate) fn texture<'b>(
         &self,
-        compatibility: &'b mut CompatibilityLayer,
+        interop: &'b mut Interop,
     ) -> Result<&'b WGPUTexture, FromNativeResourceError> {
         Ok(match self {
-            Self::ID3D11Texture2D(dx11, index) => compatibility.from_hal(dx11, *index)?,
+            Self::ID3D11Texture2D(dx11, index) => interop.from_hal(dx11, *index)?,
         })
     }
 
@@ -91,11 +91,11 @@ impl<'a> Texture2DResource<'a> {
     #[allow(unused_variables)]
     pub(crate) fn texture<'b>(
         &self,
-        compatibility: &'b mut CompatibilityLayer,
+        interop: &'b mut Interop,
     ) -> Result<Option<&'b WGPUTexture>, FromNativeResourceError> {
         Ok(match self {
             #[cfg(target_os = "windows")]
-            Texture2DResource::Texture(texture) => Some(texture.texture(compatibility)?),
+            Texture2DResource::Texture(texture) => Some(texture.texture(interop)?),
             Texture2DResource::Buffer(_) => None,
         })
     }
@@ -120,11 +120,11 @@ pub enum Texture<'a> {
 impl<'a> Texture<'a> {
     pub(crate) fn texture<'b>(
         &self,
-        compatibility: &'b mut CompatibilityLayer,
+        interop: &'b mut Interop,
     ) -> Result<Option<&'b WGPUTexture>, FromNativeResourceError> {
         Ok(match self {
             Texture::Rgba(texture) | Texture::Bgra(texture) | Texture::Nv12(texture) => {
-                texture.texture(compatibility)?
+                texture.texture(interop)?
             }
             Texture::I420(_) => None,
         })
@@ -346,16 +346,16 @@ pub struct Texture2DSource {
     pipeline: Option<RenderPipeline>,
     sample: Option<Texture2DSourceSample>,
     bind_group_layout: Option<BindGroupLayout>,
-    compatibility: CompatibilityLayer,
+    interop: Interop,
 }
 
 impl Texture2DSource {
     pub fn new(options: Texture2DSourceOptions) -> Result<Self, FromNativeResourceError> {
         #[cfg(target_os = "windows")]
-        let compatibility = CompatibilityLayer::new(options.device.clone(), options.direct3d);
+        let interop = Interop::new(options.device.clone(), options.direct3d);
 
         #[cfg(any(target_os = "linux", target_os = "macos"))]
-        let compatibility = ();
+        let interop = ();
 
         Ok(Self {
             device: options.device,
@@ -363,7 +363,7 @@ impl Texture2DSource {
             bind_group_layout: None,
             pipeline: None,
             sample: None,
-            compatibility,
+            interop,
         })
     }
 
@@ -459,7 +459,7 @@ impl Texture2DSource {
             if let (Some(layout), Some(sample), Some(pipeline)) =
                 (&self.bind_group_layout, &self.sample, &self.pipeline)
             {
-                let texture = texture.texture(&mut self.compatibility)?;
+                let texture = texture.texture(&mut self.interop)?;
                 Some((
                     pipeline,
                     match sample {

@@ -27,6 +27,8 @@ use mirror_common::win32::{
 #[cfg(target_os = "macos")]
 use mirror_common::macos::{CVPixelBufferRef, PixelBufferRef};
 
+use parking_lot::Mutex;
+
 #[cfg(target_os = "windows")]
 use parking_lot::RwLock;
 
@@ -109,8 +111,6 @@ pub trait AVFrameObserver: Sync + Send {
     /// sent (the network is disconnected), etc.
     fn close(&self) {}
 }
-
-impl AVFrameObserver for () {}
 
 pub trait AVFrameSink: Sync + Send {
     /// Callback occurs when the video frame is updated. The video frame format
@@ -359,7 +359,7 @@ impl<'a> VideoRender<'a> {
         })
     }
 
-    pub fn send(&self, frame: &VideoFrame) -> Result<(), RendererError> {
+    pub fn send(&mut self, frame: &VideoFrame) -> Result<(), RendererError> {
         match frame.sub_format {
             #[cfg(target_os = "windows")]
             VideoSubFormat::D3D11 => {
@@ -529,7 +529,7 @@ impl<'a> VideoRender<'a> {
 /// implemented with Direct3D 11 Graphics, which works fine on some very old
 /// devices.
 pub struct Renderer<'a> {
-    video: VideoRender<'a>, 
+    video: Mutex<VideoRender<'a>>,
     audio: AudioRender,
 }
 
@@ -540,7 +540,7 @@ impl<'a> Renderer<'a> {
         size: Size,
     ) -> Result<Self, RendererError> {
         Ok(Self {
-            video: VideoRender::new(backend, window, size)?,
+            video: Mutex::new(VideoRender::new(backend, window, size)?),
             audio: AudioRender::new()?,
         })
     }
@@ -564,7 +564,7 @@ impl<'a> AVFrameSink for Renderer<'a> {
     /// Renders video frames and can automatically handle rendering of hardware
     /// textures and rendering textures.
     fn video(&self, frame: &VideoFrame) -> bool {
-        if let Err(e) = self.video.send(frame) {
+        if let Err(e) = self.video.lock().send(frame) {
             log::error!("{:?}", e);
 
             return false;

@@ -100,6 +100,7 @@ impl App {
 
     fn create_window(&mut self, event_loop: &ActiveEventLoop) -> Result<()> {
         let mut attr = Window::default_attributes();
+        attr.title = "mirror example".to_string();
         attr.inner_size = Some(winit::dpi::Size::Physical(PhysicalSize::new(
             self.cli.width,
             self.cli.height,

@@ -14,6 +14,7 @@ import {
 } from "mirror-napi";
 import { join } from "node:path";
 import * as fs from "node:fs";
+import { endianness } from "node:os";
 
 const USER_DATA = app.getPath("userData");
 const CONFIG_PATH = join(USER_DATA, "./configure");
@@ -89,17 +90,19 @@ const trayWindow = new BrowserWindow({
 trayWindow.loadFile(join(__dirname, "../view/index.html"));
 
 const baseWindow = new BaseWindow({
-    width: display.size.width,
-    height: display.size.height,
-    resizable: false,
-    movable: false,
-    minimizable: false,
-    maximizable: false,
-    alwaysOnTop: true,
-    fullscreenable: true,
-    show: false,
+    width: 1280,
+    height: 720,
+    // resizable: false,
+    // movable: false,
+    // minimizable: false,
+    // maximizable: false,
+    // alwaysOnTop: false,
+    // fullscreenable: true,
+    // fullscreen: true,
+    // show: false,
     frame: false,
-    autoHideMenuBar: true,
+    // autoHideMenuBar: true,
+    transparent: false,
 });
 
 const icon = nativeImage.createFromPath(join(__dirname, "../../logo.ico"));
@@ -176,6 +179,7 @@ function closeMirror() {
 function createMirror(settings: typeof Config): boolean {
     try {
         const { width, height } = display.size;
+        const hwnd = baseWindow.getNativeWindowHandle();
 
         closeMirror();
 
@@ -186,9 +190,9 @@ function createMirror(settings: typeof Config): boolean {
             mtu: settings.mtu,
             windowHandle: {
                 windows: {
-                    hwnd: baseWindow.getNativeWindowHandle().readBigInt64LE(),
-                    width,
-                    height,
+                    hwnd: endianness() == "LE" ? hwnd.readBigInt64LE() : hwnd.readBigInt64BE(),
+                    width: 1280,
+                    height: 720,
                 },
             },
         });

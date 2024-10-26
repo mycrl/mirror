@@ -1,11 +1,14 @@
 mod window;
 
 use self::window::{
-    EmptyWindow, NativeWindow,
+    EmptyWindow, LinuxNativeWindowHandle, MacosNativeWindowHandle, NativeWindowHandle, Window,
+    WindowsNativeWindowHandle,
 };
 
+use std::sync::Arc;
+
 use mirror::{
-    AudioDescriptor, Capture, GraphicsBackend, Mirror, Receiver, ReceiverDescriptor,
+    AudioDescriptor, Capture, GraphicsBackend, Mirror, Receiver, ReceiverDescriptor, Renderer,
     Sender, SenderDescriptor, Source, SourceType, TransportDescriptor, VideoDecoderType,
     VideoDescriptor, VideoEncoderType,
 };
@@ -44,19 +47,17 @@ pub fn shutdown() -> napi::Result<()> {
 }
 
 #[napi]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Events {
     Closed,
     Initialized,
 }
 
 #[napi]
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub enum MirrorBackend {
     /// Use Direct3D 11.x as a rendering backend, this is not a cross-platform
     /// option and is only available on windows, on some Direct3D 11 only
     /// devices.
-    #[default]
     Direct3D11,
     /// This is a new cross-platform backend, and on windows the latency may be
     /// a bit higher than the Direct3D 11 backend.
@@ -72,6 +73,39 @@ impl Into<GraphicsBackend> for MirrorBackend {
     }
 }
 
+/// There's a BrowserWindow API for this:
+///
+/// ```
+/// win.getNativeWindowHandle()
+/// ```
+///
+/// which return the HWND you can use in any native windows code.
+#[napi(object)]
+#[derive(Clone)]
+pub struct MirrorNativeWindowHandle {
+    pub windows: Option<WindowsNativeWindowHandle>,
+    pub linux: Option<LinuxNativeWindowHandle>,
+    pub macos: Option<MacosNativeWindowHandle>,
+}
+
+impl Into<NativeWindowHandle> for MirrorNativeWindowHandle {
+    fn into(self) -> NativeWindowHandle {
+        if let Some(handle) = self.windows {
+            return NativeWindowHandle::Windows(handle);
+        }
+
+        if let Some(handle) = self.linux {
+            return NativeWindowHandle::Linux(handle);
+        }
+
+        if let Some(handle) = self.macos {
+            return NativeWindowHandle::Macos(handle);
+        }
+
+        panic!("You didn't pass any window handles.")
+    }
+}
+
 #[napi(object)]
 pub struct MirrorServiceDescriptor {
     /// The IP address and port of the server, in this case the service refers
@@ -79,8 +113,10 @@ pub struct MirrorServiceDescriptor {
     pub server: String,
     /// The multicast address used for multicasting, which is an IP address.
     pub multicast: String,
-    /// [Maximum transmission unit](https://en.wikipedia.org/wiki/Maximum_transmission_unit)
+    /// see: https://en.wikipedia.org/wiki/Maximum_transmission_unit
     pub mtu: u32,
+    pub backend: MirrorBackend,
+    pub window_handle: MirrorNativeWindowHandle,
 }
 
 impl TryInto<TransportDescriptor> for MirrorServiceDescriptor {
@@ -307,7 +343,7 @@ impl Into<ReceiverDescriptor> for MirrorReceiverServiceDescriptor {
 #[napi]
 pub struct MirrorService {
     mirror: Option<Mirror>,
-    window: NativeWindow,
+    renderer: Arc<Renderer<'static>>,
 }
 
 #[napi]
@@ -328,11 +364,14 @@ impl MirrorService {
     }
 
     #[napi(constructor)]
-    pub fn new(options: MirrorServiceDescriptor, window: &NativeWindow) -> napi::Result<Self> {
+    pub fn new(options: MirrorServiceDescriptor) -> napi::Result<Self> {
         let func = || {
+            let window: NativeWindowHandle = options.window_handle.clone().into();
+            let size = window.size();
+
             Ok::<_, anyhow::Error>(Self {
+                renderer: Arc::new(Renderer::new(options.backend.into(), window, size)?),
                 mirror: Some(Mirror::new(options.try_into()?)?),
-                window: window.clone(),
             })
         };
 
@@ -340,7 +379,7 @@ impl MirrorService {
     }
 
     #[napi(
-        ts_args_type = "id: number, options: MirrorSenderServiceDescriptor, callback: (event: Events) => void"
+        ts_args_type = "id: number, options: MirrorSenderServiceDescriptor, callback: (Events) => void"
     )]
     pub fn create_sender(
         &self,
@@ -359,7 +398,7 @@ impl MirrorService {
                         EmptyWindow(
                             callback
                                 .build_threadsafe_function::<Events>()
-                                .build_callback(|ctx| Ok(ctx.value))?,
+                                .build_callback(|it| Ok(it.value))?,
                         ),
                     )?,
             )))
@@ -369,7 +408,7 @@ impl MirrorService {
     }
 
     #[napi(
-        ts_args_type = "id: number, options: MirrorReceiverServiceDescriptor, callback: (event: Events) => void"
+        ts_args_type = "id: number, options: MirrorReceiverServiceDescriptor, callback: (Events) => void"
     )]
     pub fn create_receiver(
         &self,
@@ -385,7 +424,12 @@ impl MirrorService {
                     .create_receiver(
                         id,
                         options.into(),
-                        self.window.clone(),
+                        Window {
+                            renderer: self.renderer.clone(),
+                            callback: callback
+                                .build_threadsafe_function::<Events>()
+                                .build_callback(|it| Ok(it.value))?,
+                        },
                     )?,
             )))
         };
@@ -430,7 +474,7 @@ impl MirrorSenderService {
 }
 
 #[napi]
-pub struct MirrorReceiverService(Option<Receiver<NativeWindow>>);
+pub struct MirrorReceiverService(Option<Receiver<Window>>);
 
 #[napi]
 impl MirrorReceiverService {
