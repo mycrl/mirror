@@ -20,27 +20,27 @@ The project is cross-platform, but the priority platforms supported are Windows 
 
 ## Documentation
 
-- Rust: There are still some obstacles to releasing to crates.io, so for rust the documentation is being updated.
-- C/C++: This project also compiles dynamic link libraries, so for C/C++ projects, use this header file [mirror.h](./ffi/include/mirror.h)
+-   Rust: There are still some obstacles to releasing to crates.io, so for rust the documentation is being updated.
+-   C/C++: This project also compiles dynamic link libraries, so for C/C++ projects, use this header file [mirror.h](./ffi/include/mirror.h)
 
 ## Examples
 
 > Automated builds can be downloaded from the github release page.
 
-- [Android](./examples/android) - this is an android studio project.
-- [C++](./examples/cpp) - the build product is `example-cpp`.
-- [Rust](./examples/rust) - the build product is `example`.
+-   [Android](./examples/android) - this is an android studio project.
+-   [C++](./examples/cpp) - the build product is `example-cpp`.
+-   [Rust](./examples/rust) - the build product is `example`.
 
 ## Build Instructions
 
 #### Requirements
 
-- [Git](https://git-scm.com/downloads)
-- [Rust](https://www.rust-lang.org/tools/install): Rust stable toolchain.
-- C++20 or above compliant compiler. (G++/Clang/MSVC)
-- [CMake](https://cmake.org/download/): CMake 3.16 or above as a build system.
-- [Node.js](https://nodejs.org/en/download): Node.js 16 or above as a auto build script.
-- [Python3](https://www.python.org/downloads/): Python3 is optional and required for Android Studio projects.
+-   [Git](https://git-scm.com/downloads)
+-   [Rust](https://www.rust-lang.org/tools/install): Rust stable toolchain.
+-   C++20 or above compliant compiler. (G++/Clang/MSVC)
+-   [CMake](https://cmake.org/download/): CMake 3.16 or above as a build system.
+-   [Node.js](https://nodejs.org/en/download): Node.js 16 or above as a auto build script.
+-   [Cargo NDK](https://github.com/willir/cargo-ndk-android-gradle): Cargo NDK is optional and required for Android Studio projects.
 
 ##### Linux (Ubuntu/Debian)
 
