@@ -88,7 +88,8 @@ const trayWindow = new BrowserWindow({
     },
 });
 
-trayWindow.loadFile(join(__dirname, "../view/index.html"));
+// trayWindow.loadFile(join(__dirname, "../view/index.html"));
+trayWindow.loadURL("http://localhost:3000");
 
 const baseWindow = new BaseWindow({
     width: 1280,
@@ -100,7 +101,7 @@ const baseWindow = new BaseWindow({
     // alwaysOnTop: false,
     // fullscreenable: true,
     // fullscreen: true,
-    // show: false,
+    show: false,
     frame: false,
     // autoHideMenuBar: true,
     transparent: false,
