@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
     faDesktop,
@@ -8,7 +8,7 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import styles from "@/styles/devices.module.css";
 
-export const MirrorSourceType = {
+export const SourceType: { [key in MirrorSourceType]: number } = {
     /**
      * Camera or video capture card and other devices (and support virtual
      * camera)
@@ -23,45 +23,70 @@ export const MirrorSourceType = {
     Audio: 2,
 };
 
-const MirrorSourceTypeIcon: { [key in keyof typeof MirrorSourceType]: IconDefinition } = {
+const SourceTypeIcon: { [key in MirrorSourceType]: IconDefinition } = {
     Camera: faVideo,
     Screen: faDesktop,
     Audio: faMicrophone,
 };
 
-export default function Devices() {
-    const [kind, setKind] = useState(MirrorSourceType.Screen);
+export interface DevicesProps {
+    onChange?: (type: MirrorSourceType, source: MirrorSourceDescriptor) => void;
+}
+
+export default function Devices({ onChange }: DevicesProps) {
+    const [kind, setKind] = useState(SourceType.Screen);
+    const [devices, setDevices] = useState<MirrorSourceDescriptor[]>([]);
+
+    const selectSourceType = async (type: MirrorSourceType) => {
+        setDevices(await electronAPI.getSources(type));
+        setKind(type);
+    };
+
+    useEffect(() => {
+        return () => {
+            selectSourceType(kind).then(() => {
+                if (onChange && devices.length > 0) {
+                    onChange(kind, devices[0]);
+                }
+            });
+        };
+    }, []);
 
     return (
         <>
             <div id={styles.devices}>
                 <div id={styles.types}>
-                    {Object.keys(MirrorSourceType).map((item) => {
-                        const key = item as keyof typeof MirrorSourceType;
-                        const value = MirrorSourceType[key];
+                    {Object.keys(SourceType).map((key) => {
                         return (
-                            <div className={styles.type}>
+                            <div className={styles.type} key={key}>
                                 <FontAwesomeIcon
                                     fixedWidth
-                                    style={{ fontSize: "16px" }}
-                                    icon={MirrorSourceTypeIcon[key]}
-                                    onClick={() => setKind(value)}
+                                    icon={SourceTypeIcon[key]}
+                                    onClick={() => selectSourceType(SourceType[key])}
                                 />
-                                <p id={kind == value ? styles.selected : undefined}>·</p>
+                                <p id={kind == SourceType[key] ? styles.selected : undefined}>·</p>
                             </div>
                         );
                     })}
                 </div>
                 <div id={styles.values}>
-                    {Object.keys(MirrorSourceType).map((item) => {
-                        const key = item as keyof typeof MirrorSourceType;
-                        const value = MirrorSourceType[key];
+                    {Object.keys(SourceType).map((key) => {
                         return (
                             <select
+                                key={key}
                                 style={{
-                                    display: kind == value ? undefined : "none",
+                                    display: kind == SourceType[key] ? undefined : "none",
                                 }}
-                            ></select>
+                                onChange={({ target }) => {
+                                    onChange && onChange(kind, devices[Number(target.value)]);
+                                }}
+                            >
+                                {devices.map((it, index) => (
+                                    <option key={index} value={index}>
+                                        {it.name}
+                                    </option>
+                                ))}
+                            </select>
                         );
                     })}
                 </div>

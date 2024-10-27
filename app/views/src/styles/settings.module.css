@@ -1,0 +1,71 @@
+#settings {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    transition: 0.5s;
+    z-index: 3;
+}
+
+#arrow {
+    text-align: center;
+    padding: 10px 0 10px 0;
+}
+
+#arrow svg {
+    width: 15px;
+    cursor: pointer;
+    margin-top: 3px;
+    color: #555;
+}
+
+#switch {
+    text-align: center;
+    padding: 10px 0 10px 0;
+}
+
+#switch svg {
+    font-size: 20px;
+    cursor: pointer;
+    margin-top: 3px;
+    color: #ddd;
+}
+
+#box {
+    transition: 0.5s;
+    height: 100%;
+}
+
+#items {
+    padding: 15px;
+}
+
+.item {
+    display: flex;
+}
+
+.key {
+    flex: 1;
+    margin-right: 5px;
+    line-height: 30px;
+}
+
+.key span {
+    color: #939393;
+}
+
+.value {
+    flex: 2;
+    display: flex;
+}
+
+.value > * {
+    flex: auto;
+    line-height: 30px;
+    background-color: rgba(0, 0, 0, 0);
+}
+
+.value input {
+    width: 100%;
+    border-bottom: 1px solid #eee;
+    outline: none;
+}
