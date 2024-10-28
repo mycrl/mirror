@@ -7,26 +7,12 @@ import {
     IconDefinition,
 } from "@fortawesome/free-solid-svg-icons";
 import styles from "@/styles/devices.module.css";
-
-export const SourceType: { [key in MirrorSourceType]: number } = {
-    /**
-     * Camera or video capture card and other devices (and support virtual
-     * camera)
-     */
-    Camera: 0,
-    /**
-     * The desktop or monitor corresponds to the desktop in the operating
-     * system.
-     */
-    Screen: 1,
-    /** Audio input and output devices. */
-    Audio: 2,
-};
+import { MirrorSourceDescriptor, MirrorSourceType } from "mirror-napi";
 
 const SourceTypeIcon: { [key in MirrorSourceType]: IconDefinition } = {
-    Camera: faVideo,
-    Screen: faDesktop,
-    Audio: faMicrophone,
+    [MirrorSourceType.Camera]: faVideo,
+    [MirrorSourceType.Screen]: faDesktop,
+    [MirrorSourceType.Audio]: faMicrophone,
 };
 
 export interface DevicesProps {
@@ -34,7 +20,7 @@ export interface DevicesProps {
 }
 
 export default function Devices({ onChange }: DevicesProps) {
-    const [kind, setKind] = useState(SourceType.Screen);
+    const [kind, setKind] = useState(MirrorSourceType.Screen);
     const [devices, setDevices] = useState<MirrorSourceDescriptor[]>([]);
 
     const selectSourceType = async (type: MirrorSourceType) => {
@@ -56,39 +42,43 @@ export default function Devices({ onChange }: DevicesProps) {
         <>
             <div id={styles.devices}>
                 <div id={styles.types}>
-                    {Object.keys(SourceType).map((key) => {
-                        return (
-                            <div className={styles.type} key={key}>
-                                <FontAwesomeIcon
-                                    fixedWidth
-                                    icon={SourceTypeIcon[key]}
-                                    onClick={() => selectSourceType(SourceType[key])}
-                                />
-                                <p id={kind == SourceType[key] ? styles.selected : undefined}>·</p>
-                            </div>
-                        );
-                    })}
+                    {Object.values(MirrorSourceType)
+                        .filter((it) => typeof it != "string")
+                        .map((type) => {
+                            return (
+                                <div className={styles.type} key={type}>
+                                    <FontAwesomeIcon
+                                        fixedWidth
+                                        icon={SourceTypeIcon[type]}
+                                        onClick={() => selectSourceType(type)}
+                                    />
+                                    <p id={kind == type ? styles.selected : undefined}>·</p>
+                                </div>
+                            );
+                        })}
                 </div>
                 <div id={styles.values}>
-                    {Object.keys(SourceType).map((key) => {
-                        return (
-                            <select
-                                key={key}
-                                style={{
-                                    display: kind == SourceType[key] ? undefined : "none",
-                                }}
-                                onChange={({ target }) => {
-                                    onChange && onChange(kind, devices[Number(target.value)]);
-                                }}
-                            >
-                                {devices.map((it, index) => (
-                                    <option key={index} value={index}>
-                                        {it.name}
-                                    </option>
-                                ))}
-                            </select>
-                        );
-                    })}
+                    {Object.keys(MirrorSourceType)
+                        .filter((it) => typeof it != "string")
+                        .map((type) => {
+                            return (
+                                <select
+                                    key={type}
+                                    style={{
+                                        display: kind == type ? undefined : "none",
+                                    }}
+                                    onChange={({ target }) => {
+                                        onChange && onChange(kind, devices[Number(target.value)]);
+                                    }}
+                                >
+                                    {devices.map((it, index) => (
+                                        <option key={index} value={index}>
+                                            {it.name}
+                                        </option>
+                                    ))}
+                                </select>
+                            );
+                        })}
                 </div>
             </div>
         </>

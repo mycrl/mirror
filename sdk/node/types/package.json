@@ -1,0 +1,9 @@
+{
+    "name": "@types/mirror-napi",
+    "version": "0.1.0",
+    "types": "../napi/index.d.ts",
+    "license": "MIT",
+    "engines": {
+        "node": ">= 10"
+    }
+}

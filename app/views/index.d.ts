@@ -39,11 +39,4 @@ declare global {
     export interface Window {
         electronAPI: electronAPI;
     }
-
-    export {
-        MirrorSourceDescriptor,
-        MirrorSourceType,
-        MirrorVideoDecoderType,
-        MirrorVideoEncoderType,
-    };
 }

@@ -22,6 +22,6 @@
     "workspaces": [
         "app",
         "app/views",
-        "sdk/napi"
+        "sdk/node/napi"
     ]
 }

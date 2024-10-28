@@ -2,30 +2,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCaretDown, faGear } from "@fortawesome/free-solid-svg-icons";
 import styles from "@/styles/settings.module.css";
 import { useEffect, useState } from "react";
-
-export const VideoDecoderType: { [key in MirrorVideoDecoderType]: number } = {
-    /** h264 (software) */
-    H264: 0,
-    /** d3d11va */
-    D3D11: 1,
-    /** h264_qsv */
-    Qsv: 2,
-    /** h264_cvuid */
-    Cuda: 3,
-    /** video tool box */
-    VideoToolBox: 4,
-};
-
-export const VideoEncoderType: { [key in MirrorVideoEncoderType]: number } = {
-    /** libx264 (software) */
-    X264: 0,
-    /** h264_qsv */
-    Qsv: 1,
-    /** h264_nvenc */
-    Cuda: 2,
-    /** video tool box */
-    VideoToolBox: 3,
-};
+import { MirrorVideoDecoderType, MirrorVideoEncoderType } from "mirror-napi";
 
 const Items: {
     [key: string]: {
@@ -55,7 +32,19 @@ const Items: {
         {
             key: "encoder",
             element: "select",
-            options: VideoEncoderType,
+            options: Object.values(MirrorVideoEncoderType)
+                .filter((it) => typeof it == "string")
+                .reduce(
+                    (value, it) =>
+                        Object.assign(value, {
+                            [it]: (
+                                MirrorVideoEncoderType as unknown as {
+                                    [key: string]: MirrorVideoEncoderType;
+                                }
+                            )[it],
+                        }),
+                    {}
+                ),
             into: Number,
         },
     ],
@@ -63,7 +52,19 @@ const Items: {
         {
             key: "decoder",
             element: "select",
-            options: VideoDecoderType,
+            options: Object.values(MirrorVideoDecoderType)
+                .filter((it) => typeof it == "string")
+                .reduce(
+                    (value, it) =>
+                        Object.assign(value, {
+                            [it]: (
+                                MirrorVideoEncoderType as unknown as {
+                                    [key: string]: MirrorVideoEncoderType;
+                                }
+                            )[it],
+                        }),
+                    {}
+                ),
             into: Number,
         },
     ],
@@ -131,8 +132,8 @@ export default function Settings({ state, onClick }: SettingsProps) {
         server: "127.0.0.1:8080",
         multicast: "239.0.0.1",
         mtu: 1500,
-        decoder: VideoDecoderType.H264,
-        encoder: VideoEncoderType.X264,
+        decoder: MirrorVideoDecoderType.H264,
+        encoder: MirrorVideoEncoderType.X264,
         frameRate: 24,
         width: 1280,
         height: 720,

@@ -18,7 +18,7 @@
     },
     "homepage": "https://github.com/mycrl/mirror#readme",
     "dependencies": {
-        "mirror-napi": "file:../sdk/napi"
+        "mirror-napi": "file:../../sdk/node/napi"
     },
     "devDependencies": {
         "7zip-bin": "5.2.0",
@@ -32,7 +32,7 @@
         "portable": {},
         "extraFiles": [
             {
-                "from": "../sdk/napi",
+                "from": "../sdk/node/napi",
                 "to": "./",
                 "filter": "*.node"
             }

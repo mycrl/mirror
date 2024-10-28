@@ -14,11 +14,11 @@
         "node": ">= 10"
     },
     "scripts": {
-        "build:debug": "napi build --platform",
-        "artifacts": "napi artifacts",
-        "prepare": "napi build --platform --release",
+        "build:debug": "napi build --platform && node ./build.js",
+        "prepare": "napi build --platform --release && node ./build.js",
         "prepublishOnly": "napi prepublish -t npm",
         "universal": "napi universal",
+        "artifacts": "napi artifacts",
         "version": "napi version"
     },
     "optionalDependencies": {
