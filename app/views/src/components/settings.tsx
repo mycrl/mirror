@@ -1,6 +1,7 @@
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faCaretDown, faCaretUp } from "@fortawesome/free-solid-svg-icons";
+import { faCaretDown, faGear } from "@fortawesome/free-solid-svg-icons";
 import styles from "@/styles/settings.module.css";
+import { useEffect, useState } from "react";
 
 export const VideoDecoderType: { [key in MirrorVideoDecoderType]: number } = {
     /** h264 (software) */
@@ -28,10 +29,11 @@ export const VideoEncoderType: { [key in MirrorVideoEncoderType]: number } = {
 
 const Items: {
     [key: string]: {
-        key: string;
+        key: keyof Settings;
         type?: "number" | "text";
         element: "input" | "select";
         options?: { [key: string]: number };
+        into?: (value: any) => any;
     }[];
 } = {
     Channel: [
@@ -39,6 +41,7 @@ const Items: {
             key: "channel",
             type: "number",
             element: "input",
+            into: Number,
         },
     ],
     Server: [
@@ -53,6 +56,7 @@ const Items: {
             key: "encoder",
             element: "select",
             options: VideoEncoderType,
+            into: Number,
         },
     ],
     Decoder: [
@@ -60,6 +64,7 @@ const Items: {
             key: "decoder",
             element: "select",
             options: VideoDecoderType,
+            into: Number,
         },
     ],
     Size: [
@@ -67,11 +72,13 @@ const Items: {
             key: "width",
             element: "input",
             type: "number",
+            into: Number,
         },
         {
             key: "height",
             element: "input",
             type: "number",
+            into: Number,
         },
     ],
     FPS: [
@@ -79,6 +86,7 @@ const Items: {
             key: "frameRate",
             element: "input",
             type: "number",
+            into: Number,
         },
     ],
     BitRate: [
@@ -86,6 +94,7 @@ const Items: {
             key: "bitRate",
             element: "input",
             type: "number",
+            into: Number,
         },
     ],
     Multicast: [
@@ -100,6 +109,7 @@ const Items: {
             key: "mtu",
             element: "input",
             type: "number",
+            into: Number,
         },
     ],
 };
@@ -111,12 +121,47 @@ export enum SettingsState {
 }
 
 export interface SettingsProps {
-    settings?: Settings;
     state: SettingsState;
-    onClick?: () => void;
+    onClick?: (settings: Settings) => void;
 }
 
-export default function Settings({ state, settings, onClick }: SettingsProps) {
+export default function Settings({ state, onClick }: SettingsProps) {
+    const [settings, setSettings] = useState<Settings>({
+        channel: 0,
+        server: "127.0.0.1:8080",
+        multicast: "239.0.0.1",
+        mtu: 1500,
+        decoder: VideoDecoderType.H264,
+        encoder: VideoEncoderType.X264,
+        frameRate: 24,
+        width: 1280,
+        height: 720,
+        bitRate: 500 * 1024 * 8,
+        keyFrameInterval: 20,
+    });
+
+    const getSettings = async () => {
+        setSettings(await electronAPI.getSettings());
+    };
+
+    const onChanggeSettings = <K extends keyof Settings>(key: K, value: Settings[K]) => {
+        setSettings({
+            ...settings,
+            [key]: value,
+        });
+    };
+
+    const submitSettings = async () => {
+        await electronAPI.setSettings({ ...settings });
+        onClick && onClick(settings);
+    };
+
+    useEffect(() => {
+        return () => {
+            getSettings();
+        };
+    }, []);
+
     return (
         <>
             <div
@@ -128,24 +173,26 @@ export default function Settings({ state, settings, onClick }: SettingsProps) {
                             : state == SettingsState.Min
                             ? "360px"
                             : 0,
-                    backgroundColor:
-                        state == SettingsState.Max ? "rgba(0, 0, 0, 1)" : "rgba(0, 0, 0, 0)",
+                    backgroundColor: state == SettingsState.Max ? "#fff" : "rgba(0, 0, 0, 0)",
                 }}
             >
                 <div id={styles.box}>
                     <div id={styles.switch}>
                         <FontAwesomeIcon
                             icon={faCaretDown}
-                            onClick={onClick}
+                            onClick={submitSettings}
                             style={{
                                 display: state == SettingsState.Max ? undefined : "none",
+                                color: "#000",
                             }}
                         />
                         <FontAwesomeIcon
-                            icon={faCaretUp}
-                            onClick={onClick}
+                            icon={faGear}
+                            onClick={() => onClick && onClick(settings)}
                             style={{
                                 display: state == SettingsState.Min ? undefined : "none",
+                                color: "#fff",
+                                fontSize: "15px",
                             }}
                         />
                     </div>
@@ -162,18 +209,52 @@ export default function Settings({ state, settings, onClick }: SettingsProps) {
                                     <div className={styles.value}>
                                         {item.map((value) => {
                                             if (value.element == "input") {
-                                                return <input type={value.type} />;
+                                                return (
+                                                    <input
+                                                        key={value.key}
+                                                        type={value.type}
+                                                        value={
+                                                            settings[value.key] != null
+                                                                ? settings[value.key]
+                                                                : ""
+                                                        }
+                                                        onChange={({ target }) =>
+                                                            onChanggeSettings(
+                                                                value.key,
+                                                                value.into
+                                                                    ? value.into(target.value)
+                                                                    : target.value
+                                                            )
+                                                        }
+                                                    />
+                                                );
                                             } else if (value.element == "select") {
                                                 return (
-                                                    <select>
+                                                    <select
+                                                        key={value.key}
+                                                        value={
+                                                            settings[value.key] != null
+                                                                ? settings[value.key]
+                                                                : ""
+                                                        }
+                                                        onChange={({ target }) =>
+                                                            onChanggeSettings(
+                                                                value.key,
+                                                                value.into
+                                                                    ? value.into(target.value)
+                                                                    : target.value
+                                                            )
+                                                        }
+                                                    >
                                                         {Object.keys(value.options || {}).map(
                                                             (key) => (
                                                                 <option
+                                                                    key={key}
                                                                     value={
                                                                         (value.options || {})[key]
                                                                     }
                                                                 >
-                                                                    {key}
+                                                                    {key.toUpperCase()}
                                                                 </option>
                                                             )
                                                         )}

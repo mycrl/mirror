@@ -27,7 +27,7 @@ declare global {
 
     export interface electronAPI {
         getSources: (kind: MirrorSourceType) => Promise<MirrorSourceDescriptor[]>;
-        setSettings: (settings: any) => Promise<void>;
+        setSettings: (settings: Settings) => Promise<void>;
         getSettings: () => Promise<Settings>;
         createSender: (device: DevicesDescriptor) => Promise<void>;
         closeSender: () => Promise<void>;
