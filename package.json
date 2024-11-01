@@ -22,6 +22,7 @@
     "workspaces": [
         "app",
         "app/views",
-        "sdk/node/napi"
+        "sdk/node/napi",
+        "sdk/node/types"
     ]
 }

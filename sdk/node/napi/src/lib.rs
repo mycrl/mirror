@@ -113,7 +113,7 @@ pub struct MirrorServiceDescriptor {
     pub server: String,
     /// The multicast address used for multicasting, which is an IP address.
     pub multicast: String,
-    /// see: https://en.wikipedia.org/wiki/Maximum_transmission_unit
+    /// see: [Maximum_transmission_unit](https://en.wikipedia.org/wiki/Maximum_transmission_unit)
     pub mtu: u32,
     pub backend: MirrorBackend,
     pub window_handle: MirrorNativeWindowHandle,
