@@ -8,7 +8,7 @@ log = "0.4.20"
 thiserror = "1.0.63"
 mirror-common = { path = "../common", version = "0.1" }
 
-[target.'cfg(target_os = "window")'.dependencies.mirror-ffmpeg-sys]
+[target.'cfg(target_os = "windows")'.dependencies.mirror-ffmpeg-sys]
 version = "0.1"
 features = [
     "avcodec",
@@ -17,7 +17,7 @@ features = [
     "qsv"
 ]
 
-[target.'cfg(not(target_os = "window"))'.dependencies.mirror-ffmpeg-sys]
+[target.'cfg(not(target_os = "windows"))'.dependencies.mirror-ffmpeg-sys]
 version = "0.1"
 features = [
     "avcodec",
