@@ -4,6 +4,8 @@ version = "0.1.0"
 edition = "2021"
 description = "A cross-platform screen casting library implemented by Rust."
 license = "LGPL-2.1-only"
+readme = "../README.md"
+repository = "https://github.com/mycrl/mirror"
 
 [dependencies]
 log = "0.4.20"
