@@ -8,7 +8,7 @@ Cargo.lock
 /build/
 /doc
 /out
-*/third_party/
+third_party
 /logs/
-/node_modules
+node_modules
 package-lock.json

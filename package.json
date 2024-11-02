@@ -18,5 +18,8 @@
     "bugs": {
         "url": "https://github.com/mycrl/mirror/issues"
     },
-    "homepage": "https://github.com/mycrl/mirror#readme"
+    "homepage": "https://github.com/mycrl/mirror#readme",
+    "workspaces": [
+        "sdk/node"
+    ]
 }

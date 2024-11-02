@@ -21,15 +21,15 @@ The project is cross-platform, but the priority platforms supported are Windows 
 ## Documentation
 
 -   Rust: There are still some obstacles to releasing to crates.io, so for rust the documentation is being updated.
--   C/C++: This project also compiles dynamic link libraries, so for C/C++ projects, use this header file [ffi/include/mirror.h](./ffi/include/mirror.h)
+-   C/C++: This project also compiles dynamic link libraries, so for C/C++ projects, use this header file [mirror.h](./ffi/include/mirror.h)
 
 ## Examples
 
 > Automated builds can be downloaded from the github release page.
 
 -   [Android](./examples/android) - this is an android studio project.
--   [C++](./examples/cpp) - the build product is `build/bin/example-cpp`.
--   [Rust](./examples/rust) - the build product is `build/bin/example`.
+-   [C++](./examples/cpp) - the build product is `example-cpp`.
+-   [Rust](./examples/rust) - the build product is `example`.
 
 ## Build Instructions
 
@@ -40,7 +40,7 @@ The project is cross-platform, but the priority platforms supported are Windows 
 -   C++20 or above compliant compiler. (G++/Clang/MSVC)
 -   [CMake](https://cmake.org/download/): CMake 3.16 or above as a build system.
 -   [Node.js](https://nodejs.org/en/download): Node.js 16 or above as a auto build script.
--   [Python3](https://www.python.org/downloads/): Python3 is optional and required for Android Studio projects.
+-   [Cargo NDK](https://github.com/willir/cargo-ndk-android-gradle): Cargo NDK is optional and required for Android Studio projects.
 
 ##### Linux (Ubuntu/Debian)
 
@@ -48,7 +48,7 @@ The project is cross-platform, but the priority platforms supported are Windows 
 
 ```sh
 sudo apt-get update
-sudo apt-get install tclsh pkg-config cmake libssl-dev build-essential libavcodec-dev libavdevice-dev libavformat-dev libasound2-dev libsdl2-dev libmfx-dev libva-dev v4l-utils
+sudo apt-get install tclsh pkg-config cmake libssl-dev build-essential libasound2-dev libsdl2-dev libmfx-dev libva-dev v4l-utils
 ```
 
 ---
@@ -62,7 +62,7 @@ npm run build:release
 ```
 
 The Release version is compiled by default. If you need the Debug version, just run `npm run build:debug`.  
-For android, there is no need to manually call compilation. You can directly use Android Studio to open [./examples/android](./examples/android).
+For android, there is no need to manually call compilation. You can directly use Android Studio to open [android](./examples/android).
 
 ## License
 

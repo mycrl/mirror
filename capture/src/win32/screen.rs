@@ -20,14 +20,15 @@ use windows::{
     core::Interface,
     Win32::Graphics::{
         Direct3D11::{
-            ID3D11Texture2D, D3D11_RESOURCE_MISC_SHARED, D3D11_TEXTURE2D_DESC, D3D11_USAGE_DEFAULT,
+            ID3D11DeviceContext, ID3D11Texture2D, D3D11_RESOURCE_MISC_SHARED, D3D11_TEXTURE2D_DESC,
+            D3D11_USAGE_DEFAULT,
         },
         Dxgi::Common::{DXGI_FORMAT_NV12, DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_SAMPLE_DESC},
     },
 };
 
 use windows_capture::{
-    capture::{CaptureControl, GraphicsCaptureApiHandler, RawDirect3DDevice},
+    capture::{CaptureControl, Context, GraphicsCaptureApiHandler},
     frame::Frame,
     graphics_capture_api::InternalCaptureControl,
     monitor::Monitor,
@@ -59,15 +60,21 @@ unsafe impl Send for Surface {}
 
 struct WindowsCapture {
     texture: ID3D11Texture2D,
-    raw_device: RawDirect3DDevice,
+    device_context: ID3D11DeviceContext,
     status: Arc<AtomicBool>,
 }
 
 impl GraphicsCaptureApiHandler for WindowsCapture {
-    type Flags = Context;
+    type Flags = CaptureContext;
     type Error = ScreenCaptureError;
 
-    fn new(raw_device: RawDirect3DDevice, mut ctx: Self::Flags) -> Result<Self, Self::Error> {
+    fn new(
+        Context {
+            mut flags,
+            device,
+            device_context,
+        }: Context<Self::Flags>,
+    ) -> Result<Self, Self::Error> {
         let status: Arc<AtomicBool> = Arc::new(AtomicBool::new(true));
 
         // Because windows-capture and this library implementation use different devices
@@ -79,8 +86,8 @@ impl GraphicsCaptureApiHandler for WindowsCapture {
         // from this intermediate texture.
         let (texture, surface) = {
             let desc = D3D11_TEXTURE2D_DESC {
-                Width: ctx.source.width()?,
-                Height: ctx.source.height()?,
+                Width: flags.source.width()?,
+                Height: flags.source.height()?,
                 MipLevels: 1,
                 ArraySize: 1,
                 Format: DXGI_FORMAT_R8G8B8A8_UNORM,
@@ -96,15 +103,13 @@ impl GraphicsCaptureApiHandler for WindowsCapture {
 
             let mut tex = None;
             unsafe {
-                raw_device
-                    .device
-                    .CreateTexture2D(&desc, None, Some(&mut tex))?;
+                device.CreateTexture2D(&desc, None, Some(&mut tex))?;
             }
 
             let texture = tex.unwrap();
 
             // Use as input to VideoResampler by sharing resources across devices.
-            let surface = ctx
+            let surface = flags
                 .options
                 .direct3d
                 .open_shared_texture(texture.get_shared()?)?;
@@ -113,10 +118,10 @@ impl GraphicsCaptureApiHandler for WindowsCapture {
         };
 
         let mut frame = VideoFrame::default();
-        frame.width = ctx.options.size.width;
-        frame.height = ctx.options.size.height;
+        frame.width = flags.options.size.width;
+        frame.height = flags.options.size.height;
         frame.format = VideoFormat::NV12;
-        frame.sub_format = if ctx.options.hardware {
+        frame.sub_format = if flags.options.hardware {
             VideoSubFormat::D3D11
         } else {
             VideoSubFormat::SW
@@ -124,19 +129,19 @@ impl GraphicsCaptureApiHandler for WindowsCapture {
 
         // Convert texture formats and scale sizes.
         let mut transform = VideoResampler::new(VideoResamplerDescriptor {
-            direct3d: ctx.options.direct3d,
+            direct3d: flags.options.direct3d,
             input: Resource::Default(
                 DXGI_FORMAT_R8G8B8A8_UNORM,
                 Size {
-                    width: ctx.source.width()?,
-                    height: ctx.source.height()?,
+                    width: flags.source.width()?,
+                    height: flags.source.height()?,
                 },
             ),
             output: Resource::Default(
                 DXGI_FORMAT_NV12,
                 Size {
-                    width: ctx.options.size.width,
-                    height: ctx.options.size.height,
+                    width: flags.options.size.width,
+                    height: flags.options.size.height,
                 },
             ),
         })?;
@@ -156,7 +161,7 @@ impl GraphicsCaptureApiHandler for WindowsCapture {
                             frame.data[0] = transform.get_output().as_raw();
                             frame.data[1] = 0 as *const _;
 
-                            if !ctx.arrived.sink(&frame) {
+                            if !flags.arrived.sink(&frame) {
                                 break;
                             }
                         } else {
@@ -171,12 +176,12 @@ impl GraphicsCaptureApiHandler for WindowsCapture {
                             frame.linesize[0] = texture.stride();
                             frame.linesize[1] = texture.stride();
 
-                            if !ctx.arrived.sink(&frame) {
+                            if !flags.arrived.sink(&frame) {
                                 break;
                             }
                         }
 
-                        thread::sleep(Duration::from_millis(1000 / ctx.options.fps as u64));
+                        thread::sleep(Duration::from_millis(1000 / flags.options.fps as u64));
                     }
 
                     Ok::<_, ScreenCaptureError>(())
@@ -198,7 +203,7 @@ impl GraphicsCaptureApiHandler for WindowsCapture {
             })?;
 
         Ok(Self {
-            raw_device,
+            device_context,
             status,
             texture,
         })
@@ -212,8 +217,7 @@ impl GraphicsCaptureApiHandler for WindowsCapture {
         if self.status.get() {
             // Updates the texture in the frame to the middle texture.
             unsafe {
-                self.raw_device
-                    .context
+                self.device_context
                     .CopyResource(&self.texture, frame.as_raw_texture());
             }
         } else {
@@ -231,7 +235,7 @@ impl GraphicsCaptureApiHandler for WindowsCapture {
     }
 }
 
-struct Context {
+struct CaptureContext {
     arrived: Box<dyn FrameArrived<Frame = VideoFrame>>,
     options: VideoCaptureSourceDescription,
     source: Monitor,
@@ -281,7 +285,7 @@ impl CaptureHandler for ScreenCapture {
                 CursorCaptureSettings::WithoutCursor,
                 DrawBorderSettings::Default,
                 ColorFormat::Rgba8,
-                Context {
+                CaptureContext {
                     arrived: Box::new(arrived),
                     options,
                     source,

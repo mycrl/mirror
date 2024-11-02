@@ -1,4 +1,4 @@
-mod helper;
+mod interop;
 mod texture;
 mod vertex;
 
@@ -317,16 +317,17 @@ pub mod dx11 {
                     _ => unimplemented!("not supports texture format"),
                 };
 
-                self.video_processor = Some(VideoResampler::new(VideoResamplerDescriptor {
-                    direct3d: self.direct3d.clone(),
-                    input: Resource::Default(format, size),
-                    output: Resource::Texture(unsafe {
-                        self.swap_chain.GetBuffer::<ID3D11Texture2D>(0)?
-                    }),
-                })?);
+                self.video_processor
+                    .replace(VideoResampler::new(VideoResamplerDescriptor {
+                        direct3d: self.direct3d.clone(),
+                        input: Resource::Default(format, size),
+                        output: Resource::Texture(unsafe {
+                            self.swap_chain.GetBuffer::<ID3D11Texture2D>(0)?
+                        }),
+                    })?);
             }
 
-            if let Some(processor) = &mut self.video_processor {
+            if let Some(processor) = self.video_processor.as_mut() {
                 let texture = match texture {
                     Texture::Rgba(texture) | Texture::Nv12(texture) => texture,
                     _ => unimplemented!("not supports texture format"),

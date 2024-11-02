@@ -1,7 +1,7 @@
 use thiserror::Error;
 
 #[derive(Debug, Error)]
-pub enum CompatibilityLayerError {
+pub enum InteropError {
     #[cfg(target_os = "windows")]
     #[error(transparent)]
     DxError(#[from] mirror_common::win32::windows::core::Error),
@@ -21,16 +21,13 @@ pub enum CompatibilityLayerError {
 pub mod win32 {
     use std::sync::Arc;
 
-    use super::CompatibilityLayerError;
+    use super::InteropError;
 
     use mirror_common::win32::{
         windows::Win32::Graphics::{
-            Direct3D11::{
-                ID3D11Texture2D, D3D11_RESOURCE_MISC_SHARED, D3D11_TEXTURE2D_DESC,
-                D3D11_USAGE_DEFAULT,
-            },
+            Direct3D11::{ID3D11Texture2D, D3D11_RESOURCE_MISC_SHARED, D3D11_USAGE_DEFAULT},
             Direct3D12::ID3D12Resource,
-            Dxgi::Common::{DXGI_FORMAT_NV12, DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_SAMPLE_DESC},
+            Dxgi::Common::{DXGI_FORMAT_NV12, DXGI_FORMAT_R8G8B8A8_UNORM},
         },
         Direct3DDevice, EasyTexture,
     };
@@ -40,17 +37,17 @@ pub mod win32 {
         TextureFormat, TextureUsages,
     };
 
-    pub struct Dx11OnWgpuCompatibilityLayer {
+    pub struct Interop {
         device: Arc<Device>,
         direct3d: Direct3DDevice,
         dx_texture: Option<ID3D11Texture2D>,
         texture: Option<Texture>,
     }
 
-    unsafe impl Sync for Dx11OnWgpuCompatibilityLayer {}
-    unsafe impl Send for Dx11OnWgpuCompatibilityLayer {}
+    unsafe impl Sync for Interop {}
+    unsafe impl Send for Interop {}
 
-    impl Dx11OnWgpuCompatibilityLayer {
+    impl Interop {
         pub fn new(device: Arc<Device>, direct3d: Direct3DDevice) -> Self {
             Self {
                 dx_texture: None,
@@ -64,28 +61,21 @@ pub mod win32 {
             &mut self,
             texture: &ID3D11Texture2D,
             index: u32,
-        ) -> Result<&Texture, CompatibilityLayerError> {
+        ) -> Result<&Texture, InteropError> {
             // The first texture received, the texture is not initialized yet, initialize
             // the texture here.
             if self.dx_texture.is_none() {
                 // Gets the incoming texture properties, the new texture contains only an array
                 // of textures and is a shareable texture resource.
-                let desc = texture.desc();
-                let desc = D3D11_TEXTURE2D_DESC {
-                    Width: desc.Width,
-                    Height: desc.Height,
-                    MipLevels: 1,
-                    ArraySize: 1,
-                    Format: desc.Format,
-                    SampleDesc: DXGI_SAMPLE_DESC {
-                        Count: 1,
-                        Quality: 0,
-                    },
-                    BindFlags: 0,
-                    CPUAccessFlags: 0,
-                    Usage: D3D11_USAGE_DEFAULT,
-                    MiscFlags: D3D11_RESOURCE_MISC_SHARED.0 as u32,
-                };
+                let mut desc = texture.desc();
+                desc.MipLevels = 1;
+                desc.ArraySize = 1;
+                desc.SampleDesc.Count = 1;
+                desc.SampleDesc.Quality = 0;
+                desc.BindFlags = 0;
+                desc.CPUAccessFlags = 0;
+                desc.Usage = D3D11_USAGE_DEFAULT;
+                desc.MiscFlags = D3D11_RESOURCE_MISC_SHARED.0 as u32;
 
                 // Creates a new texture, which serves as the current texture to be used, and to
                 // which external input textures are updated.
@@ -101,7 +91,7 @@ pub mod win32 {
                 let tex = tex.unwrap();
                 let handle = tex.get_shared()?;
                 if handle.is_invalid() {
-                    return Err(CompatibilityLayerError::InvalidDxSharedHandle);
+                    return Err(InteropError::InvalidDxSharedHandle);
                 } else {
                     self.dx_texture = Some(tex);
                 }
@@ -110,18 +100,16 @@ pub mod win32 {
                 let resource = unsafe {
                     self.device
                         .as_hal::<Dx12, _, _>(|hdevice| {
-                            let hdevice = hdevice
-                                .ok_or_else(|| CompatibilityLayerError::NotFoundDxBackend)?;
-
+                            let hdevice = hdevice.ok_or_else(|| InteropError::NotFoundDxBackend)?;
                             let raw_device = hdevice.raw_device();
 
                             let mut resource = None::<ID3D12Resource>;
                             raw_device
                                 .OpenSharedHandle(handle, &mut resource)
                                 .map(|_| resource.unwrap())
-                                .map_err(|e| CompatibilityLayerError::DxError(e))
+                                .map_err(|e| InteropError::DxError(e))
                         })
-                        .ok_or_else(|| CompatibilityLayerError::NotFoundDxBackend)??
+                        .ok_or_else(|| InteropError::NotFoundDxBackend)??
                 };
 
                 let desc = TextureDescriptor {
@@ -145,16 +133,17 @@ pub mod win32 {
 
                 // Converts dx12 resources to textures that wgpu can use.
                 self.texture = Some(unsafe {
-                    let texture = <Dx12 as wgpu::hal::Api>::Device::texture_from_raw(
-                        resource,
-                        desc.format,
-                        desc.dimension,
-                        desc.size,
-                        desc.mip_level_count,
-                        desc.sample_count,
-                    );
-
-                    self.device.create_texture_from_hal::<Dx12>(texture, &desc)
+                    self.device.create_texture_from_hal::<Dx12>(
+                        <Dx12 as wgpu::hal::Api>::Device::texture_from_raw(
+                            resource,
+                            desc.format,
+                            desc.dimension,
+                            desc.size,
+                            desc.mip_level_count,
+                            desc.sample_count,
+                        ),
+                        &desc,
+                    )
                 });
             }
 

@@ -2,11 +2,11 @@ plugins {
     id 'com.android.library'
     id 'org.jetbrains.kotlin.android'
     id 'org.jetbrains.kotlin.plugin.serialization' version '1.9.21'
-    id 'org.mozilla.rust-android-gradle.rust-android' version '0.9.3'
+    id 'com.github.willir.rust.cargo-ndk-android' version '0.3.4'
     id 'maven-publish'
 }
 
-apply plugin: 'org.mozilla.rust-android-gradle.rust-android'
+apply plugin: 'com.github.willir.rust.cargo-ndk-android'
 apply plugin: 'maven-publish'
 
 dependencies {
@@ -70,28 +70,21 @@ android {
     }
 }
 
-cargo {
-    verbose = true
-    profile = 'release'
-    apiLevel = 29
-    rustupChannel = 'stable'
-    prebuiltToolchains = true
-    pythonCommand = 'python3'
-    module = '../../../ffi'
-    libname = 'mirror-shared'
-    targets = ['arm64']
-    targetDirectory = '../../../target'
-    targetIncludes = ['libmirror.so']
-    exec { spec, toolchain ->
-        def absolutePath = project.file("../../../target").absolutePath
-        spec.environment("CARGO_TARGET_DIR", "$absolutePath")
+cargoNdk {
+    buildTypes {
+        release {
+            buildType = "release"
+        }
+        debug {
+            buildType = "debug"
+        }
     }
-}
 
-tasks.whenTaskAdded { task ->
-    if ((task.name == 'javaPreCompileDebug' || task.name == 'javaPreCompileRelease')) {
-        task.dependsOn 'cargoBuild'
-    }
+    apiLevel = 29
+    targets = ["arm64"]
+    module = "../../ffi"
+    targetDirectory = "../target"
+    librariesNames = ["libmirror.so"]
 }
 
 publishing {
@@ -110,7 +103,7 @@ publishing {
         release(MavenPublication) {
             groupId = 'com.github.mycrl'
             artifactId = 'mirror'
-            version = '0.5.0'
+            version = '0.5.1'
 
             afterEvaluate {
                 from components.release

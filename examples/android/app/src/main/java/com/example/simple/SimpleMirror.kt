@@ -72,8 +72,8 @@ class Notify(service: SimpleMirrorService) {
 }
 
 abstract class SimpleMirrorServiceObserver() {
-    abstract fun OnConnected();
-    abstract fun OnReceiverClosed();
+    abstract fun onConnected();
+    abstract fun onReceiverClosed();
 }
 
 class SimpleMirrorServiceBinder(private val service: SimpleMirrorService) : Binder() {
@@ -166,7 +166,7 @@ class SimpleMirrorService : Service() {
                 1400
             )
 
-            observer?.OnConnected()
+            observer?.onConnected()
         } catch (e: Exception) {
             Log.e(
                 "simple",
@@ -208,7 +208,7 @@ class SimpleMirrorService : Service() {
 
             override fun released() {
                 super.released()
-                observer?.OnReceiverClosed();
+                observer?.onReceiverClosed();
 
                 Log.w("simple", "receiver is released.")
             }
@@ -232,8 +232,8 @@ class SimpleMirrorService : Service() {
                 intent
             )
 
-        VideoConfigure.width = 1920;
-        VideoConfigure.height = 1080;
+        VideoConfigure.width = displayMetrics.widthPixels
+        VideoConfigure.height = displayMetrics.heightPixels
 
         mediaProjection?.registerCallback(object : MediaProjection.Callback() {}, null)
         sender = mirror?.createSender(

@@ -14,7 +14,7 @@ mirror-resample = { path = "../resample", version = "0.1" }
 mirror-graphics = { path = "../graphics", version = "0.1" }
 
 [target.'cfg(target_os = "windows")'.dependencies]
-windows-capture = { git = "https://github.com/mycrl/windows-capture" }
+windows-capture = { version = "1.4.0" }
 
 [target.'cfg(target_os = "windows")'.dependencies.windows]
 version = "0.58.0"
@@ -22,9 +22,12 @@ features = ["Win32_Media", "Win32_Media_MediaFoundation"]
 
 [target.'cfg(target_os = "linux")'.dependencies]
 v4l = "0.14.0"
-mirror-ffmpeg-sys = { version = "0.1", features = [
+
+[target.'cfg(target_os = "linux")'.dependencies.mirror-ffmpeg-sys]
+version = "0.1" 
+features = [
     "swscale",
     "avformat",
     "avcodec",
     "avutil",
-] }
+]

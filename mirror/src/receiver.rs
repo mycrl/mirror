@@ -7,7 +7,7 @@ use std::{
 
 use mirror_codec::{AudioDecoder, VideoDecoder, VideoDecoderSettings, VideoDecoderType};
 use mirror_common::atomic::EasyAtomic;
-use mirror_transport::adapter::{StreamKind, StreamMultiReceiverAdapter, StreamReceiverAdapterExt};
+use mirror_transport::{StreamKind, StreamMultiReceiverAdapter, StreamReceiverAdapterExt};
 use thiserror::Error;
 
 #[cfg(target_os = "windows")]
@@ -28,10 +28,10 @@ pub struct ReceiverDescriptor {
     pub video: VideoDecoderType,
 }
 
-fn create_video_decoder(
+fn create_video_decoder<T: AVFrameStream + 'static>(
     status: &Arc<AtomicBool>,
     adapter: &Arc<StreamMultiReceiverAdapter>,
-    sink: &Arc<dyn AVFrameStream>,
+    sink: &Arc<T>,
     settings: VideoDecoderSettings,
 ) -> Result<(), ReceiverError> {
     let sink_ = Arc::downgrade(sink);
@@ -84,10 +84,10 @@ fn create_video_decoder(
     Ok(())
 }
 
-fn create_audio_decoder(
+fn create_audio_decoder<T: AVFrameStream + 'static>(
     status: &Arc<AtomicBool>,
     adapter: &Arc<StreamMultiReceiverAdapter>,
-    sink: &Arc<dyn AVFrameStream>,
+    sink: &Arc<T>,
 ) -> Result<(), ReceiverError> {
     let sink_ = Arc::downgrade(sink);
     let status_ = Arc::downgrade(status);
@@ -139,25 +139,21 @@ fn create_audio_decoder(
     Ok(())
 }
 
-pub struct Receiver {
+pub struct Receiver<T: AVFrameStream + 'static> {
     pub(crate) adapter: Arc<StreamMultiReceiverAdapter>,
     status: Arc<AtomicBool>,
-    sink: Arc<dyn AVFrameStream>,
+    sink: Arc<T>,
 }
 
-impl Receiver {
+impl<T: AVFrameStream + 'static> Receiver<T> {
     /// Create a receiving end. The receiving end is much simpler to implement.
     /// You only need to decode the data in the queue and call it back to the
     /// sink.
-    pub fn new<T: AVFrameStream + 'static>(
-        options: ReceiverDescriptor,
-        sink: T,
-    ) -> Result<Self, ReceiverError> {
+    pub fn new(options: ReceiverDescriptor, sink: Arc<T>) -> Result<Self, ReceiverError> {
         log::info!("create receiver");
 
         let adapter = StreamMultiReceiverAdapter::new();
         let status = Arc::new(AtomicBool::new(false));
-        let sink: Arc<dyn AVFrameStream> = Arc::new(sink);
 
         create_audio_decoder(&status, &adapter, &sink)?;
         create_video_decoder(
@@ -179,7 +175,7 @@ impl Receiver {
     }
 }
 
-impl Drop for Receiver {
+impl<T: AVFrameStream + 'static> Drop for Receiver<T> {
     fn drop(&mut self) {
         log::info!("receiver drop");
 

@@ -15,7 +15,7 @@ impl CaptureHandler for CameraCapture {
     type CaptureDescriptor = VideoCaptureSourceDescription;
 
     fn get_sources() -> Result<Vec<Source>, Self::Error> {
-        todo!("camera capture is not supported on macos")
+        Ok(Vec::new())
     }
 
     fn start<S: FrameArrived<Frame = Self::Frame> + 'static>(

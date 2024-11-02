@@ -6,7 +6,7 @@ pub use self::{
     sender::{AudioDescriptor, Sender, SenderDescriptor, SenderError, VideoDescriptor},
 };
 
-use std::slice::from_raw_parts;
+use std::{slice::from_raw_parts, sync::Arc};
 
 pub use mirror_capture::{Capture, Source, SourceType};
 pub use mirror_codec::{VideoDecoderType, VideoEncoderType};
@@ -27,6 +27,8 @@ use mirror_common::win32::{
 #[cfg(target_os = "macos")]
 use mirror_common::macos::{CVPixelBufferRef, PixelBufferRef};
 
+use parking_lot::Mutex;
+
 #[cfg(target_os = "windows")]
 use parking_lot::RwLock;
 
@@ -39,7 +41,6 @@ use mirror_graphics::{
 };
 
 use mirror_transport::Transport;
-use parking_lot::Mutex;
 use rodio::{OutputStream, OutputStreamHandle, Sink};
 use thiserror::Error;
 
@@ -100,14 +101,16 @@ pub fn shutdown() -> Result<(), MirrorError> {
     Ok(())
 }
 
-pub trait Close: Sync + Send {
+pub trait AVFrameObserver: Sync + Send {
+    /// The stream has been initialized, which has no special meaning for the
+    /// sender, but for the receiver, this event is triggered when the receiver
+    /// can receive the stream.
+    fn initialized(&self) {}
     /// Callback when the sender is closed. This may be because the external
     /// side actively calls the close, or the audio and video packets cannot be
     /// sent (the network is disconnected), etc.
     fn close(&self) {}
 }
-
-impl Close for () {}
 
 pub trait AVFrameSink: Sync + Send {
     /// Callback occurs when the video frame is updated. The video frame format
@@ -129,10 +132,8 @@ pub trait AVFrameSink: Sync + Send {
     }
 }
 
-impl AVFrameSink for () {}
-
 /// Abstraction of audio and video streams.
-pub trait AVFrameStream: AVFrameSink + Close {}
+pub trait AVFrameStream: AVFrameSink + AVFrameObserver {}
 
 pub struct Mirror(Transport);
 
@@ -150,11 +151,13 @@ impl Mirror {
         id: u32,
         options: SenderDescriptor,
         sink: T,
-    ) -> Result<Sender, SenderError> {
+    ) -> Result<Sender<T>, SenderError> {
         log::info!("create sender: id={}, options={:?}", id, options);
 
+        let sink = Arc::new(sink);
         let sender = Sender::new(options, sink)?;
         self.0.create_sender(id, &sender.adapter)?;
+
         Ok(sender)
     }
 
@@ -165,11 +168,15 @@ impl Mirror {
         id: u32,
         options: ReceiverDescriptor,
         sink: T,
-    ) -> Result<Receiver, ReceiverError> {
+    ) -> Result<Receiver<T>, ReceiverError> {
         log::info!("create receiver: id={}, options={:?}", id, options);
 
-        let receiver = Receiver::new(options, sink)?;
-        self.0.create_receiver(id, &receiver.adapter)?;
+        let sink = Arc::new(sink);
+        let receiver = Receiver::new(options, sink.clone())?;
+        self.0.create_receiver(id, &receiver.adapter, move || {
+            sink.initialized();
+        })?;
+
         Ok(receiver)
     }
 }
@@ -282,7 +289,7 @@ impl AudioRender {
     }
 
     /// Push an audio clip to the queue.
-    pub fn send(&mut self, frame: &AudioFrame) -> Result<(), RendererError> {
+    pub fn send(&self, frame: &AudioFrame) -> Result<(), RendererError> {
         self.sink.append(AudioSamples::from(frame));
         Ok(())
     }
@@ -521,7 +528,10 @@ impl<'a> VideoRender<'a> {
 /// unavailable, for video this can be done by enabling the dx11 feature tobe
 /// implemented with Direct3D 11 Graphics, which works fine on some very old
 /// devices.
-pub struct Renderer<'a>(Mutex<VideoRender<'a>>, Mutex<AudioRender>);
+pub struct Renderer<'a> {
+    video: Mutex<VideoRender<'a>>,
+    audio: AudioRender,
+}
 
 impl<'a> Renderer<'a> {
     pub fn new<T: Into<SurfaceTarget<'a>>>(
@@ -529,10 +539,10 @@ impl<'a> Renderer<'a> {
         window: T,
         size: Size,
     ) -> Result<Self, RendererError> {
-        Ok(Self(
-            Mutex::new(VideoRender::new(backend, window, size)?),
-            Mutex::new(AudioRender::new()?),
-        ))
+        Ok(Self {
+            video: Mutex::new(VideoRender::new(backend, window, size)?),
+            audio: AudioRender::new()?,
+        })
     }
 }
 
@@ -542,7 +552,7 @@ impl<'a> AVFrameSink for Renderer<'a> {
     /// empty, it fills the mute data to the player by default, so you need to
     /// pay attention to the push rate.
     fn audio(&self, frame: &AudioFrame) -> bool {
-        if let Err(e) = self.1.lock().send(frame) {
+        if let Err(e) = self.audio.send(frame) {
             log::error!("{:?}", e);
 
             return false;
@@ -554,7 +564,7 @@ impl<'a> AVFrameSink for Renderer<'a> {
     /// Renders video frames and can automatically handle rendering of hardware
     /// textures and rendering textures.
     fn video(&self, frame: &VideoFrame) -> bool {
-        if let Err(e) = self.0.lock().send(frame) {
+        if let Err(e) = self.video.lock().send(frame) {
             log::error!("{:?}", e);
 
             return false;

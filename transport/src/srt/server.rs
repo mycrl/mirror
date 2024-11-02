@@ -41,12 +41,12 @@ impl Server {
     /// **IMPORTANT**: When you bind an IPv6 wildcard address, note that the
     /// `SRTO_IPV6ONLY` option must be set on the socket explicitly to 1 or 0
     /// prior to calling this function. See
-    /// [`SRTO_IPV6ONLY`](API-socket-options.md#SRTO_IPV6ONLY) for more details.
+    /// `SRTO_IPV6ONLY`(API-socket-options.md#SRTO_IPV6ONLY) for more details.
     ///
     /// Binding is necessary for every socket to be used for communication. If
     /// the socket is to be used to initiate a connection to a listener
     /// socket, which can be done, for example, by the
-    /// [`srt_connect`](#srt_connect) function, the socket is bound
+    /// `srt_connect`(#srt_connect) function, the socket is bound
     /// implicitly to the wildcard address according to the IP family
     /// (`INADDR_ANY` for `AF_INET` or `in6addr_any` for `AF_INET6`) and
     /// port number 0. In all other cases, a socket must be bound explicitly
@@ -54,11 +54,11 @@ impl Server {
     ///
     /// When the port number parameter is 0, then the effective port number will
     /// be system-allocated. To obtain this effective port number you can
-    /// use [`srt_getsockname`](#srt_getsockname).
+    /// use `srt_getsockname`(#srt_getsockname).
     ///
     /// This call is obligatory for a listening socket before calling
-    /// [`srt_listen`](#srt_listen) and for rendezvous mode before calling
-    /// [`srt_connect`](#srt_connect); otherwise it's optional. For a
+    /// `srt_listen`(#srt_listen) and for rendezvous mode before calling
+    /// `srt_connect`(#srt_connect); otherwise it's optional. For a
     /// listening socket it defines the network interface and the port where
     /// the listener should expect a call request.
     ///
@@ -69,7 +69,7 @@ impl Server {
     /// A and a Party 2 that selects an endpoint B. In this case the Party 1
     /// binds the socket to the endpoint A and then connects to the endpoint B,
     /// and the Party 2 the other way around. Both sockets must be set
-    /// [`SRTO_RENDEZVOUS`](API-socket-options.md#SRTO_RENDEZVOUS) to *true* to
+    /// `SRTO_RENDEZVOUS`(API-socket-options.md#SRTO_RENDEZVOUS) to *true* to
     /// make this connection possible.
     ///
     /// For a connecting socket the call to `srt_bind` is optional, but can be
@@ -98,8 +98,8 @@ impl Server {
     ///
     /// * Its binding address and UDP-related socket options match the socket to
     ///   be bound.
-    /// * Its [`SRTO_REUSEADDR`](API-socket-options.md#SRTO_REUSEADDRS) is set
-    ///   to *true* (default).
+    /// * Its `SRTO_REUSEADDR`(API-socket-options.md#SRTO_REUSEADDRS) is set to
+    ///   *true* (default).
     ///
     /// If none of the free, side and shared binding options is currently
     /// possible, this function will fail. If the socket blocking the
@@ -134,8 +134,8 @@ impl Server {
     /// **NOTE**: This function cannot be called on a socket group. If you need
     /// to have the group-member socket bound to the specified source
     /// address before connecting, use
-    /// [`srt_connect_bind`](#srt_connect_bind) for that purpose or set the
-    /// appropriate source address using [`srt_prepare_endpoint`](#
+    /// `srt_connect_bind`(#srt_connect_bind) for that purpose or set the
+    /// appropriate source address using `srt_prepare_endpoint`(#
     /// srt_prepare_endpoint).
     ///
     /// **IMPORTANT information about IPv6**: If you are going to bind to the
@@ -168,7 +168,7 @@ impl Server {
     /// distinguished by checking the `SRTGROUP_MASK` bit on the returned ID.
     ///
     /// * `lsn`: the listener socket previously configured by
-    ///   [`srt_listen`](#srt_listen)
+    ///   `srt_listen`(#srt_listen)
     /// * `addr`: the IP address and port specification for the remote party
     /// * `addrlen`: INPUT: size of `addr` pointed object. OUTPUT: real size of
     ///   the
@@ -182,12 +182,12 @@ impl Server {
     /// case of group connection only the initial connection that
     /// establishes the group connection is returned, together with its address.
     /// As member connections are added or broken within the group, you can
-    /// obtain this information through [`srt_group_data`](#srt_group_data)
-    /// or the data filled by [`srt_sendmsg2`](#srt_sendmsg) and
-    /// [`srt_recvmsg2`](#srt_recvmsg2).
+    /// obtain this information through `srt_group_data`(#srt_group_data)
+    /// or the data filled by `srt_sendmsg2`(#srt_sendmsg) and
+    /// `srt_recvmsg2`(#srt_recvmsg2).
     ///
     /// If the `lsn` listener socket is configured for blocking mode
-    /// ([`SRTO_RCVSYN`](API-socket-options.md#SRTO_RCVSYN) set to true,
+    /// (`SRTO_RCVSYN`(API-socket-options.md#SRTO_RCVSYN) set to true,
     /// default), the call will block until the incoming connection is
     /// ready. Otherwise, the call always returns immediately. The
     /// `SRT_EPOLL_IN` epoll event should be checked on the `lsn` socket
@@ -196,12 +196,12 @@ impl Server {
     /// If the pending connection is a group connection (initiated on the peer
     /// side by calling the connection function using a group ID, and
     /// permitted on the listener socket by the
-    /// [`SRTO_GROUPCONNECT`](API-socket-options.md#SRTO_GROUPCONNECT)
+    /// `SRTO_GROUPCONNECT`(API-socket-options.md#SRTO_GROUPCONNECT)
     /// flag), then the value returned is a group ID. This function then creates
     /// a new group, as well as a new socket for this connection, that will
     /// be added to the group. Once the group is created this way, further
     /// connections within the same group, as well as sockets for them, will
-    /// be created in the background. The [`SRT_EPOLL_UPDATE`](#
+    /// be created in the background. The `SRT_EPOLL_UPDATE`(#
     /// SRT_EPOLL_UPDATE) event is raised on the `lsn` socket when
     /// a new background connection is attached to the group, although it's
     /// usually for internal use only.
