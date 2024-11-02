@@ -51,6 +51,12 @@ sudo apt-get update
 sudo apt-get install tclsh pkg-config cmake libssl-dev build-essential libasound2-dev libsdl2-dev libva-dev v4l-utils
 ```
 
+##### Macos
+
+```sh
+brew install cmake ffmpeg@7
+```
+
 ---
 
 #### Build
