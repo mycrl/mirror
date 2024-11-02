@@ -100,6 +100,7 @@ public:
         FrameSink sink;
         sink.audio = nullptr;
         sink.video = nullptr;
+        sink.initialized = nullptr;
         sink.close = MirrorService::close_proc;
         sink.ctx = (void*)this;
 
@@ -124,6 +125,7 @@ public:
         }
 
         FrameSink sink;
+        sink.initialized = nullptr;
         sink.video = MirrorService::video_proc;
         sink.audio = MirrorService::audio_proc;
         sink.close = MirrorService::close_proc;
@@ -283,7 +285,7 @@ int WINAPI WinMain(HINSTANCE hinstance,
     auto window_handle = create_window_handle_for_win32(hwnd,
                                                         OPTIONS.width,
                                                         OPTIONS.height);
-    RENDER = renderer_create(window_handle, RENDER_BACKEND_WGPU);
+    RENDER = renderer_create(window_handle, RENDER_BACKEND_DX11);
     MIRROR_SERVICE = new MirrorService();
 
     MSG message;

@@ -22,6 +22,11 @@ impl Default for Route {
 }
 
 impl Route {
+    /// Send a ping to all clients.
+    pub fn ping(&self) {
+        self.tx.send(Signal::Ping).unwrap();
+    }
+
     /// Add a channel to the route, where the port number is the multicast port
     /// on the sender side
     ///

@@ -7,13 +7,14 @@ use clap::{
 };
 
 use mirror::{
-    shutdown, startup, AVFrameSink, AVFrameStream, AudioDescriptor, AudioFrame, Capture, Close,
-    GraphicsBackend, Mirror, Receiver, ReceiverDescriptor, Renderer, Sender, SenderDescriptor,
-    SourceType, TransportDescriptor, VideoDecoderType, VideoDescriptor, VideoEncoderType,
-    VideoFrame,
+    shutdown, startup, AVFrameObserver, AVFrameSink, AVFrameStream, AudioDescriptor, AudioFrame,
+    Capture, GraphicsBackend, Mirror, Receiver, ReceiverDescriptor, Renderer, Sender,
+    SenderDescriptor, SourceType, TransportDescriptor, VideoDecoderType, VideoDescriptor,
+    VideoEncoderType, VideoFrame,
 };
 
 use mirror_common::Size;
+use parking_lot::Mutex;
 use winit::{
     application::ApplicationHandler,
     dpi::PhysicalSize,
@@ -31,7 +32,7 @@ enum StreamKind {
 
 struct Canvas {
     kind: StreamKind,
-    renderer: Arc<Renderer<'static>>,
+    renderer: Arc<Mutex<Renderer<'static>>>,
     event_proxy: EventLoopProxy<AppEvent>,
 }
 
@@ -40,18 +41,18 @@ impl AVFrameStream for Canvas {}
 impl AVFrameSink for Canvas {
     fn audio(&self, frame: &AudioFrame) -> bool {
         if self.kind == StreamKind::Receiver {
-            return self.renderer.audio(frame);
+            return self.renderer.lock().audio(frame);
         }
 
         true
     }
 
     fn video(&self, frame: &VideoFrame) -> bool {
-        self.renderer.video(frame)
+        self.renderer.lock().video(frame)
     }
 }
 
-impl Close for Canvas {
+impl AVFrameObserver for Canvas {
     fn close(&self) {
         let _ = self.event_proxy.send_event(match self.kind {
             StreamKind::Receiver => AppEvent::CloseReceiver,
@@ -70,10 +71,10 @@ struct App {
     cli: Cli,
     event_proxy: EventLoopProxy<AppEvent>,
     window: Option<Arc<Window>>,
-    renderer: Option<Arc<Renderer<'static>>>,
+    renderer: Option<Arc<Mutex<Renderer<'static>>>>,
     mirror: Option<Mirror>,
-    sender: Option<Sender>,
-    receiver: Option<Receiver>,
+    sender: Option<Sender<Canvas>>,
+    receiver: Option<Receiver<Canvas>>,
 }
 
 impl App {
@@ -99,6 +100,7 @@ impl App {
 
     fn create_window(&mut self, event_loop: &ActiveEventLoop) -> Result<()> {
         let mut attr = Window::default_attributes();
+        attr.title = "mirror example".to_string();
         attr.inner_size = Some(winit::dpi::Size::Physical(PhysicalSize::new(
             self.cli.width,
             self.cli.height,
@@ -106,14 +108,14 @@ impl App {
 
         let window = Arc::new(event_loop.create_window(attr)?);
 
-        self.renderer.replace(Arc::new(Renderer::new(
+        self.renderer.replace(Arc::new(Mutex::new(Renderer::new(
             GraphicsBackend::WebGPU,
             window.clone(),
             Size {
                 width: self.cli.width,
                 height: self.cli.height,
             },
-        )?));
+        )?)));
 
         self.window.replace(window);
         self.mirror.replace(Mirror::new(TransportDescriptor {

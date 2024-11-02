@@ -70,7 +70,7 @@ class Video {
                 Process.setThreadPriority(Process.THREAD_PRIORITY_VIDEO)
 
                 val buffer = ByteArray(2 * 1024 * 1024)
-                val streamBufferInfo = StreamBufferInfo(StreamKind.Video)
+                val streamBufferInfo = StreamBufferInfo(StreamKind.VIDEO)
 
                 while (isRunning) {
                     try {
@@ -340,7 +340,7 @@ class Audio {
                 Process.setThreadPriority(Process.THREAD_PRIORITY_URGENT_AUDIO)
 
                 val buffer = ByteArray(1024 * 1024)
-                val streamBufferInfo = StreamBufferInfo(StreamKind.Audio)
+                val streamBufferInfo = StreamBufferInfo(StreamKind.AUDIO)
 
                 while (isRunning) {
                     try {

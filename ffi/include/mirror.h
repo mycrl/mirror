@@ -185,6 +185,7 @@ typedef const void* Receiver;
 
 typedef struct
 {
+    void (*initialized)(void* ctx);
     /**
      * Callback occurs when the video frame is updated. The video frame format
      * is fixed to NV12. Be careful not to call blocking methods inside the

@@ -1,35 +1,35 @@
-pub mod adapter;
-pub mod multicast;
-pub mod package;
+mod adapter;
+mod multi;
+mod package;
+mod service;
 pub mod srt;
 
-use crate::{
-    adapter::{StreamReceiverAdapterExt, StreamSenderAdapter},
-    package::{Package, PacketInfo, UnPackage},
+pub use self::{
+    adapter::{
+        BufferFlag, StreamBufferInfo, StreamKind, StreamMultiReceiverAdapter,
+        StreamReceiverAdapter, StreamReceiverAdapterExt, StreamSenderAdapter,
+    },
+    package::{copy_from_slice, with_capacity, Package, PacketInfo, UnPackage},
+    service::{Service, Signal, SocketKind, StreamInfo},
 };
 
 use std::{
-    collections::HashMap,
-    io::{Error, Read},
-    net::{Ipv4Addr, SocketAddr, TcpStream},
-    sync::{
-        atomic::{AtomicU32, AtomicU64},
-        mpsc::{channel, Sender},
-        Arc, Weak,
-    },
+    io::Error,
+    net::{Ipv4Addr, SocketAddr},
+    sync::{atomic::AtomicU64, Arc},
     thread,
 };
 
-use bytes::{BufMut, Bytes, BytesMut};
 use mirror_common::atomic::EasyAtomic;
-use parking_lot::{Mutex, RwLock};
-use serde::{Deserialize, Serialize};
-use smallvec::SmallVec;
+use parking_lot::Mutex;
 
+/// Initialize the srt communication protocol, mainly initializing some
+/// log-related things.
 pub fn startup() -> bool {
     srt::startup()
 }
 
+/// Clean up the srt environment and prepare to exit.
 pub fn shutdown() {
     srt::cleanup()
 }
@@ -41,94 +41,16 @@ pub struct TransportDescriptor {
     pub mtu: usize,
 }
 
-#[derive(Debug)]
 pub struct Transport {
-    index: AtomicU32,
     options: TransportDescriptor,
-    publishs: Arc<RwLock<HashMap<u32, u16>>>,
-    channels: Arc<RwLock<HashMap<u32, Sender<Signal>>>>,
+    service: Service<Box<dyn FnOnce(u16) -> Result<(), Error> + Send>>,
 }
 
 impl Transport {
     pub fn new(options: TransportDescriptor) -> Result<Self, Error> {
-        let channels: Arc<RwLock<HashMap<u32, Sender<Signal>>>> = Default::default();
-        let publishs: Arc<RwLock<HashMap<u32, u16>>> = Default::default();
-
-        // Connecting to a mirror server
-        let mut socket = TcpStream::connect(options.server)?;
-
-        // The role of this thread is to forward all received signals to all subscribers
-        let channels_ = Arc::downgrade(&channels);
-        let publishs_ = Arc::downgrade(&publishs);
-        thread::Builder::new()
-            .name("MirrorSignalReceiverThread".to_string())
-            .spawn(move || {
-                let mut buf = [0u8; 1024];
-                let mut bytes = BytesMut::with_capacity(2000);
-
-                while let Ok(size) = socket.read(&mut buf) {
-                    log::info!("signal socket read buf, size={}", size);
-
-                    if size == 0 {
-                        break;
-                    }
-
-                    // Try to decode all data received
-                    bytes.extend_from_slice(&buf[..size]);
-                    if let Some((size, signal)) = Signal::decode(&bytes) {
-                        let _ = bytes.split_to(size);
-
-                        log::info!("recv a signal={:?}", signal);
-
-                        if let Some(channels) = channels_.upgrade() {
-                            match signal {
-                                Signal::Start { id, port } => {
-                                    if let Some(publishs) = publishs_.upgrade() {
-                                        publishs.write().insert(id, port);
-                                    }
-                                }
-                                Signal::Stop { id } => {
-                                    if let Some(publishs) = publishs_.upgrade() {
-                                        publishs.write().remove(&id);
-                                    }
-
-                                    if channels.write().remove(&id).is_some() {
-                                        log::info!("channel is close, id={}", id)
-                                    }
-                                }
-                            }
-
-                            let mut closeds: SmallVec<[u32; 10]> = SmallVec::with_capacity(10);
-
-                            // Forwards the signal to all subscribers
-                            {
-                                for (id, tx) in channels.read().iter() {
-                                    if tx.send(signal).is_err() {
-                                        closeds.push(*id);
-                                    }
-                                }
-                            }
-
-                            // Clean up closed subscribers
-                            if !closeds.is_empty() {
-                                for id in closeds {
-                                    if channels.write().remove(&id).is_some() {
-                                        log::info!("channel is close, id={}", id)
-                                    }
-                                }
-                            }
-                        } else {
-                            break;
-                        }
-                    }
-                }
-            })?;
-
         Ok(Self {
-            index: AtomicU32::new(0),
+            service: Service::new(options.server)?,
             options,
-            channels,
-            publishs,
         })
     }
 
@@ -137,11 +59,11 @@ impl Transport {
         stream_id: u32,
         adapter: &Arc<StreamSenderAdapter>,
     ) -> Result<(), Error> {
-        let port = multicast::alloc_port()?;
+        let port = multi::alloc_port()?;
 
         // Create a multicast sender, the port is automatically assigned an idle port by
         // the system
-        let mut mcast_sender = multicast::Server::new(
+        let mut mcast_sender = multi::Server::new(
             self.options.multicast,
             format!("0.0.0.0:{}", port).parse().unwrap(),
             self.options.mtu,
@@ -224,78 +146,17 @@ impl Transport {
         Ok(())
     }
 
-    pub fn create_receiver<T>(&self, stream_id: u32, adapter: &Arc<T>) -> Result<(), Error>
+    pub fn create_receiver<T, H>(
+        &self,
+        stream_id: u32,
+        adapter: &Arc<T>,
+        online_handle: H,
+    ) -> Result<(), Error>
     where
         T: StreamReceiverAdapterExt + 'static,
+        H: FnOnce() + Send + 'static,
     {
-        let current_mcast_rceiver: Arc<Mutex<Option<Arc<multicast::Socket>>>> = Default::default();
-
-        // Creating a multicast receiver
-        let current_mcast_rceiver_ = current_mcast_rceiver.clone();
-        let create_mcast_receiver = move |receiver: Weak<srt::Socket>,
-                                          sequence: Arc<AtomicU64>,
-                                          adapter: Weak<T>,
-                                          multicast,
-                                          port| {
-            let mcast_rceiver = if let Ok(socket) =
-                multicast::Socket::new(multicast, SocketAddr::new("0.0.0.0".parse().unwrap(), port))
-            {
-                let socket = Arc::new(socket);
-                if let Some(socket) = current_mcast_rceiver_.lock().replace(socket.clone()) {
-                    socket.close()
-                }
-
-                socket
-            } else {
-                if let Some(receiver) = receiver.upgrade() {
-                    receiver.close();
-                }
-
-                return;
-            };
-
-            log::info!("create multicast receiver, port={}", port);
-
-            thread::Builder::new()
-                .name("MirrorStreamMulticastReceiverThread".to_string())
-                .spawn(move || {
-                    while let Some((seq, bytes)) = mcast_rceiver.read() {
-                        if bytes.is_empty() {
-                            break;
-                        }
-
-                        if let Some(adapter) = adapter.upgrade() {
-                            // Check whether the sequence number is continuous, in
-                            // order to check whether packet loss has occurred
-                            if seq == 0 || seq - 1 == sequence.get() {
-                                if let Some((info, package)) = UnPackage::unpack(bytes) {
-                                    if !adapter.send(package, info.kind, info.flags, info.timestamp)
-                                    {
-                                        log::error!("adapter on buf failed.");
-
-                                        break;
-                                    }
-                                } else {
-                                    adapter.loss_pkt();
-                                }
-                            } else {
-                                adapter.loss_pkt()
-                            }
-
-                            sequence.update(seq);
-                        } else {
-                            break;
-                        }
-                    }
-
-                    log::warn!("multicast receiver is closed, id={}", stream_id);
-
-                    if let Some(receiver) = receiver.upgrade() {
-                        receiver.close();
-                    }
-                })
-                .unwrap();
-        };
+        let current_mcast_rceiver: Arc<Mutex<Option<Arc<multi::Socket>>>> = Default::default();
 
         // Create an srt configuration and carry stream information
         let mut opt = srt::Descriptor::default();
@@ -311,51 +172,97 @@ impl Transport {
             .encode(),
         );
 
-        // Assign a unique ID to each receiver
-        let index = self.index.get();
-        self.index
-            .update(if index == u32::MAX { 0 } else { index + 1 });
-
         // Create an srt connection to the server
         let sequence = Arc::new(AtomicU64::new(0));
         let mut decoder = srt::FragmentDecoder::new();
         let receiver = Arc::new(srt::Socket::connect(self.options.server, opt)?);
         log::info!("receiver connect to server={}", self.options.server);
 
-        {
-            let multicast = self.options.multicast;
-            let sequence = sequence.clone();
-            let adapter = Arc::downgrade(adapter);
-            let receiver = Arc::downgrade(&receiver);
-            if let Some(port) = self.publishs.read().get(&stream_id) {
-                create_mcast_receiver(receiver, sequence, adapter, multicast, *port);
-            } else {
-                // Add a message receiver to the list
-                let (tx, rx) = channel();
-                self.channels.write().insert(index, tx);
+        let multicast_ = self.options.multicast;
+        let adapter_ = Arc::downgrade(adapter);
+        let sequence_ = Arc::downgrade(&sequence);
+        let receiver_ = Arc::downgrade(&receiver);
+        let current_mcast_rceiver_ = current_mcast_rceiver.clone();
+        let service_listener = self.service.online(
+            stream_id,
+            Box::new(move |port| {
+                // Notify external sender that the sender is online.
+                online_handle();
+
+                // Creating a multicast receiver
+                let socket = match multi::Socket::new(
+                    multicast_,
+                    SocketAddr::new("0.0.0.0".parse().unwrap(), port),
+                ) {
+                    Ok(socket) => {
+                        let socket = Arc::new(socket);
+                        if let Some(socket) = current_mcast_rceiver_.lock().replace(socket.clone())
+                        {
+                            socket.close()
+                        }
+
+                        socket
+                    }
+                    Err(e) => {
+                        if let Some(receiver) = receiver_.upgrade() {
+                            receiver.close();
+                        }
+
+                        return Err(e);
+                    }
+                };
 
                 thread::Builder::new()
-                    .name("MirrorReceiverSignalProcessThread".to_string())
+                    .name("MirrorStreamMulticastReceiverThread".to_string())
                     .spawn(move || {
-                        while let Ok(signal) = rx.recv() {
-                            if let Signal::Start { id, port } = signal {
-                                // Only process messages from the current receiving end
-                                if id == stream_id {
-                                    create_mcast_receiver(
-                                        receiver.clone(),
-                                        sequence.clone(),
-                                        adapter.clone(),
-                                        multicast,
-                                        port,
-                                    );
+                        while let Some((seq, bytes)) = socket.read() {
+                            if bytes.is_empty() {
+                                break;
+                            }
+
+                            if let Some(adapter) = adapter_.upgrade() {
+                                // Check whether the sequence number is continuous, in
+                                // order to check whether packet loss has occurred
+                                if let Some(sequence) = sequence_.upgrade() {
+                                    if seq == 0 || seq - 1 == sequence.get() {
+                                        if let Some((info, package)) = UnPackage::unpack(bytes) {
+                                            if !adapter.send(
+                                                package,
+                                                info.kind,
+                                                info.flags,
+                                                info.timestamp,
+                                            ) {
+                                                log::error!("adapter on buf failed.");
+
+                                                break;
+                                            }
+                                        } else {
+                                            adapter.loss_pkt();
+                                        }
+                                    } else {
+                                        adapter.loss_pkt()
+                                    }
+
+                                    sequence.update(seq);
+                                } else {
+                                    break;
                                 }
+                            } else {
+                                break;
                             }
                         }
-                    })?;
-            }
-        }
 
-        let channels = self.channels.clone();
+                        log::warn!("multicast receiver is closed, id={}", stream_id);
+
+                        if let Some(receiver) = receiver_.upgrade() {
+                            receiver.close();
+                        }
+                    })?;
+
+                Ok(())
+            }),
+        )?;
+
         let adapter_ = Arc::downgrade(adapter);
         thread::Builder::new()
             .name("MirrorStreamReceiverThread".to_string())
@@ -411,8 +318,8 @@ impl Transport {
 
                 log::warn!("srt receiver is closed, id={}", stream_id);
 
-                // Remove the sender, which is intended to stop the signal receiver thread.
-                let _ = channels.write().remove(&index);
+                // release service online listener.
+                drop(service_listener);
 
                 if let Some(adapter) = adapter_.upgrade() {
                     adapter.close();
@@ -425,109 +332,5 @@ impl Transport {
             })?;
 
         Ok(())
-    }
-}
-
-#[repr(u8)]
-#[derive(Default, PartialEq, Eq, Debug)]
-pub enum SocketKind {
-    #[default]
-    Subscriber = 0,
-    Publisher = 1,
-}
-
-#[derive(Default, Debug)]
-pub struct StreamInfo {
-    pub id: u32,
-    pub port: Option<u16>,
-    pub kind: SocketKind,
-}
-
-impl StreamInfo {
-    pub fn decode(value: &str) -> Option<Self> {
-        if value.starts_with("#!::") {
-            let mut info = Self::default();
-            for item in value.split_at(4).1.split(',') {
-                if let Some((k, v)) = item.split_once('=') {
-                    match k {
-                        "i" => {
-                            if let Ok(id) = v.parse::<u32>() {
-                                info.id = id;
-                            }
-                        }
-                        "k" => {
-                            if let Ok(kind) = v.parse::<u8>() {
-                                match kind {
-                                    0 => {
-                                        info.kind = SocketKind::Subscriber;
-                                    }
-                                    1 => {
-                                        info.kind = SocketKind::Publisher;
-                                    }
-                                    _ => (),
-                                }
-                            }
-                        }
-                        "p" => {
-                            if let Ok(port) = v.parse::<u16>() {
-                                info.port = Some(port);
-                            }
-                        }
-                        _ => (),
-                    }
-                }
-            }
-
-            Some(info)
-        } else {
-            None
-        }
-    }
-
-    pub fn encode(self) -> String {
-        format!(
-            "#!::{}",
-            [
-                format!("i={}", self.id),
-                format!("k={}", self.kind as u8),
-                self.port.map(|p| format!("p={}", p)).unwrap_or_default(),
-            ]
-            .join(",")
-        )
-    }
-}
-
-#[derive(Debug, Clone, Copy, Deserialize, Serialize)]
-pub enum Signal {
-    /// Start publishing a channel. The port number is the publisher's multicast
-    /// port.
-    Start { id: u32, port: u16 },
-    /// Stop publishing to a channel
-    Stop { id: u32 },
-}
-
-impl Signal {
-    pub fn encode(&self) -> Bytes {
-        let payload = rmp_serde::to_vec(&self).unwrap();
-        let mut buf = BytesMut::with_capacity(payload.len() + 2);
-        buf.put_u16(buf.capacity() as u16);
-        buf.extend_from_slice(&payload);
-        buf.freeze()
-    }
-
-    #[rustfmt::skip]
-    pub fn decode(buf: &[u8]) -> Option<(usize, Self)> {
-        if buf.len() > 2 {
-            let size = u16::from_be_bytes([
-                buf[0],
-                buf[1],
-            ]) as usize;
-
-            if size <= buf.len() {
-                return rmp_serde::from_slice(&buf[2..size]).ok().map(|it| (size, it))
-            }
-        }
-
-        None
     }
 }

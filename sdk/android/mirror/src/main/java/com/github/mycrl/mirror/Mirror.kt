@@ -2,22 +2,23 @@ package com.github.mycrl.mirror
 
 class StreamKind {
     companion object {
-        const val Video = 0;
-        const val Audio = 1;
+        const val VIDEO = 0
+        const val AUDIO = 1
     }
 }
 
 abstract class ReceiverAdapter {
     abstract fun sink(kind: Int, flags: Int, timestamp: Long, buf: ByteArray): Boolean
+    abstract fun online()
     abstract fun close()
 }
 
 data class StreamBufferInfo(val kind: Int) {
-    var flags: Int = 0;
-    var timestamp: Long = 0;
+    var flags: Int = 0
+    var timestamp: Long = 0
 }
 
-class SenderAdapterWrapper constructor(
+class SenderAdapterWrapper(
     private val sendProc: (StreamBufferInfo, ByteArray) -> Unit,
     private val getMulticastProc: () -> Boolean,
     private val setMulticastProc: (Boolean) -> Unit,
@@ -40,7 +41,7 @@ class SenderAdapterWrapper constructor(
     }
 }
 
-class ReceiverAdapterWrapper constructor(private val releaser: () -> Unit) {
+class ReceiverAdapterWrapper(private val releaser: () -> Unit) {
     /**
      * Close and release this receiver.
      */
@@ -49,10 +50,10 @@ class ReceiverAdapterWrapper constructor(private val releaser: () -> Unit) {
     }
 }
 
-class Mirror constructor(
-    private val server: String,
-    private val multicast: String,
-    private val mtu: Int,
+class Mirror(
+    server: String,
+    multicast: String,
+    mtu: Int,
 ) {
     private var mirror: Long = 0L
 
@@ -78,7 +79,7 @@ class Mirror constructor(
                     }
                 }
             },
-            { ->
+            {
                 run {
                     if (sender != 0L) senderGetMulticast(sender) else false
                 }
@@ -90,7 +91,7 @@ class Mirror constructor(
                     }
                 }
             },
-            { ->
+            {
                 run {
                     if (sender != 0L) {
                         releaseStreamSenderAdapter(sender)
@@ -111,7 +112,7 @@ class Mirror constructor(
             throw Exception("failed to create mirror receiver adapter!")
         }
 
-        return ReceiverAdapterWrapper { ->
+        return ReceiverAdapterWrapper {
             run {
                 if (receiver != 0L) {
                     releaseStreamReceiverAdapter(receiver)
@@ -148,8 +149,7 @@ class Mirror constructor(
     private external fun releaseStreamReceiverAdapter(adapter: Long)
 
     /**
-     * Creates a mirror instance, the return value is a pointer, and you
-    need to
+     * Creates a mirror instance, the return value is a pointer, and you need to
      * check that the pointer is valid.
      */
     private external fun createMirror(
@@ -164,8 +164,7 @@ class Mirror constructor(
     private external fun releaseMirror(mirror: Long)
 
     /**
-     * Creates an instance of the stream sender adapter, the return value is
-    a
+     * Creates an instance of the stream sender adapter, the return value is a
      * pointer and you need to check if the pointer is valid.
      */
     private external fun createStreamSenderAdapter(): Long
@@ -206,7 +205,7 @@ class Mirror constructor(
 
     /**
      * Creates the receiver, the return value indicates whether the creation
-     *  was successful or not.
+     * was successful or not.
      */
     private external fun createReceiver(
         mirror: Long,

@@ -101,8 +101,13 @@ pub trait CaptureHandler: Sync + Send {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SourceType {
+    /// Camera or video capture card and other devices (and support virtual
+    /// camera)
     Camera,
+    /// The desktop or monitor corresponds to the desktop in the operating
+    /// system.
     Screen,
+    /// Audio input and output devices.
     Audio,
 }
 

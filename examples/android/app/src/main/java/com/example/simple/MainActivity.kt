@@ -310,11 +310,11 @@ class MainActivity : Permissions() {
 
             simpleMirrorServiceBinder = service as SimpleMirrorServiceBinder
             simpleMirrorServiceBinder?.setObserver(object : SimpleMirrorServiceObserver() {
-                override fun OnConnected() {
+                override fun onConnected() {
                     layoutSetState(State.Connected)
                 }
 
-                override fun OnReceiverClosed() {
+                override fun onReceiverClosed() {
                     layoutStop()
                 }
             })

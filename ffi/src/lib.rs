@@ -18,10 +18,8 @@ pub mod android {
 
     use mirror_common::logger;
     use mirror_transport::{
-        adapter::{
-            StreamKind, StreamReceiverAdapter, StreamReceiverAdapterExt, StreamSenderAdapter,
-        },
-        package, Transport, TransportDescriptor,
+        with_capacity as package_with_capacity, StreamKind, StreamReceiverAdapter,
+        StreamReceiverAdapterExt, StreamSenderAdapter, Transport, TransportDescriptor,
     };
 
     // Each function is accessible at a fixed offset through the JNIEnv argument.
@@ -165,7 +163,7 @@ pub mod android {
 
     pub fn copy_from_byte_array(env: &JNIEnv, array: &JByteArray) -> anyhow::Result<BytesMut> {
         let size = env.get_array_length(array)? as usize;
-        let mut bytes = package::with_capacity(size);
+        let mut bytes = package_with_capacity(size);
         let start = bytes.len() - size;
 
         env.get_byte_array_region(array, 0, unsafe {
@@ -177,6 +175,7 @@ pub mod android {
 
     pub struct AndroidStreamReceiverAdapter {
         pub callback: GlobalRef,
+        pub inner: Arc<StreamReceiverAdapter>,
     }
 
     impl AndroidStreamReceiverAdapter {
@@ -238,6 +237,15 @@ pub mod android {
                 Ok(())
             });
         }
+
+        pub(crate) fn online(&self) {
+            let mut env = get_current_env();
+            catcher(&mut env, |env| {
+                env.call_method(self.callback.as_obj(), "online", "()V", &[])?;
+
+                Ok(())
+            });
+        }
     }
 
     mod objects {
@@ -247,7 +255,7 @@ pub mod android {
             JNIEnv,
         };
 
-        use mirror_transport::adapter::{StreamBufferInfo, StreamKind};
+        use mirror_transport::{StreamBufferInfo, StreamKind};
 
         /// /**
         ///  * Streaming data information.
@@ -300,19 +308,19 @@ pub mod android {
         mut env: JNIEnv,
         _this: JClass,
         callback: JObject,
-    ) -> *const Arc<StreamReceiverAdapter> {
+    ) -> *const Arc<AndroidStreamReceiverAdapter> {
         catcher(&mut env, |env| {
-            let adapter = AndroidStreamReceiverAdapter {
+            let adapter = Arc::new(AndroidStreamReceiverAdapter {
                 callback: env.new_global_ref(callback)?,
-            };
+                inner: StreamReceiverAdapter::new(),
+            });
 
-            let stream_adapter = StreamReceiverAdapter::new();
-            let stream_adapter_ = Arc::downgrade(&stream_adapter);
+            let adapter_ = Arc::downgrade(&adapter);
             thread::Builder::new()
                 .name("MirrorJniStreamReceiverThread".to_string())
                 .spawn(move || {
-                    while let Some(stream_adapter) = stream_adapter_.upgrade() {
-                        if let Some((buf, kind, flags, timestamp)) = stream_adapter.next() {
+                    while let Some(adapter) = adapter_.upgrade() {
+                        if let Some((buf, kind, flags, timestamp)) = adapter.inner.next() {
                             if !adapter.sink(buf, kind, flags, timestamp) {
                                 break;
                             }
@@ -323,10 +331,12 @@ pub mod android {
 
                     log::info!("StreamReceiverAdapter is closed");
 
-                    adapter.close();
+                    if let Some(adapter) = adapter_.upgrade() {
+                        adapter.close();
+                    }
                 })?;
 
-            Ok(Box::into_raw(Box::new(stream_adapter)))
+            Ok(Box::into_raw(Box::new(adapter)))
         })
         .unwrap_or_else(null_mut)
     }
@@ -340,9 +350,9 @@ pub mod android {
     pub extern "system" fn Java_com_github_mycrl_mirror_Mirror_releaseStreamReceiverAdapter(
         _env: JNIEnv,
         _this: JClass,
-        ptr: *const Arc<StreamReceiverAdapter>,
+        ptr: *const Arc<AndroidStreamReceiverAdapter>,
     ) {
-        unsafe { Box::from_raw(ptr as *mut Arc<StreamReceiverAdapter>) }.close();
+        unsafe { Box::from_raw(ptr as *mut Arc<AndroidStreamReceiverAdapter>) }.close();
     }
 
     /// /**
@@ -519,10 +529,14 @@ pub mod android {
         _this: JClass,
         mirror: *const Transport,
         id: i32,
-        adapter: *const Arc<StreamReceiverAdapter>,
+        adapter: *const Arc<AndroidStreamReceiverAdapter>,
     ) -> i32 {
         catcher(&mut env, |_| {
-            unsafe { &*mirror }.create_receiver(id as u32, unsafe { &*adapter })?;
+            let adapter = unsafe { &*adapter };
+            unsafe { &*mirror }.create_receiver(id as u32, &adapter.inner, move || {
+                adapter.online();
+            })?;
+
             Ok(true)
         })
         .unwrap_or(false) as i32
@@ -545,10 +559,10 @@ pub mod desktop {
             Win32WindowHandle, WindowHandle, XcbDisplayHandle, XcbWindowHandle, XlibDisplayHandle,
             XlibWindowHandle,
         },
-        shutdown, startup, AVFrameSink, AVFrameStream, AudioDescriptor, AudioFrame, Capture, Close,
-        GraphicsBackend, Mirror, Receiver, ReceiverDescriptor, Renderer, Sender, SenderDescriptor,
-        Source, SourceType, TransportDescriptor, VideoDecoderType, VideoDescriptor,
-        VideoEncoderType, VideoFrame,
+        shutdown, startup, AVFrameObserver, AVFrameSink, AVFrameStream, AudioDescriptor,
+        AudioFrame, Capture, GraphicsBackend, Mirror, Receiver, ReceiverDescriptor, Renderer,
+        Sender, SenderDescriptor, Source, SourceType, TransportDescriptor, VideoDecoderType,
+        VideoDescriptor, VideoEncoderType, VideoFrame,
     };
 
     use mirror_common::{logger, strings::Strings, Size};
@@ -640,6 +654,7 @@ pub mod desktop {
         log::info!("extern api: mirror create");
 
         let func = || Ok(Mirror::new(options.try_into()?)?);
+
         checker(func())
             .map(|mirror| Box::into_raw(Box::new(RawMirror(mirror))))
             .unwrap_or_else(|_: anyhow::Error| null_mut()) as *const _
@@ -760,6 +775,7 @@ pub mod desktop {
     #[repr(C)]
     #[derive(Clone, Copy)]
     pub struct RawAVFrameStream {
+        pub initialized: Option<extern "C" fn(ctx: *const c_void)>,
         /// Callback occurs when the video frame is updated. The video frame
         /// format is fixed to NV12. Be careful not to call blocking
         /// methods inside the callback, which will seriously slow down
@@ -845,7 +861,15 @@ pub mod desktop {
         }
     }
 
-    impl Close for RawAVFrameStream {
+    impl AVFrameObserver for RawAVFrameStream {
+        fn initialized(&self) {
+            if let Some(callback) = &self.initialized {
+                callback(self.ctx);
+
+                log::info!("extern api: call initialized callback");
+            }
+        }
+
         fn close(&self) {
             if let Some(callback) = &self.close {
                 callback(self.ctx);
@@ -976,7 +1000,7 @@ pub mod desktop {
     }
 
     #[repr(C)]
-    pub struct RawSender(Sender);
+    pub struct RawSender(Sender<RawAVFrameStream>);
 
     /// Create a sender, specify a bound NIC address, you can pass callback to
     /// get the device screen or sound callback, callback can be null, if it is
@@ -1034,7 +1058,7 @@ pub mod desktop {
     }
 
     #[repr(C)]
-    pub struct RawReceiver(Receiver);
+    pub struct RawReceiver(Receiver<RawAVFrameStream>);
 
     #[repr(C)]
     #[derive(Debug, Clone, Copy)]
