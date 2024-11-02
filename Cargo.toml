@@ -19,5 +19,5 @@ members = [
     "service",
     "transport",
     "examples/rust",
-    "sdk/node/napi"
+    "sdk/node"
 ]

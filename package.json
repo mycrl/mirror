@@ -20,8 +20,6 @@
     },
     "homepage": "https://github.com/mycrl/mirror#readme",
     "workspaces": [
-        "app",
-        "app/views",
-        "sdk/node/napi"
+        "sdk/node"
     ]
 }

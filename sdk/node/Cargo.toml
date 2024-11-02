@@ -11,7 +11,7 @@ anyhow = "1.0.82"
 log = "0.4.20"
 napi = { version = "3.0.0-alpha.11", features = ["napi9"] }
 napi-derive = "3.0.0-alpha.11"
-mirror = { version = "0.1", path = "../../../mirror" }
+mirror = { version = "0.1", path = "../../mirror" }
 simple_logger = "5"
 winit = "0.30.5"
 
