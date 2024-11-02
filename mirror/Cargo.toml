@@ -2,6 +2,8 @@
 name = "mirror"
 version = "0.1.0"
 edition = "2021"
+description = "A cross-platform screen casting library implemented by Rust."
+license = "LGPL-2.1-only"
 
 [dependencies]
 thiserror = "1.0.63"
