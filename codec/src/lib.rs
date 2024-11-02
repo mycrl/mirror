@@ -4,8 +4,8 @@ mod video;
 
 use std::ffi::{c_char, c_int, c_void};
 
+use hylarana_common::strings::Strings;
 use log::Level;
-use mirror_common::strings::Strings;
 use mirror_ffmpeg_sys::*;
 
 pub use self::{

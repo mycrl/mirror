@@ -6,14 +6,14 @@ use std::{
     time::Duration,
 };
 
-use mirror_common::{
+use hylarana_common::{
     atomic::EasyAtomic,
     frame::{VideoFormat, VideoFrame, VideoSubFormat},
     win32::{EasyTexture, MediaThreadClass},
     Size,
 };
 
-use mirror_resample::win32::{Resource, VideoResampler, VideoResamplerDescriptor};
+use hylarana_resample::win32::{Resource, VideoResampler, VideoResamplerDescriptor};
 use parking_lot::Mutex;
 use thiserror::Error;
 use windows::{

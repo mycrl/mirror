@@ -69,9 +69,9 @@ void (async () => {
         }
     }
 
-    await Command(`cargo build ${Args.release ? "--release" : ""} -p mirror-shared`);
-    await Command(`cargo build ${Args.release ? "--release" : ""} -p mirror-example`);
-    await Command(`cargo build ${Args.release ? "--release" : ""} -p mirror-service`);
+    await Command(`cargo build ${Args.release ? "--release" : ""} -p hylarana-shared`);
+    await Command(`cargo build ${Args.release ? "--release" : ""} -p hylarana-example`);
+    await Command(`cargo build ${Args.release ? "--release" : ""} -p hylarana-service`);
     await Command(`cargo doc --no-deps`);
 
     /* download ffmpeg librarys for windows */
@@ -126,7 +126,7 @@ void (async () => {
         ["./examples/rust", "./build/examples/rust"],
 
         /* inculde */
-        ["./ffi/include/mirror.h", "./build/include/mirror.h"],
+        ["./ffi/include/hylarana.h", "./build/include/hylarana.h"],
 
         /* doc */
         ["./target/doc", "./build/doc"],
@@ -137,13 +137,13 @@ void (async () => {
     if (process.platform == "win32") {
         for (const item of [
             [`./examples/cpp/build/${Profile}/example.exe`, "./build/bin/example-cpp.exe"],
-            [`./target/${Profile.toLowerCase()}/mirror-example.exe`, "./build/bin/example.exe"],
+            [`./target/${Profile.toLowerCase()}/hylarana-example.exe`, "./build/bin/example.exe"],
             [
-                `./target/${Profile.toLowerCase()}/mirror-service.exe`,
-                "./build/server/mirror-service.exe",
+                `./target/${Profile.toLowerCase()}/hylarana-service.exe`,
+                "./build/server/hylarana-service.exe",
             ],
-            [`./target/${Profile.toLowerCase()}/mirror.dll.lib`, "./build/lib/mirror.dll.lib"],
-            [`./target/${Profile.toLowerCase()}/mirror.dll`, "./build/bin/mirror.dll"],
+            [`./target/${Profile.toLowerCase()}/hylarana.dll.lib`, "./build/lib/hylarana.dll.lib"],
+            [`./target/${Profile.toLowerCase()}/hylarana.dll`, "./build/bin/hylarana.dll"],
             [`./target/ffmpeg/bin/avcodec-61.dll`, "./build/bin/avcodec-61.dll"],
             [`./target/ffmpeg/bin/avutil-59.dll`, "./build/bin/avutil-59.dll"],
             [`./target/ffmpeg/bin/swresample-5.dll`, "./build/bin/swresample-5.dll"],
@@ -153,18 +153,27 @@ void (async () => {
     } else if (process.platform == "darwin") {
         for (const item of [
             [`./examples/cpp/build/example`, "./build/bin/example-cpp"],
-            [`./target/${Profile.toLowerCase()}/mirror-example`, "./build/bin/example"],
-            [`./target/${Profile.toLowerCase()}/mirror-service`, "./build/server/mirror-service"],
-            [`./target/${Profile.toLowerCase()}/libmirror.dylib`, "./build/bin/libmirror.dylib"],
+            [`./target/${Profile.toLowerCase()}/hylarana-example`, "./build/bin/example"],
+            [
+                `./target/${Profile.toLowerCase()}/hylarana-service`,
+                "./build/server/hylarana-service",
+            ],
+            [
+                `./target/${Profile.toLowerCase()}/libhylarana.dylib`,
+                "./build/bin/libhylarana.dylib",
+            ],
         ]) {
             fs.cpSync(...item, { force: true, recursive: true });
         }
     } else if (process.platform == "linux") {
         for (const item of [
             [`./examples/cpp/build/example`, "./build/bin/example-cpp"],
-            [`./target/${Profile.toLowerCase()}/mirror-example`, "./build/bin/example"],
-            [`./target/${Profile.toLowerCase()}/mirror-service`, "./build/server/mirror-service"],
-            [`./target/${Profile.toLowerCase()}/libmirror.so`, "./build/bin/libmirror.so"],
+            [`./target/${Profile.toLowerCase()}/hylarana-example`, "./build/bin/example"],
+            [
+                `./target/${Profile.toLowerCase()}/hylarana-service`,
+                "./build/server/hylarana-service",
+            ],
+            [`./target/${Profile.toLowerCase()}/libhylarana.so`, "./build/bin/libhylarana.so"],
             [`./target/ffmpeg/lib`, "./build/lib"],
         ]) {
             fs.cpSync(...item, { force: true, recursive: true });
@@ -173,8 +182,8 @@ void (async () => {
 
     if (process.platform == "win32") {
         for (const item of [
-            ["./target/debug/mirror.pdb", "./build/bin/mirror.pdb"],
-            ["./target/debug/mirror_service.pdb", "./build/server/mirror-service.pdb"],
+            ["./target/debug/hylarana.pdb", "./build/bin/hylarana.pdb"],
+            ["./target/debug/hylarana_service.pdb", "./build/server/hylarana-service.pdb"],
         ]) {
             if (!Args.release) {
                 fs.cpSync(...item, { force: true, recursive: true });

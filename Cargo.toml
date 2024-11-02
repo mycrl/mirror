@@ -15,7 +15,7 @@ members = [
     "resample",
     "capture",
     "graphics",
-    "mirror",
+    "hylarana",
     "service",
     "transport",
     "examples/rust",

@@ -26,19 +26,19 @@ import android.os.IBinder
 import android.util.DisplayMetrics
 import android.util.Log
 import android.view.Surface
-import com.github.mycrl.mirror.Audio
-import com.github.mycrl.mirror.MirrorAdapterConfigure
-import com.github.mycrl.mirror.MirrorReceiver
-import com.github.mycrl.mirror.MirrorSender
-import com.github.mycrl.mirror.MirrorService
-import com.github.mycrl.mirror.ReceiverAdapterWrapper
-import com.github.mycrl.mirror.Video
+import com.github.mycrl.hylarana.Audio
+import com.github.mycrl.hylarana.HylaranaAdapterConfigure
+import com.github.mycrl.hylarana.HylaranaReceiver
+import com.github.mycrl.hylarana.HylaranaSender
+import com.github.mycrl.hylarana.HylaranaService
+import com.github.mycrl.hylarana.ReceiverAdapterWrapper
+import com.github.mycrl.hylarana.Video
 
-class Notify(service: SimpleMirrorService) {
+class Notify(service: SimpleHylaranaService) {
     companion object {
         private const val NotifyId = 100
-        private const val NotifyChannelId = "SimpleMirror"
-        private const val NotifyChannelName = "SimpleMirror"
+        private const val NotifyChannelId = "SimpleHylarana"
+        private const val NotifyChannelName = "SimpleHylarana"
     }
 
     init {
@@ -71,12 +71,12 @@ class Notify(service: SimpleMirrorService) {
     }
 }
 
-abstract class SimpleMirrorServiceObserver() {
+abstract class SimpleHylaranaServiceObserver() {
     abstract fun onConnected();
     abstract fun onReceiverClosed();
 }
 
-class SimpleMirrorServiceBinder(private val service: SimpleMirrorService) : Binder() {
+class SimpleHylaranaServiceBinder(private val service: SimpleHylaranaService) : Binder() {
     fun createSender(intent: Intent, displayMetrics: DisplayMetrics, id: Int) {
         service.createSender(intent, displayMetrics, id)
     }
@@ -111,17 +111,17 @@ class SimpleMirrorServiceBinder(private val service: SimpleMirrorService) : Bind
         service.stopReceiver()
     }
 
-    fun setObserver(observer: SimpleMirrorServiceObserver) {
+    fun setObserver(observer: SimpleHylaranaServiceObserver) {
         service.setObserver(observer)
     }
 }
 
-class SimpleMirrorService : Service() {
-    private var observer: SimpleMirrorServiceObserver? = null
+class SimpleHylaranaService : Service() {
+    private var observer: SimpleHylaranaServiceObserver? = null
     private var mediaProjection: MediaProjection? = null
     private var virtualDisplay: VirtualDisplay? = null
     private var outputSurface: Surface? = null
-    private var sender: MirrorSender? = null
+    private var sender: HylaranaSender? = null
 
     companion object {
         private val VideoConfigure = object : Video.VideoEncoder.VideoEncoderConfigure {
@@ -142,15 +142,15 @@ class SimpleMirrorService : Service() {
     }
 
     private var receiverAdapter: ReceiverAdapterWrapper? = null
-    private var mirror: MirrorService? = null
+    private var hylarana: HylaranaService? = null
 
     override fun onBind(intent: Intent?): IBinder {
-        return SimpleMirrorServiceBinder(this)
+        return SimpleHylaranaServiceBinder(this)
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        mirror?.release()
+        hylarana?.release()
         sender?.release()
         mediaProjection?.stop()
         virtualDisplay?.release()
@@ -160,7 +160,7 @@ class SimpleMirrorService : Service() {
 
     fun connect(server: String) {
         try {
-            mirror = MirrorService(
+            hylarana = HylaranaService(
                 server,
                 "239.0.0.1",
                 1400
@@ -170,7 +170,7 @@ class SimpleMirrorService : Service() {
         } catch (e: Exception) {
             Log.e(
                 "simple",
-                "Mirror connect exception",
+                "Hylarana connect exception",
                 e
             )
         }
@@ -188,7 +188,7 @@ class SimpleMirrorService : Service() {
         sender?.setMulticast(isMulticast)
     }
 
-    fun setObserver(observer: SimpleMirrorServiceObserver) {
+    fun setObserver(observer: SimpleHylaranaServiceObserver) {
         this.observer = observer
     }
 
@@ -199,10 +199,10 @@ class SimpleMirrorService : Service() {
     fun createReceiver(id: Int) {
         Log.i("simple", "create receiver.")
 
-        mirror?.createReceiver(id, object : MirrorAdapterConfigure {
+        hylarana?.createReceiver(id, object : HylaranaAdapterConfigure {
             override val video = VideoConfigure
             override val audio = AudioConfigure
-        }, object : MirrorReceiver() {
+        }, object : HylaranaReceiver() {
             override val track = createAudioTrack()
             override val surface = outputSurface!!
 
@@ -236,9 +236,9 @@ class SimpleMirrorService : Service() {
         VideoConfigure.height = displayMetrics.heightPixels
 
         mediaProjection?.registerCallback(object : MediaProjection.Callback() {}, null)
-        sender = mirror?.createSender(
+        sender = hylarana?.createSender(
             id,
-            object : MirrorAdapterConfigure {
+            object : HylaranaAdapterConfigure {
                 override val video = VideoConfigure
                 override val audio = AudioConfigure
             },
@@ -246,7 +246,7 @@ class SimpleMirrorService : Service() {
         )
 
         virtualDisplay = mediaProjection?.createVirtualDisplay(
-            "MirrorVirtualDisplayService",
+            "HylaranaVirtualDisplayService",
             VideoConfigure.width, VideoConfigure.height, 1,
             DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
             null, null, null

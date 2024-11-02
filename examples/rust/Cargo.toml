@@ -1,5 +1,5 @@
 [package]
-name = "mirror-example"
+name = "hylarana-example"
 version = "0.1.0"
 edition = "2021"
 
@@ -8,7 +8,7 @@ anyhow = "1.0.82"
 clap = { version = "4", features = ["derive"] }
 log = "0.4.20"
 parking_lot = "0.12"
-mirror = { path = "../../mirror", version = "0.1" }
-mirror-common = { path = "../../common", version = "0.1" }
+hylarana = { path = "../../hylarana", version = "0.1" }
+hylarana-common = { path = "../../common", version = "0.1" }
 winit = "0.30.5"
 simple_logger = "5"

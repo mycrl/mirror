@@ -6,13 +6,13 @@ use std::{
     thread,
 };
 
-use mirror_common::{
+use hylarana_common::{
     atomic::EasyAtomic,
     frame::{VideoFormat, VideoFrame, VideoSubFormat},
     Size,
 };
 
-use mirror_ffmpeg_sys::*;
+use hylarana_ffmpeg_sys::*;
 use thiserror::Error;
 use v4l::{
     buffer::Type,

@@ -1,5 +1,5 @@
 {
-    "name": "mirror",
+    "name": "hylarana",
     "version": "1.0.0",
     "description": "",
     "main": "build.js",
@@ -11,14 +11,14 @@
     },
     "repository": {
         "type": "git",
-        "url": "git+https://github.com/mycrl/mirror.git"
+        "url": "git+https://github.com/mycrl/hylarana.git"
     },
     "author": "Mr.Panda",
     "license": "MIT",
     "bugs": {
-        "url": "https://github.com/mycrl/mirror/issues"
+        "url": "https://github.com/mycrl/hylarana/issues"
     },
-    "homepage": "https://github.com/mycrl/mirror#readme",
+    "homepage": "https://github.com/mycrl/hylarana#readme",
     "workspaces": [
         "sdk/node"
     ]

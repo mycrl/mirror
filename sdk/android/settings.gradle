@@ -13,5 +13,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "mirror"
-include ':mirror'
+rootProject.name = "hylarana"
+include ':hylarana'

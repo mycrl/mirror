@@ -1,4 +1,4 @@
-package com.github.mycrl.mirror
+package com.github.mycrl.hylarana
 
 import android.media.AudioRecord
 import android.media.AudioTrack
@@ -6,12 +6,12 @@ import android.util.Log
 import android.view.Surface
 import kotlin.Exception
 
-interface MirrorAdapterConfigure {
+interface HylaranaAdapterConfigure {
     val video: Video.VideoEncoder.VideoEncoderConfigure
     val audio: Audio.AudioEncoder.AudioEncoderConfigure
 }
 
-abstract class MirrorReceiver {
+abstract class HylaranaReceiver {
 
     /**
      *  You need to provide a surface to the receiver, which will decode and render the received
@@ -51,21 +51,21 @@ abstract class MirrorReceiver {
 }
 
 /**
- * Create a mirror service, note that observer can be null, when observer is null, it will not
+ * Create a hylarana service, note that observer can be null, when observer is null, it will not
  * automatically respond to any sender push.
  */
-class MirrorService(
+class HylaranaService(
     server: String,
     multicast: String,
     mtu: Int,
 ) {
-    private val mirror: Mirror = Mirror(server, multicast, mtu)
+    private val hylarana: Hylarana = Hylarana(server, multicast, mtu)
 
     /**
-     * Release this mirror instance.
+     * Release this hylarana instance.
      */
     fun release() {
-        mirror.release()
+        hylarana.release()
     }
 
     /**
@@ -74,11 +74,11 @@ class MirrorService(
      */
     fun createSender(
         id: Int,
-        configure: MirrorAdapterConfigure,
+        configure: HylaranaAdapterConfigure,
         record: AudioRecord?
-    ): MirrorSender {
-        return MirrorSender(
-            mirror.createSender(id),
+    ): HylaranaSender {
+        return HylaranaSender(
+            hylarana.createSender(id),
             configure,
             record,
         )
@@ -92,11 +92,11 @@ class MirrorService(
      */
     fun createReceiver(
         id: Int,
-        configure: MirrorAdapterConfigure,
-        observer: MirrorReceiver
+        configure: HylaranaAdapterConfigure,
+        observer: HylaranaReceiver
     ) {
         var adapter: ReceiverAdapterWrapper? = null
-        adapter = mirror.createReceiver(id, object : ReceiverAdapter() {
+        adapter = hylarana.createReceiver(id, object : ReceiverAdapter() {
             private var isReleased: Boolean = false
             private val videoDecoder = Video.VideoDecoder(
                 observer.surface,
@@ -146,8 +146,8 @@ class MirrorService(
                     return true
                 } catch (e: Exception) {
                     Log.e(
-                        "com.github.mycrl.mirror",
-                        "Mirror ReceiverAdapter sink exception",
+                        "com.github.mycrl.hylarana",
+                        "Hylarana ReceiverAdapter sink exception",
                         e
                     )
 
@@ -170,8 +170,8 @@ class MirrorService(
                     }
                 } catch (e: Exception) {
                     Log.e(
-                        "com.github.mycrl.mirror",
-                        "Mirror ReceiverAdapter close exception",
+                        "com.github.mycrl.hylarana",
+                        "Hylarana ReceiverAdapter close exception",
                         e
                     )
                 }
@@ -180,9 +180,9 @@ class MirrorService(
     }
 }
 
-class MirrorSender(
+class HylaranaSender(
     private val sender: SenderAdapterWrapper,
-    configure: MirrorAdapterConfigure,
+    configure: HylaranaAdapterConfigure,
     record: AudioRecord?,
 ) {
     private val videoEncoder: Video.VideoEncoder =

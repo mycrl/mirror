@@ -1,4 +1,4 @@
-package com.github.mycrl.mirror
+package com.github.mycrl.hylarana
 
 import android.media.AudioFormat
 import android.media.AudioRecord
@@ -91,7 +91,7 @@ class Video {
                             codec.releaseOutputBuffer(index, false)
                         }
                     } catch (e: Exception) {
-                        Log.w("com.github.mycrl.mirror", "VideoEncoder worker exception", e)
+                        Log.w("com.github.mycrl.hylarana", "VideoEncoder worker exception", e)
 
                         release()
                     }
@@ -180,7 +180,7 @@ class Video {
                             codec.releaseOutputBuffer(index, true)
                         }
                     } catch (e: Exception) {
-                        Log.w("com.github.mycrl.mirror", "VideoDecoder worker exception", e)
+                        Log.w("com.github.mycrl.hylarana", "VideoDecoder worker exception", e)
 
                         release()
                     }
@@ -197,7 +197,7 @@ class Video {
                     codec.queueInputBuffer(index, 0, buf.size, timestamp, flags)
                 }
             } catch (e: Exception) {
-                Log.w("com.github.mycrl.mirror", "VideoDecoder sink exception", e)
+                Log.w("com.github.mycrl.hylarana", "VideoDecoder sink exception", e)
 
                 release()
             }
@@ -262,7 +262,7 @@ class Audio {
                             codec.releaseOutputBuffer(index, false)
                         }
                     } catch (e: Exception) {
-                        Log.w("com.github.mycrl.mirror", "AudioDecoder worker exception", e)
+                        Log.w("com.github.mycrl.hylarana", "AudioDecoder worker exception", e)
 
                         release()
                     }
@@ -361,7 +361,7 @@ class Audio {
                             codec.releaseOutputBuffer(index, false)
                         }
                     } catch (e: Exception) {
-                        Log.w("com.github.mycrl.mirror", "AudioEncoder worker exception", e)
+                        Log.w("com.github.mycrl.hylarana", "AudioEncoder worker exception", e)
 
                         release()
                     }
@@ -384,7 +384,7 @@ class Audio {
                                 }
                             }
                         } catch (e: Exception) {
-                            Log.w("com.github.mycrl.mirror", "AudioDecoder record exception", e)
+                            Log.w("com.github.mycrl.hylarana", "AudioDecoder record exception", e)
 
                             release()
                         }

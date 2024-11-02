@@ -6,14 +6,14 @@ use clap::{
     Parser,
 };
 
-use mirror::{
+use hylarana::{
     shutdown, startup, AVFrameObserver, AVFrameSink, AVFrameStream, AudioDescriptor, AudioFrame,
-    Capture, GraphicsBackend, Mirror, Receiver, ReceiverDescriptor, Renderer, Sender,
+    Capture, GraphicsBackend, Hylarana, Receiver, ReceiverDescriptor, Renderer, Sender,
     SenderDescriptor, SourceType, TransportDescriptor, VideoDecoderType, VideoDescriptor,
     VideoEncoderType, VideoFrame,
 };
 
-use mirror_common::Size;
+use hylarana_common::Size;
 use parking_lot::Mutex;
 use winit::{
     application::ApplicationHandler,
@@ -72,7 +72,7 @@ struct App {
     event_proxy: EventLoopProxy<AppEvent>,
     window: Option<Arc<Window>>,
     renderer: Option<Arc<Mutex<Renderer<'static>>>>,
-    mirror: Option<Mirror>,
+    hylarana: Option<Hylarana>,
     sender: Option<Sender<Canvas>>,
     receiver: Option<Receiver<Canvas>>,
 }
@@ -84,7 +84,7 @@ impl App {
             event_proxy,
             window: None,
             renderer: None,
-            mirror: None,
+            hylarana: None,
             sender: None,
             receiver: None,
         }
@@ -100,7 +100,7 @@ impl App {
 
     fn create_window(&mut self, event_loop: &ActiveEventLoop) -> Result<()> {
         let mut attr = Window::default_attributes();
-        attr.title = "mirror example".to_string();
+        attr.title = "hylarana example".to_string();
         attr.inner_size = Some(winit::dpi::Size::Physical(PhysicalSize::new(
             self.cli.width,
             self.cli.height,
@@ -118,7 +118,7 @@ impl App {
         )?)));
 
         self.window.replace(window);
-        self.mirror.replace(Mirror::new(TransportDescriptor {
+        self.hylarana.replace(Hylarana::new(TransportDescriptor {
             multicast: "239.0.0.1".parse()?,
             server: self.cli.server,
             mtu: 1500,
@@ -155,22 +155,23 @@ impl App {
             ));
         }
 
-        if let (Some(mirror), Some(canvas)) =
-            (self.mirror.as_ref(), self.create_canvas(StreamKind::Sender))
-        {
+        if let (Some(hylarana), Some(canvas)) = (
+            self.hylarana.as_ref(),
+            self.create_canvas(StreamKind::Sender),
+        ) {
             self.sender
-                .replace(mirror.create_sender(self.cli.id, options, canvas)?);
+                .replace(hylarana.create_sender(self.cli.id, options, canvas)?);
         }
 
         Ok(())
     }
 
     fn create_receiver(&mut self) -> Result<()> {
-        if let (Some(mirror), Some(canvas)) = (
-            self.mirror.as_ref(),
+        if let (Some(hylarana), Some(canvas)) = (
+            self.hylarana.as_ref(),
             self.create_canvas(StreamKind::Receiver),
         ) {
-            self.receiver.replace(mirror.create_receiver(
+            self.receiver.replace(hylarana.create_receiver(
                 self.cli.id,
                 ReceiverDescriptor {
                     video: self.cli.decoder.unwrap(),
@@ -196,12 +197,12 @@ impl ApplicationHandler<AppEvent> for App {
     ) {
         match event {
             // The user closes the window, and we close the sender and receiver, in that order, and
-            // release the renderer and mirror instances, and finally stop the message loop.
+            // release the renderer and hylarana instances, and finally stop the message loop.
             WindowEvent::CloseRequested => {
                 drop(self.receiver.take());
                 drop(self.sender.take());
                 drop(self.renderer.take());
-                drop(self.mirror.take());
+                drop(self.hylarana.take());
 
                 event_loop.exit();
             }
@@ -261,8 +262,8 @@ impl ApplicationHandler<AppEvent> for App {
     author = env!("CARGO_PKG_AUTHORS"),
 )]
 struct Cli {
-    /// The address to which the mirror service is bound, indicating how to
-    /// connect to the mirror service.
+    /// The address to which the hylarana service is bound, indicating how to
+    /// connect to the hylarana service.
     #[arg(long)]
     server: SocketAddr,
     #[arg(long, default_value_t = 1280)]
@@ -319,7 +320,8 @@ fn main() -> Result<()> {
     let event_proxy = event_loop.create_proxy();
     event_loop.run_app(&mut App::new(cli, event_proxy))?;
 
-    //When exiting the application, the environment of mirror should be cleaned up.
+    //When exiting the application, the environment of hylarana should be cleaned
+    // up.
     shutdown()?;
     Ok(())
 }

@@ -1,4 +1,4 @@
-package com.github.mycrl.mirror
+package com.github.mycrl.hylarana
 
 class StreamKind {
     companion object {
@@ -50,27 +50,27 @@ class ReceiverAdapterWrapper(private val releaser: () -> Unit) {
     }
 }
 
-class Mirror(
+class Hylarana(
     server: String,
     multicast: String,
     mtu: Int,
 ) {
-    private var mirror: Long = 0L
+    private var hylarana: Long = 0L
 
     init {
-        mirror = createMirror(server, multicast, mtu)
-        if (mirror == 0L) {
-            throw Exception("failed to create mirror!")
+        hylarana = createHylarana(server, multicast, mtu)
+        if (hylarana == 0L) {
+            throw Exception("failed to create hylarana!")
         }
     }
 
     fun createSender(id: Int): SenderAdapterWrapper {
         var sender = createStreamSenderAdapter()
-        if (sender == 0L || mirror == 0L) {
+        if (sender == 0L || hylarana == 0L) {
             throw Exception("failed to create sender adapter!")
         }
 
-        createSender(mirror, id, sender)
+        createSender(hylarana, id, sender)
         return SenderAdapterWrapper(
             { info, buf ->
                 run {
@@ -104,12 +104,12 @@ class Mirror(
 
     fun createReceiver(id: Int, adapter: ReceiverAdapter): ReceiverAdapterWrapper {
         var receiver = createStreamReceiverAdapter(adapter)
-        if (receiver == 0L || mirror == 0L) {
+        if (receiver == 0L || hylarana == 0L) {
             throw Exception("failed to create receiver adapter!")
         }
 
-        if (!createReceiver(mirror, id, receiver)) {
-            throw Exception("failed to create mirror receiver adapter!")
+        if (!createReceiver(hylarana, id, receiver)) {
+            throw Exception("failed to create hylarana receiver adapter!")
         }
 
         return ReceiverAdapterWrapper {
@@ -124,15 +124,15 @@ class Mirror(
     }
 
     fun release() {
-        if (mirror != 0L) {
-            releaseMirror(mirror)
-            mirror = 0L
+        if (hylarana != 0L) {
+            releaseHylarana(hylarana)
+            hylarana = 0L
         }
     }
 
     companion object {
         init {
-            System.loadLibrary("mirror")
+            System.loadLibrary("hylarana")
         }
     }
 
@@ -149,19 +149,19 @@ class Mirror(
     private external fun releaseStreamReceiverAdapter(adapter: Long)
 
     /**
-     * Creates a mirror instance, the return value is a pointer, and you need to
+     * Creates a hylarana instance, the return value is a pointer, and you need to
      * check that the pointer is valid.
      */
-    private external fun createMirror(
+    private external fun createHylarana(
         server: String,
         multicast: String,
         mtu: Int,
     ): Long
 
     /**
-     * Free the mirror instance pointer.
+     * Free the hylarana instance pointer.
      */
-    private external fun releaseMirror(mirror: Long)
+    private external fun releaseHylarana(hylarana: Long)
 
     /**
      * Creates an instance of the stream sender adapter, the return value is a
@@ -189,7 +189,7 @@ class Mirror(
      * was successful or not.
      */
     private external fun createSender(
-        mirror: Long,
+        hylarana: Long,
         id: Int,
         adapter: Long
     )
@@ -208,7 +208,7 @@ class Mirror(
      * was successful or not.
      */
     private external fun createReceiver(
-        mirror: Long,
+        hylarana: Long,
         id: Int,
         adapter: Long
     ): Boolean

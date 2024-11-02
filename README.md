@@ -1,15 +1,15 @@
 <!--lint disable no-literal-urls-->
 <div align="center">
-   <h1>MIRROR</h1>
+   <h1>Hylarana</h1>
 </div>
 <div align="center">
   <strong>A cross-platform screen casting library implemented by rust.</strong>
 </div>
 <div align="center">
-  <img src="https://img.shields.io/github/actions/workflow/status/mycrl/mirror/release.yml"/>
-  <img src="https://img.shields.io/github/license/mycrl/mirror"/>
-  <img src="https://img.shields.io/github/issues/mycrl/mirror"/>
-  <img src="https://img.shields.io/github/stars/mycrl/mirror"/>
+  <img src="https://img.shields.io/github/actions/workflow/status/mycrl/hylarana/release.yml"/>
+  <img src="https://img.shields.io/github/license/mycrl/hylarana"/>
+  <img src="https://img.shields.io/github/issues/mycrl/hylarana"/>
+  <img src="https://img.shields.io/github/stars/mycrl/hylarana"/>
 </div>
 <br/>
 <br/>
@@ -21,7 +21,7 @@ The project is cross-platform, but the priority platforms supported are Windows 
 ## Documentation
 
 -   Rust: There are still some obstacles to releasing to crates.io, so for rust the documentation is being updated.
--   C/C++: This project also compiles dynamic link libraries, so for C/C++ projects, use this header file [mirror.h](./ffi/include/mirror.h)
+-   C/C++: This project also compiles dynamic link libraries, so for C/C++ projects, use this header file [hylarana.h](./ffi/include/hylarana.h)
 
 ## Examples
 

@@ -27,7 +27,7 @@ where
         let streams_ = Arc::downgrade(&streams);
         let onlines_ = Arc::downgrade(&onlines);
         thread::Builder::new()
-            .name("MirrorTransportServiceThread".to_string())
+            .name("HylaranaTransportServiceThread".to_string())
             .spawn(move || {
                 let mut buf = [0u8; 1024];
                 let mut bytes = BytesMut::with_capacity(2000);
@@ -80,7 +80,7 @@ where
                     }
                 }
 
-                log::error!("MirrorTransportServiceThread, service connection is closed");
+                log::error!("HylaranaTransportServiceThread, service connection is closed");
             })?;
 
         Ok(Self { streams, onlines })

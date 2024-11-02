@@ -28,7 +28,7 @@
             </intent-filter>
         </activity>
         <service
-            android:name=".SimpleMirrorService"
+            android:name=".SimpleHylaranaService"
             android:foregroundServiceType="mediaProjection"
             android:enabled="true"
             android:exported="true"/>

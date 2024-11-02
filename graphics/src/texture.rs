@@ -14,12 +14,12 @@ use crate::interop::win32::Interop;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 type Interop = ();
 
-use mirror_common::Size;
+use hylarana_common::Size;
 use smallvec::SmallVec;
 use thiserror::Error;
 
 #[cfg(target_os = "windows")]
-use mirror_common::win32::{
+use hylarana_common::win32::{
     windows::Win32::Graphics::Direct3D11::ID3D11Texture2D, Direct3DDevice, EasyTexture,
 };
 

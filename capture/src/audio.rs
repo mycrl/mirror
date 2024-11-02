@@ -1,8 +1,8 @@
 use crate::{AudioCaptureSourceDescription, CaptureHandler, Source, SourceType};
 
 use cpal::{traits::*, Host, Stream, StreamConfig};
-use mirror_common::frame::AudioFrame;
-use mirror_resample::AudioResampler;
+use hylarana_common::frame::AudioFrame;
+use hylarana_resample::AudioResampler;
 use once_cell::sync::Lazy;
 use parking_lot::Mutex;
 use thiserror::Error;

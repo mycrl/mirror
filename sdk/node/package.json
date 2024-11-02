@@ -1,10 +1,10 @@
 {
-    "name": "mirror-napi",
+    "name": "hylarana-napi",
     "version": "0.1.0",
     "main": "index.js",
     "types": "index.d.ts",
     "napi": {
-        "name": "mirror"
+        "name": "hylarana"
     },
     "license": "MIT",
     "devDependencies": {
@@ -22,6 +22,6 @@
         "version": "napi version"
     },
     "optionalDependencies": {
-        "mirror-napi-win32-x64-msvc": "0.1.0"
+        "hylarana-napi-win32-x64-msvc": "0.1.0"
     }
 }

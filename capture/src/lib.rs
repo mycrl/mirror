@@ -38,7 +38,7 @@ pub use self::macos::{
     screen::{ScreenCapture, ScreenCaptureError},
 };
 
-use mirror_common::{
+use hylarana_common::{
     frame::{AudioFrame, VideoFrame},
     Size,
 };
@@ -46,12 +46,12 @@ use mirror_common::{
 use thiserror::Error;
 
 #[cfg(target_os = "windows")]
-use mirror_common::win32::Direct3DDevice;
+use hylarana_common::win32::Direct3DDevice;
 
 #[cfg(target_os = "linux")]
 pub fn startup() {
     unsafe {
-        mirror_ffmpeg_sys::avdevice_register_all();
+        hylarana_ffmpeg_sys::avdevice_register_all();
     }
 }
 

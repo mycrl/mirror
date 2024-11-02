@@ -1,23 +1,23 @@
 [package]
-name = "mirror-shared"
+name = "hylarana-shared"
 version = "0.1.0"
 edition = "2021"
 
 [lib]
 crate-type = ["cdylib"]
-name = "mirror"
+name = "hylarana"
 doc = false
 
 [dependencies]
 anyhow = "1.0.82"
 log = "0.4.20"
-mirror-common = { path = "../common", version = "0.1" }
+hylarana-common = { path = "../common", version = "0.1" }
 
 [target.'cfg(target_os = "android")'.dependencies]
 bytes = "1.5"
 jni = "0.21.1"
 num_cpus = "1.16.0"
-mirror-transport = { path = "../transport", version = "0.1" }
+hylarana-transport = { path = "../transport", version = "0.1" }
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
-mirror = { path = "../mirror", version = "0.1" }
+hylarana = { path = "../hylarana", version = "0.1" }

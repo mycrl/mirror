@@ -20,7 +20,7 @@ use std::{
     thread,
 };
 
-use mirror_common::atomic::EasyAtomic;
+use hylarana_common::atomic::EasyAtomic;
 use parking_lot::Mutex;
 
 /// Initialize the srt communication protocol, mainly initializing some
@@ -92,7 +92,7 @@ impl Transport {
 
         let adapter_ = Arc::downgrade(adapter);
         thread::Builder::new()
-            .name("MirrorStreamSenderThread".to_string())
+            .name("HylaranaStreamSenderThread".to_string())
             .spawn(move || {
                 // If the adapter has been released, close the current thread
                 'a: while let Some(adapter) = adapter_.upgrade() {
@@ -213,7 +213,7 @@ impl Transport {
                 };
 
                 thread::Builder::new()
-                    .name("MirrorStreamMulticastReceiverThread".to_string())
+                    .name("HylaranaStreamMulticastReceiverThread".to_string())
                     .spawn(move || {
                         while let Some((seq, bytes)) = socket.read() {
                             if bytes.is_empty() {
@@ -265,7 +265,7 @@ impl Transport {
 
         let adapter_ = Arc::downgrade(adapter);
         thread::Builder::new()
-            .name("MirrorStreamReceiverThread".to_string())
+            .name("HylaranaStreamReceiverThread".to_string())
             .spawn(move || {
                 let mut buf = [0u8; 2000];
 

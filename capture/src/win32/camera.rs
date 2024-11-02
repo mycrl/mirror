@@ -7,7 +7,7 @@ use std::{
     thread,
 };
 
-use mirror_common::{
+use hylarana_common::{
     atomic::EasyAtomic,
     frame::{VideoFormat, VideoFrame, VideoSubFormat},
     win32::{IMFValue, MediaFoundationIMFAttributesSetHelper, MediaThreadClass},

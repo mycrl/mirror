@@ -6,7 +6,7 @@ use std::{
     sync::Arc,
 };
 
-use mirror::{
+use hylarana::{
     raw_window_handle::{
         AppKitWindowHandle, DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle,
         RawDisplayHandle, RawWindowHandle, Win32WindowHandle, WindowHandle, XlibDisplayHandle,

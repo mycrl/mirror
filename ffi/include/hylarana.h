@@ -1,6 +1,6 @@
 //
-// mirror.h
-// mirror
+// hylarana.h
+// hylarana
 //
 // Created by Panda on 2024/4/1.
 //
@@ -164,7 +164,7 @@ typedef struct
 typedef struct
 {
     /**
-     * mirror server address.
+     * hylarana server address.
      */
     const char* server;
     /**
@@ -177,9 +177,9 @@ typedef struct
      * the recommended value is 1400.
      */
     size_t mtu;
-} MirrorDescriptor;
+} HylaranaDescriptor;
 
-typedef const void* Mirror;
+typedef const void* Hylarana;
 typedef const void* Sender;
 typedef const void* Receiver;
 
@@ -262,69 +262,69 @@ typedef struct
 /**
  * Initialize the environment, which must be initialized before using the SDK.
  */
-EXPORT bool mirror_startup();
+EXPORT bool hylarana_startup();
 
 /**
  * Cleans up the environment when the SDK exits, and is recommended to be
  * called when the application exits.
  */
-EXPORT void mirror_shutdown();
+EXPORT void hylarana_shutdown();
 
 #endif // !WIN32
 
 /**
- * Create mirror.
+ * Create hylarana.
  */
-EXPORT Mirror mirror_create(MirrorDescriptor options);
+EXPORT Hylarana hylarana_create(HylaranaDescriptor options);
 
 /**
- * Release mirror.
+ * Release hylarana.
  */
-EXPORT void mirror_destroy(Mirror mirror);
+EXPORT void hylarana_destroy(Hylarana hylarana);
 
 /**
  * Get capture sources.
  */
-EXPORT Sources mirror_get_sources(SourceType kind);
+EXPORT Sources hylarana_get_sources(SourceType kind);
 
 /**
  * Because `Sources` are allocated internally, they also need to be released
  * internally.
  */
-EXPORT void mirror_sources_destroy(Sources* sources);
+EXPORT void hylarana_sources_destroy(Sources* sources);
 
 /**
  * Create a sender, specify a bound NIC address, you can pass callback to
  * get the device screen or sound callback, callback can be null, if it is
  * null then it means no callback data is needed.
  */
-EXPORT Sender mirror_create_sender(Mirror mirror, int id, SenderDescriptor options, FrameSink sink);
+EXPORT Sender hylarana_create_sender(Hylarana hylarana, int id, SenderDescriptor options, FrameSink sink);
 
 /**
  * Get whether the sender uses multicast transmission.
  */
-EXPORT bool mirror_sender_get_multicast(Sender sender);
+EXPORT bool hylarana_sender_get_multicast(Sender sender);
 
 /**
  * Set whether the sender uses multicast transmission.
  */
-EXPORT void mirror_sender_set_multicast(Sender sender, bool is_multicast);
+EXPORT void hylarana_sender_set_multicast(Sender sender, bool is_multicast);
 
 /**
  * Close sender.
  */
-EXPORT void mirror_sender_destroy(Sender sender);
+EXPORT void hylarana_sender_destroy(Sender sender);
 
 /**
  * Create a receiver, specify a bound NIC address, you can pass callback to
  * get the sender's screen or sound callback, callback can not be null.
  */
-EXPORT Receiver mirror_create_receiver(Mirror mirror, int id, VideoDecoderType codec, FrameSink sink);
+EXPORT Receiver hylarana_create_receiver(Hylarana hylarana, int id, VideoDecoderType codec, FrameSink sink);
 
 /**
  * Close receiver.
  */
-EXPORT void mirror_receiver_destroy(Receiver receiver);
+EXPORT void hylarana_receiver_destroy(Receiver receiver);
 
 typedef const void* WindowHandle;
 typedef const void* Render;

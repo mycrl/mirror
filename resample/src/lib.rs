@@ -74,7 +74,7 @@ impl AudioResampler {
 pub mod win32 {
     use std::mem::ManuallyDrop;
 
-    use mirror_common::{
+    use hylarana_common::{
         win32::{
             windows::{
                 core::{Error, Interface},

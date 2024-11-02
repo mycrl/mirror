@@ -5,7 +5,7 @@ use std::{
     mem::size_of,
 };
 
-use mirror_common::strings::Strings;
+use hylarana_common::strings::Strings;
 
 use super::{error, srt_getsockflag, srt_setsockflag, SRTSOCKET, SRT_SOCKOPT, SRT_TRANSTYPE};
 

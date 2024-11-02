@@ -16,8 +16,8 @@ pub mod android {
         JNIEnv, JavaVM,
     };
 
-    use mirror_common::logger;
-    use mirror_transport::{
+    use hylarana_common::logger;
+    use hylarana_transport::{
         with_capacity as package_with_capacity, StreamKind, StreamReceiverAdapter,
         StreamReceiverAdapterExt, StreamSenderAdapter, Transport, TransportDescriptor,
     };
@@ -109,7 +109,7 @@ pub mod android {
     #[allow(non_snake_case)]
     pub extern "system" fn JNI_OnLoad(vm: JavaVM, _: *mut c_void) -> i32 {
         logger::init_with_android(log::LevelFilter::Info);
-        mirror_transport::startup();
+        hylarana_transport::startup();
         JVM.lock().unwrap().replace(vm);
 
         JNI_VERSION_1_6
@@ -158,7 +158,7 @@ pub mod android {
     #[no_mangle]
     #[allow(non_snake_case)]
     pub extern "system" fn JNI_OnUnload(_: JavaVM, _: *mut c_void) {
-        mirror_transport::shutdown();
+        hylarana_transport::shutdown();
     }
 
     pub fn copy_from_byte_array(env: &JNIEnv, array: &JByteArray) -> anyhow::Result<BytesMut> {
@@ -255,7 +255,7 @@ pub mod android {
             JNIEnv,
         };
 
-        use mirror_transport::{StreamBufferInfo, StreamKind};
+        use hylarana_transport::{StreamBufferInfo, StreamKind};
 
         /// /**
         ///  * Streaming data information.
@@ -304,7 +304,7 @@ pub mod android {
     /// ReceiverAdapter): Long
     #[no_mangle]
     #[allow(non_snake_case)]
-    pub extern "system" fn Java_com_github_mycrl_mirror_Mirror_createStreamReceiverAdapter(
+    pub extern "system" fn Java_com_github_mycrl_hylarana_Hylarana_createStreamReceiverAdapter(
         mut env: JNIEnv,
         _this: JClass,
         callback: JObject,
@@ -317,7 +317,7 @@ pub mod android {
 
             let adapter_ = Arc::downgrade(&adapter);
             thread::Builder::new()
-                .name("MirrorJniStreamReceiverThread".to_string())
+                .name("HylaranaJniStreamReceiverThread".to_string())
                 .spawn(move || {
                     while let Some(adapter) = adapter_.upgrade() {
                         if let Some((buf, kind, flags, timestamp)) = adapter.inner.next() {
@@ -347,7 +347,7 @@ pub mod android {
     /// private external fun releaseStreamReceiverAdapter(adapter: Long)
     #[no_mangle]
     #[allow(non_snake_case)]
-    pub extern "system" fn Java_com_github_mycrl_mirror_Mirror_releaseStreamReceiverAdapter(
+    pub extern "system" fn Java_com_github_mycrl_hylarana_Hylarana_releaseStreamReceiverAdapter(
         _env: JNIEnv,
         _this: JClass,
         ptr: *const Arc<AndroidStreamReceiverAdapter>,
@@ -356,17 +356,17 @@ pub mod android {
     }
 
     /// /**
-    ///  * Creates a mirror instance, the return value is a pointer, and you
+    ///  * Creates a hylarana instance, the return value is a pointer, and you
     ///    need to
     ///  * check that the pointer is valid.
     ///  */
-    /// private external fun createMirror(
+    /// private external fun createHylarana(
     ///     bind: String,
     ///     adapterFactory: Long
     /// ): Long
     #[no_mangle]
     #[allow(non_snake_case)]
-    pub extern "system" fn Java_com_github_mycrl_mirror_Mirror_createMirror(
+    pub extern "system" fn Java_com_github_mycrl_hylarana_Hylarana_createHylarana(
         mut env: JNIEnv,
         _this: JClass,
         server: JString,
@@ -389,12 +389,12 @@ pub mod android {
     }
 
     /// /**
-    ///  * Free the mirror instance pointer.
+    ///  * Free the hylarana instance pointer.
     ///  */
-    /// private external fun releaseMirror(mirror: Long)
+    /// private external fun releaseHylarana(hylarana: Long)
     #[no_mangle]
     #[allow(non_snake_case)]
-    pub extern "system" fn Java_com_github_mycrl_mirror_Mirror_releaseMirror(
+    pub extern "system" fn Java_com_github_mycrl_hylarana_Hylarana_releaseHylarana(
         _env: JNIEnv,
         _this: JClass,
         ptr: *const Transport,
@@ -410,7 +410,7 @@ pub mod android {
     /// private external fun createStreamSenderAdapter(kind: Int): Long
     #[no_mangle]
     #[allow(non_snake_case)]
-    pub extern "system" fn Java_com_github_mycrl_mirror_Mirror_createStreamSenderAdapter(
+    pub extern "system" fn Java_com_github_mycrl_hylarana_Hylarana_createStreamSenderAdapter(
         _env: JNIEnv,
         _this: JClass,
     ) -> *const Arc<StreamSenderAdapter> {
@@ -423,7 +423,7 @@ pub mod android {
     /// private external fun senderGetMulticast(adapter: Long): Boolean
     #[no_mangle]
     #[allow(non_snake_case)]
-    pub extern "system" fn Java_com_github_mycrl_mirror_Mirror_senderGetMulticast(
+    pub extern "system" fn Java_com_github_mycrl_hylarana_Hylarana_senderGetMulticast(
         _env: JNIEnv,
         _this: JClass,
         ptr: *const Arc<StreamSenderAdapter>,
@@ -438,7 +438,7 @@ pub mod android {
     /// Boolean)
     #[no_mangle]
     #[allow(non_snake_case)]
-    pub extern "system" fn Java_com_github_mycrl_mirror_Mirror_senderSetMulticast(
+    pub extern "system" fn Java_com_github_mycrl_hylarana_Hylarana_senderSetMulticast(
         _env: JNIEnv,
         _this: JClass,
         ptr: *const Arc<StreamSenderAdapter>,
@@ -453,7 +453,7 @@ pub mod android {
     /// private external fun releaseStreamSenderAdapter(adapter: Long)
     #[no_mangle]
     #[allow(non_snake_case)]
-    pub extern "system" fn Java_com_github_mycrl_mirror_Mirror_releaseStreamSenderAdapter(
+    pub extern "system" fn Java_com_github_mycrl_hylarana_Hylarana_releaseStreamSenderAdapter(
         _env: JNIEnv,
         _this: JClass,
         ptr: *const Arc<StreamSenderAdapter>,
@@ -466,22 +466,22 @@ pub mod android {
     ///  * was successful or not.
     ///  */
     /// private external fun createSender(
-    ///     mirror: Long,
+    ///     hylarana: Long,
     ///     id: Int,
     ///     description: ByteArray,
     ///     adapter: Long
     /// ): Boolean
     #[no_mangle]
     #[allow(non_snake_case)]
-    pub extern "system" fn Java_com_github_mycrl_mirror_Mirror_createSender(
+    pub extern "system" fn Java_com_github_mycrl_hylarana_Hylarana_createSender(
         mut env: JNIEnv,
         _this: JClass,
-        mirror: *const Transport,
+        hylarana: *const Transport,
         id: i32,
         adapter: *const Arc<StreamSenderAdapter>,
     ) -> i32 {
         catcher(&mut env, |_| {
-            unsafe { &*mirror }.create_sender(id as u32, unsafe { &*adapter })?;
+            unsafe { &*hylarana }.create_sender(id as u32, unsafe { &*adapter })?;
             Ok(true)
         })
         .unwrap_or(false) as i32
@@ -497,7 +497,7 @@ pub mod android {
     /// )
     #[no_mangle]
     #[allow(non_snake_case)]
-    pub extern "system" fn Java_com_github_mycrl_mirror_Mirror_sendBufToSender(
+    pub extern "system" fn Java_com_github_mycrl_hylarana_Hylarana_sendBufToSender(
         mut env: JNIEnv,
         _this: JClass,
         adapter: *const Arc<StreamSenderAdapter>,
@@ -518,22 +518,22 @@ pub mod android {
     ///  * was successful or not.
     ///  */
     /// private external fun createReceiver(
-    ///     mirror: Long,
+    ///     hylarana: Long,
     ///     addr: String,
     ///     adapter: Long
     /// ): Boolean
     #[no_mangle]
     #[allow(non_snake_case)]
-    pub extern "system" fn Java_com_github_mycrl_mirror_Mirror_createReceiver(
+    pub extern "system" fn Java_com_github_mycrl_hylarana_Hylarana_createReceiver(
         mut env: JNIEnv,
         _this: JClass,
-        mirror: *const Transport,
+        hylarana: *const Transport,
         id: i32,
         adapter: *const Arc<AndroidStreamReceiverAdapter>,
     ) -> i32 {
         catcher(&mut env, |_| {
             let adapter = unsafe { &*adapter };
-            unsafe { &*mirror }.create_receiver(id as u32, &adapter.inner, move || {
+            unsafe { &*hylarana }.create_receiver(id as u32, &adapter.inner, move || {
                 adapter.online();
             })?;
 
@@ -552,7 +552,7 @@ pub mod desktop {
         ptr::{null_mut, NonNull},
     };
 
-    use mirror::{
+    use hylarana::{
         raw_window_handle::{
             AppKitWindowHandle, DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle,
             RawDisplayHandle, RawWindowHandle, WaylandDisplayHandle, WaylandWindowHandle,
@@ -560,12 +560,12 @@ pub mod desktop {
             XlibWindowHandle,
         },
         shutdown, startup, AVFrameObserver, AVFrameSink, AVFrameStream, AudioDescriptor,
-        AudioFrame, Capture, GraphicsBackend, Mirror, Receiver, ReceiverDescriptor, Renderer,
+        AudioFrame, Capture, GraphicsBackend, Hylarana, Receiver, ReceiverDescriptor, Renderer,
         Sender, SenderDescriptor, Source, SourceType, TransportDescriptor, VideoDecoderType,
         VideoDescriptor, VideoEncoderType, VideoFrame,
     };
 
-    use mirror_common::{logger, strings::Strings, Size};
+    use hylarana_common::{logger, strings::Strings, Size};
 
     // In fact, this is a package that is convenient for recording errors. If the
     // result is an error message, it is output to the log. This function does not
@@ -590,10 +590,10 @@ pub mod desktop {
         reserved: *const std::ffi::c_void,
     ) -> bool {
         match call_reason {
-            1 /* DLL_PROCESS_ATTACH */ => mirror_startup(),
+            1 /* DLL_PROCESS_ATTACH */ => hylarana_startup(),
             0 /* DLL_PROCESS_DETACH */ => {
                 if reserved.is_null() {
-                    mirror_shutdown();
+                    hylarana_shutdown();
                 }
 
                 true
@@ -605,7 +605,7 @@ pub mod desktop {
     /// Initialize the environment, which must be initialized before using the
     /// SDK.
     #[no_mangle]
-    pub extern "C" fn mirror_startup() -> bool {
+    pub extern "C" fn hylarana_startup() -> bool {
         let func = || {
             logger::init_logger(log::LevelFilter::Info, None)?;
 
@@ -619,21 +619,21 @@ pub mod desktop {
     /// Cleans up the environment when the SDK exits, and is recommended to be
     /// called when the application exits.
     #[no_mangle]
-    pub extern "C" fn mirror_shutdown() {
-        log::info!("extern api: mirror quit");
+    pub extern "C" fn hylarana_shutdown() {
+        log::info!("extern api: hylarana quit");
 
         let _ = checker(shutdown());
     }
 
     #[repr(C)]
     #[derive(Debug, Clone, Copy)]
-    pub struct MirrorDescriptor {
+    pub struct HylaranaDescriptor {
         pub server: *const c_char,
         pub multicast: *const c_char,
         pub mtu: usize,
     }
 
-    impl TryInto<TransportDescriptor> for MirrorDescriptor {
+    impl TryInto<TransportDescriptor> for HylaranaDescriptor {
         type Error = anyhow::Error;
 
         fn try_into(self) -> Result<TransportDescriptor, Self::Error> {
@@ -646,27 +646,27 @@ pub mod desktop {
     }
 
     #[repr(C)]
-    pub struct RawMirror(Mirror);
+    pub struct RawHylarana(Hylarana);
 
-    /// Create mirror.
+    /// Create hylarana.
     #[no_mangle]
-    pub extern "C" fn mirror_create(options: MirrorDescriptor) -> *const RawMirror {
-        log::info!("extern api: mirror create");
+    pub extern "C" fn hylarana_create(options: HylaranaDescriptor) -> *const RawHylarana {
+        log::info!("extern api: hylarana create");
 
-        let func = || Ok(Mirror::new(options.try_into()?)?);
+        let func = || Ok(Hylarana::new(options.try_into()?)?);
 
         checker(func())
-            .map(|mirror| Box::into_raw(Box::new(RawMirror(mirror))))
+            .map(|hylarana| Box::into_raw(Box::new(RawHylarana(hylarana))))
             .unwrap_or_else(|_: anyhow::Error| null_mut()) as *const _
     }
 
-    /// Release mirror.
+    /// Release hylarana.
     #[no_mangle]
-    pub extern "C" fn mirror_destroy(mirror: *const RawMirror) {
-        assert!(!mirror.is_null());
+    pub extern "C" fn hylarana_destroy(hylarana: *const RawHylarana) {
+        assert!(!hylarana.is_null());
 
-        log::info!("extern api: mirror destroy");
-        drop(unsafe { Box::from_raw(mirror as *mut RawMirror) });
+        log::info!("extern api: hylarana destroy");
+        drop(unsafe { Box::from_raw(hylarana as *mut RawHylarana) });
     }
 
     #[repr(C)]
@@ -687,7 +687,7 @@ pub mod desktop {
         }
     }
 
-    impl From<mirror::SourceType> for RawSourceType {
+    impl From<hylarana::SourceType> for RawSourceType {
         fn from(value: SourceType) -> Self {
             match value {
                 SourceType::Screen => Self::Screen,
@@ -731,8 +731,8 @@ pub mod desktop {
 
     /// Get capture sources from sender.
     #[no_mangle]
-    pub extern "C" fn mirror_get_sources(kind: RawSourceType) -> RawSources {
-        log::info!("extern api: mirror get sources: kind={:?}", kind);
+    pub extern "C" fn hylarana_get_sources(kind: RawSourceType) -> RawSources {
+        log::info!("extern api: hylarana get sources: kind={:?}", kind);
 
         let mut items = ManuallyDrop::new(
             Capture::get_sources(kind.into())
@@ -762,7 +762,7 @@ pub mod desktop {
     /// Because `Sources` are allocated internally, they also need to be
     /// released internally.
     #[no_mangle]
-    pub extern "C" fn mirror_sources_destroy(sources: *const RawSources) {
+    pub extern "C" fn hylarana_sources_destroy(sources: *const RawSources) {
         assert!(!sources.is_null());
 
         let sources = unsafe { &*sources };
@@ -1006,21 +1006,21 @@ pub mod desktop {
     /// get the device screen or sound callback, callback can be null, if it is
     /// null then it means no callback data is needed.
     #[no_mangle]
-    pub extern "C" fn mirror_create_sender(
-        mirror: *const RawMirror,
+    pub extern "C" fn hylarana_create_sender(
+        hylarana: *const RawHylarana,
         id: c_int,
         options: RawSenderDescriptor,
         sink: RawAVFrameStream,
     ) -> *const RawSender {
-        assert!(!mirror.is_null());
+        assert!(!hylarana.is_null());
 
-        log::info!("extern api: mirror create sender");
+        log::info!("extern api: hylarana create sender");
 
         let func = || {
             let options: SenderDescriptor = options.try_into()?;
-            log::info!("mirror create options={:?}", options);
+            log::info!("hylarana create options={:?}", options);
 
-            Ok(unsafe { &*mirror }
+            Ok(unsafe { &*hylarana }
                 .0
                 .create_sender(id as u32, options, sink)?)
         };
@@ -1032,28 +1032,28 @@ pub mod desktop {
 
     /// Set whether the sender uses multicast transmission.
     #[no_mangle]
-    pub extern "C" fn mirror_sender_set_multicast(sender: *const RawSender, is_multicast: bool) {
+    pub extern "C" fn hylarana_sender_set_multicast(sender: *const RawSender, is_multicast: bool) {
         assert!(!sender.is_null());
 
-        log::info!("extern api: mirror set sender multicast={}", is_multicast);
+        log::info!("extern api: hylarana set sender multicast={}", is_multicast);
         unsafe { &*sender }.0.set_multicast(is_multicast);
     }
 
     /// Get whether the sender uses multicast transmission.
     #[no_mangle]
-    pub extern "C" fn mirror_sender_get_multicast(sender: *const RawSender) -> bool {
+    pub extern "C" fn hylarana_sender_get_multicast(sender: *const RawSender) -> bool {
         assert!(!sender.is_null());
 
-        log::info!("extern api: mirror get sender multicast");
+        log::info!("extern api: hylarana get sender multicast");
         unsafe { &*sender }.0.get_multicast()
     }
 
     /// Close sender.
     #[no_mangle]
-    pub extern "C" fn mirror_sender_destroy(sender: *const RawSender) {
+    pub extern "C" fn hylarana_sender_destroy(sender: *const RawSender) {
         assert!(!sender.is_null());
 
-        log::info!("extern api: mirror close sender");
+        log::info!("extern api: hylarana close sender");
         drop(unsafe { Box::from_raw(sender as *mut RawSender) })
     }
 
@@ -1085,18 +1085,18 @@ pub mod desktop {
     /// Create a receiver, specify a bound NIC address, you can pass callback to
     /// get the sender's screen or sound callback, callback can not be null.
     #[no_mangle]
-    pub extern "C" fn mirror_create_receiver(
-        mirror: *const RawMirror,
+    pub extern "C" fn hylarana_create_receiver(
+        hylarana: *const RawHylarana,
         id: c_int,
         codec: RawVideoDecoderType,
         sink: RawAVFrameStream,
     ) -> *const RawReceiver {
-        assert!(!mirror.is_null());
+        assert!(!hylarana.is_null());
 
-        log::info!("extern api: mirror create receiver");
+        log::info!("extern api: hylarana create receiver");
 
         let func = || {
-            unsafe { &*mirror }.0.create_receiver(
+            unsafe { &*hylarana }.0.create_receiver(
                 id as u32,
                 ReceiverDescriptor {
                     video: codec.into(),
@@ -1112,10 +1112,10 @@ pub mod desktop {
 
     /// Close receiver.
     #[no_mangle]
-    pub extern "C" fn mirror_receiver_destroy(receiver: *const RawReceiver) {
+    pub extern "C" fn hylarana_receiver_destroy(receiver: *const RawReceiver) {
         assert!(!receiver.is_null());
 
-        log::info!("extern api: mirror close receiver");
+        log::info!("extern api: hylarana close receiver");
         drop(unsafe { Box::from_raw(receiver as *mut RawReceiver) })
     }
 

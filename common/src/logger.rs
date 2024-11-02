@@ -70,7 +70,7 @@ pub fn init_logger(level: LevelFilter, path: Option<&str>) -> Result<(), LoggerI
                 create_dir(path)?;
             }
 
-            logger = logger.chain(DateBased::new(path, "%Y-%m-%d-mirror.log"))
+            logger = logger.chain(DateBased::new(path, "%Y-%m-%d-hylarana.log"))
         } else {
             logger = logger.chain(std::io::stdout());
         }
@@ -142,7 +142,7 @@ impl log::Log for AndroidLogger {
         unsafe {
             android_log_write(
                 AndroidLogLevel::from_level(record.level()) as c_int,
-                "com.github.mycrl.mirror\0".as_ptr() as *const _,
+                "com.github.mycrl.hylarana\0".as_ptr() as *const _,
                 format!("{}\0", record.args()).as_ptr() as *const _,
             );
         }

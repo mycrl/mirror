@@ -8,24 +8,24 @@ pub use self::{
 
 use std::{slice::from_raw_parts, sync::Arc};
 
-pub use mirror_capture::{Capture, Source, SourceType};
-pub use mirror_codec::{VideoDecoderType, VideoEncoderType};
-pub use mirror_common::{
+pub use hylarana_capture::{Capture, Source, SourceType};
+pub use hylarana_codec::{VideoDecoderType, VideoEncoderType};
+pub use hylarana_common::{
     frame::{AudioFrame, VideoFormat, VideoFrame, VideoSubFormat},
     Size,
 };
 
-pub use mirror_graphics::raw_window_handle;
-pub use mirror_transport::TransportDescriptor;
+pub use hylarana_graphics::raw_window_handle;
+pub use hylarana_transport::TransportDescriptor;
 
 #[cfg(target_os = "windows")]
-use mirror_common::win32::{
+use hylarana_common::win32::{
     d3d_texture_borrowed_raw, set_process_priority, shutdown as win32_shutdown,
     startup as win32_startup, windows::Win32::Foundation::HWND, Direct3DDevice, ProcessPriority,
 };
 
 #[cfg(target_os = "macos")]
-use mirror_common::macos::{CVPixelBufferRef, PixelBufferRef};
+use hylarana_common::macos::{CVPixelBufferRef, PixelBufferRef};
 
 use parking_lot::Mutex;
 
@@ -33,29 +33,29 @@ use parking_lot::Mutex;
 use parking_lot::RwLock;
 
 #[cfg(target_os = "windows")]
-use mirror_graphics::dx11::Dx11Renderer;
+use hylarana_graphics::dx11::Dx11Renderer;
 
-use mirror_graphics::{
+use hylarana_graphics::{
     Renderer as WgpuRenderer, RendererOptions as WgpuRendererOptions, SurfaceTarget, Texture,
     Texture2DBuffer, Texture2DResource,
 };
 
-use mirror_transport::Transport;
+use hylarana_transport::Transport;
 use rodio::{OutputStream, OutputStreamHandle, Sink};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
-pub enum MirrorError {
+pub enum HylaranaError {
     #[error(transparent)]
     #[cfg(target_os = "windows")]
-    Win32Error(#[from] mirror_common::win32::windows::core::Error),
+    Win32Error(#[from] hylarana_common::win32::windows::core::Error),
     #[error(transparent)]
     TransportError(#[from] std::io::Error),
 }
 
 /// Initialize the environment, which must be initialized before using the sdk.
-pub fn startup() -> Result<(), MirrorError> {
-    log::info!("mirror startup");
+pub fn startup() -> Result<(), HylaranaError> {
+    log::info!("hylarana startup");
 
     #[cfg(target_os = "windows")]
     if let Err(e) = win32_startup() {
@@ -73,12 +73,12 @@ pub fn startup() -> Result<(), MirrorError> {
     }
 
     #[cfg(target_os = "linux")]
-    mirror_capture::startup();
+    hylarana_capture::startup();
 
-    mirror_codec::startup();
+    hylarana_codec::startup();
     log::info!("codec initialized");
 
-    mirror_transport::startup();
+    hylarana_transport::startup();
     log::info!("transport initialized");
 
     log::info!("all initialized");
@@ -87,11 +87,11 @@ pub fn startup() -> Result<(), MirrorError> {
 
 /// Cleans up the environment when the sdk exits, and is recommended to be
 /// called when the application exits.
-pub fn shutdown() -> Result<(), MirrorError> {
-    log::info!("mirror shutdown");
+pub fn shutdown() -> Result<(), HylaranaError> {
+    log::info!("hylarana shutdown");
 
-    mirror_codec::shutdown();
-    mirror_transport::shutdown();
+    hylarana_codec::shutdown();
+    hylarana_transport::shutdown();
 
     #[cfg(target_os = "windows")]
     if let Err(e) = win32_shutdown() {
@@ -135,11 +135,11 @@ pub trait AVFrameSink: Sync + Send {
 /// Abstraction of audio and video streams.
 pub trait AVFrameStream: AVFrameSink + AVFrameObserver {}
 
-pub struct Mirror(Transport);
+pub struct Hylarana(Transport);
 
-impl Mirror {
-    pub fn new(options: TransportDescriptor) -> Result<Self, MirrorError> {
-        log::info!("create mirror: options={:?}", options);
+impl Hylarana {
+    pub fn new(options: TransportDescriptor) -> Result<Self, HylaranaError> {
+        log::info!("create hylarana: options={:?}", options);
         Ok(Self(Transport::new(options)?))
     }
 
@@ -208,9 +208,9 @@ pub enum RendererError {
     AudioSendQueueError,
     #[error(transparent)]
     #[cfg(target_os = "windows")]
-    VideoDx11GraphicsError(#[from] mirror_graphics::dx11::Dx11GraphicsError),
+    VideoDx11GraphicsError(#[from] hylarana_graphics::dx11::Dx11GraphicsError),
     #[error(transparent)]
-    VideoGraphicsError(#[from] mirror_graphics::GraphicsError),
+    VideoGraphicsError(#[from] hylarana_graphics::GraphicsError),
     #[error("invalid d3d11texture2d texture")]
     #[cfg(target_os = "windows")]
     VideoInvalidD3D11Texture,
@@ -364,7 +364,7 @@ impl<'a> VideoRender<'a> {
             #[cfg(target_os = "windows")]
             VideoSubFormat::D3D11 => {
                 let texture =
-                    Texture2DResource::Texture(mirror_graphics::Texture2DRaw::ID3D11Texture2D(
+                    Texture2DResource::Texture(hylarana_graphics::Texture2DRaw::ID3D11Texture2D(
                         d3d_texture_borrowed_raw(&(frame.data[0] as *mut _))
                             .ok_or_else(|| RendererError::VideoInvalidD3D11Texture)?
                             .clone(),

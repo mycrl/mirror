@@ -5,22 +5,22 @@ use std::{
     thread,
 };
 
-use mirror_codec::{AudioDecoder, VideoDecoder, VideoDecoderSettings, VideoDecoderType};
-use mirror_common::atomic::EasyAtomic;
-use mirror_transport::{StreamKind, StreamMultiReceiverAdapter, StreamReceiverAdapterExt};
+use hylarana_codec::{AudioDecoder, VideoDecoder, VideoDecoderSettings, VideoDecoderType};
+use hylarana_common::atomic::EasyAtomic;
+use hylarana_transport::{StreamKind, StreamMultiReceiverAdapter, StreamReceiverAdapterExt};
 use thiserror::Error;
 
 #[cfg(target_os = "windows")]
-use mirror_common::win32::MediaThreadClass;
+use hylarana_common::win32::MediaThreadClass;
 
 #[derive(Debug, Error)]
 pub enum ReceiverError {
     #[error(transparent)]
     CreateThreadError(#[from] std::io::Error),
     #[error(transparent)]
-    VideoDecoderError(#[from] mirror_codec::VideoDecoderError),
+    VideoDecoderError(#[from] hylarana_codec::VideoDecoderError),
     #[error(transparent)]
-    AudioDecoderError(#[from] mirror_codec::AudioDecoderError),
+    AudioDecoderError(#[from] hylarana_codec::AudioDecoderError),
 }
 
 #[derive(Debug, Clone)]

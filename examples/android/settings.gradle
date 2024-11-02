@@ -16,6 +16,6 @@ dependencyResolutionManagement {
 
 rootProject.name = 'simple'
 include ':app'
-include ':mirror'
+include ':hylarana'
 
-project(':mirror').projectDir = new File(settingsDir, '../../sdk/android/mirror')
+project(':hylarana').projectDir = new File(settingsDir, '../../sdk/android/hylarana')

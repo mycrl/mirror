@@ -23,46 +23,46 @@
 
 extern "C"
 {
-#include <mirror.h>
+#include <hylarana.h>
 }
 
 #include "./cli.h"
 
 static Render RENDER = nullptr;
 
-class MirrorService
+class HylaranaService
 {
 public:
-    MirrorService()
+    HylaranaService()
     {
-        MirrorDescriptor mirror_options;
-        mirror_options.server = const_cast<char*>(OPTIONS.server.c_str());
-        mirror_options.multicast = const_cast<char*>("239.0.0.1");
-        mirror_options.mtu = 1500;
+        HylaranaDescriptor hylarana_options;
+        hylarana_options.server = const_cast<char*>(OPTIONS.server.c_str());
+        hylarana_options.multicast = const_cast<char*>("239.0.0.1");
+        hylarana_options.mtu = 1500;
 
-        _mirror = mirror_create(mirror_options);
+        _hylarana = hylarana_create(hylarana_options);
     }
 
-    ~MirrorService()
+    ~HylaranaService()
     {
         Close();
 
-        if (_mirror != nullptr)
+        if (_hylarana != nullptr)
         {
-            mirror_destroy(_mirror);
-            _mirror = nullptr;
+            hylarana_destroy(_hylarana);
+            _hylarana = nullptr;
         }
     }
 
-    bool CreateMirrorSender()
+    bool CreateHylaranaSender()
     {
         if (_sender != nullptr)
         {
             return true;
         }
 
-        auto video_sources = mirror_get_sources(SOURCE_TYPE_SCREEN);
-        auto audio_sources = mirror_get_sources(SOURCE_TYPE_AUDIO);
+        auto video_sources = hylarana_get_sources(SOURCE_TYPE_SCREEN);
+        auto audio_sources = hylarana_get_sources(SOURCE_TYPE_AUDIO);
 
         VideoDescriptor video_options;
         video_options.encoder.codec = OPTIONS.encoder;
@@ -101,10 +101,10 @@ public:
         sink.audio = nullptr;
         sink.video = nullptr;
         sink.initialized = nullptr;
-        sink.close = MirrorService::close_proc;
+        sink.close = HylaranaService::close_proc;
         sink.ctx = (void*)this;
 
-        _sender = mirror_create_sender(_mirror,
+        _sender = hylarana_create_sender(_hylarana,
                                        OPTIONS.id,
                                        options,
                                        sink);
@@ -117,7 +117,7 @@ public:
         return true;
     }
 
-    bool CreateMirrorReceiver()
+    bool CreateHylaranaReceiver()
     {
         if (_receiver != nullptr)
         {
@@ -126,12 +126,12 @@ public:
 
         FrameSink sink;
         sink.initialized = nullptr;
-        sink.video = MirrorService::video_proc;
-        sink.audio = MirrorService::audio_proc;
-        sink.close = MirrorService::close_proc;
+        sink.video = HylaranaService::video_proc;
+        sink.audio = HylaranaService::audio_proc;
+        sink.close = HylaranaService::close_proc;
         sink.ctx = (void*)this;
 
-        _receiver = mirror_create_receiver(_mirror,
+        _receiver = hylarana_create_receiver(_hylarana,
                                            OPTIONS.id,
                                            OPTIONS.decoder,
                                            sink);
@@ -157,18 +157,18 @@ public:
 
         if (_sender != nullptr)
         {
-            mirror_sender_destroy(_sender);
+            hylarana_sender_destroy(_sender);
             _sender = nullptr;
         }
 
         if (_receiver != nullptr)
         {
-            mirror_receiver_destroy(_receiver);
+            hylarana_receiver_destroy(_receiver);
             _receiver = nullptr;
         }
     }
 private:
-    Mirror _mirror = nullptr;
+    Hylarana _hylarana = nullptr;
     Sender _sender = nullptr;
     Receiver _receiver = nullptr;
     bool _is_runing = true;
@@ -185,12 +185,12 @@ private:
 
     static void close_proc(void* ctx)
     {
-        auto mirror = (MirrorService*)ctx;
-        mirror->Close();
+        auto hylarana = (HylaranaService*)ctx;
+        hylarana->Close();
     }
 };
 
-static MirrorService* MIRROR_SERVICE = nullptr;
+static HylaranaService* MIRROR_SERVICE = nullptr;
 
 #ifdef WIN32
 LRESULT CALLBACK window_handle_proc(HWND hwnd,
@@ -207,7 +207,7 @@ LRESULT CALLBACK window_handle_proc(HWND hwnd,
         switch (wparam)
         {
         case 'S':
-            if (!MIRROR_SERVICE->CreateMirrorSender())
+            if (!MIRROR_SERVICE->CreateHylaranaSender())
             {
                 MessageBox(nullptr,
                            TEXT("Failed to create sender"),
@@ -217,7 +217,7 @@ LRESULT CALLBACK window_handle_proc(HWND hwnd,
 
             break;
         case 'R':
-            if (!MIRROR_SERVICE->CreateMirrorReceiver())
+            if (!MIRROR_SERVICE->CreateHylaranaReceiver())
             {
                 MessageBox(nullptr,
                            TEXT("Failed to create receiver"),
@@ -286,7 +286,7 @@ int WINAPI WinMain(HINSTANCE hinstance,
                                                         OPTIONS.width,
                                                         OPTIONS.height);
     RENDER = renderer_create(window_handle, RENDER_BACKEND_DX11);
-    MIRROR_SERVICE = new MirrorService();
+    MIRROR_SERVICE = new HylaranaService();
 
     MSG message;
     while (GetMessage(&message, nullptr, 0, 0))
@@ -313,7 +313,7 @@ int main(int argc, char* argv[])
         return -1;
     }
 
-    mirror_startup();
+    hylarana_startup();
 
         SDL_Init(SDL_INIT_EVENTS);
 #ifdef LINUX
@@ -353,7 +353,7 @@ int main(int argc, char* argv[])
 #endif
 
     RENDER = renderer_create(window_handle, RENDER_BACKEND_WGPU);
-    MIRROR_SERVICE = new MirrorService();
+    MIRROR_SERVICE = new HylaranaService();
 
     SDL_Event event;
     while (SDL_WaitEvent(&event) == 1)
@@ -367,11 +367,11 @@ int main(int argc, char* argv[])
             switch (event.key.keysym.sym)
             {
             case SDLK_r:
-                MIRROR_SERVICE->CreateMirrorReceiver();
+                MIRROR_SERVICE->CreateHylaranaReceiver();
 
                 break;
             case SDLK_s:
-                MIRROR_SERVICE->CreateMirrorSender();
+                MIRROR_SERVICE->CreateHylaranaSender();
 
                 break;
             case SDLK_k:
@@ -384,7 +384,7 @@ int main(int argc, char* argv[])
 
     renderer_destroy(RENDER);
     window_handle_destroy(window_handle);
-    mirror_shutdown();
+    hylarana_shutdown();
 
     SDL_DestroyWindow(window);
     SDL_Quit();

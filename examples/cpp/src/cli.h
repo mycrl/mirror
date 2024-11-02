@@ -4,7 +4,7 @@
 
 extern "C"
 {
-#include <mirror.h>
+#include <hylarana.h>
 }
 
 #include <stdexcept>
@@ -156,7 +156,7 @@ int parse_argv(std::string args)
             printf("--height    default=720             - video height\n");
             printf("--encoder   default=*               - libx264, h264_qsv, h264_nvenc, h264_videotoolbox\n");
             printf("--decoder   default=*               - h264, d3d11va, h264_qsv, h264_cuvid, h264_videotoolbox\n");
-            printf("--server    default=127.0.0.1:8080  - mirror service bind address\n");
+            printf("--server    default=127.0.0.1:8080  - hylarana service bind address\n");
             printf("\n");
             return -1;
         }

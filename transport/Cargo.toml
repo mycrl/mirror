@@ -1,17 +1,17 @@
 [package]
-name = "mirror-transport"
+name = "hylarana-transport"
 version = "0.1.0"
 edition = "2021"
 description = "A cross-platform screen casting library implemented by Rust."
 license = "LGPL-2.1-only"
 readme = "../README.md"
-repository = "https://github.com/mycrl/mirror"
+repository = "https://github.com/mycrl/hylarana"
 
 [dependencies]
 bytes = "1.5.0"
 log = "0.4.20"
 crossbeam = "0.8.4"
-mirror-common = { path = "../common", version = "0.1" }
+hylarana-common = { path = "../common", version = "0.1" }
 xxhash-rust = { version = "0.8.11", features = ["xxh3", "xxh64"] }
 parking_lot = "0.12"
 rmp-serde = "1.3.0"

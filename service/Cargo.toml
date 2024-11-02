@@ -1,18 +1,18 @@
 [package]
-name = "mirror-service"
+name = "hylarana-service"
 version = "0.1.0"
 edition = "2021"
 description = "A cross-platform screen casting library implemented by Rust."
 license = "LGPL-2.1-only"
 readme = "../README.md"
-repository = "https://github.com/mycrl/mirror"
+repository = "https://github.com/mycrl/hylarana"
 
 [dependencies]
 anyhow = "1.0.79"
 log = "0.4.20"
 simple_logger = "4"
-mirror-common = { path = "../common", version = "0.1" }
-mirror-transport = { path = "../transport", version = "0.1" }
+hylarana-common = { path = "../common", version = "0.1" }
+hylarana-transport = { path = "../transport", version = "0.1" }
 clap = { version = "4", features = ["derive"] }
 tokio = { version = "1.37.0", features = ["full"] }
 mimalloc = { version = "*", default-features = false }

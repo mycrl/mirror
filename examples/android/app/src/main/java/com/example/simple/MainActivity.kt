@@ -302,14 +302,14 @@ open class Permissions : Layout() {
 }
 
 class MainActivity : Permissions() {
-    private var simpleMirrorService: Intent? = null
-    private var simpleMirrorServiceBinder: SimpleMirrorServiceBinder? = null
+    private var simpleHylaranaService: Intent? = null
+    private var simpleHylaranaServiceBinder: SimpleHylaranaServiceBinder? = null
     private val connection: ServiceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
             Log.i("simple", "service connected.")
 
-            simpleMirrorServiceBinder = service as SimpleMirrorServiceBinder
-            simpleMirrorServiceBinder?.setObserver(object : SimpleMirrorServiceObserver() {
+            simpleHylaranaServiceBinder = service as SimpleHylaranaServiceBinder
+            simpleHylaranaServiceBinder?.setObserver(object : SimpleHylaranaServiceObserver() {
                 override fun onConnected() {
                     layoutSetState(State.Connected)
                 }
@@ -320,7 +320,7 @@ class MainActivity : Permissions() {
             })
 
             layoutGetSurface()?.let { surface ->
-                simpleMirrorServiceBinder?.setRenderSurface(surface)
+                simpleHylaranaServiceBinder?.setRenderSurface(surface)
             }
         }
 
@@ -334,13 +334,13 @@ class MainActivity : Permissions() {
 
         registerPermissionsHandler { intent ->
             if (intent != null) {
-                simpleMirrorServiceBinder?.createSender(intent, resources.displayMetrics, senderId)
+                simpleHylaranaServiceBinder?.createSender(intent, resources.displayMetrics, senderId)
             }
         }
 
         layoutSetObserver(object : Observer() {
             override fun OnConnect(server: String) {
-                simpleMirrorServiceBinder?.connect(server)
+                simpleHylaranaServiceBinder?.connect(server)
             }
 
             override fun OnPublish(id: Int) {
@@ -349,40 +349,40 @@ class MainActivity : Permissions() {
             }
 
             override fun OnSubscribe(id: Int) {
-                simpleMirrorServiceBinder?.createReceiver(id)
+                simpleHylaranaServiceBinder?.createReceiver(id)
             }
 
             override fun OnStop() {
                 val state = layoutGetState()
                 if (state == State.Publishing) {
-                    simpleMirrorServiceBinder?.stopSender()
+                    simpleHylaranaServiceBinder?.stopSender()
                     layoutSetState(State.Connected)
                 } else {
-                    simpleMirrorServiceBinder?.stopReceiver()
+                    simpleHylaranaServiceBinder?.stopReceiver()
                 }
             }
 
             override fun SetMulticast(isMulticast: Boolean) {
-                simpleMirrorServiceBinder?.setMulticast(isMulticast)
+                simpleHylaranaServiceBinder?.setMulticast(isMulticast)
             }
         })
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        simpleMirrorService = startSimpleMirrorService()
+        simpleHylaranaService = startSimpleHylaranaService()
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        stopService(simpleMirrorService)
+        stopService(simpleHylaranaService)
     }
 
-    private fun startSimpleMirrorService(): Intent {
-        val intent = Intent(this, SimpleMirrorService::class.java)
+    private fun startSimpleHylaranaService(): Intent {
+        val intent = Intent(this, SimpleHylaranaService::class.java)
         bindService(intent, connection, BIND_AUTO_CREATE)
 
-        Log.i("simple", "start simple mirror service.")
+        Log.i("simple", "start simple hylarana service.")
 
         return intent
     }

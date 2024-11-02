@@ -1,6 +1,6 @@
 use super::Texture2DSample;
 
-use mirror_common::Size;
+use hylarana_common::Size;
 use wgpu::{Device, Texture, TextureAspect, TextureFormat};
 
 /// YCbCr, Y′CbCr, or Y Pb/Cb Pr/Cr, also written as YCBCR or Y′CBCR, is a

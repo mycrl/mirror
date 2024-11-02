@@ -84,14 +84,14 @@ cargoNdk {
     targets = ["arm64"]
     module = "../../ffi"
     targetDirectory = "../target"
-    librariesNames = ["libmirror.so"]
+    librariesNames = ["libhylarana.so"]
 }
 
 publishing {
     repositories {
         maven {
             name = 'GitHubPackages'
-            url = 'https://maven.pkg.github.com/mycrl/mirror'
+            url = 'https://maven.pkg.github.com/mycrl/hylarana'
             credentials {
                 username = System.getenv('GITHUB_USERNAME')
                 password = System.getenv('GITHUB_TOKEN')
@@ -102,8 +102,8 @@ publishing {
     publications {
         release(MavenPublication) {
             groupId = 'com.github.mycrl'
-            artifactId = 'mirror'
-            version = '0.5.1'
+            artifactId = 'hylarana'
+            version = '0.1.0'
 
             afterEvaluate {
                 from components.release

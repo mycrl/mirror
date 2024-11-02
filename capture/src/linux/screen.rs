@@ -7,13 +7,13 @@ use std::{
     time::Duration,
 };
 
-use mirror_common::{
+use hylarana_common::{
     atomic::EasyAtomic,
     c_str,
     frame::{VideoFormat, VideoFrame, VideoSubFormat},
 };
 
-use mirror_ffmpeg_sys::*;
+use hylarana_ffmpeg_sys::*;
 use thiserror::Error;
 
 #[derive(Error, Debug)]

@@ -5,15 +5,15 @@ use crate::codec::{
 
 use std::{ffi::c_int, ptr::null_mut};
 
-use mirror_common::frame::{VideoFormat, VideoFrame, VideoSubFormat};
+use hylarana_common::frame::{VideoFormat, VideoFrame, VideoSubFormat};
 use mirror_ffmpeg_sys::*;
 use thiserror::Error;
 
 #[cfg(any(target_os = "windows", target_os = "macos"))]
-use mirror_common::Size;
+use hylarana_common::Size;
 
 #[cfg(target_os = "windows")]
-use mirror_common::win32::Direct3DDevice;
+use hylarana_common::win32::Direct3DDevice;
 
 #[derive(Debug, Clone)]
 pub struct VideoDecoderSettings {

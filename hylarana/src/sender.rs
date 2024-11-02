@@ -8,23 +8,23 @@ use std::{
 use bytes::BytesMut;
 use thiserror::Error;
 
-use mirror_capture::{
+use hylarana_capture::{
     AudioCaptureSourceDescription, Capture, CaptureDescriptor, FrameArrived, Source,
     SourceCaptureDescriptor, VideoCaptureSourceDescription,
 };
 
-use mirror_common::{
+use hylarana_common::{
     atomic::EasyAtomic,
     frame::{AudioFrame, VideoFrame},
     Size,
 };
 
-use mirror_codec::{
+use hylarana_codec::{
     create_opus_identification_header, AudioEncoder, AudioEncoderSettings, CodecType, VideoEncoder,
     VideoEncoderSettings, VideoEncoderType,
 };
 
-use mirror_transport::{
+use hylarana_transport::{
     copy_from_slice as package_copy_from_slice, BufferFlag, StreamBufferInfo, StreamSenderAdapter,
 };
 
@@ -33,11 +33,11 @@ pub enum SenderError {
     #[error(transparent)]
     TransportError(#[from] std::io::Error),
     #[error(transparent)]
-    CaptureError(#[from] mirror_capture::CaptureError),
+    CaptureError(#[from] hylarana_capture::CaptureError),
     #[error(transparent)]
-    VideoEncoderError(#[from] mirror_codec::VideoEncoderError),
+    VideoEncoderError(#[from] hylarana_codec::VideoEncoderError),
     #[error(transparent)]
-    AudioEncoderError(#[from] mirror_codec::AudioEncoderError),
+    AudioEncoderError(#[from] hylarana_codec::AudioEncoderError),
 }
 
 /// Description of video coding.
@@ -386,7 +386,7 @@ impl<T: AVFrameStream + 'static> Drop for Sender<T> {
         // it should be distinguished whether it is an active closure, but in order to
         // make it simpler to implement, let's do it this way first.
         if let Err(e) = self.capture.close() {
-            log::warn!("mirror sender capture close error={:?}", e);
+            log::warn!("hylarana sender capture close error={:?}", e);
         }
 
         self.adapter.close();

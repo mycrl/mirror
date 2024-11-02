@@ -1,16 +1,16 @@
 [package]
-name = "mirror-codec"
+name = "hylarana-codec"
 version = "0.1.0"
 edition = "2021"
 description = "A cross-platform screen casting library implemented by Rust."
 license = "LGPL-2.1-only"
 readme = "../README.md"
-repository = "https://github.com/mycrl/mirror"
+repository = "https://github.com/mycrl/hylarana"
 
 [dependencies]
 log = "0.4.20"
 thiserror = "1.0.63"
-mirror-common = { path = "../common", version = "0.1" }
+hylarana-common = { path = "../common", version = "0.1" }
 
 [target.'cfg(target_os = "windows")'.dependencies.mirror-ffmpeg-sys]
 version = "0.1"

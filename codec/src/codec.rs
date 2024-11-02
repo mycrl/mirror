@@ -1,14 +1,14 @@
 use std::str::FromStr;
 
-use mirror_common::c_str;
+use hylarana_common::c_str;
 use mirror_ffmpeg_sys::*;
 use thiserror::Error;
 
 #[cfg(any(target_os = "windows", target_os = "macos"))]
-use mirror_common::Size;
+use hylarana_common::Size;
 
 #[cfg(target_os = "windows")]
-use mirror_common::win32::{windows::core::Interface, Direct3DDevice};
+use hylarana_common::win32::{windows::core::Interface, Direct3DDevice};
 
 #[derive(Error, Debug)]
 pub enum CreateVideoContextError {
@@ -22,7 +22,7 @@ pub enum CreateVideoContextError {
     MissingDirect3DDevice,
     #[cfg(target_os = "windows")]
     #[error(transparent)]
-    SetMultithreadProtectedError(#[from] mirror_common::win32::windows::core::Error),
+    SetMultithreadProtectedError(#[from] hylarana_common::win32::windows::core::Error),
     #[error("failed to init av hardware device context")]
     InitAVHardwareDeviceContextError,
     #[error("failed to init qsv device context")]

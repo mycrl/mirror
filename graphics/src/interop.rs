@@ -4,7 +4,7 @@ use thiserror::Error;
 pub enum InteropError {
     #[cfg(target_os = "windows")]
     #[error(transparent)]
-    DxError(#[from] mirror_common::win32::windows::core::Error),
+    DxError(#[from] hylarana_common::win32::windows::core::Error),
     #[error("not found wgpu dx12 device")]
     NotFoundDxBackend,
     #[error("dx11 shared handle is invalid")]
@@ -23,7 +23,7 @@ pub mod win32 {
 
     use super::InteropError;
 
-    use mirror_common::win32::{
+    use hylarana_common::win32::{
         windows::Win32::Graphics::{
             Direct3D11::{ID3D11Texture2D, D3D11_RESOURCE_MISC_SHARED, D3D11_USAGE_DEFAULT},
             Direct3D12::ID3D12Resource,

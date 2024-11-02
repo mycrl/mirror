@@ -7,8 +7,8 @@ use self::window::{
 
 use std::sync::Arc;
 
-use mirror::{
-    AudioDescriptor, Capture, GraphicsBackend, Mirror, Receiver, ReceiverDescriptor, Renderer,
+use hylarana::{
+    AudioDescriptor, Capture, GraphicsBackend, Hylarana, Receiver, ReceiverDescriptor, Renderer,
     Sender, SenderDescriptor, Source, SourceType, TransportDescriptor, VideoDecoderType,
     VideoDescriptor, VideoEncoderType,
 };
@@ -31,7 +31,7 @@ pub fn startup(user_data: Option<String>) -> napi::Result<()> {
             );
         }));
 
-        mirror::startup()?;
+        hylarana::startup()?;
         Ok::<_, anyhow::Error>(())
     };
 
@@ -41,7 +41,7 @@ pub fn startup(user_data: Option<String>) -> napi::Result<()> {
 /// Roll out the sdk environment and clean up resources.
 #[napi]
 pub fn shutdown() -> napi::Result<()> {
-    mirror::shutdown().map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    hylarana::shutdown().map_err(|e| napi::Error::from_reason(e.to_string()))?;
 
     Ok(())
 }
@@ -54,7 +54,7 @@ pub enum Events {
 
 #[napi]
 #[derive(Debug, Clone, Copy)]
-pub enum MirrorBackend {
+pub enum HylaranaBackend {
     /// Use Direct3D 11.x as a rendering backend, this is not a cross-platform
     /// option and is only available on windows, on some Direct3D 11 only
     /// devices.
@@ -64,7 +64,7 @@ pub enum MirrorBackend {
     WebGPU,
 }
 
-impl Into<GraphicsBackend> for MirrorBackend {
+impl Into<GraphicsBackend> for HylaranaBackend {
     fn into(self) -> GraphicsBackend {
         match self {
             Self::Direct3D11 => GraphicsBackend::Direct3D11,
@@ -82,13 +82,13 @@ impl Into<GraphicsBackend> for MirrorBackend {
 /// which return the HWND you can use in any native windows code.
 #[napi(object)]
 #[derive(Clone)]
-pub struct MirrorNativeWindowHandle {
+pub struct HylaranaNativeWindowHandle {
     pub windows: Option<WindowsNativeWindowHandle>,
     pub linux: Option<LinuxNativeWindowHandle>,
     pub macos: Option<MacosNativeWindowHandle>,
 }
 
-impl Into<NativeWindowHandle> for MirrorNativeWindowHandle {
+impl Into<NativeWindowHandle> for HylaranaNativeWindowHandle {
     fn into(self) -> NativeWindowHandle {
         if let Some(handle) = self.windows {
             return NativeWindowHandle::Windows(handle);
@@ -107,19 +107,19 @@ impl Into<NativeWindowHandle> for MirrorNativeWindowHandle {
 }
 
 #[napi(object)]
-pub struct MirrorServiceDescriptor {
+pub struct HylaranaServiceDescriptor {
     /// The IP address and port of the server, in this case the service refers
-    /// to the mirror service.
+    /// to the hylarana service.
     pub server: String,
     /// The multicast address used for multicasting, which is an IP address.
     pub multicast: String,
     /// see: [Maximum_transmission_unit](https://en.wikipedia.org/wiki/Maximum_transmission_unit)
     pub mtu: u32,
-    pub backend: MirrorBackend,
-    pub window_handle: MirrorNativeWindowHandle,
+    pub backend: HylaranaBackend,
+    pub window_handle: HylaranaNativeWindowHandle,
 }
 
-impl TryInto<TransportDescriptor> for MirrorServiceDescriptor {
+impl TryInto<TransportDescriptor> for HylaranaServiceDescriptor {
     type Error = napi::Error;
 
     fn try_into(self) -> Result<TransportDescriptor, Self::Error> {
@@ -137,7 +137,7 @@ impl TryInto<TransportDescriptor> for MirrorServiceDescriptor {
 
 #[napi]
 #[derive(Debug, Clone, Copy)]
-pub enum MirrorVideoDecoderType {
+pub enum HylaranaVideoDecoderType {
     /// h264 (software)
     H264,
     /// d3d11va
@@ -150,7 +150,7 @@ pub enum MirrorVideoDecoderType {
     VideoToolBox,
 }
 
-impl Into<VideoDecoderType> for MirrorVideoDecoderType {
+impl Into<VideoDecoderType> for HylaranaVideoDecoderType {
     fn into(self) -> VideoDecoderType {
         match self {
             Self::H264 => VideoDecoderType::H264,
@@ -164,7 +164,7 @@ impl Into<VideoDecoderType> for MirrorVideoDecoderType {
 
 #[napi]
 #[derive(Debug, Clone, Copy)]
-pub enum MirrorVideoEncoderType {
+pub enum HylaranaVideoEncoderType {
     /// libx264 (software)
     X264,
     /// h264_qsv
@@ -175,7 +175,7 @@ pub enum MirrorVideoEncoderType {
     VideoToolBox,
 }
 
-impl Into<VideoEncoderType> for MirrorVideoEncoderType {
+impl Into<VideoEncoderType> for HylaranaVideoEncoderType {
     fn into(self) -> VideoEncoderType {
         match self {
             Self::X264 => VideoEncoderType::X264,
@@ -188,8 +188,8 @@ impl Into<VideoEncoderType> for MirrorVideoEncoderType {
 
 #[napi(object)]
 #[derive(Debug, Clone, Copy)]
-pub struct MirrorVideoDescriptor {
-    pub codec: MirrorVideoEncoderType,
+pub struct HylaranaVideoDescriptor {
+    pub codec: HylaranaVideoEncoderType,
     ///  For codecs that store a framerate value in the compressed bitstream,
     /// the decoder may export it here.
     pub frame_rate: u8,
@@ -202,7 +202,7 @@ pub struct MirrorVideoDescriptor {
     pub key_frame_interval: u32,
 }
 
-impl Into<VideoDescriptor> for MirrorVideoDescriptor {
+impl Into<VideoDescriptor> for HylaranaVideoDescriptor {
     fn into(self) -> VideoDescriptor {
         VideoDescriptor {
             codec: self.codec.into(),
@@ -217,7 +217,7 @@ impl Into<VideoDescriptor> for MirrorVideoDescriptor {
 
 #[napi]
 #[derive(Debug, Clone, Copy)]
-pub enum MirrorSourceType {
+pub enum HylaranaSourceType {
     /// Camera or video capture card and other devices (and support virtual
     /// camera)
     Camera,
@@ -228,7 +228,7 @@ pub enum MirrorSourceType {
     Audio,
 }
 
-impl Into<SourceType> for MirrorSourceType {
+impl Into<SourceType> for HylaranaSourceType {
     fn into(self) -> SourceType {
         match self {
             Self::Camera => SourceType::Camera,
@@ -238,7 +238,7 @@ impl Into<SourceType> for MirrorSourceType {
     }
 }
 
-impl From<SourceType> for MirrorSourceType {
+impl From<SourceType> for HylaranaSourceType {
     fn from(value: SourceType) -> Self {
         match value {
             SourceType::Camera => Self::Camera,
@@ -250,7 +250,7 @@ impl From<SourceType> for MirrorSourceType {
 
 #[napi(object)]
 #[derive(Debug, Clone)]
-pub struct MirrorSourceDescriptor {
+pub struct HylaranaSourceDescriptor {
     /// Device ID, usually the symbolic link to the device or the address of the
     /// device file handle.
     pub id: String,
@@ -259,13 +259,13 @@ pub struct MirrorSourceDescriptor {
     /// has no real meaning and simply indicates the order in which the device
     /// was acquired internally.
     pub index: f64,
-    pub kind: MirrorSourceType,
+    pub kind: HylaranaSourceType,
     /// Whether or not it is the default device, normally used to indicate
     /// whether or not it is the master device.
     pub is_default: bool,
 }
 
-impl Into<Source> for MirrorSourceDescriptor {
+impl Into<Source> for HylaranaSourceDescriptor {
     fn into(self) -> Source {
         Source {
             id: self.id,
@@ -279,12 +279,12 @@ impl Into<Source> for MirrorSourceDescriptor {
 
 #[napi(object)]
 #[derive(Debug, Clone, Copy)]
-pub struct MirrorAudioDescriptor {
+pub struct HylaranaAudioDescriptor {
     pub sample_rate: f64,
     pub bit_rate: f64,
 }
 
-impl Into<AudioDescriptor> for MirrorAudioDescriptor {
+impl Into<AudioDescriptor> for HylaranaAudioDescriptor {
     fn into(self) -> AudioDescriptor {
         AudioDescriptor {
             sample_rate: self.sample_rate as u64,
@@ -295,28 +295,28 @@ impl Into<AudioDescriptor> for MirrorAudioDescriptor {
 
 #[napi(object)]
 #[derive(Debug, Clone)]
-pub struct MirrorSenderVideoDescriptor {
-    pub source: MirrorSourceDescriptor,
-    pub settings: MirrorVideoDescriptor,
+pub struct HylaranaSenderVideoDescriptor {
+    pub source: HylaranaSourceDescriptor,
+    pub settings: HylaranaVideoDescriptor,
 }
 
 #[napi(object)]
 #[derive(Debug, Clone)]
-pub struct MirrorSenderAudioDescriptor {
-    pub source: MirrorSourceDescriptor,
-    pub settings: MirrorAudioDescriptor,
+pub struct HylaranaSenderAudioDescriptor {
+    pub source: HylaranaSourceDescriptor,
+    pub settings: HylaranaAudioDescriptor,
 }
 
 #[napi(object)]
 #[derive(Debug, Clone)]
-pub struct MirrorSenderServiceDescriptor {
-    pub video: Option<MirrorSenderVideoDescriptor>,
-    pub audio: Option<MirrorSenderAudioDescriptor>,
+pub struct HylaranaSenderServiceDescriptor {
+    pub video: Option<HylaranaSenderVideoDescriptor>,
+    pub audio: Option<HylaranaSenderAudioDescriptor>,
     /// Whether to use multicast.
     pub multicast: bool,
 }
 
-impl Into<SenderDescriptor> for MirrorSenderServiceDescriptor {
+impl Into<SenderDescriptor> for HylaranaSenderServiceDescriptor {
     fn into(self) -> SenderDescriptor {
         SenderDescriptor {
             video: self.video.map(|it| (it.source.into(), it.settings.into())),
@@ -328,11 +328,11 @@ impl Into<SenderDescriptor> for MirrorSenderServiceDescriptor {
 
 #[napi(object)]
 #[derive(Debug, Clone, Copy)]
-pub struct MirrorReceiverServiceDescriptor {
-    pub video: MirrorVideoDecoderType,
+pub struct HylaranaReceiverServiceDescriptor {
+    pub video: HylaranaVideoDecoderType,
 }
 
-impl Into<ReceiverDescriptor> for MirrorReceiverServiceDescriptor {
+impl Into<ReceiverDescriptor> for HylaranaReceiverServiceDescriptor {
     fn into(self) -> ReceiverDescriptor {
         ReceiverDescriptor {
             video: self.video.into(),
@@ -341,37 +341,37 @@ impl Into<ReceiverDescriptor> for MirrorReceiverServiceDescriptor {
 }
 
 #[napi]
-pub struct MirrorService {
-    mirror: Option<Mirror>,
+pub struct HylaranaService {
+    hylarana: Option<Hylarana>,
     renderer: Arc<Renderer<'static>>,
 }
 
 #[napi]
-impl MirrorService {
+impl HylaranaService {
     #[napi]
-    pub fn get_sources(kind: MirrorSourceType) -> Vec<MirrorSourceDescriptor> {
+    pub fn get_sources(kind: HylaranaSourceType) -> Vec<HylaranaSourceDescriptor> {
         Capture::get_sources(kind.into())
             .unwrap_or_else(|_| Vec::new())
             .into_iter()
-            .map(|source| MirrorSourceDescriptor {
+            .map(|source| HylaranaSourceDescriptor {
                 id: source.id,
                 name: source.name,
                 index: source.index as f64,
-                kind: MirrorSourceType::from(source.kind),
+                kind: HylaranaSourceType::from(source.kind),
                 is_default: source.is_default,
             })
             .collect()
     }
 
     #[napi(constructor)]
-    pub fn new(options: MirrorServiceDescriptor) -> napi::Result<Self> {
+    pub fn new(options: HylaranaServiceDescriptor) -> napi::Result<Self> {
         let func = || {
             let window: NativeWindowHandle = options.window_handle.clone().into();
             let size = window.size();
 
             Ok::<_, anyhow::Error>(Self {
                 renderer: Arc::new(Renderer::new(options.backend.into(), window, size)?),
-                mirror: Some(Mirror::new(options.try_into()?)?),
+                hylarana: Some(Hylarana::new(options.try_into()?)?),
             })
         };
 
@@ -379,19 +379,19 @@ impl MirrorService {
     }
 
     #[napi(
-        ts_args_type = "id: number, options: MirrorSenderServiceDescriptor, callback: (Events) => void"
+        ts_args_type = "id: number, options: HylaranaSenderServiceDescriptor, callback: (Events) => void"
     )]
     pub fn create_sender(
         &self,
         id: u32,
-        options: MirrorSenderServiceDescriptor,
+        options: HylaranaSenderServiceDescriptor,
         callback: Function,
-    ) -> napi::Result<MirrorSenderService> {
+    ) -> napi::Result<HylaranaSenderService> {
         let func = || {
-            Ok::<_, anyhow::Error>(MirrorSenderService(Some(
-                self.mirror
+            Ok::<_, anyhow::Error>(HylaranaSenderService(Some(
+                self.hylarana
                     .as_ref()
-                    .ok_or_else(|| napi::Error::from_reason("mirror is destroy"))?
+                    .ok_or_else(|| napi::Error::from_reason("hylarana is destroy"))?
                     .create_sender(
                         id,
                         options.into(),
@@ -408,19 +408,19 @@ impl MirrorService {
     }
 
     #[napi(
-        ts_args_type = "id: number, options: MirrorReceiverServiceDescriptor, callback: (Events) => void"
+        ts_args_type = "id: number, options: HylaranaReceiverServiceDescriptor, callback: (Events) => void"
     )]
     pub fn create_receiver(
         &self,
         id: u32,
-        options: MirrorReceiverServiceDescriptor,
+        options: HylaranaReceiverServiceDescriptor,
         callback: Function,
-    ) -> napi::Result<MirrorReceiverService> {
+    ) -> napi::Result<HylaranaReceiverService> {
         let func = || {
-            Ok::<_, anyhow::Error>(MirrorReceiverService(Some(
-                self.mirror
+            Ok::<_, anyhow::Error>(HylaranaReceiverService(Some(
+                self.hylarana
                     .as_ref()
-                    .ok_or_else(|| napi::Error::from_reason("mirror is destroy"))?
+                    .ok_or_else(|| napi::Error::from_reason("hylarana is destroy"))?
                     .create_receiver(
                         id,
                         options.into(),
@@ -439,15 +439,15 @@ impl MirrorService {
 
     #[napi]
     pub fn destroy(&mut self) {
-        drop(self.mirror.take());
+        drop(self.hylarana.take());
     }
 }
 
 #[napi]
-pub struct MirrorSenderService(Option<Sender<EmptyWindow>>);
+pub struct HylaranaSenderService(Option<Sender<EmptyWindow>>);
 
 #[napi]
-impl MirrorSenderService {
+impl HylaranaSenderService {
     #[napi(getter, js_name = "multicast")]
     pub fn get_multicast(&self) -> napi::Result<bool> {
         Ok(self
@@ -474,10 +474,10 @@ impl MirrorSenderService {
 }
 
 #[napi]
-pub struct MirrorReceiverService(Option<Receiver<Window>>);
+pub struct HylaranaReceiverService(Option<Receiver<Window>>);
 
 #[napi]
-impl MirrorReceiverService {
+impl HylaranaReceiverService {
     #[napi]
     pub fn destroy(&mut self) {
         drop(self.0.take());

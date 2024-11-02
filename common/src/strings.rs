@@ -97,6 +97,6 @@ impl Strings {
 #[macro_export]
 macro_rules! c_str {
     ($s:expr) => {
-        mirror_common::strings::Strings::from($s).as_ptr()
+        hylarana_common::strings::Strings::from($s).as_ptr()
     };
 }

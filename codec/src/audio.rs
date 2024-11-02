@@ -2,7 +2,7 @@ use crate::codec::{set_option, set_str_option};
 
 use std::{ffi::c_int, ptr::null_mut};
 
-use mirror_common::{c_str, frame::AudioFrame};
+use hylarana_common::{c_str, frame::AudioFrame};
 use mirror_ffmpeg_sys::*;
 use thiserror::Error;
 

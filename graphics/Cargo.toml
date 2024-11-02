@@ -1,11 +1,11 @@
 [package]
-name = "mirror-graphics"
+name = "hylarana-graphics"
 version = "0.1.0"
 edition = "2021"
 description = "A cross-platform screen casting library implemented by Rust."
 license = "LGPL-2.1-only"
 readme = "../README.md"
-repository = "https://github.com/mycrl/mirror"
+repository = "https://github.com/mycrl/hylarana"
 
 [dependencies]
 pollster = "0.3.0"
@@ -13,5 +13,5 @@ thiserror = "1.0.63"
 smallvec = "1.13.2"
 wgpu = "23"
 bytemuck = { version = "1.17.1", features = ["derive"] }
-mirror-common = { path = "../common", version = "0.1" }
-mirror-resample = { path = "../resample", version = "0.1" }
+hylarana-common = { path = "../common", version = "0.1" }
+hylarana-resample = { path = "../resample", version = "0.1" }

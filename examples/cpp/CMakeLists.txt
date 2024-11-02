@@ -60,14 +60,14 @@ if(MSVC)
                           userenv
                           ntdll
                           bcrypt
-                          mirror.dll.lib)
+                          hylarana.dll.lib)
 elseif(UNIX AND NOT APPLE)
     target_link_libraries(example
-                          libmirror.so
+                          libhylarana.so
                           SDL2)
 elseif(UNIX)
     target_link_libraries(example
-                          libmirror.so
+                          libhylarana.so
                           SDL2
                           "-framework Cocoa")
 endif()
