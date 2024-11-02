@@ -117,8 +117,8 @@ void (async () => {
     });
 
     for (const item of [
-        ["./README.md", "./README.md"],
-        ["./LICENSE", "./LICENSE"],
+        ["./README.md", "./build/README.md"],
+        ["./LICENSE", "./build/LICENSE"],
 
         /* examples */
         ["./examples/cpp/src", "./build/examples/cpp/src"],
