@@ -76,7 +76,9 @@ void (async () => {
 
     /* download ffmpeg librarys for windows */
     if (process.platform == "win32" || process.platform == "linux") {
-        const name = `ffmpeg-n7.1-latest-${process.platform == "win32" ? "win64" : "linux64"}-gpl-shared-7.1`;
+        const name = `ffmpeg-n7.1-latest-${
+            process.platform == "win32" ? "win64" : "linux64"
+        }-gpl-shared-7.1`;
         const baseUri = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest";
 
         if (!fs.existsSync("./target/ffmpeg")) {
@@ -115,8 +117,8 @@ void (async () => {
     });
 
     for (const item of [
-        ["./README.md", "./build/README.md"],
-        ["./LICENSE.txt", "./build/LICENSE.txt"],
+        ["./README.md", "./README.md"],
+        ["./LICENSE", "./LICENSE"],
 
         /* examples */
         ["./examples/cpp/src", "./build/examples/cpp/src"],
