@@ -15,7 +15,6 @@ log = "0.4.20"
 parking_lot = "0.12"
 hylarana-common = { path = "../common", version = "0.1" }
 hylarana-resample = { path = "../resample", version = "0.1" }
-hylarana-graphics = { path = "../graphics", version = "0.1" }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows-capture = { version = "1.4.0" }
