@@ -19,7 +19,7 @@
         "react-dom": "18.3.1"
     },
     "devDependencies": {
-        "@types/mirror-napi": "file:../sdk/node/types",
+        "mirror-napi-types": "file:../sdk/node/types",
         "@types/node": "20",
         "@types/react": "18",
         "@types/react-dom": "18",

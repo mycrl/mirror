@@ -3,7 +3,7 @@ import {
     MirrorSourceType,
     MirrorVideoDecoderType,
     MirrorVideoEncoderType,
-} from "mirror-napi";
+} from "mirror-napi-types";
 
 declare global {
     export interface Settings {

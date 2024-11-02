@@ -1,5 +1,5 @@
 {
-    "name": "@types/mirror-napi",
+    "name": "mirror-napi-types",
     "version": "0.1.0",
     "types": "../napi/index.d.ts",
     "license": "MIT",
