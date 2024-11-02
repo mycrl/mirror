@@ -12,7 +12,7 @@ use hylarana_common::{
     Size,
 };
 
-use hylarana_ffmpeg_sys::*;
+use mirror_ffmpeg_sys::*;
 use thiserror::Error;
 use v4l::{
     buffer::Type,

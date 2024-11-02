@@ -13,7 +13,7 @@ use hylarana_common::{
     frame::{VideoFormat, VideoFrame, VideoSubFormat},
 };
 
-use hylarana_ffmpeg_sys::*;
+use mirror_ffmpeg_sys::*;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
