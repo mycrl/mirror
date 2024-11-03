@@ -20,7 +20,7 @@ The project is cross-platform, but the priority platforms supported are Windows 
 
 ## Documentation
 
--   Rust: There are still some obstacles to releasing to crates.io, so for rust the documentation is being updated.
+-   Rust: [hylarana crate document](https://mycrl.github.io/hylarana/hylarana/index.html)
 -   C/C++: This project also compiles dynamic link libraries, so for C/C++ projects, use this header file [hylarana.h](./ffi/include/hylarana.h)
 
 ## Examples
