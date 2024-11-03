@@ -50,7 +50,8 @@ endif()
 if(APPLE)
     target_link_directories(example PRIVATE "/opt/homebrew/opt/sdl2/lib")
 elseif(UNIX AND NOT APPLE)
-    target_link_directories(example PRIVATE "/usr/lib/x86_64-linux-gnu")
+    target_link_directories(example PRIVATE "/usr/lib/x86_64-linux-gnu"
+                                            "../../target/ffmpeg/lib")
 endif()
 
 # Introduce other runtime necessary library files.

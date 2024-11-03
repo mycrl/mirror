@@ -33,4 +33,7 @@ features = [
     "avformat",
     "avcodec",
     "avutil",
+    "avfilter",
+    "postproc",
+    "swresample"
 ]

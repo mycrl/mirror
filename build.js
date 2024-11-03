@@ -112,6 +112,7 @@ void (async () => {
     await Command(`cmake -DCMAKE_BUILD_TYPE=${Profile} ..`, {
         cwd: join(__dirname, "./examples/cpp/build"),
     });
+
     await Command(`cmake --build . --config=${Profile}`, {
         cwd: join(__dirname, "./examples/cpp/build"),
     });
