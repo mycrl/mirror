@@ -6,6 +6,7 @@ description = "A cross-platform screen casting library implemented by Rust."
 license = "LGPL-2.1-only"
 readme = "../README.md"
 repository = "https://github.com/mycrl/hylarana"
+documentation = "https://mycrl.github.io/hylarana/hylarana/index.html"
 
 [dependencies]
 thiserror = "1.0.63"
