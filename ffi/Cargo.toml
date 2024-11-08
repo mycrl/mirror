@@ -13,7 +13,7 @@ anyhow = "1.0.82"
 log = "0.4.20"
 hylarana-common = { path = "../common", version = "0.1" }
 
-[target.'cfg(target_os = "android")'.dependencies]
+# [target.'cfg(target_os = "android")'.dependencies]
 bytes = "1.5"
 jni = "0.21.1"
 num_cpus = "1.16.0"

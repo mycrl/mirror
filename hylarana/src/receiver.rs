@@ -7,14 +7,17 @@ use std::{
 
 use hylarana_codec::{AudioDecoder, VideoDecoder, VideoDecoderSettings, VideoDecoderType};
 use hylarana_common::atomic::EasyAtomic;
-use hylarana_transport::{StreamKind, StreamMultiReceiverAdapter, StreamReceiverAdapterExt};
+use hylarana_transport::{
+    StreamKind, StreamMultiReceiverAdapter, StreamReceiverAdapterExt, TransportDescriptor,
+};
+
 use thiserror::Error;
 
 #[cfg(target_os = "windows")]
 use hylarana_common::win32::MediaThreadClass;
 
 #[derive(Debug, Error)]
-pub enum ReceiverError {
+pub enum HylaranaReceiverError {
     #[error(transparent)]
     CreateThreadError(#[from] std::io::Error),
     #[error(transparent)]
@@ -24,7 +27,8 @@ pub enum ReceiverError {
 }
 
 #[derive(Debug, Clone)]
-pub struct ReceiverDescriptor {
+pub struct HylaranaReceiverDescriptor {
+    pub transport: TransportDescriptor,
     pub video: VideoDecoderType,
 }
 
@@ -33,7 +37,7 @@ fn create_video_decoder<T: AVFrameStream + 'static>(
     adapter: &Arc<StreamMultiReceiverAdapter>,
     sink: &Arc<T>,
     settings: VideoDecoderSettings,
-) -> Result<(), ReceiverError> {
+) -> Result<(), HylaranaReceiverError> {
     let sink_ = Arc::downgrade(sink);
     let status_ = Arc::downgrade(status);
     let adapter_ = Arc::downgrade(adapter);
@@ -88,7 +92,7 @@ fn create_audio_decoder<T: AVFrameStream + 'static>(
     status: &Arc<AtomicBool>,
     adapter: &Arc<StreamMultiReceiverAdapter>,
     sink: &Arc<T>,
-) -> Result<(), ReceiverError> {
+) -> Result<(), HylaranaReceiverError> {
     let sink_ = Arc::downgrade(sink);
     let status_ = Arc::downgrade(status);
     let adapter_ = Arc::downgrade(adapter);
@@ -139,17 +143,20 @@ fn create_audio_decoder<T: AVFrameStream + 'static>(
     Ok(())
 }
 
-pub struct Receiver<T: AVFrameStream + 'static> {
+pub struct HylaranaReceiver<T: AVFrameStream + 'static> {
     pub(crate) adapter: Arc<StreamMultiReceiverAdapter>,
     status: Arc<AtomicBool>,
     sink: Arc<T>,
 }
 
-impl<T: AVFrameStream + 'static> Receiver<T> {
+impl<T: AVFrameStream + 'static> HylaranaReceiver<T> {
     /// Create a receiving end. The receiving end is much simpler to implement.
     /// You only need to decode the data in the queue and call it back to the
     /// sink.
-    pub fn new(options: ReceiverDescriptor, sink: Arc<T>) -> Result<Self, ReceiverError> {
+    pub fn new(
+        options: HylaranaReceiverDescriptor,
+        sink: Arc<T>,
+    ) -> Result<Self, HylaranaReceiverError> {
         log::info!("create receiver");
 
         let adapter = StreamMultiReceiverAdapter::new();
@@ -175,7 +182,7 @@ impl<T: AVFrameStream + 'static> Receiver<T> {
     }
 }
 
-impl<T: AVFrameStream + 'static> Drop for Receiver<T> {
+impl<T: AVFrameStream + 'static> Drop for HylaranaReceiver<T> {
     fn drop(&mut self) {
         log::info!("receiver drop");
 

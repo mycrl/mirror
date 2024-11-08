@@ -11,7 +11,7 @@ interface HylaranaAdapterConfigure {
     val audio: Audio.AudioEncoder.AudioEncoderConfigure
 }
 
-abstract class HylaranaReceiver {
+abstract class HylaranaReceiverObserver {
 
     /**
      *  You need to provide a surface to the receiver, which will decode and render the received
@@ -42,12 +42,7 @@ abstract class HylaranaReceiver {
      * Called when the receiver is created, this will pass you a wrapper for the underlying adapter,
      * and you can actively release this receiver by calling the release method of the adapter.
      */
-    open fun onStart(adapter: ReceiverAdapterWrapper) {}
-
-    /**
-     * For the receiving side, this function will be called back when the sending side is created.
-     */
-    open fun onLine() {}
+    open fun onStart(adapter: HylaranaReceiverAdapter) {}
 }
 
 /**
@@ -62,23 +57,15 @@ class HylaranaService(
     private val hylarana: Hylarana = Hylarana(server, multicast, mtu)
 
     /**
-     * Release this hylarana instance.
-     */
-    fun release() {
-        hylarana.release()
-    }
-
-    /**
      * Creates an instance of a sender with an unlimited `id` parameter, this id is passed to all
      * receivers and is mainly used to provide receivers with identification of this sender.
      */
     fun createSender(
-        id: Int,
         configure: HylaranaAdapterConfigure,
         record: AudioRecord?
     ): HylaranaSender {
         return HylaranaSender(
-            hylarana.createSender(id),
+            hylarana.createSender(),
             configure,
             record,
         )
@@ -91,12 +78,12 @@ class HylaranaService(
      * `port` The port number from the created sender.
      */
     fun createReceiver(
-        id: Int,
+        id: StreamId,
         configure: HylaranaAdapterConfigure,
-        observer: HylaranaReceiver
+        observer: HylaranaReceiverObserver
     ) {
-        var adapter: ReceiverAdapterWrapper? = null
-        adapter = hylarana.createReceiver(id, object : ReceiverAdapter() {
+        var adapter: HylaranaReceiverAdapter? = null
+        adapter = hylarana.createReceiver(id, object : HylaranaReceiverAdapterObserver() {
             private var isReleased: Boolean = false
             private val videoDecoder = Video.VideoDecoder(
                 observer.surface,
@@ -119,7 +106,7 @@ class HylaranaService(
             init {
                 videoDecoder.start()
                 audioDecoder?.start()
-                observer.onStart(ReceiverAdapterWrapper { close() })
+                observer.onStart(HylaranaReceiverAdapter { close() })
             }
 
             override fun sink(kind: Int, flags: Int, timestamp: Long, buf: ByteArray): Boolean {
@@ -155,10 +142,6 @@ class HylaranaService(
                 }
             }
 
-            override fun online() {
-                observer.onLine()
-            }
-
             override fun close() {
                 try {
                     if (!isReleased) {
@@ -181,7 +164,7 @@ class HylaranaService(
 }
 
 class HylaranaSender(
-    private val sender: SenderAdapterWrapper,
+    private val sender: HylaranaSenderAdapter,
     configure: HylaranaAdapterConfigure,
     record: AudioRecord?,
 ) {
@@ -236,6 +219,13 @@ class HylaranaSender(
 
     fun pushAudioChunk(chunk: ByteArray) {
         audioEncoder.sink(chunk)
+    }
+
+    /**
+     * get sender stream id.
+     */
+    fun getStreamId(): StreamId {
+        return sender.getStreamId()
     }
 
     /**

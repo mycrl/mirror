@@ -24,15 +24,26 @@ class Video {
     ) {
         private var isRunning: Boolean = false
 
-        private val codec: MediaCodec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
+        private val codec: MediaCodec =
+            MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
         private val bufferInfo = MediaCodec.BufferInfo()
         private var surface: Surface? = null
         private var worker: Thread
 
         init {
-            val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, configure.width, configure.height)
-            format.setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR)
-            format.setInteger(MediaFormat.KEY_PROFILE, MediaCodecInfo.CodecProfileLevel.AVCProfileBaseline)
+            val format = MediaFormat.createVideoFormat(
+                MediaFormat.MIMETYPE_VIDEO_AVC,
+                configure.width,
+                configure.height
+            )
+            format.setInteger(
+                MediaFormat.KEY_BITRATE_MODE,
+                MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR
+            )
+            format.setInteger(
+                MediaFormat.KEY_PROFILE,
+                MediaCodecInfo.CodecProfileLevel.AVCProfileBaseline
+            )
             format.setFloat(MediaFormat.KEY_MAX_FPS_TO_ENCODER, configure.frameRate.toFloat())
             format.setInteger(MediaFormat.KEY_LATENCY, configure.frameRate / 10)
             format.setInteger(MediaFormat.KEY_OPERATING_RATE, configure.frameRate)
@@ -42,13 +53,15 @@ class Video {
             format.setInteger(MediaFormat.KEY_BIT_RATE, configure.bitRate)
             format.setFloat(MediaFormat.KEY_I_FRAME_INTERVAL, 0.4F)
             format.setInteger(MediaFormat.KEY_MAX_B_FRAMES, 0)
-            format.setInteger(MediaFormat.KEY_LEVEL, if (configure.width <= 1280 && configure.height <= 720) {
-                MediaCodecInfo.CodecProfileLevel.AVCLevel31
-            } else if (configure.width <= 2048 && configure.height <= 1024) {
-                MediaCodecInfo.CodecProfileLevel.AVCLevel4
-            } else {
-                MediaCodecInfo.CodecProfileLevel.AVCLevel5
-            })
+            format.setInteger(
+                MediaFormat.KEY_LEVEL, if (configure.width <= 1280 && configure.height <= 720) {
+                    MediaCodecInfo.CodecProfileLevel.AVCLevel31
+                } else if (configure.width <= 2048 && configure.height <= 1024) {
+                    MediaCodecInfo.CodecProfileLevel.AVCLevel4
+                } else {
+                    MediaCodecInfo.CodecProfileLevel.AVCLevel5
+                }
+            )
 
             if (codec.name.indexOf(".rk.") >= 0) {
                 format.setInteger(MediaFormat.KEY_COMPLEXITY, 0)
@@ -60,11 +73,12 @@ class Video {
             }
 
             codec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
-            surface = if (configure.format == MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface) {
-                codec.createInputSurface()
-            } else {
-                null
-            }
+            surface =
+                if (configure.format == MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface) {
+                    codec.createInputSurface()
+                } else {
+                    null
+                }
 
             worker = Thread {
                 Process.setThreadPriority(Process.THREAD_PRIORITY_VIDEO)
@@ -154,14 +168,25 @@ class Video {
     class VideoDecoder(surface: Surface, configure: VideoDecoderConfigure) {
         var isRunning: Boolean = false
 
-        private var codec: MediaCodec = MediaCodec.createDecoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
+        private var codec: MediaCodec =
+            MediaCodec.createDecoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
         private val bufferInfo = MediaCodec.BufferInfo()
         private var worker: Thread
 
         init {
-            val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, configure.width, configure.height)
-            format.setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
-            format.setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR)
+            val format = MediaFormat.createVideoFormat(
+                MediaFormat.MIMETYPE_VIDEO_AVC,
+                configure.width,
+                configure.height
+            )
+            format.setInteger(
+                MediaFormat.KEY_COLOR_FORMAT,
+                MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface
+            )
+            format.setInteger(
+                MediaFormat.KEY_BITRATE_MODE,
+                MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR
+            )
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 if (codec.name.indexOf(".rk.") < 0 && codec.name.indexOf(".hisi.") < 0) {
@@ -237,8 +262,15 @@ class Audio {
         private var worker: Thread
 
         init {
-            val format = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_OPUS, configure.sampleRate, configure.channels)
-            format.setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR)
+            val format = MediaFormat.createAudioFormat(
+                MediaFormat.MIMETYPE_AUDIO_OPUS,
+                configure.sampleRate,
+                configure.channels
+            )
+            format.setInteger(
+                MediaFormat.KEY_BITRATE_MODE,
+                MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR
+            )
             format.setInteger(MediaFormat.KEY_PCM_ENCODING, AudioFormat.ENCODING_PCM_16BIT)
 
             codec = MediaCodec.createDecoderByType(MediaFormat.MIMETYPE_AUDIO_OPUS)
@@ -325,8 +357,15 @@ class Audio {
         )
 
         init {
-            val format = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_OPUS, configure.sampleRate, configure.channels)
-            format.setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR)
+            val format = MediaFormat.createAudioFormat(
+                MediaFormat.MIMETYPE_AUDIO_OPUS,
+                configure.sampleRate,
+                configure.channels
+            )
+            format.setInteger(
+                MediaFormat.KEY_BITRATE_MODE,
+                MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR
+            )
             format.setInteger(MediaFormat.KEY_PCM_ENCODING, AudioFormat.ENCODING_PCM_16BIT)
             format.setInteger(MediaFormat.KEY_CHANNEL_COUNT, configure.channels)
             format.setInteger(MediaFormat.KEY_BIT_RATE, configure.bitRate)

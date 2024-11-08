@@ -2,8 +2,11 @@ mod receiver;
 mod sender;
 
 pub use self::{
-    receiver::{Receiver, ReceiverDescriptor, ReceiverError},
-    sender::{AudioDescriptor, Sender, SenderDescriptor, SenderError, VideoDescriptor},
+    receiver::{HylaranaReceiver, HylaranaReceiverDescriptor, HylaranaReceiverError},
+    sender::{
+        AudioDescriptor, HylaranaSender, HylaranaSenderDescriptor, HylaranaSenderError,
+        HylaranaSenderSourceDescriptor, VideoDescriptor,
+    },
 };
 
 use std::{slice::from_raw_parts, sync::Arc};
@@ -16,7 +19,7 @@ pub use hylarana_common::{
 };
 
 pub use hylarana_graphics::raw_window_handle;
-pub use hylarana_transport::TransportDescriptor;
+pub use hylarana_transport::{StreamId, TransportDescriptor};
 
 #[cfg(target_os = "windows")]
 use hylarana_common::win32::{
@@ -26,8 +29,6 @@ use hylarana_common::win32::{
 
 #[cfg(target_os = "macos")]
 use hylarana_common::macos::{CVPixelBufferRef, PixelBufferRef};
-
-use parking_lot::Mutex;
 
 #[cfg(target_os = "windows")]
 use parking_lot::RwLock;
@@ -41,6 +42,7 @@ use hylarana_graphics::{
 };
 
 use hylarana_transport::Transport;
+use parking_lot::Mutex;
 use rodio::{OutputStream, OutputStreamHandle, Sink};
 use thiserror::Error;
 
@@ -102,10 +104,6 @@ pub fn shutdown() -> Result<(), HylaranaError> {
 }
 
 pub trait AVFrameObserver: Sync + Send {
-    /// The stream has been initialized, which has no special meaning for the
-    /// sender, but for the receiver, this event is triggered when the receiver
-    /// can receive the stream.
-    fn initialized(&self) {}
     /// Callback when the sender is closed. This may be because the external
     /// side actively calls the close, or the audio and video packets cannot be
     /// sent (the network is disconnected), etc.
@@ -135,47 +133,38 @@ pub trait AVFrameSink: Sync + Send {
 /// Abstraction of audio and video streams.
 pub trait AVFrameStream: AVFrameSink + AVFrameObserver {}
 
-pub struct Hylarana(Transport);
+pub struct Hylarana;
 
 impl Hylarana {
-    pub fn new(options: TransportDescriptor) -> Result<Self, HylaranaError> {
-        log::info!("create hylarana: options={:?}", options);
-        Ok(Self(Transport::new(options)?))
-    }
-
     /// Create a sender, specify a bound NIC address, you can pass callback to
     /// get the device screen or sound callback, callback can be null, if it is
     /// null then it means no callback data is needed.
     pub fn create_sender<T: AVFrameStream + 'static>(
-        &self,
-        id: u32,
-        options: SenderDescriptor,
+        options: HylaranaSenderDescriptor,
         sink: T,
-    ) -> Result<Sender<T>, SenderError> {
-        log::info!("create sender: id={}, options={:?}", id, options);
+    ) -> Result<(StreamId, HylaranaSender<T>), HylaranaSenderError> {
+        log::info!("create sender: options={:?}", options);
 
         let sink = Arc::new(sink);
-        let sender = Sender::new(options, sink)?;
-        self.0.create_sender(id, &sender.adapter)?;
+        let sender = HylaranaSender::new(options.clone(), sink)?;
+        let id = Transport::create_sender(options.transport, &sender.adapter)?;
+        log::info!("create sender done: id={:?}", id);
 
-        Ok(sender)
+        Ok((id, sender))
     }
 
     /// Create a receiver, specify a bound NIC address, you can pass callback to
     /// get the sender's screen or sound callback, callback can not be null.
     pub fn create_receiver<T: AVFrameStream + 'static>(
-        &self,
-        id: u32,
-        options: ReceiverDescriptor,
+        id: StreamId,
+        options: HylaranaReceiverDescriptor,
         sink: T,
-    ) -> Result<Receiver<T>, ReceiverError> {
-        log::info!("create receiver: id={}, options={:?}", id, options);
+    ) -> Result<HylaranaReceiver<T>, HylaranaReceiverError> {
+        log::info!("create receiver: id={:?}, options={:?}", id, options);
 
         let sink = Arc::new(sink);
-        let receiver = Receiver::new(options, sink.clone())?;
-        self.0.create_receiver(id, &receiver.adapter, move || {
-            sink.initialized();
-        })?;
+        let receiver = HylaranaReceiver::new(options.clone(), sink.clone())?;
+        Transport::create_receiver(id, options.transport, &receiver.adapter)?;
 
         Ok(receiver)
     }

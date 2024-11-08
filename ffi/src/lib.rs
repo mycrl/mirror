@@ -1,17 +1,117 @@
-#[cfg(target_os = "android")]
+// #[cfg(target_os = "android")]
 pub mod android {
+    mod objects {
+        use anyhow::{anyhow, Result};
+        use hylarana_transport::{StreamId, TransportDescriptor};
+        use jni::{
+            objects::{JObject, JString, JValueGen},
+            sys::jint,
+            JNIEnv,
+        };
+
+        use hylarana_transport::{StreamBufferInfo, StreamKind};
+
+        pub fn to_stream_buffer_info(env: &mut JNIEnv, info: &JObject) -> Result<StreamBufferInfo> {
+            let kind = if let JValueGen::Int(kind) = env.get_field(info, "kind", "I")? {
+                kind
+            } else {
+                return Err(anyhow!("kind not a int."));
+            };
+
+            let flags = if let JValueGen::Int(flags) = env.get_field(info, "flags", "I")? {
+                flags
+            } else {
+                return Err(anyhow!("flags not a int."));
+            };
+
+            let timestamp =
+                if let JValueGen::Long(timestamp) = env.get_field(info, "timestamp", "J")? {
+                    timestamp as u64
+                } else {
+                    return Err(anyhow!("timestamp not a long."));
+                };
+
+            Ok(
+                match StreamKind::try_from(kind as u8).map_err(|_| anyhow!("kind unreachable"))? {
+                    StreamKind::Video => StreamBufferInfo::Video(flags, timestamp),
+                    StreamKind::Audio => StreamBufferInfo::Audio(flags, timestamp),
+                },
+            )
+        }
+
+        pub fn to_transport_descriptor(
+            env: &mut JNIEnv,
+            options: &JObject,
+        ) -> Result<TransportDescriptor> {
+            let server: String = if let JValueGen::Object(server) =
+                env.get_field(options, "server", "Ljava/lang/String;")?
+            {
+                env.get_string(&JString::from(server))?.into()
+            } else {
+                return Err(anyhow!("server not a string."));
+            };
+
+            let multicast: String = if let JValueGen::Object(multicast) =
+                env.get_field(options, "multicast", "Ljava/lang/String;")?
+            {
+                env.get_string(&JString::from(multicast))?.into()
+            } else {
+                return Err(anyhow!("multicast not a string."));
+            };
+
+            let mtu = if let JValueGen::Int(mtu) = env.get_field(options, "mtu", "I")? {
+                mtu as usize
+            } else {
+                return Err(anyhow!("mtu not a int."));
+            };
+
+            Ok(TransportDescriptor {
+                multicast: multicast.parse()?,
+                server: server.parse()?,
+                mtu,
+            })
+        }
+
+        pub fn to_stream_id(env: &mut JNIEnv, id: &JObject) -> Result<StreamId> {
+            let uid: String =
+                if let JValueGen::Object(uid) = env.get_field(id, "uid", "Ljava/lang/String;")? {
+                    env.get_string(&JString::from(uid))?.into()
+                } else {
+                    return Err(anyhow!("uid not a string."));
+                };
+
+            let port = if let JValueGen::Int(port) = env.get_field(id, "port", "I")? {
+                port as u16
+            } else {
+                return Err(anyhow!("port not a int."));
+            };
+
+            Ok(StreamId { uid, port })
+        }
+
+        pub fn from_stream_id<'a>(env: &mut JNIEnv<'a>, stream_id: StreamId) -> Result<JObject<'a>> {
+            let mut id = env.new_object("com/github/mycrl/hylarana/StreamId", "()V", &[])?;
+
+            env.set_field(
+                &mut id,
+                "uid",
+                "Ljava/lang/String;",
+                JValueGen::Object(env.new_string(stream_id.uid)?.as_ref()),
+            )?;
+
+            env.set_field(&mut id, "port", "I", JValueGen::Int(stream_id.port as jint))?;
+            Ok(id)
+        }
+    }
+
     use std::{
-        cell::RefCell,
-        ffi::c_void,
-        ptr::null_mut,
-        sync::{Arc, Mutex},
-        thread,
+        cell::RefCell, ffi::c_void, ptr::null_mut, sync::{Arc, Mutex}, thread
     };
 
-    use anyhow::anyhow;
+    use anyhow::{anyhow, Result};
     use bytes::{Bytes, BytesMut};
     use jni::{
-        objects::{GlobalRef, JByteArray, JClass, JObject, JString, JValue, JValueGen},
+        objects::{GlobalRef, JByteArray, JClass, JObject, JValue, JValueGen},
         sys::JNI_VERSION_1_6,
         JNIEnv, JavaVM,
     };
@@ -19,8 +119,21 @@ pub mod android {
     use hylarana_common::logger;
     use hylarana_transport::{
         with_capacity as package_with_capacity, StreamKind, StreamReceiverAdapter,
-        StreamReceiverAdapterExt, StreamSenderAdapter, Transport, TransportDescriptor,
+        StreamSenderAdapter, Transport,
     };
+
+    pub fn ok_or_check<'a, F, T>(env: &mut JNIEnv<'a>, func: F) -> Option<T>
+    where
+        F: FnOnce(&mut JNIEnv<'a>) -> Result<T>,
+    {
+        match func(env) {
+            Ok(ret) => Some(ret),
+            Err(e) => {
+                log::error!("java runtime exception, err={:?}", e);
+                None
+            }
+        }
+    }
 
     // Each function is accessible at a fixed offset through the JNIEnv argument.
     // The JNIEnv type is a pointer to a structure storing all JNI function
@@ -60,19 +173,6 @@ pub mod android {
                 .unwrap(),
             )
             .unwrap()
-        }
-    }
-
-    pub fn catcher<F, T>(env: &mut JNIEnv, func: F) -> Option<T>
-    where
-        F: FnOnce(&mut JNIEnv) -> anyhow::Result<T>,
-    {
-        match func(env) {
-            Ok(ret) => Some(ret),
-            Err(e) => {
-                log::error!("java runtime exception, err={:?}", e);
-                None
-            }
         }
     }
 
@@ -161,7 +261,7 @@ pub mod android {
         hylarana_transport::shutdown();
     }
 
-    pub fn copy_from_byte_array(env: &JNIEnv, array: &JByteArray) -> anyhow::Result<BytesMut> {
+    pub fn copy_from_byte_array(env: &JNIEnv, array: &JByteArray) -> Result<BytesMut> {
         let size = env.get_array_length(array)? as usize;
         let mut bytes = package_with_capacity(size);
         let start = bytes.len() - size;
@@ -179,137 +279,81 @@ pub mod android {
     }
 
     impl AndroidStreamReceiverAdapter {
-        // /**
-        //  * Data Stream Receiver Adapter
-        //  *
-        //  * Used to receive data streams from the network.
-        //  */
-        // abstract class ReceiverAdapter {
-        //     /**
-        //      * Triggered when data arrives in the network.
-        //      *
-        //      * Note: If the buffer is empty, the current network connection has been
-        //      * closed or suddenly interrupted.
-        //      */
-        //     abstract fun sink(kind: Int, buf: ByteArray)
-        // }
+        /// Data Stream Receiver Adapter
+        ///  
+        /// Used to receive data streams from the network.
+        ///
+        /// ```kt
+        /// abstract class HylaranaReceiverAdapterObserver {
+        ///     /**
+        ///      * Triggered when data arrives in the network.
+        ///      *
+        ///      * Note: If the buffer is empty, the current network connection has been closed or suddenly interrupted.
+        ///      */
+        ///     abstract fun sink(kind: Int, buf: ByteArray)
+        ///     
+        ///     /**
+        ///      * stream is closed.
+        ///      */
+        ///     abstract fun close()
+        /// }
+        /// ```
         pub(crate) fn sink(
             &self,
             buf: Bytes,
             kind: StreamKind,
             flags: i32,
             timestamp: u64,
-        ) -> bool {
+        ) -> Result<()> {
             let mut env = get_current_env();
-            catcher(&mut env, |env| {
-                let buf = env.byte_array_from_slice(&buf)?.into();
-                let ret = env.call_method(
-                    self.callback.as_obj(),
-                    "sink",
-                    "(IIJ[B)Z",
-                    &[
-                        JValue::Int(kind as i32),
-                        JValue::Int(flags),
-                        JValue::Long(timestamp as i64),
-                        JValue::Object(&buf),
-                    ],
-                );
+            let buf = env.byte_array_from_slice(&buf)?.into();
+            let ret = env.call_method(
+                self.callback.as_obj(),
+                "sink",
+                "(IIJ[B)Z",
+                &[
+                    JValue::Int(kind as i32),
+                    JValue::Int(flags),
+                    JValue::Long(timestamp as i64),
+                    JValue::Object(&buf),
+                ],
+            );
 
-                let _ = env.delete_local_ref(buf);
-                if let JValueGen::Bool(ret) = ret? {
-                    if ret == 0 {
-                        return Err(anyhow!("sink return false."));
-                    }
-                } else {
-                    return Err(anyhow!("connect return result type missing."));
-                };
+            let _ = env.delete_local_ref(buf);
+            if let JValueGen::Bool(ret) = ret? {
+                if ret == 0 {
+                    return Err(anyhow!("sink return false."));
+                }
+            } else {
+                return Err(anyhow!("connect return result type missing."));
+            };
 
-                Ok(())
-            })
-            .is_some()
+            Ok(())
         }
 
-        pub(crate) fn close(&self) {
+        pub(crate) fn close(&self) -> Result<()> {
             let mut env = get_current_env();
-            catcher(&mut env, |env| {
-                env.call_method(self.callback.as_obj(), "close", "()V", &[])?;
+            env.call_method(self.callback.as_obj(), "close", "()V", &[])?;
 
-                Ok(())
-            });
-        }
-
-        pub(crate) fn online(&self) {
-            let mut env = get_current_env();
-            catcher(&mut env, |env| {
-                env.call_method(self.callback.as_obj(), "online", "()V", &[])?;
-
-                Ok(())
-            });
+            Ok(())
         }
     }
 
-    mod objects {
-        use anyhow::{anyhow, Ok};
-        use jni::{
-            objects::{JObject, JValueGen},
-            JNIEnv,
-        };
-
-        use hylarana_transport::{StreamBufferInfo, StreamKind};
-
-        /// /**
-        ///  * Streaming data information.
-        ///  */
-        /// data class StreamBufferInfo(val kind: Int) {
-        ///     var flags: Int = 0;
-        /// }
-        pub fn to_stream_buffer_info(
-            env: &mut JNIEnv,
-            info: &JObject,
-        ) -> anyhow::Result<StreamBufferInfo> {
-            let kind = if let JValueGen::Int(kind) = env.get_field(info, "kind", "I")? {
-                kind
-            } else {
-                return Err(anyhow!("kind not a int."));
-            };
-
-            let flags = if let JValueGen::Int(flags) = env.get_field(info, "flags", "I")? {
-                flags
-            } else {
-                return Err(anyhow!("flags not a int."));
-            };
-
-            let timestamp =
-                if let JValueGen::Long(timestamp) = env.get_field(info, "timestamp", "J")? {
-                    timestamp as u64
-                } else {
-                    return Err(anyhow!("timestamp not a long."));
-                };
-
-            Ok(
-                match StreamKind::try_from(kind as u8).map_err(|_| anyhow!("kind unreachable"))? {
-                    StreamKind::Video => StreamBufferInfo::Video(flags, timestamp),
-                    StreamKind::Audio => StreamBufferInfo::Audio(flags, timestamp),
-                },
-            )
-        }
-    }
-
-    /// /**
-    ///  * Create a stream receiver adapter where the return value is a
-    ///  * pointer to the instance, and you need to check that the returned
-    ///  * pointer is not Null.
-    ///  */
-    /// private external fun createStreamReceiverAdapter(adapter:
-    /// ReceiverAdapter): Long
+    /// Create a stream receiver adapter where the return value is a pointer to
+    /// the instance, and you need to check that the returned pointer is not
+    /// Null.
+    ///
+    /// ```kt
+    /// private external fun createReceiverAdapter(adapter: HylaranaReceiverAdapterObserver): Long
+    /// ```
     #[no_mangle]
     #[allow(non_snake_case)]
-    pub extern "system" fn Java_com_github_mycrl_hylarana_Hylarana_createStreamReceiverAdapter(
+    pub extern "system" fn Java_com_github_mycrl_hylarana_Hylarana_createReceiverAdapter(
         mut env: JNIEnv,
         _this: JClass,
         callback: JObject,
     ) -> *const Arc<AndroidStreamReceiverAdapter> {
-        catcher(&mut env, |env| {
+        ok_or_check(&mut env, |env| {
             let adapter = Arc::new(AndroidStreamReceiverAdapter {
                 callback: env.new_global_ref(callback)?,
                 inner: StreamReceiverAdapter::new(),
@@ -321,7 +365,9 @@ pub mod android {
                 .spawn(move || {
                     while let Some(adapter) = adapter_.upgrade() {
                         if let Some((buf, kind, flags, timestamp)) = adapter.inner.next() {
-                            if !adapter.sink(buf, kind, flags, timestamp) {
+                            if let Err(e) = adapter.sink(buf, kind, flags, timestamp) {
+                                log::error!("java runtime exception, err={:?}", e);
+
                                 break;
                             }
                         } else {
@@ -332,98 +378,54 @@ pub mod android {
                     log::info!("StreamReceiverAdapter is closed");
 
                     if let Some(adapter) = adapter_.upgrade() {
-                        adapter.close();
+                        if let Err(e) = adapter.close() {
+                            log::error!("java runtime exception, err={:?}", e);
+                        }
                     }
                 })?;
 
             Ok(Box::into_raw(Box::new(adapter)))
-        })
-        .unwrap_or_else(null_mut)
+        }).unwrap_or_else(|| null_mut())
     }
 
-    /// /**
-    ///  * Free the stream receiver adapter instance pointer.
-    ///  */
-    /// private external fun releaseStreamReceiverAdapter(adapter: Long)
+    /// Free the stream receiver adapter instance pointer.
+    ///
+    /// ```kt
+    /// private external fun releaseReceiverAdapter(adapter: Long)
+    /// ```
     #[no_mangle]
     #[allow(non_snake_case)]
-    pub extern "system" fn Java_com_github_mycrl_hylarana_Hylarana_releaseStreamReceiverAdapter(
+    pub extern "system" fn Java_com_github_mycrl_hylarana_Hylarana_releaseReceiverAdapter(
         _env: JNIEnv,
         _this: JClass,
         ptr: *const Arc<AndroidStreamReceiverAdapter>,
     ) {
-        unsafe { Box::from_raw(ptr as *mut Arc<AndroidStreamReceiverAdapter>) }.close();
+        let _ = unsafe { Box::from_raw(ptr as *mut Arc<AndroidStreamReceiverAdapter>) }.close();
     }
 
-    /// /**
-    ///  * Creates a hylarana instance, the return value is a pointer, and you
-    ///    need to
-    ///  * check that the pointer is valid.
-    ///  */
-    /// private external fun createHylarana(
-    ///     bind: String,
-    ///     adapterFactory: Long
-    /// ): Long
+    /// Creates an instance of the stream sender adapter, the return value is a
+    /// pointer and you need to check if the pointer is valid.
+    ///
+    /// ```kt
+    /// private external fun createSenderAdapter(): Long
+    /// ```
     #[no_mangle]
     #[allow(non_snake_case)]
-    pub extern "system" fn Java_com_github_mycrl_hylarana_Hylarana_createHylarana(
-        mut env: JNIEnv,
-        _this: JClass,
-        server: JString,
-        multicast: JString,
-        mtu: i32,
-    ) -> *const Transport {
-        catcher(&mut env, |env| {
-            let server: String = env.get_string(&server)?.into();
-            let multicast: String = env.get_string(&multicast)?.into();
-
-            Ok(Box::into_raw(Box::new(Transport::new(
-                TransportDescriptor {
-                    server: server.parse()?,
-                    multicast: multicast.parse()?,
-                    mtu: mtu as usize,
-                },
-            )?)))
-        })
-        .unwrap_or_else(null_mut)
-    }
-
-    /// /**
-    ///  * Free the hylarana instance pointer.
-    ///  */
-    /// private external fun releaseHylarana(hylarana: Long)
-    #[no_mangle]
-    #[allow(non_snake_case)]
-    pub extern "system" fn Java_com_github_mycrl_hylarana_Hylarana_releaseHylarana(
-        _env: JNIEnv,
-        _this: JClass,
-        ptr: *const Transport,
-    ) {
-        drop(unsafe { Box::from_raw(ptr as *mut Transport) })
-    }
-
-    /// /**
-    ///  * Creates an instance of the stream sender adapter, the return value is
-    ///    a
-    ///  * pointer and you need to check if the pointer is valid.
-    ///  */
-    /// private external fun createStreamSenderAdapter(kind: Int): Long
-    #[no_mangle]
-    #[allow(non_snake_case)]
-    pub extern "system" fn Java_com_github_mycrl_hylarana_Hylarana_createStreamSenderAdapter(
+    pub extern "system" fn Java_com_github_mycrl_hylarana_Hylarana_createSenderAdapter(
         _env: JNIEnv,
         _this: JClass,
     ) -> *const Arc<StreamSenderAdapter> {
         Box::into_raw(Box::new(StreamSenderAdapter::new(false)))
     }
 
-    /// /**
-    ///  * Get whether the sender uses multicast transmission
-    ///  */
-    /// private external fun senderGetMulticast(adapter: Long): Boolean
+    /// Get whether the sender uses multicast transmission
+    ///
+    /// ```kt
+    /// private external fun senderAdapterGetMulticast(adapter: Long): Boolean
+    /// ```
     #[no_mangle]
     #[allow(non_snake_case)]
-    pub extern "system" fn Java_com_github_mycrl_hylarana_Hylarana_senderGetMulticast(
+    pub extern "system" fn Java_com_github_mycrl_hylarana_Hylarana_senderAdapterGetMulticast(
         _env: JNIEnv,
         _this: JClass,
         ptr: *const Arc<StreamSenderAdapter>,
@@ -431,14 +433,14 @@ pub mod android {
         unsafe { &*ptr }.get_multicast() as i32
     }
 
-    /// /**
-    ///  * Set whether the sender uses multicast transmission
-    ///  */
-    /// private external fun senderSetMulticast(adapter: Long, is_multicast:
-    /// Boolean)
+    /// Set whether the sender uses multicast transmission
+    ///
+    /// ```kt
+    /// private external fun senderAdapterSetMulticast(adapter: Long, isMulticast: Boolean)
+    /// ```
     #[no_mangle]
     #[allow(non_snake_case)]
-    pub extern "system" fn Java_com_github_mycrl_hylarana_Hylarana_senderSetMulticast(
+    pub extern "system" fn Java_com_github_mycrl_hylarana_Hylarana_senderAdapterSetMulticast(
         _env: JNIEnv,
         _this: JClass,
         ptr: *const Arc<StreamSenderAdapter>,
@@ -447,13 +449,14 @@ pub mod android {
         unsafe { &*ptr }.set_multicast(is_multicast != 0)
     }
 
-    /// /**
-    ///  * Release the stream sender adapter.
-    ///  */
-    /// private external fun releaseStreamSenderAdapter(adapter: Long)
+    /// Release the stream sender adapter.
+    ///
+    /// ```kt
+    /// private external fun releaseSenderAdapter(adapter: Long)
+    /// ```
     #[no_mangle]
     #[allow(non_snake_case)]
-    pub extern "system" fn Java_com_github_mycrl_hylarana_Hylarana_releaseStreamSenderAdapter(
+    pub extern "system" fn Java_com_github_mycrl_hylarana_Hylarana_releaseSenderAdapter(
         _env: JNIEnv,
         _this: JClass,
         ptr: *const Arc<StreamSenderAdapter>,
@@ -461,85 +464,89 @@ pub mod android {
         unsafe { Box::from_raw(ptr as *mut Arc<StreamSenderAdapter>) }.close();
     }
 
-    /// /**
-    ///  * Creates the sender, the return value indicates whether the creation
-    ///  * was successful or not.
-    ///  */
-    /// private external fun createSender(
-    ///     hylarana: Long,
-    ///     id: Int,
-    ///     description: ByteArray,
+    /// Creates the sender, the return value indicates whether the creation was
+    /// successful or not.
+    ///
+    /// ```kt
+    /// private external fun createTransportSender(
+    ///     options: TransportDescriptor,
     ///     adapter: Long
-    /// ): Boolean
+    /// ): StreamId
+    /// ```
     #[no_mangle]
     #[allow(non_snake_case)]
-    pub extern "system" fn Java_com_github_mycrl_hylarana_Hylarana_createSender(
-        mut env: JNIEnv,
+    pub extern "system" fn Java_com_github_mycrl_hylarana_Hylarana_createTransportSender<'a>(
+        mut env: JNIEnv<'a>,
         _this: JClass,
-        hylarana: *const Transport,
-        id: i32,
+        options: JObject,
         adapter: *const Arc<StreamSenderAdapter>,
-    ) -> i32 {
-        catcher(&mut env, |_| {
-            unsafe { &*hylarana }.create_sender(id as u32, unsafe { &*adapter })?;
-            Ok(true)
-        })
-        .unwrap_or(false) as i32
+    ) -> JObject<'a> {
+        ok_or_check(&mut env, |env| {
+            let id= Transport::create_sender(
+                objects::to_transport_descriptor(env, &options)?,
+                unsafe { &*adapter },
+            )?;
+
+            Ok(objects::from_stream_id(env, id)?)
+        }).unwrap_or_else(|| JObject::null())
     }
 
-    /// /**
-    ///  * Sends the packet to the sender instance.
-    ///  */
-    /// private external fun sendBufToSender(
+    /// Sends the packet to the sender instance.
+    ///
+    /// ```kt
+    /// private external fun senderAdapterSendBytes(
     ///     adapter: Long,
+    ///     info: StreamBufferInfo,
     ///     buf: ByteArray,
-    ///     info: BufferInfo
     /// )
+    /// ```
     #[no_mangle]
     #[allow(non_snake_case)]
-    pub extern "system" fn Java_com_github_mycrl_hylarana_Hylarana_sendBufToSender(
+    pub extern "system" fn Java_com_github_mycrl_hylarana_Hylarana_senderAdapterSendBytes(
         mut env: JNIEnv,
         _this: JClass,
         adapter: *const Arc<StreamSenderAdapter>,
         info: JObject,
         buf: JByteArray,
-    ) {
-        catcher(&mut env, |env| {
+    ) -> bool {
+        ok_or_check(&mut env, |env| {
             let buf = copy_from_byte_array(env, &buf)?;
             let info = objects::to_stream_buffer_info(env, &info)?;
             unsafe { &*adapter }.send(buf, info);
 
-            Ok(())
-        });
+            Ok(true)
+        }).is_some()
     }
 
-    /// /**
-    ///  * Creates the receiver, the return value indicates whether the creation
-    ///  * was successful or not.
-    ///  */
-    /// private external fun createReceiver(
-    ///     hylarana: Long,
-    ///     addr: String,
+    /// Creates the receiver, the return value indicates whether the creation
+    /// was successful or not.
+    ///
+    /// ```kt
+    /// private external fun createTransportReceiver(
+    ///     id: StreamId,
+    ///     options: TransportDescriptor,
     ///     adapter: Long
-    /// ): Boolean
+    /// )
+    /// ```
     #[no_mangle]
     #[allow(non_snake_case)]
-    pub extern "system" fn Java_com_github_mycrl_hylarana_Hylarana_createReceiver(
-        mut env: JNIEnv,
+    pub extern "system" fn Java_com_github_mycrl_hylarana_Hylarana_createTransportReceiver<'a>(
+        mut env: JNIEnv<'a>,
         _this: JClass,
-        hylarana: *const Transport,
-        id: i32,
+        id: JObject,
+        options: JObject,
         adapter: *const Arc<AndroidStreamReceiverAdapter>,
-    ) -> i32 {
-        catcher(&mut env, |_| {
+    ) -> bool {
+        ok_or_check(&mut env, |env| {
             let adapter = unsafe { &*adapter };
-            unsafe { &*hylarana }.create_receiver(id as u32, &adapter.inner, move || {
-                adapter.online();
-            })?;
+            Transport::create_receiver(
+                objects::to_stream_id(env, &id)?,
+                objects::to_transport_descriptor(env, &options)?,
+                &adapter.inner,
+            )?;
 
-            Ok(true)
-        })
-        .unwrap_or(false) as i32
+            Ok(())
+        }).is_some()
     }
 }
 
@@ -549,7 +556,7 @@ pub mod desktop {
         ffi::{c_char, c_int, c_void, CString},
         fmt::Debug,
         mem::ManuallyDrop,
-        ptr::{null_mut, NonNull},
+        ptr::{self, null_mut, NonNull},
     };
 
     use hylarana::{
@@ -560,9 +567,10 @@ pub mod desktop {
             XlibWindowHandle,
         },
         shutdown, startup, AVFrameObserver, AVFrameSink, AVFrameStream, AudioDescriptor,
-        AudioFrame, Capture, GraphicsBackend, Hylarana, Receiver, ReceiverDescriptor, Renderer,
-        Sender, SenderDescriptor, Source, SourceType, TransportDescriptor, VideoDecoderType,
-        VideoDescriptor, VideoEncoderType, VideoFrame,
+        AudioFrame, Capture, GraphicsBackend, Hylarana, HylaranaReceiver,
+        HylaranaReceiverDescriptor, HylaranaSender, HylaranaSenderDescriptor,
+        HylaranaSenderSourceDescriptor, Renderer, Source, SourceType, StreamId,
+        TransportDescriptor, VideoDecoderType, VideoDescriptor, VideoEncoderType, VideoFrame,
     };
 
     use hylarana_common::{logger, strings::Strings, Size};
@@ -643,30 +651,6 @@ pub mod desktop {
                 mtu: self.mtu,
             })
         }
-    }
-
-    #[repr(C)]
-    pub struct RawHylarana(Hylarana);
-
-    /// Create hylarana.
-    #[no_mangle]
-    pub extern "C" fn hylarana_create(options: HylaranaDescriptor) -> *const RawHylarana {
-        log::info!("extern api: hylarana create");
-
-        let func = || Ok(Hylarana::new(options.try_into()?)?);
-
-        checker(func())
-            .map(|hylarana| Box::into_raw(Box::new(RawHylarana(hylarana))))
-            .unwrap_or_else(|_: anyhow::Error| null_mut()) as *const _
-    }
-
-    /// Release hylarana.
-    #[no_mangle]
-    pub extern "C" fn hylarana_destroy(hylarana: *const RawHylarana) {
-        assert!(!hylarana.is_null());
-
-        log::info!("extern api: hylarana destroy");
-        drop(unsafe { Box::from_raw(hylarana as *mut RawHylarana) });
     }
 
     #[repr(C)]
@@ -775,7 +759,6 @@ pub mod desktop {
     #[repr(C)]
     #[derive(Clone, Copy)]
     pub struct RawAVFrameStream {
-        pub initialized: Option<extern "C" fn(ctx: *const c_void)>,
         /// Callback occurs when the video frame is updated. The video frame
         /// format is fixed to NV12. Be careful not to call blocking
         /// methods inside the callback, which will seriously slow down
@@ -862,14 +845,6 @@ pub mod desktop {
     }
 
     impl AVFrameObserver for RawAVFrameStream {
-        fn initialized(&self) {
-            if let Some(callback) = &self.initialized {
-                callback(self.ctx);
-
-                log::info!("extern api: call initialized callback");
-            }
-        }
-
         fn close(&self) {
             if let Some(callback) = &self.close {
                 callback(self.ctx);
@@ -955,17 +930,19 @@ pub mod desktop {
     pub struct RawSenderDescriptor {
         video: *const RawSenderSourceDescriptor<RawVideoDescriptor>,
         audio: *const RawSenderSourceDescriptor<RawAudioDescriptor>,
+        transport: HylaranaDescriptor,
         multicast: bool,
     }
 
-    impl TryInto<SenderDescriptor> for RawSenderDescriptor {
+    impl TryInto<HylaranaSenderDescriptor> for RawSenderDescriptor {
         type Error = anyhow::Error;
 
         // Both video and audio are optional, so the type conversion here is a bit more
         // complicated.
         #[rustfmt::skip]
-        fn try_into(self) -> Result<SenderDescriptor, Self::Error> {
-            let mut options = SenderDescriptor {
+        fn try_into(self) -> Result<HylaranaSenderDescriptor, Self::Error> {
+            let mut descriptor = HylaranaSenderDescriptor {
+                transport: self.transport.try_into()?,
                 multicast: self.multicast,
                 audio: None,
                 video: None,
@@ -973,56 +950,77 @@ pub mod desktop {
 
             if !self.video.is_null() {
                 let video = unsafe { &*self.video };
-                let settings: VideoDescriptor = video.options.try_into()?;
+                let options: VideoDescriptor = video.options.try_into()?;
 
                 // Check whether the external parameters are configured correctly to 
                 // avoid some clowns inserting some inexplicable parameters.
-                anyhow::ensure!(settings.width % 4 == 0 && settings.width <= 4096, "invalid video width");
-                anyhow::ensure!(settings.height % 4 == 0 && settings.height <= 2560, "invalid video height");
-                anyhow::ensure!(settings.frame_rate <= 60, "invalid video frame rate");
+                anyhow::ensure!(options.width % 4 == 0 && options.width <= 4096, "invalid video width");
+                anyhow::ensure!(options.height % 4 == 0 && options.height <= 2560, "invalid video height");
+                anyhow::ensure!(options.frame_rate <= 60, "invalid video frame rate");
 
-                options.video = Some((
-                    unsafe { &*video.source }.try_into()?,
-                    settings,
-                ));
+                descriptor.video = Some(HylaranaSenderSourceDescriptor {
+                    source: unsafe { &*video.source }.try_into()?,
+                    options,
+                });
             }
 
             if !self.audio.is_null() {
                 let audio = unsafe { &*self.audio };
-                options.audio = Some((
-                    unsafe { &*audio.source }.try_into()?,
-                    audio.options.try_into()?,
-                ));
+                descriptor.audio = Some(HylaranaSenderSourceDescriptor {
+                    source: unsafe { &*audio.source }.try_into()?,
+                    options: audio.options.try_into()?,
+            });
             }
 
-            Ok(options)
+            Ok(descriptor)
         }
     }
 
     #[repr(C)]
-    pub struct RawSender(Sender<RawAVFrameStream>);
+    #[derive(Debug, Clone)]
+    pub struct RawStreamId {
+        uid: *mut c_char,
+        port: u16,
+    }
+
+    #[repr(C)]
+    pub struct RawSender(HylaranaSender<RawAVFrameStream>);
 
     /// Create a sender, specify a bound NIC address, you can pass callback to
     /// get the device screen or sound callback, callback can be null, if it is
     /// null then it means no callback data is needed.
     #[no_mangle]
     pub extern "C" fn hylarana_create_sender(
-        hylarana: *const RawHylarana,
-        id: c_int,
+        stream_id: *mut RawStreamId,
         options: RawSenderDescriptor,
         sink: RawAVFrameStream,
     ) -> *const RawSender {
-        assert!(!hylarana.is_null());
+        assert!(!stream_id.is_null());
 
+        let stream_id = unsafe { &mut *stream_id };
         log::info!("extern api: hylarana create sender");
 
         let func = || {
-            let options: SenderDescriptor = options.try_into()?;
+            let options: HylaranaSenderDescriptor = options.try_into()?;
             log::info!("hylarana create options={:?}", options);
 
-            Ok(unsafe { &*hylarana }
-                .0
-                .create_sender(id as u32, options, sink)?)
+            let (id, sender) = Hylarana::create_sender(options, sink)?;
+            unsafe {
+                stream_id.port = id.port;
+
+                ptr::copy(
+                    id.uid.as_bytes().as_ptr().cast(),
+                    stream_id.uid,
+                    id.uid.as_bytes().len() + 1,
+                );
+
+                ptr::write(
+                    stream_id.uid.offset(id.uid.as_bytes().len() as isize + 1) as *mut u8,
+                    0u8,
+                );
+            }
+
+            Ok(sender)
         };
 
         checker(func())
@@ -1058,7 +1056,7 @@ pub mod desktop {
     }
 
     #[repr(C)]
-    pub struct RawReceiver(Receiver<RawAVFrameStream>);
+    pub struct RawReceiver(HylaranaReceiver<RawAVFrameStream>);
 
     #[repr(C)]
     #[derive(Debug, Clone, Copy)]
@@ -1082,27 +1080,38 @@ pub mod desktop {
         }
     }
 
+    #[repr(C)]
+    #[derive(Debug)]
+    pub struct RawReceiverescriptor {
+        video: RawVideoDecoderType,
+        transport: HylaranaDescriptor,
+    }
+
     /// Create a receiver, specify a bound NIC address, you can pass callback to
     /// get the sender's screen or sound callback, callback can not be null.
     #[no_mangle]
     pub extern "C" fn hylarana_create_receiver(
-        hylarana: *const RawHylarana,
-        id: c_int,
-        codec: RawVideoDecoderType,
+        stream_id: *const RawStreamId,
+        options: RawReceiverescriptor,
         sink: RawAVFrameStream,
     ) -> *const RawReceiver {
-        assert!(!hylarana.is_null());
+        assert!(!stream_id.is_null());
 
+        let stream_id = unsafe { &*stream_id };
         log::info!("extern api: hylarana create receiver");
 
         let func = || {
-            unsafe { &*hylarana }.0.create_receiver(
-                id as u32,
-                ReceiverDescriptor {
-                    video: codec.into(),
+            Ok::<_, anyhow::Error>(Hylarana::create_receiver(
+                StreamId {
+                    uid: Strings::from(stream_id.uid as *const _).to_string()?,
+                    port: stream_id.port,
+                },
+                HylaranaReceiverDescriptor {
+                    transport: options.transport.try_into()?,
+                    video: options.video.into(),
                 },
                 sink,
-            )
+            )?)
         };
 
         checker(func())

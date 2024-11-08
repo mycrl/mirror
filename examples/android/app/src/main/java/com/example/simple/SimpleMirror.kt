@@ -28,10 +28,10 @@ import android.util.Log
 import android.view.Surface
 import com.github.mycrl.hylarana.Audio
 import com.github.mycrl.hylarana.HylaranaAdapterConfigure
-import com.github.mycrl.hylarana.HylaranaReceiver
+import com.github.mycrl.hylarana.HylaranaReceiverAdapter
+import com.github.mycrl.hylarana.HylaranaReceiverObserver
 import com.github.mycrl.hylarana.HylaranaSender
 import com.github.mycrl.hylarana.HylaranaService
-import com.github.mycrl.hylarana.ReceiverAdapterWrapper
 import com.github.mycrl.hylarana.Video
 
 class Notify(service: SimpleHylaranaService) {
@@ -141,7 +141,7 @@ class SimpleHylaranaService : Service() {
         }
     }
 
-    private var receiverAdapter: ReceiverAdapterWrapper? = null
+    private var receiverAdapter: HylaranaReceiverAdapter? = null
     private var hylarana: HylaranaService? = null
 
     override fun onBind(intent: Intent?): IBinder {
@@ -150,7 +150,6 @@ class SimpleHylaranaService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        hylarana?.release()
         sender?.release()
         mediaProjection?.stop()
         virtualDisplay?.release()
@@ -199,26 +198,28 @@ class SimpleHylaranaService : Service() {
     fun createReceiver(id: Int) {
         Log.i("simple", "create receiver.")
 
-        hylarana?.createReceiver(id, object : HylaranaAdapterConfigure {
-            override val video = VideoConfigure
-            override val audio = AudioConfigure
-        }, object : HylaranaReceiver() {
-            override val track = createAudioTrack()
-            override val surface = outputSurface!!
+        if (sender != null) {
+            hylarana?.createReceiver(sender!!.getStreamId(), object : HylaranaAdapterConfigure {
+                override val video = VideoConfigure
+                override val audio = AudioConfigure
+            }, object : HylaranaReceiverObserver() {
+                override val track = createAudioTrack()
+                override val surface = outputSurface!!
 
-            override fun released() {
-                super.released()
-                observer?.onReceiverClosed();
+                override fun released() {
+                    super.released()
+                    observer?.onReceiverClosed();
 
-                Log.w("simple", "receiver is released.")
-            }
+                    Log.w("simple", "receiver is released.")
+                }
 
-            override fun onStart(adapter: ReceiverAdapterWrapper) {
-                super.onStart(adapter)
+                override fun onStart(adapter: HylaranaReceiverAdapter) {
+                    super.onStart(adapter)
 
-                receiverAdapter = adapter
-            }
-        })
+                    receiverAdapter = adapter
+                }
+            })
+        }
     }
 
     fun createSender(intent: Intent, displayMetrics: DisplayMetrics, id: Int) {
@@ -237,7 +238,6 @@ class SimpleHylaranaService : Service() {
 
         mediaProjection?.registerCallback(object : MediaProjection.Callback() {}, null)
         sender = hylarana?.createSender(
-            id,
             object : HylaranaAdapterConfigure {
                 override val video = VideoConfigure
                 override val audio = AudioConfigure

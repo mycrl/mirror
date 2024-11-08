@@ -6,8 +6,6 @@ use std::{
 };
 
 use bytes::BytesMut;
-use thiserror::Error;
-
 use hylarana_capture::{
     AudioCaptureSourceDescription, Capture, CaptureDescriptor, FrameArrived, Source,
     SourceCaptureDescriptor, VideoCaptureSourceDescription,
@@ -26,10 +24,13 @@ use hylarana_codec::{
 
 use hylarana_transport::{
     copy_from_slice as package_copy_from_slice, BufferFlag, StreamBufferInfo, StreamSenderAdapter,
+    TransportDescriptor,
 };
 
+use thiserror::Error;
+
 #[derive(Debug, Error)]
-pub enum SenderError {
+pub enum HylaranaSenderError {
     #[error(transparent)]
     TransportError(#[from] std::io::Error),
     #[error(transparent)]
@@ -58,11 +59,18 @@ pub struct AudioDescriptor {
     pub bit_rate: u64,
 }
 
+#[derive(Debug, Clone)]
+pub struct HylaranaSenderSourceDescriptor<T> {
+    pub source: Source,
+    pub options: T,
+}
+
 /// Transmitter Configuration Description.
-#[derive(Default, Debug)]
-pub struct SenderDescriptor {
-    pub video: Option<(Source, VideoDescriptor)>,
-    pub audio: Option<(Source, AudioDescriptor)>,
+#[derive(Debug, Clone)]
+pub struct HylaranaSenderDescriptor {
+    pub video: Option<HylaranaSenderSourceDescriptor<VideoDescriptor>>,
+    pub audio: Option<HylaranaSenderSourceDescriptor<AudioDescriptor>>,
+    pub transport: TransportDescriptor,
     pub multicast: bool,
 }
 
@@ -85,7 +93,7 @@ impl<T: AVFrameStream + 'static> VideoSender<T> {
         adapter: &Arc<StreamSenderAdapter>,
         settings: VideoEncoderSettings,
         sink: &Arc<T>,
-    ) -> Result<Self, SenderError> {
+    ) -> Result<Self, HylaranaSenderError> {
         Ok(Self {
             sink: Arc::downgrade(sink),
             adapter: Arc::downgrade(adapter),
@@ -184,7 +192,7 @@ impl<T: AVFrameStream + 'static> AudioSender<T> {
         adapter: &Arc<StreamSenderAdapter>,
         settings: AudioEncoderSettings,
         sink: &Arc<T>,
-    ) -> Result<Self, SenderError> {
+    ) -> Result<Self, HylaranaSenderError> {
         // Create an opus header data. The opus decoder needs this data to obtain audio
         // information. Here, actively add an opus header information to the queue, and
         // the transport layer will automatically cache it.
@@ -292,25 +300,28 @@ impl<T: AVFrameStream + 'static> FrameArrived for AudioSender<T> {
     }
 }
 
-pub struct Sender<T: AVFrameStream + 'static> {
+pub struct HylaranaSender<T: AVFrameStream + 'static> {
     pub(crate) adapter: Arc<StreamSenderAdapter>,
     status: Arc<AtomicBool>,
     sink: Arc<T>,
     capture: Capture,
 }
 
-impl<T: AVFrameStream + 'static> Sender<T> {
+impl<T: AVFrameStream + 'static> HylaranaSender<T> {
     // Create a sender. The capture of the sender is started following the sender,
     // but both video capture and audio capture can be empty, which means you can
     // create a sender that captures nothing.
-    pub fn new(options: SenderDescriptor, sink: Arc<T>) -> Result<Self, SenderError> {
+    pub fn new(
+        options: HylaranaSenderDescriptor,
+        sink: Arc<T>,
+    ) -> Result<Self, HylaranaSenderError> {
         log::info!("create sender");
 
         let mut capture_options = CaptureDescriptor::default();
         let adapter = StreamSenderAdapter::new(options.multicast);
         let status = Arc::new(AtomicBool::new(false));
 
-        if let Some((source, options)) = options.audio {
+        if let Some(HylaranaSenderSourceDescriptor { source, options }) = options.audio {
             capture_options.audio = Some(SourceCaptureDescriptor {
                 arrived: AudioSender::new(
                     &status,
@@ -328,7 +339,7 @@ impl<T: AVFrameStream + 'static> Sender<T> {
             });
         }
 
-        if let Some((source, options)) = options.video {
+        if let Some(HylaranaSenderSourceDescriptor { source, options }) = options.video {
             capture_options.video = Some(SourceCaptureDescriptor {
                 description: VideoCaptureSourceDescription {
                     hardware: CodecType::from(options.codec).is_hardware(),
@@ -376,7 +387,7 @@ impl<T: AVFrameStream + 'static> Sender<T> {
     }
 }
 
-impl<T: AVFrameStream + 'static> Drop for Sender<T> {
+impl<T: AVFrameStream + 'static> Drop for HylaranaSender<T> {
     fn drop(&mut self) {
         log::info!("sender drop");
 

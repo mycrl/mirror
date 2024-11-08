@@ -8,9 +8,9 @@ use clap::{
 
 use hylarana::{
     shutdown, startup, AVFrameObserver, AVFrameSink, AVFrameStream, AudioDescriptor, AudioFrame,
-    Capture, GraphicsBackend, Hylarana, Receiver, ReceiverDescriptor, Renderer, Sender,
-    SenderDescriptor, SourceType, TransportDescriptor, VideoDecoderType, VideoDescriptor,
-    VideoEncoderType, VideoFrame,
+    Capture, GraphicsBackend, Hylarana, HylaranaReceiver, HylaranaReceiverDescriptor,
+    HylaranaSender, HylaranaSenderDescriptor, HylaranaSenderSourceDescriptor, Renderer, SourceType,
+    StreamId, TransportDescriptor, VideoDecoderType, VideoDescriptor, VideoEncoderType, VideoFrame,
 };
 
 use hylarana_common::Size;
@@ -72,9 +72,9 @@ struct App {
     event_proxy: EventLoopProxy<AppEvent>,
     window: Option<Arc<Window>>,
     renderer: Option<Arc<Mutex<Renderer<'static>>>>,
-    hylarana: Option<Hylarana>,
-    sender: Option<Sender<Canvas>>,
-    receiver: Option<Receiver<Canvas>>,
+    stream_id: Option<StreamId>,
+    sender: Option<HylaranaSender<Canvas>>,
+    receiver: Option<HylaranaReceiver<Canvas>>,
 }
 
 impl App {
@@ -84,7 +84,7 @@ impl App {
             event_proxy,
             window: None,
             renderer: None,
-            hylarana: None,
+            stream_id: None,
             sender: None,
             receiver: None,
         }
@@ -118,23 +118,17 @@ impl App {
         )?)));
 
         self.window.replace(window);
-        self.hylarana.replace(Hylarana::new(TransportDescriptor {
-            multicast: "239.0.0.1".parse()?,
-            server: self.cli.server,
-            mtu: 1500,
-        })?);
 
         startup()?;
         Ok(())
     }
 
     fn create_sender(&mut self) -> Result<()> {
-        let mut options = SenderDescriptor::default();
-
+        let mut video = None;
         if let Some(source) = Capture::get_sources(SourceType::Screen)?.get(0) {
-            options.video = Some((
-                source.clone(),
-                VideoDescriptor {
+            video = Some(HylaranaSenderSourceDescriptor {
+                source: source.clone(),
+                options: VideoDescriptor {
                     codec: self.cli.encoder.unwrap(),
                     frame_rate: self.cli.fps,
                     width: self.cli.width,
@@ -142,39 +136,55 @@ impl App {
                     bit_rate: 500 * 1024 * 8,
                     key_frame_interval: 21,
                 },
-            ));
+            });
         }
 
+        let mut audio = None;
         if let Some(source) = Capture::get_sources(SourceType::Audio)?.get(0) {
-            options.audio = Some((
-                source.clone(),
-                AudioDescriptor {
+            audio = Some(HylaranaSenderSourceDescriptor {
+                source: source.clone(),
+                options: AudioDescriptor {
                     sample_rate: 48000,
                     bit_rate: 64000,
                 },
-            ));
+            });
         }
 
-        if let (Some(hylarana), Some(canvas)) = (
-            self.hylarana.as_ref(),
-            self.create_canvas(StreamKind::Sender),
-        ) {
-            self.sender
-                .replace(hylarana.create_sender(self.cli.id, options, canvas)?);
+        if let Some(canvas) = self.create_canvas(StreamKind::Sender) {
+            let (id, sender) = Hylarana::create_sender(
+                HylaranaSenderDescriptor {
+                    transport: TransportDescriptor {
+                        multicast: "239.0.0.1".parse()?,
+                        server: self.cli.server,
+                        mtu: 1500,
+                    },
+                    multicast: false,
+                    video,
+                    audio,
+                },
+                canvas,
+            )?;
+            self.sender.replace(sender);
+            self.stream_id.replace(id);
         }
 
         Ok(())
     }
 
     fn create_receiver(&mut self) -> Result<()> {
-        if let (Some(hylarana), Some(canvas)) = (
-            self.hylarana.as_ref(),
+        if let (Some(id), Some(canvas)) = (
+            self.stream_id.clone(),
             self.create_canvas(StreamKind::Receiver),
         ) {
-            self.receiver.replace(hylarana.create_receiver(
-                self.cli.id,
-                ReceiverDescriptor {
+            self.receiver.replace(Hylarana::create_receiver(
+                id,
+                HylaranaReceiverDescriptor {
                     video: self.cli.decoder.unwrap(),
+                    transport: TransportDescriptor {
+                        multicast: "239.0.0.1".parse()?,
+                        server: self.cli.server,
+                        mtu: 1500,
+                    },
                 },
                 canvas,
             )?);
@@ -202,7 +212,6 @@ impl ApplicationHandler<AppEvent> for App {
                 drop(self.receiver.take());
                 drop(self.sender.take());
                 drop(self.renderer.take());
-                drop(self.hylarana.take());
 
                 event_loop.exit();
             }
