@@ -103,6 +103,24 @@ typedef enum
 typedef struct
 {
     /**
+     * hylarana server address.
+     */
+    const char* server;
+    /**
+     * Multicast address, e.g. `239.0.0.1`.
+     */
+    const char* multicast;
+    /**
+     * The size of the maximum transmission unit of the network, which is
+     * related to the settings of network devices such as routers or switches,
+     * the recommended value is 1400.
+     */
+    size_t mtu;
+} HylaranaDescriptor;
+
+typedef struct
+{
+    /**
      * Video encoder settings, possible values are `h264_qsv`, `h264_nvenc`,
      * `libx264` and so on.
      */
@@ -158,34 +176,28 @@ typedef struct
 {
     VideoDescriptor* video;
     AudioDescriptor* audio;
+    HylaranaDescriptor transport;
     bool multicast;
-} SenderDescriptor;
+} HylaranaSenderDescriptor;
 
 typedef struct
 {
-    /**
-     * hylarana server address.
-     */
-    const char* server;
-    /**
-     * Multicast address, e.g. `239.0.0.1`.
-     */
-    const char* multicast;
-    /**
-     * The size of the maximum transmission unit of the network, which is
-     * related to the settings of network devices such as routers or switches,
-     * the recommended value is 1400.
-     */
-    size_t mtu;
-} HylaranaDescriptor;
+    VideoDecoderType video;
+    HylaranaDescriptor transport;
+} HylaranaReceiverDescriptor;
 
-typedef const void* Hylarana;
+typedef struct
+{
+    char* uid;
+    uint16_t port;
+} StreamId;
+
+
 typedef const void* Sender;
 typedef const void* Receiver;
 
 typedef struct
 {
-    void (*initialized)(void* ctx);
     /**
      * Callback occurs when the video frame is updated. The video frame format
      * is fixed to NV12. Be careful not to call blocking methods inside the
@@ -273,16 +285,6 @@ EXPORT void hylarana_shutdown();
 #endif // !WIN32
 
 /**
- * Create hylarana.
- */
-EXPORT Hylarana hylarana_create(HylaranaDescriptor options);
-
-/**
- * Release hylarana.
- */
-EXPORT void hylarana_destroy(Hylarana hylarana);
-
-/**
  * Get capture sources.
  */
 EXPORT Sources hylarana_get_sources(SourceType kind);
@@ -298,7 +300,7 @@ EXPORT void hylarana_sources_destroy(Sources* sources);
  * get the device screen or sound callback, callback can be null, if it is
  * null then it means no callback data is needed.
  */
-EXPORT Sender hylarana_create_sender(Hylarana hylarana, int id, SenderDescriptor options, FrameSink sink);
+EXPORT Sender hylarana_create_sender(StreamId* id, HylaranaSenderDescriptor options, FrameSink sink);
 
 /**
  * Get whether the sender uses multicast transmission.
@@ -319,7 +321,7 @@ EXPORT void hylarana_sender_destroy(Sender sender);
  * Create a receiver, specify a bound NIC address, you can pass callback to
  * get the sender's screen or sound callback, callback can not be null.
  */
-EXPORT Receiver hylarana_create_receiver(Hylarana hylarana, int id, VideoDecoderType codec, FrameSink sink);
+EXPORT Receiver hylarana_create_receiver(StreamId* id, HylaranaReceiverDescriptor options, FrameSink sink);
 
 /**
  * Close receiver.

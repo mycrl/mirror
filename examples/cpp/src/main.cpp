@@ -35,23 +35,14 @@ class HylaranaService
 public:
     HylaranaService()
     {
-        HylaranaDescriptor hylarana_options;
-        hylarana_options.server = const_cast<char*>(OPTIONS.server.c_str());
-        hylarana_options.multicast = const_cast<char*>("239.0.0.1");
-        hylarana_options.mtu = 1500;
-
-        _hylarana = hylarana_create(hylarana_options);
+        _hylarana_options.server = const_cast<char*>(OPTIONS.server.c_str());
+        _hylarana_options.multicast = const_cast<char*>("239.0.0.1");
+        _hylarana_options.mtu = 1500;
     }
 
     ~HylaranaService()
     {
         Close();
-
-        if (_hylarana != nullptr)
-        {
-            hylarana_destroy(_hylarana);
-            _hylarana = nullptr;
-        }
     }
 
     bool CreateHylaranaSender()
@@ -92,7 +83,8 @@ public:
             }
         }
 
-        SenderDescriptor options;
+        HylaranaSenderDescriptor options;
+        options.transport = _hylarana_options;
         options.video = &video_options;
         options.audio = &audio_options;
         options.multicast = false;
@@ -100,14 +92,11 @@ public:
         FrameSink sink;
         sink.audio = nullptr;
         sink.video = nullptr;
-        sink.initialized = nullptr;
         sink.close = HylaranaService::close_proc;
         sink.ctx = (void*)this;
 
-        _sender = hylarana_create_sender(_hylarana,
-                                       OPTIONS.id,
-                                       options,
-                                       sink);
+        StreamId id = {};
+        _sender = hylarana_create_sender(&id, options, sink);
         if (_sender == nullptr)
         {
             return false;
@@ -125,16 +114,17 @@ public:
         }
 
         FrameSink sink;
-        sink.initialized = nullptr;
         sink.video = HylaranaService::video_proc;
         sink.audio = HylaranaService::audio_proc;
         sink.close = HylaranaService::close_proc;
         sink.ctx = (void*)this;
 
-        _receiver = hylarana_create_receiver(_hylarana,
-                                           OPTIONS.id,
-                                           OPTIONS.decoder,
-                                           sink);
+        HylaranaReceiverDescriptor options;
+        options.transport = _hylarana_options;
+        options.video = OPTIONS.decoder;
+
+        StreamId id = {};
+        _receiver = hylarana_create_receiver(&id, options, sink);
         if (_receiver == nullptr)
         {
             return false;
@@ -168,7 +158,7 @@ public:
         }
     }
 private:
-    Hylarana _hylarana = nullptr;
+    HylaranaDescriptor _hylarana_options = {};
     Sender _sender = nullptr;
     Receiver _receiver = nullptr;
     bool _is_runing = true;

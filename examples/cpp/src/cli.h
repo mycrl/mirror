@@ -28,7 +28,6 @@ static struct
     int width = 1280;
     int height = 720;
     int fps = 30;
-    int id = 0;
 } OPTIONS = {};
 
 VideoEncoderType encoder_from_str(std::string value)
@@ -123,10 +122,6 @@ int parse_argv(std::string args)
         {
             OPTIONS.server = value;
         }
-        else if (key == "--id")
-        {
-            OPTIONS.id = std::stoi(value);
-        }
         else if (key == "--fps")
         {
             OPTIONS.fps = std::stoi(value);
@@ -150,7 +145,6 @@ int parse_argv(std::string args)
         else if (key == "--help")
         {
             printf("\n");
-            printf("--id        default=0               - stream id\n");
             printf("--fps       default=30              - frame rate\n");
             printf("--width     default=1280            - video width\n");
             printf("--height    default=720             - video height\n");
