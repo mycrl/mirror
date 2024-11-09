@@ -1,14 +1,19 @@
 mod adapter;
 mod multi;
 mod package;
-pub mod srt;
+mod srt;
 
 pub use self::{
     adapter::{
         BufferFlag, StreamBufferInfo, StreamKind, StreamMultiReceiverAdapter,
         StreamReceiverAdapter, StreamReceiverAdapterExt, StreamSenderAdapter,
     },
+    multi::{Server as MulticastServer, Socket as MulticastSocket},
     package::{copy_from_slice, with_capacity, Package, PacketInfo, UnPackage},
+    srt::{
+        Descriptor as SrtDescriptor, FragmentDecoder as SrtFragmentDecoder,
+        FragmentEncoder as SrtFragmentEncoder, Server as SrtServer, Socket as SrtSocket,
+    },
 };
 
 use std::{
@@ -121,7 +126,7 @@ impl Transport {
 
         // Create a multicast sender, the port is automatically assigned an idle port by
         // the system
-        let mut mcast_sender = multi::Server::new(
+        let mut mcast_sender = MulticastServer::new(
             options.multicast,
             format!("0.0.0.0:{}", stream_id.port).parse().unwrap(),
             options.mtu,
@@ -130,7 +135,7 @@ impl Transport {
         log::info!("create multicast sender, port={}", stream_id.port);
 
         // Create an srt configuration and carry stream information
-        let mut opt = srt::Descriptor::default();
+        let mut opt = SrtDescriptor::default();
         opt.fc = 32;
         opt.latency = 20;
         opt.mtu = options.mtu as u32;
@@ -143,8 +148,8 @@ impl Transport {
         );
 
         // Create an srt connection to the server
-        let mut encoder = srt::FragmentEncoder::new(opt.max_pkt_size());
-        let srt = Arc::new(srt::Socket::connect(options.server, opt)?);
+        let mut encoder = SrtFragmentEncoder::new(opt.max_pkt_size());
+        let srt = Arc::new(SrtSocket::connect(options.server, opt)?);
         log::info!("sender connect to server={}", options.server);
 
         let stream_id_ = stream_id.clone();
@@ -215,7 +220,7 @@ impl Transport {
         let sequence = Arc::new(AtomicU64::new(0));
 
         // Create an srt configuration and carry stream information
-        let mut opt = srt::Descriptor::default();
+        let mut opt = SrtDescriptor::default();
         opt.fc = 32;
         opt.latency = 20;
         opt.mtu = options.mtu as u32;
@@ -228,12 +233,12 @@ impl Transport {
         );
 
         // Create an srt connection to the server
-        let srt = Arc::new(srt::Socket::connect(options.server, opt)?);
+        let srt = Arc::new(SrtSocket::connect(options.server, opt)?);
         log::info!("receiver connect to server={}", options.server);
 
         // Creating a multicast receiver
         let multicast_addr = SocketAddr::new("0.0.0.0".parse().unwrap(), stream_id.port);
-        let multicast = Arc::new(multi::Socket::new(options.multicast, multicast_addr)?);
+        let multicast = Arc::new(MulticastSocket::new(options.multicast, multicast_addr)?);
         log::info!("create multicast receiver, port={}", stream_id.port);
 
         let multicast_ = Arc::downgrade(&multicast);
@@ -290,7 +295,7 @@ impl Transport {
             .name("HylaranaStreamReceiverThread".to_string())
             .spawn(move || {
                 let mut buf = [0u8; 2000];
-                let mut decoder = srt::FragmentDecoder::new();
+                let mut decoder = SrtFragmentDecoder::new();
 
                 loop {
                     match srt.read(&mut buf) {

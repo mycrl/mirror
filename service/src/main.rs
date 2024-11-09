@@ -8,11 +8,7 @@ use std::{
 
 use anyhow::Result;
 use clap::Parser;
-use hylarana_transport::{
-    srt::{cleanup, startup, Descriptor, Server},
-    StreamInfo, StreamInfoKind,
-};
-
+use hylarana_transport::{shutdown, startup, SrtDescriptor, SrtServer, StreamInfo, StreamInfoKind};
 use parking_lot::RwLock;
 
 // #[global_allocator]
@@ -43,13 +39,13 @@ fn main() -> Result<()> {
 
     // Configuration of the srt server. Since this suite only works within the LAN,
     // the delay is set to the minimum delay without considering network factors.
-    let mut opt = Descriptor::default();
+    let mut opt = SrtDescriptor::default();
     opt.mtu = config.mtu as u32;
     opt.latency = 40;
     opt.fc = 32;
 
     // Start the srt server
-    let server = Server::bind(config.bind, opt, 100)?;
+    let server = SrtServer::bind(config.bind, opt, 100)?;
     log::info!("starting srt server...");
 
     let sockets = Arc::new(RwLock::new(HashMap::with_capacity(200)));
@@ -194,6 +190,6 @@ fn main() -> Result<()> {
         }
     }
 
-    cleanup();
+    shutdown();
     Ok(())
 }

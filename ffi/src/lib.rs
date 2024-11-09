@@ -89,7 +89,10 @@ pub mod android {
             Ok(StreamId { uid, port })
         }
 
-        pub fn from_stream_id<'a>(env: &mut JNIEnv<'a>, stream_id: StreamId) -> Result<JObject<'a>> {
+        pub fn from_stream_id<'a>(
+            env: &mut JNIEnv<'a>,
+            stream_id: StreamId,
+        ) -> Result<JObject<'a>> {
             let mut id = env.new_object("com/github/mycrl/hylarana/StreamId", "()V", &[])?;
 
             env.set_field(
@@ -105,7 +108,11 @@ pub mod android {
     }
 
     use std::{
-        cell::RefCell, ffi::c_void, ptr::null_mut, sync::{Arc, Mutex}, thread
+        cell::RefCell,
+        ffi::c_void,
+        ptr::null_mut,
+        sync::{Arc, Mutex},
+        thread,
     };
 
     use anyhow::{anyhow, Result};
@@ -385,7 +392,8 @@ pub mod android {
                 })?;
 
             Ok(Box::into_raw(Box::new(adapter)))
-        }).unwrap_or_else(|| null_mut())
+        })
+        .unwrap_or_else(|| null_mut())
     }
 
     /// Free the stream receiver adapter instance pointer.
@@ -482,13 +490,14 @@ pub mod android {
         adapter: *const Arc<StreamSenderAdapter>,
     ) -> JObject<'a> {
         ok_or_check(&mut env, |env| {
-            let id= Transport::create_sender(
+            let id = Transport::create_sender(
                 objects::to_transport_descriptor(env, &options)?,
                 unsafe { &*adapter },
             )?;
 
             Ok(objects::from_stream_id(env, id)?)
-        }).unwrap_or_else(|| JObject::null())
+        })
+        .unwrap_or_else(|| JObject::null())
     }
 
     /// Sends the packet to the sender instance.
@@ -515,7 +524,8 @@ pub mod android {
             unsafe { &*adapter }.send(buf, info);
 
             Ok(true)
-        }).is_some()
+        })
+        .is_some()
     }
 
     /// Creates the receiver, the return value indicates whether the creation
@@ -546,7 +556,8 @@ pub mod android {
             )?;
 
             Ok(())
-        }).is_some()
+        })
+        .is_some()
     }
 }
 
