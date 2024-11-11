@@ -16,7 +16,7 @@ members = [
     "capture",
     "graphics",
     "hylarana",
-    "service",
+    "server",
     "transport",
     "examples/rust",
 ]
