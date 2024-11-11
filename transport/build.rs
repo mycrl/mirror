@@ -50,9 +50,9 @@ fn main() -> Result<()> {
         let srt_dir = join(&out_dir, "srt");
         if !is_exsit(&srt_dir) {
             exec(
-                "git clone --branch v1.5.4-rc.0 https://github.com/Haivision/srt",
+                "git clone --branch v1.5.4 https://github.com/Haivision/srt",
                 &out_dir,
-            )?; // fixed 1.5.4-rc.0
+            )?;
         }
 
         use_library(srt_dir)?;
