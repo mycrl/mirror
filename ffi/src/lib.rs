@@ -580,7 +580,7 @@ pub mod desktop {
         shutdown, startup, AVFrameObserver, AVFrameSink, AVFrameStream, AudioDescriptor,
         AudioFrame, Capture, GraphicsBackend, Hylarana, HylaranaReceiver,
         HylaranaReceiverDescriptor, HylaranaSender, HylaranaSenderDescriptor,
-        HylaranaSenderSourceDescriptor, Renderer, Source, SourceType, StreamId,
+        HylaranaSenderSourceDescriptor, Renderer, Source, SourceType,
         TransportDescriptor, VideoDecoderType, VideoDescriptor, VideoEncoderType, VideoFrame,
     };
 

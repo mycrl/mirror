@@ -9,7 +9,8 @@ use uuid::Uuid;
 
 use crate::{
     adapter::StreamSenderAdapter, MulticastServer, Package, PacketInfo, SrtDescriptor,
-    SrtFragmentEncoder, SrtSocket, StreamInfo, StreamInfoKind,
+    SrtFragmentEncoder, SrtSocket, StreamInfo, StreamInfoKind, TransportDescriptor,
+    TransportStrategy,
 };
 
 pub struct Sender {
@@ -46,7 +47,7 @@ impl Drop for Sender {
     }
 }
 
-pub fn create_multicast_sender(addr: SocketAddr, mtu: usize) -> Result<Sender, Error> {
+fn create_multicast_sender(addr: SocketAddr, mtu: usize) -> Result<Sender, Error> {
     let sender = Sender::default();
 
     // Create a multicast sender, the port is automatically assigned an idle port by
@@ -107,7 +108,7 @@ pub fn create_multicast_sender(addr: SocketAddr, mtu: usize) -> Result<Sender, E
     Ok(sender)
 }
 
-pub fn create_relay_sender(addr: SocketAddr, mtu: usize) -> Result<Sender, Error> {
+fn create_relay_sender(addr: SocketAddr, mtu: usize) -> Result<Sender, Error> {
     let sender = Sender::default();
 
     // Create an srt configuration and carry stream information
@@ -175,4 +176,12 @@ pub fn create_relay_sender(addr: SocketAddr, mtu: usize) -> Result<Sender, Error
         })?;
 
     Ok(sender)
+}
+
+pub fn create_sender(options: TransportDescriptor) -> Result<Sender, Error> {
+    match options.strategy {
+        TransportStrategy::Multicast(addr) => create_multicast_sender(addr, options.mtu),
+        TransportStrategy::Direct(_bind) => todo!(),
+        TransportStrategy::Relay(addr) => create_relay_sender(addr, options.mtu),
+    }
 }

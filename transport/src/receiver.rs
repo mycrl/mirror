@@ -9,7 +9,8 @@ use uuid::Uuid;
 
 use crate::{
     adapter::StreamReceiverAdapterExt, MulticastSocket, SrtDescriptor, SrtFragmentDecoder,
-    SrtSocket, StreamInfo, StreamInfoKind, UnPackage,
+    SrtSocket, StreamInfo, StreamInfoKind, StreamMultiReceiverAdapter, StreamReceiverAdapter,
+    TransportDescriptor, TransportStrategy, UnPackage,
 };
 
 enum Socket {
@@ -54,7 +55,7 @@ impl<T> Drop for Receiver<T> {
     }
 }
 
-pub fn create_multicast_receiver<T>(id: String, addr: SocketAddr) -> Result<Receiver<T>, Error>
+fn create_multicast_receiver<T>(id: String, addr: SocketAddr) -> Result<Receiver<T>, Error>
 where
     T: Default + StreamReceiverAdapterExt + 'static,
 {
@@ -115,11 +116,7 @@ where
     Ok(receiver)
 }
 
-pub fn create_srt_receiver<T>(
-    id: String,
-    addr: SocketAddr,
-    mtu: usize,
-) -> Result<Receiver<T>, Error>
+fn create_srt_receiver<T>(id: String, addr: SocketAddr, mtu: usize) -> Result<Receiver<T>, Error>
 where
     T: Default + StreamReceiverAdapterExt + 'static,
 {
@@ -208,4 +205,30 @@ where
         })?;
 
     Ok(receiver)
+}
+
+fn create_receiver<T: Default + StreamReceiverAdapterExt + 'static>(
+    id: String,
+    options: TransportDescriptor,
+) -> Result<Receiver<T>, Error> {
+    match options.strategy {
+        TransportStrategy::Multicast(addr) => create_multicast_receiver(id, addr),
+        TransportStrategy::Direct(addr) | TransportStrategy::Relay(addr) => {
+            create_srt_receiver(id, addr, options.mtu)
+        }
+    }
+}
+
+pub fn create_split_receiver(
+    id: String,
+    options: TransportDescriptor,
+) -> Result<Receiver<StreamMultiReceiverAdapter>, Error> {
+    create_receiver::<StreamMultiReceiverAdapter>(id, options)
+}
+
+pub fn create_mix_receiver(
+    id: String,
+    options: TransportDescriptor,
+) -> Result<Receiver<StreamReceiverAdapter>, Error> {
+    create_receiver::<StreamReceiverAdapter>(id, options)
 }

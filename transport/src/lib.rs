@@ -12,8 +12,8 @@ pub use self::{
     },
     multi::{Server as MulticastServer, Socket as MulticastSocket},
     package::{copy_from_slice, with_capacity, Package, PacketInfo, UnPackage},
-    receiver::Receiver as TransportReceiver,
-    sender::Sender as TransportSender,
+    receiver::{create_mix_receiver, create_split_receiver, Receiver as TransportReceiver},
+    sender::{create_sender, Sender as TransportSender},
     srt::{
         Descriptor as SrtDescriptor, FragmentDecoder as SrtFragmentDecoder,
         FragmentEncoder as SrtFragmentEncoder, Server as SrtServer, Socket as SrtSocket,
@@ -52,38 +52,6 @@ pub struct TransportDescriptor {
     pub strategy: TransportStrategy,
     /// see: [Maximum_transmission_unit](https://en.wikipedia.org/wiki/Maximum_transmission_unit)
     pub mtu: usize,
-}
-
-pub fn create_sender(options: TransportDescriptor) -> Result<TransportSender, Error> {
-    match options.strategy {
-        TransportStrategy::Multicast(addr) => sender::create_multicast_sender(addr, options.mtu),
-        TransportStrategy::Direct(_bind) => todo!(),
-        TransportStrategy::Relay(addr) => sender::create_relay_sender(addr, options.mtu),
-    }
-}
-
-pub fn create_receiver(
-    id: String,
-    options: TransportDescriptor,
-) -> Result<TransportReceiver<StreamReceiverAdapter>, Error> {
-    match options.strategy {
-        TransportStrategy::Multicast(addr) => receiver::create_multicast_receiver(id, addr),
-        TransportStrategy::Direct(addr) | TransportStrategy::Relay(addr) => {
-            receiver::create_srt_receiver(id, addr, options.mtu)
-        }
-    }
-}
-
-pub fn create_split_receiver(
-    id: String,
-    options: TransportDescriptor,
-) -> Result<TransportReceiver<StreamMultiReceiverAdapter>, Error> {
-    match options.strategy {
-        TransportStrategy::Multicast(addr) => receiver::create_multicast_receiver(id, addr),
-        TransportStrategy::Direct(addr) | TransportStrategy::Relay(addr) => {
-            receiver::create_srt_receiver(id, addr, options.mtu)
-        }
-    }
 }
 
 #[repr(u8)]
