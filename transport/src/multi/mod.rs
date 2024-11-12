@@ -184,12 +184,3 @@ impl Server {
         Ok(())
     }
 }
-
-/// Picks a free port, that is unused on both TCP and UDP
-pub fn alloc_port() -> Result<u16, Error> {
-    let socket = UdpSocket::bind("0.0.0.0:0")?;
-    let port = socket.local_addr()?.port();
-    drop(socket);
-
-    Ok(port)
-}

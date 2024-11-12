@@ -3,7 +3,6 @@ use std::{
     sync::{
         atomic::{AtomicBool, AtomicU8},
         mpsc::{channel, Receiver, Sender},
-        Arc,
     },
 };
 
@@ -63,7 +62,6 @@ pub enum StreamBufferInfo {
 /// sps and pps as well as the key frame information.
 #[derive(Default)]
 pub struct StreamSenderAdapter {
-    multicast: AtomicBool,
     audio_interval: AtomicU8,
     video_config: AtomicOption<BytesMut>,
     audio_config: AtomicOption<BytesMut>,
@@ -71,24 +69,7 @@ pub struct StreamSenderAdapter {
 }
 
 impl StreamSenderAdapter {
-    pub fn new(multicast: bool) -> Arc<Self> {
-        Arc::new(Self {
-            multicast: AtomicBool::new(multicast),
-            ..Default::default()
-        })
-    }
-
-    /// Toggle whether to use multicast
-    pub fn set_multicast(&self, is_multicast: bool) {
-        self.multicast.update(is_multicast);
-    }
-
-    /// Get whether to use multicast
-    pub fn get_multicast(&self) -> bool {
-        self.multicast.get()
-    }
-
-    pub fn close(&self) {
+    pub(crate) fn close(&self) {
         self.channel.send(None);
     }
 
@@ -159,7 +140,7 @@ impl StreamSenderAdapter {
     }
 }
 
-pub trait StreamReceiverAdapterExt: Sync + Send {
+pub(crate) trait StreamReceiverAdapterExt: Sync + Send {
     fn close(&self);
     fn loss_pkt(&self);
     fn send(&self, buf: Bytes, kind: StreamKind, flags: i32, timestamp: u64) -> bool;
@@ -178,10 +159,6 @@ pub struct StreamReceiverAdapter {
 }
 
 impl StreamReceiverAdapter {
-    pub fn new() -> Arc<Self> {
-        Arc::new(Self::default())
-    }
-
     pub fn next(&self) -> Option<(Bytes, StreamKind, i32, u64)> {
         self.channel.recv()
     }
@@ -234,10 +211,6 @@ pub struct StreamMultiReceiverAdapter {
 }
 
 impl StreamMultiReceiverAdapter {
-    pub fn new() -> Arc<Self> {
-        Arc::new(Self::default())
-    }
-
     pub fn next(&self, kind: StreamKind) -> Option<(Bytes, i32, u64)> {
         match kind {
             StreamKind::Video => self.video_channel.recv(),

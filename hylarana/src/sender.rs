@@ -24,7 +24,7 @@ use hylarana_codec::{
 
 use hylarana_transport::{
     copy_from_slice as package_copy_from_slice, BufferFlag, StreamBufferInfo, StreamSenderAdapter,
-    TransportDescriptor,
+    TransportDescriptor, TransportSender,
 };
 
 use thiserror::Error;
@@ -75,28 +75,28 @@ pub struct HylaranaSenderDescriptor {
 }
 
 struct VideoSender<T: AVFrameStream + 'static> {
+    adapter: Arc<StreamSenderAdapter>,
     status: Weak<AtomicBool>,
-    sink: Weak<T>,
-    adapter: Weak<StreamSenderAdapter>,
     encoder: VideoEncoder,
+    sink: Weak<T>,
 }
 
+// Encoding is a relatively complex task. If you add encoding tasks to the
+// pipeline that pushes frames, it will slow down the entire pipeline.
+//
+// Here, the tasks are separated, and the encoding tasks are separated into
+// independent threads. The encoding thread is notified of task updates through
+// the optional lock.
 impl<T: AVFrameStream + 'static> VideoSender<T> {
-    // Encoding is a relatively complex task. If you add encoding tasks to the
-    // pipeline that pushes frames, it will slow down the entire pipeline.
-    //
-    // Here, the tasks are separated, and the encoding tasks are separated into
-    // independent threads. The encoding thread is notified of task updates through
-    // the optional lock.
     fn new(
         status: &Arc<AtomicBool>,
-        adapter: &Arc<StreamSenderAdapter>,
+        transport: &TransportSender,
         settings: VideoEncoderSettings,
         sink: &Arc<T>,
     ) -> Result<Self, HylaranaSenderError> {
         Ok(Self {
+            adapter: transport.get_adapter(),
             sink: Arc::downgrade(sink),
-            adapter: Arc::downgrade(adapter),
             status: Arc::downgrade(status),
             encoder: VideoEncoder::new(settings)?,
         })
@@ -114,17 +114,11 @@ impl<T: AVFrameStream + 'static> VideoSender<T> {
                 return false;
             } else {
                 while let Some((buffer, flags, timestamp)) = self.encoder.read() {
-                    if let Some(adapter) = self.adapter.upgrade() {
-                        if !adapter.send(
-                            package_copy_from_slice(buffer),
-                            StreamBufferInfo::Video(flags, timestamp),
-                        ) {
-                            log::warn!("video send packet to adapter failed");
-
-                            return false;
-                        }
-                    } else {
-                        log::warn!("video adapter weak upgrade failed, maybe is drop");
+                    if !self.adapter.send(
+                        package_copy_from_slice(buffer),
+                        StreamBufferInfo::Video(flags, timestamp),
+                    ) {
+                        log::warn!("video send packet to adapter failed");
 
                         return false;
                     }
@@ -172,30 +166,32 @@ impl<T: AVFrameStream + 'static> FrameArrived for VideoSender<T> {
 }
 
 struct AudioSender<T: AVFrameStream + 'static> {
+    adapter: Arc<StreamSenderAdapter>,
     status: Weak<AtomicBool>,
-    sink: Weak<T>,
-    adapter: Weak<StreamSenderAdapter>,
     encoder: AudioEncoder,
     chunk_count: usize,
     buffer: BytesMut,
+    sink: Weak<T>,
 }
 
+// Encoding is a relatively complex task. If you add encoding tasks to the
+// pipeline that pushes frames, it will slow down the entire pipeline.
+//
+// Here, the tasks are separated, and the encoding tasks are separated into
+// independent threads. The encoding thread is notified of task updates through
+// the optional lock.
 impl<T: AVFrameStream + 'static> AudioSender<T> {
-    // Encoding is a relatively complex task. If you add encoding tasks to the
-    // pipeline that pushes frames, it will slow down the entire pipeline.
-    //
-    // Here, the tasks are separated, and the encoding tasks are separated into
-    // independent threads. The encoding thread is notified of task updates through
-    // the optional lock.
     fn new(
         status: &Arc<AtomicBool>,
-        adapter: &Arc<StreamSenderAdapter>,
+        transport: &TransportSender,
         settings: AudioEncoderSettings,
         sink: &Arc<T>,
     ) -> Result<Self, HylaranaSenderError> {
+        let adapter = transport.get_adapter();
+
         // Create an opus header data. The opus decoder needs this data to obtain audio
         // information. Here, actively add an opus header information to the queue, and
-        // the transport layer will automatically cache it.
+        // the adapter layer will automatically cache it.
         adapter.send(
             package_copy_from_slice(&create_opus_identification_header(
                 1,
@@ -208,9 +204,9 @@ impl<T: AVFrameStream + 'static> AudioSender<T> {
             chunk_count: settings.sample_rate as usize / 1000 * 100,
             encoder: AudioEncoder::new(settings)?,
             status: Arc::downgrade(status),
-            adapter: Arc::downgrade(adapter),
             buffer: BytesMut::with_capacity(48000),
             sink: Arc::downgrade(sink),
+            adapter,
         })
     }
 
@@ -223,43 +219,37 @@ impl<T: AVFrameStream + 'static> AudioSender<T> {
         });
 
         if self.buffer.len() >= self.chunk_count * 2 {
-            if let Some(adapter) = self.adapter.upgrade() {
-                let payload = self.buffer.split_to(self.chunk_count * size_of::<i16>());
-                let frame = AudioFrame {
-                    data: payload.as_ptr() as *const _,
-                    frames: self.chunk_count as u32,
-                    sample_rate: 0,
-                };
+            let payload = self.buffer.split_to(self.chunk_count * size_of::<i16>());
+            let frame = AudioFrame {
+                data: payload.as_ptr() as *const _,
+                frames: self.chunk_count as u32,
+                sample_rate: 0,
+            };
 
-                if self.encoder.update(&frame) {
-                    // Push the audio and video frames into the encoder.
-                    if let Err(e) = self.encoder.encode() {
-                        log::error!("audio encode error={:?}", e);
-
-                        return false;
-                    } else {
-                        // Try to get the encoded data packets. The audio and video frames
-                        // do not correspond to the data
-                        // packets one by one, so you need to try to get
-                        // multiple packets until they are empty.
-                        while let Some((buffer, flags, timestamp)) = self.encoder.read() {
-                            if !adapter.send(
-                                package_copy_from_slice(buffer),
-                                StreamBufferInfo::Audio(flags, timestamp),
-                            ) {
-                                log::warn!("audio send packet to adapter failed");
-
-                                return false;
-                            }
-                        }
-                    }
-                } else {
-                    log::warn!("audio encoder update frame failed");
+            if self.encoder.update(&frame) {
+                // Push the audio and video frames into the encoder.
+                if let Err(e) = self.encoder.encode() {
+                    log::error!("audio encode error={:?}", e);
 
                     return false;
+                } else {
+                    // Try to get the encoded data packets. The audio and video frames
+                    // do not correspond to the data
+                    // packets one by one, so you need to try to get
+                    // multiple packets until they are empty.
+                    while let Some((buffer, flags, timestamp)) = self.encoder.read() {
+                        if !self.adapter.send(
+                            package_copy_from_slice(buffer),
+                            StreamBufferInfo::Audio(flags, timestamp),
+                        ) {
+                            log::warn!("audio send packet to adapter failed");
+
+                            return false;
+                        }
+                    }
                 }
             } else {
-                log::warn!("audio adapter weak upgrade failed, maybe is drop");
+                log::warn!("audio encoder update frame failed");
 
                 return false;
             }
@@ -301,31 +291,29 @@ impl<T: AVFrameStream + 'static> FrameArrived for AudioSender<T> {
 }
 
 pub struct HylaranaSender<T: AVFrameStream + 'static> {
-    pub(crate) adapter: Arc<StreamSenderAdapter>,
+    transport: TransportSender,
     status: Arc<AtomicBool>,
-    sink: Arc<T>,
     capture: Capture,
+    sink: Arc<T>,
 }
 
 impl<T: AVFrameStream + 'static> HylaranaSender<T> {
     // Create a sender. The capture of the sender is started following the sender,
     // but both video capture and audio capture can be empty, which means you can
     // create a sender that captures nothing.
-    pub fn new(
-        options: HylaranaSenderDescriptor,
-        sink: Arc<T>,
-    ) -> Result<Self, HylaranaSenderError> {
+    pub fn new(options: HylaranaSenderDescriptor, sink: T) -> Result<Self, HylaranaSenderError> {
         log::info!("create sender");
 
         let mut capture_options = CaptureDescriptor::default();
-        let adapter = StreamSenderAdapter::new(options.multicast);
+        let transport = hylarana_transport::create_sender(options.transport)?;
         let status = Arc::new(AtomicBool::new(false));
+        let sink = Arc::new(sink);
 
         if let Some(HylaranaSenderSourceDescriptor { source, options }) = options.audio {
             capture_options.audio = Some(SourceCaptureDescriptor {
                 arrived: AudioSender::new(
                     &status,
-                    &adapter,
+                    &transport,
                     AudioEncoderSettings {
                         sample_rate: options.sample_rate,
                         bit_rate: options.bit_rate,
@@ -354,7 +342,7 @@ impl<T: AVFrameStream + 'static> HylaranaSender<T> {
                 },
                 arrived: VideoSender::new(
                     &status,
-                    &adapter,
+                    &transport,
                     VideoEncoderSettings {
                         codec: options.codec,
                         key_frame_interval: options.key_frame_interval,
@@ -372,18 +360,14 @@ impl<T: AVFrameStream + 'static> HylaranaSender<T> {
 
         Ok(Self {
             capture: Capture::new(capture_options)?,
+            transport,
             status,
-            adapter,
             sink,
         })
     }
 
-    pub fn get_multicast(&self) -> bool {
-        self.adapter.get_multicast()
-    }
-
-    pub fn set_multicast(&self, multicast: bool) {
-        self.adapter.set_multicast(multicast)
+    pub fn get_id(&self) -> &str {
+        self.transport.get_id()
     }
 }
 
@@ -391,18 +375,18 @@ impl<T: AVFrameStream + 'static> Drop for HylaranaSender<T> {
     fn drop(&mut self) {
         log::info!("sender drop");
 
-        // When the sender releases, the cleanup work should be done, but there is a
-        // more troublesome point here. If it is actively released by the outside, it
-        // will also call back to the external closing event. It stands to reason that
-        // it should be distinguished whether it is an active closure, but in order to
-        // make it simpler to implement, let's do it this way first.
-        if let Err(e) = self.capture.close() {
-            log::warn!("hylarana sender capture close error={:?}", e);
-        }
-
-        self.adapter.close();
         if !self.status.get() {
             self.status.update(true);
+
+            // When the sender releases, the cleanup work should be done, but there is a
+            // more troublesome point here. If it is actively released by the outside, it
+            // will also call back to the external closing event. It stands to reason that
+            // it should be distinguished whether it is an active closure, but in order to
+            // make it simpler to implement, let's do it this way first.
+            if let Err(e) = self.capture.close() {
+                log::warn!("hylarana sender capture close error={:?}", e);
+            }
+
             self.sink.close();
         }
     }
