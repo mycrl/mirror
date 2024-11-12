@@ -5,21 +5,19 @@ use std::{
     thread,
 };
 
-use uuid::Uuid;
-
 use crate::{
-    adapter::StreamReceiverAdapterExt, MulticastSocket, SrtDescriptor, SrtFragmentDecoder,
-    SrtSocket, StreamInfo, StreamInfoKind, StreamMultiReceiverAdapter, StreamReceiverAdapter,
-    TransportDescriptor, TransportStrategy, UnPackage,
+    adapter::StreamReceiverAdapterExt, MulticastSocket, StreamInfo, StreamInfoKind,
+    StreamMultiReceiverAdapter, StreamReceiverAdapter, TransmissionDescriptor,
+    TransmissionFragmentDecoder, TransmissionSocket, TransportDescriptor, TransportStrategy,
+    UnPackage,
 };
 
 enum Socket {
     MulticastSocket(Arc<MulticastSocket>),
-    SrtSocket(Arc<SrtSocket>),
+    TransmissionSocket(Arc<TransmissionSocket>),
 }
 
 pub struct Receiver<T> {
-    id: String,
     adapter: Arc<T>,
     socket: Option<Socket>,
 }
@@ -27,7 +25,6 @@ pub struct Receiver<T> {
 impl<T: Default> Default for Receiver<T> {
     fn default() -> Self {
         Self {
-            id: Uuid::new_v4().to_string(),
             adapter: Arc::new(T::default()),
             socket: None,
         }
@@ -35,10 +32,6 @@ impl<T: Default> Default for Receiver<T> {
 }
 
 impl<T> Receiver<T> {
-    pub fn get_id(&self) -> &str {
-        &self.id
-    }
-
     pub fn get_adapter(&self) -> Arc<T> {
         self.adapter.clone()
     }
@@ -49,7 +42,7 @@ impl<T> Drop for Receiver<T> {
         if let Some(socket) = self.socket.as_ref() {
             match socket {
                 Socket::MulticastSocket(socket) => socket.close(),
-                Socket::SrtSocket(socket) => socket.close(),
+                Socket::TransmissionSocket(socket) => socket.close(),
             }
         }
     }
@@ -123,7 +116,7 @@ where
     let mut receiver = Receiver::<T>::default();
 
     // Create an srt configuration and carry stream information
-    let mut opt = SrtDescriptor::default();
+    let mut opt = TransmissionDescriptor::default();
     opt.fc = 32;
     opt.latency = 20;
     opt.mtu = mtu as u32;
@@ -136,10 +129,10 @@ where
     );
 
     // Create an srt connection to the server
-    let socket = Arc::new(SrtSocket::connect(addr, opt)?);
+    let socket = Arc::new(TransmissionSocket::connect(addr, opt)?);
 
     log::info!("receiver connect to srt server, id={}, addr={}", id, addr);
-    receiver.socket = Some(Socket::SrtSocket(socket.clone()));
+    receiver.socket = Some(Socket::TransmissionSocket(socket.clone()));
 
     let mut sequence = 0;
     let adapter_ = Arc::downgrade(&receiver.adapter);
@@ -147,7 +140,7 @@ where
         .name("HylaranaStreamReceiverThread".to_string())
         .spawn(move || {
             let mut buf = [0u8; 2000];
-            let mut decoder = SrtFragmentDecoder::new();
+            let mut decoder = TransmissionFragmentDecoder::new();
 
             loop {
                 match socket.read(&mut buf) {

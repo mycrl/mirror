@@ -1,22 +1,23 @@
 mod adapter;
-mod multi;
+mod multicast;
 mod package;
 mod receiver;
 mod sender;
-mod srt;
+mod transmission;
 
 pub use self::{
     adapter::{
         BufferFlag, StreamBufferInfo, StreamKind, StreamMultiReceiverAdapter,
         StreamReceiverAdapter, StreamSenderAdapter,
     },
-    multi::{Server as MulticastServer, Socket as MulticastSocket},
+    multicast::{Server as MulticastServer, Socket as MulticastSocket},
     package::{copy_from_slice, with_capacity, Package, PacketInfo, UnPackage},
     receiver::{create_mix_receiver, create_split_receiver, Receiver as TransportReceiver},
     sender::{create_sender, Sender as TransportSender},
-    srt::{
-        Descriptor as SrtDescriptor, FragmentDecoder as SrtFragmentDecoder,
-        FragmentEncoder as SrtFragmentEncoder, Server as SrtServer, Socket as SrtSocket,
+    transmission::{
+        Descriptor as TransmissionDescriptor, FragmentDecoder as TransmissionFragmentDecoder,
+        FragmentEncoder as TransmissionFragmentEncoder, Server as TransmissionServer,
+        Socket as TransmissionSocket,
     },
 };
 
@@ -29,12 +30,12 @@ use std::{
 /// Initialize the srt communication protocol, mainly initializing some
 /// log-related things.
 pub fn startup() -> bool {
-    srt::startup()
+    transmission::startup()
 }
 
 /// Clean up the srt environment and prepare to exit.
 pub fn shutdown() {
-    srt::cleanup()
+    transmission::cleanup()
 }
 
 #[derive(Debug, Clone, Copy)]

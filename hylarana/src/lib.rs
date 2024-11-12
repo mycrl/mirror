@@ -159,8 +159,7 @@ impl Hylarana {
     ) -> Result<HylaranaReceiver<T>, HylaranaReceiverError> {
         log::info!("create receiver: id={:?}, options={:?}", id, options);
 
-        let receiver = HylaranaReceiver::new(id, options.clone(), sink)?;
-        Ok(receiver)
+        HylaranaReceiver::new(id, options.clone(), sink)
     }
 }
 

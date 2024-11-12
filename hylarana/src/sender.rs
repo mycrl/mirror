@@ -76,7 +76,7 @@ pub struct HylaranaSenderDescriptor {
 
 struct VideoSender<T: AVFrameStream + 'static> {
     adapter: Arc<StreamSenderAdapter>,
-    status: Weak<AtomicBool>,
+    status: Arc<AtomicBool>,
     encoder: VideoEncoder,
     sink: Weak<T>,
 }
@@ -89,16 +89,16 @@ struct VideoSender<T: AVFrameStream + 'static> {
 // the optional lock.
 impl<T: AVFrameStream + 'static> VideoSender<T> {
     fn new(
-        status: &Arc<AtomicBool>,
+        status: Arc<AtomicBool>,
         transport: &TransportSender,
         settings: VideoEncoderSettings,
         sink: &Arc<T>,
     ) -> Result<Self, HylaranaSenderError> {
         Ok(Self {
+            encoder: VideoEncoder::new(settings)?,
             adapter: transport.get_adapter(),
             sink: Arc::downgrade(sink),
-            status: Arc::downgrade(status),
-            encoder: VideoEncoder::new(settings)?,
+            status,
         })
     }
 
@@ -153,9 +153,9 @@ impl<T: AVFrameStream + 'static> FrameArrived for VideoSender<T> {
         if self.process(frame) {
             true
         } else {
-            if let (Some(status), Some(sink)) = (self.status.upgrade(), self.sink.upgrade()) {
-                if !status.get() {
-                    status.update(true);
+            if let Some(sink) = self.sink.upgrade() {
+                if !self.status.get() {
+                    self.status.update(true);
                     sink.close();
                 }
             }
@@ -167,7 +167,7 @@ impl<T: AVFrameStream + 'static> FrameArrived for VideoSender<T> {
 
 struct AudioSender<T: AVFrameStream + 'static> {
     adapter: Arc<StreamSenderAdapter>,
-    status: Weak<AtomicBool>,
+    status: Arc<AtomicBool>,
     encoder: AudioEncoder,
     chunk_count: usize,
     buffer: BytesMut,
@@ -182,7 +182,7 @@ struct AudioSender<T: AVFrameStream + 'static> {
 // the optional lock.
 impl<T: AVFrameStream + 'static> AudioSender<T> {
     fn new(
-        status: &Arc<AtomicBool>,
+        status: Arc<AtomicBool>,
         transport: &TransportSender,
         settings: AudioEncoderSettings,
         sink: &Arc<T>,
@@ -203,10 +203,10 @@ impl<T: AVFrameStream + 'static> AudioSender<T> {
         Ok(AudioSender {
             chunk_count: settings.sample_rate as usize / 1000 * 100,
             encoder: AudioEncoder::new(settings)?,
-            status: Arc::downgrade(status),
             buffer: BytesMut::with_capacity(48000),
             sink: Arc::downgrade(sink),
             adapter,
+            status,
         })
     }
 
@@ -278,9 +278,9 @@ impl<T: AVFrameStream + 'static> FrameArrived for AudioSender<T> {
         if self.process(frame) {
             true
         } else {
-            if let (Some(status), Some(sink)) = (self.status.upgrade(), self.sink.upgrade()) {
-                if !status.get() {
-                    status.update(true);
+            if let Some(sink) = self.sink.upgrade() {
+                if !self.status.get() {
+                    self.status.update(true);
                     sink.close();
                 }
             }
@@ -312,7 +312,7 @@ impl<T: AVFrameStream + 'static> HylaranaSender<T> {
         if let Some(HylaranaSenderSourceDescriptor { source, options }) = options.audio {
             capture_options.audio = Some(SourceCaptureDescriptor {
                 arrived: AudioSender::new(
-                    &status,
+                    status.clone(),
                     &transport,
                     AudioEncoderSettings {
                         sample_rate: options.sample_rate,
@@ -341,7 +341,7 @@ impl<T: AVFrameStream + 'static> HylaranaSender<T> {
                     direct3d: crate::get_direct3d(),
                 },
                 arrived: VideoSender::new(
-                    &status,
+                    status.clone(),
                     &transport,
                     VideoEncoderSettings {
                         codec: options.codec,

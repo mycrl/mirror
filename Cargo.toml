@@ -9,7 +9,7 @@ lto = true
 [workspace]
 resolver = "2"
 members = [
-    "ffi",
+    # "ffi",
     "common",
     "codec",
     "resample",
@@ -18,6 +18,6 @@ members = [
     "hylarana",
     "server",
     "transport",
-    "examples/rust", 
+    # "examples/rust", 
     "discovery",
 ]
