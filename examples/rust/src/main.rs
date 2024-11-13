@@ -1,4 +1,7 @@
-use std::{net::SocketAddr, sync::Arc};
+use std::{
+    net::{IpAddr, SocketAddr},
+    sync::Arc,
+};
 
 use anyhow::Result;
 use clap::{
@@ -8,13 +11,14 @@ use clap::{
 
 use hylarana::{
     shutdown, startup, AVFrameObserver, AVFrameSink, AVFrameStream, AudioDescriptor, AudioFrame,
-    Capture, GraphicsBackend, Hylarana, HylaranaReceiver, HylaranaReceiverDescriptor,
-    HylaranaSender, HylaranaSenderDescriptor, HylaranaSenderSourceDescriptor, Renderer, SourceType,
-    TransportDescriptor, VideoDecoderType, VideoDescriptor, VideoEncoderType, VideoFrame,
+    Capture, DiscoveryService, GraphicsBackend, Hylarana, HylaranaReceiver,
+    HylaranaReceiverDescriptor, HylaranaSender, HylaranaSenderDescriptor,
+    HylaranaSenderSourceDescriptor, Renderer, Size, SourceType, TransportDescriptor,
+    TransportStrategy, VideoDecoderType, VideoDescriptor, VideoEncoderType, VideoFrame,
 };
 
-use hylarana_common::Size;
 use parking_lot::Mutex;
+use serde::{Deserialize, Serialize};
 use winit::{
     application::ApplicationHandler,
     dpi::PhysicalSize,
@@ -23,6 +27,12 @@ use winit::{
     keyboard::{KeyCode, PhysicalKey},
     window::{Window, WindowId},
 };
+
+#[derive(Debug, Serialize, Deserialize)]
+struct StreamInfo {
+    id: String,
+    strategy: TransportStrategy,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum StreamKind {
@@ -69,12 +79,12 @@ enum AppEvent {
 
 struct App {
     cli: Cli,
-    event_proxy: EventLoopProxy<AppEvent>,
     window: Option<Arc<Window>>,
+    event_proxy: EventLoopProxy<AppEvent>,
     renderer: Option<Arc<Mutex<Renderer<'static>>>>,
-    stream_id: Option<StreamId>,
-    sender: Option<HylaranaSender<Canvas>>,
-    receiver: Option<HylaranaReceiver<Canvas>>,
+    sender: Option<(HylaranaSender<Canvas>, DiscoveryService)>,
+    receiver: Arc<Mutex<Option<HylaranaReceiver<Canvas>>>>,
+    receiver_service: Option<DiscoveryService>,
 }
 
 impl App {
@@ -84,9 +94,9 @@ impl App {
             event_proxy,
             window: None,
             renderer: None,
-            stream_id: None,
             sender: None,
-            receiver: None,
+            receiver_service: None,
+            receiver: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -151,11 +161,10 @@ impl App {
         }
 
         if let Some(canvas) = self.create_canvas(StreamKind::Sender) {
-            let (id, sender) = Hylarana::create_sender(
+            let sender = Hylarana::create_sender(
                 HylaranaSenderDescriptor {
                     transport: TransportDescriptor {
-                        multicast: "239.0.0.1".parse()?,
-                        server: self.cli.server,
+                        strategy: TransportStrategy::Direct("0.0.0.0:8088".parse()?),
                         mtu: 1500,
                     },
                     multicast: false,
@@ -164,30 +173,49 @@ impl App {
                 },
                 canvas,
             )?;
-            self.sender.replace(sender);
-            self.stream_id.replace(id);
+
+            let discovery = DiscoveryService::new(
+                3456,
+                sender.get_id(),
+                &StreamInfo {
+                    strategy: TransportStrategy::Direct("0.0.0.0:8088".parse()?),
+                    id: sender.get_id().to_string(),
+                },
+            )?;
+
+            self.sender.replace((sender, discovery));
         }
 
         Ok(())
     }
 
     fn create_receiver(&mut self) -> Result<()> {
-        if let (Some(id), Some(canvas)) = (
-            self.stream_id.clone(),
-            self.create_canvas(StreamKind::Receiver),
-        ) {
-            self.receiver.replace(Hylarana::create_receiver(
-                id,
-                HylaranaReceiverDescriptor {
-                    video: self.cli.decoder.unwrap(),
-                    transport: TransportDescriptor {
-                        multicast: "239.0.0.1".parse()?,
-                        server: self.cli.server,
-                        mtu: 1500,
+        if let Some(canvas) = self.create_canvas(StreamKind::Receiver) {
+            let video = self.cli.decoder.unwrap();
+            let receiver = self.receiver.clone();
+
+            self.receiver_service
+                .replace(DiscoveryService::query::<StreamInfo, _>(
+                    move |addrs, mut info| {
+                        if let TransportStrategy::Direct(addr) = &mut info.strategy {
+                            addr.set_ip(IpAddr::V4(addrs[0]));
+                        }
+
+                        if let Ok(receiver_) = Hylarana::create_receiver(
+                            info.id,
+                            HylaranaReceiverDescriptor {
+                                video,
+                                transport: TransportDescriptor {
+                                    strategy: info.strategy,
+                                    mtu: 1500,
+                                },
+                            },
+                            canvas,
+                        ) {
+                            receiver.lock().replace(receiver_);
+                        }
                     },
-                },
-                canvas,
-            )?);
+                )?);
         }
 
         Ok(())
@@ -209,7 +237,8 @@ impl ApplicationHandler<AppEvent> for App {
             // The user closes the window, and we close the sender and receiver, in that order, and
             // release the renderer and hylarana instances, and finally stop the message loop.
             WindowEvent::CloseRequested => {
-                drop(self.receiver.take());
+                drop(self.receiver_service.take());
+                drop(self.receiver.lock().take());
                 drop(self.sender.take());
                 drop(self.renderer.take());
 
@@ -232,7 +261,7 @@ impl ApplicationHandler<AppEvent> for App {
                                 }
                             }
                             KeyCode::KeyR => {
-                                if self.receiver.is_none() {
+                                if self.receiver.lock().is_none() {
                                     if let Err(e) = self.create_receiver() {
                                         log::error!("{:?}", e);
                                     }
@@ -259,7 +288,10 @@ impl ApplicationHandler<AppEvent> for App {
         // is received, we need to drop the corresponding sender or receiver.
         match event {
             AppEvent::CloseSender => drop(self.sender.take()),
-            AppEvent::CloseReceiver => drop(self.receiver.take()),
+            AppEvent::CloseReceiver => {
+                drop(self.receiver.lock().take());
+                drop(self.receiver_service.take());
+            }
         }
     }
 }
@@ -329,7 +361,7 @@ fn main() -> Result<()> {
     let event_proxy = event_loop.create_proxy();
     event_loop.run_app(&mut App::new(cli, event_proxy))?;
 
-    //When exiting the application, the environment of hylarana should be cleaned
+    // When exiting the application, the environment of hylarana should be cleaned
     // up.
     shutdown()?;
     Ok(())

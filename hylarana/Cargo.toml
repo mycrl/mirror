@@ -16,6 +16,7 @@ parking_lot = "0.12"
 hylarana-common = { path = "../common", version = "0.1" }
 hylarana-transport = { path = "../transport", version = "0.1" }
 hylarana-graphics = { path = "../graphics", version = "0.1" }
+hylarana-discovery = { path = "../discovery", version = "0.1" }
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
 hylarana-capture = { path = "../capture", version = "0.1" }

@@ -87,10 +87,10 @@ where
                                 break;
                             }
                         } else {
-                            adapter.loss_pkt();
+                            adapter.lose();
                         }
                     } else {
-                        adapter.loss_pkt()
+                        adapter.lose()
                     }
 
                     sequence = seq;
@@ -170,10 +170,10 @@ where
                                             break;
                                         }
                                     } else {
-                                        adapter.loss_pkt();
+                                        adapter.lose();
                                     }
                                 } else {
-                                    adapter.loss_pkt()
+                                    adapter.lose()
                                 }
 
                                 sequence = seq;

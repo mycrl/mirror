@@ -27,6 +27,8 @@ use std::{
     str::FromStr,
 };
 
+use serde::{Deserialize, Serialize};
+
 /// Initialize the srt communication protocol, mainly initializing some
 /// log-related things.
 pub fn startup() -> bool {
@@ -38,7 +40,7 @@ pub fn shutdown() {
     transmission::cleanup()
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum TransportStrategy {
     Direct(SocketAddr),
     /// The IP address and port of the server, in this case the service refers

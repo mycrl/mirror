@@ -17,9 +17,10 @@ pub use hylarana_common::{
     frame::{AudioFrame, VideoFormat, VideoFrame, VideoSubFormat},
     Size,
 };
+pub use hylarana_discovery::{DiscoveryError, DiscoveryService};
 
 pub use hylarana_graphics::raw_window_handle;
-pub use hylarana_transport::TransportDescriptor;
+pub use hylarana_transport::{TransportDescriptor, TransportStrategy};
 
 #[cfg(target_os = "windows")]
 use hylarana_common::win32::{
