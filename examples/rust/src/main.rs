@@ -306,7 +306,7 @@ struct Cli {
     /// The address to which the hylarana service is bound, indicating how to
     /// connect to the hylarana service.
     #[arg(long)]
-    server: SocketAddr,
+    server: Option<SocketAddr>,
     #[arg(long, default_value_t = 1280)]
     width: u32,
     #[arg(long, default_value_t = 720)]
