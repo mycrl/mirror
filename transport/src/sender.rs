@@ -283,6 +283,9 @@ fn create_direct_sender(addr: SocketAddr, mtu: usize) -> Result<Sender, Error> {
     Ok(sender)
 }
 
+/// Create a sender, the sender only sends data and does not receive data, and
+/// no sender has a separate ID, you can get the ID of the current sender by
+/// `get_id`.
 pub fn create_sender(options: TransportDescriptor) -> Result<Sender, Error> {
     match options.strategy {
         TransportStrategy::Multicast(addr) => create_multicast_sender(addr, options.mtu),

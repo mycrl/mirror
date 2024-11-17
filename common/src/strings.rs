@@ -1,5 +1,6 @@
 use std::{
     ffi::{c_char, CStr, CString},
+    ptr,
     str::Utf8Error,
 };
 
@@ -99,4 +100,14 @@ macro_rules! c_str {
     ($s:expr) => {
         hylarana_common::strings::Strings::from($s).as_ptr()
     };
+}
+
+pub fn write_c_str(src: &str, dst: *mut c_char) {
+    let src = src.as_bytes();
+    let len = src.len() + 1;
+
+    unsafe {
+        ptr::copy(src.as_ptr().cast(), dst, len);
+        ptr::write(dst.offset(len as isize) as *mut u8, 0u8);
+    }
 }

@@ -12,10 +12,16 @@ pub enum DiscoveryError {
     JsonError(#[from] serde_json::Error),
 }
 
+/// LAN service discovery, which exposes its services through the MDNS protocol
+/// and can allow other nodes or clients to discover the current service.
 pub struct DiscoveryService(ServiceDaemon);
 
 impl DiscoveryService {
-    pub fn new<P: Serialize + Debug>(
+    /// Register the service, the service type is fixed, you can customize the
+    /// port number, id is the identifying information of the service, used to
+    /// distinguish between different publishers, in properties you can add
+    /// customized data to the published service.
+    pub fn register<P: Serialize + Debug>(
         port: u16,
         id: &str,
         properties: &P,
@@ -45,6 +51,9 @@ impl DiscoveryService {
         Ok(Self(mdns))
     }
 
+    /// Query the registered service, the service type is fixed, when the query
+    /// is published the callback function will call back all the network
+    /// addresses of the service publisher as well as the attribute information.
     pub fn query<P: DeserializeOwned, T: FnOnce(Vec<Ipv4Addr>, P) + Send + 'static>(
         func: T,
     ) -> Result<Self, DiscoveryError> {
@@ -89,7 +98,7 @@ impl DiscoveryService {
 
 impl Drop for DiscoveryService {
     fn drop(&mut self) {
-        let _ = self.0.unregister("sender._hylarana._udp.local.");
+        let _ = self.0.unregister("_hylarana._udp.local.");
         let _ = self.0.stop_browse("_hylarana._udp.local.");
     }
 }

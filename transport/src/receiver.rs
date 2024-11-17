@@ -212,6 +212,9 @@ fn create_receiver<T: Default + StreamReceiverAdapterExt + 'static>(
     }
 }
 
+/// Create channel-separated receivers where audio and video channels are
+/// received independently, so that a channel can be easily processed separately
+/// from different threads.
 pub fn create_split_receiver(
     id: String,
     options: TransportDescriptor,
@@ -219,6 +222,9 @@ pub fn create_split_receiver(
     create_receiver::<StreamMultiReceiverAdapter>(id, options)
 }
 
+/// Creating a mixed channel is the opposite of separating channels, where the
+/// data from all channels is mixed together, and the data received from the
+/// receiver is mixed, and you need to process it yourself by data type.
 pub fn create_mix_receiver(
     id: String,
     options: TransportDescriptor,

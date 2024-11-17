@@ -152,13 +152,13 @@ void (async () => {
         }
     } else if (process.platform == "darwin") {
         for (const item of [
-            [`./examples/cpp/build/example`, "./build/bin/example-cpp"],
+            // [`./examples/cpp/build/example`, "./build/bin/example-cpp"],
             [`./target/${Profile.toLowerCase()}/hylarana-example`, "./build/bin/example"],
             [`./target/${Profile.toLowerCase()}/hylarana-server`, "./build/bin/hylarana-server"],
-            [
-                `./target/${Profile.toLowerCase()}/libhylarana.dylib`,
-                "./build/bin/libhylarana.dylib",
-            ],
+            // [
+            //     `./target/${Profile.toLowerCase()}/libhylarana.dylib`,
+            //     "./build/bin/libhylarana.dylib",
+            // ],
         ]) {
             fs.cpSync(...item, { force: true, recursive: true });
         }

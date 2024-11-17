@@ -1,9 +1,10 @@
 use std::{
+    collections::HashMap,
     net::{IpAddr, SocketAddr},
     sync::Arc,
 };
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use clap::{
     builder::{PossibleValuesParser, TypedValueParser},
     Parser,
@@ -18,7 +19,6 @@ use hylarana::{
 };
 
 use parking_lot::Mutex;
-use serde::{Deserialize, Serialize};
 use winit::{
     application::ApplicationHandler,
     dpi::PhysicalSize,
@@ -28,10 +28,59 @@ use winit::{
     window::{Window, WindowId},
 };
 
-#[derive(Debug, Serialize, Deserialize)]
 struct StreamInfo {
     id: String,
     strategy: TransportStrategy,
+}
+
+impl Into<HashMap<String, String>> for StreamInfo {
+    fn into(self) -> HashMap<String, String> {
+        let mut map = HashMap::with_capacity(3);
+        map.insert("id".to_string(), self.id);
+
+        match self.strategy {
+            TransportStrategy::Direct(addr) => {
+                map.insert("strategy".to_string(), "0".to_string());
+                map.insert("address".to_string(), addr.to_string());
+            }
+            TransportStrategy::Relay(addr) => {
+                map.insert("strategy".to_string(), "1".to_string());
+                map.insert("address".to_string(), addr.to_string());
+            }
+            TransportStrategy::Multicast(addr) => {
+                map.insert("strategy".to_string(), "2".to_string());
+                map.insert("address".to_string(), addr.to_string());
+            }
+        }
+
+        map
+    }
+}
+
+impl TryFrom<HashMap<String, String>> for StreamInfo {
+    type Error = anyhow::Error;
+
+    fn try_from(value: HashMap<String, String>) -> Result<Self, Self::Error> {
+        let id = value.get("id").ok_or_else(|| anyhow!("not found id"))?;
+        let address = value
+            .get("address")
+            .ok_or_else(|| anyhow!("not found address"))?;
+        let strategy = value
+            .get("strategy")
+            .ok_or_else(|| anyhow!("not found strategy"))?;
+
+        let strategy = match strategy.as_str() {
+            "0" => TransportStrategy::Direct(address.parse()?),
+            "1" => TransportStrategy::Relay(address.parse()?),
+            "2" => TransportStrategy::Multicast(address.parse()?),
+            _ => return Err(anyhow!("strategy of invalidity")),
+        };
+
+        Ok(Self {
+            id: id.clone(),
+            strategy,
+        })
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -161,11 +210,17 @@ impl App {
         }
 
         if let Some(canvas) = self.create_canvas(StreamKind::Sender) {
+            let strategy = if let Some(addr) = self.cli.server {
+                TransportStrategy::Relay(addr)
+            } else {
+                TransportStrategy::Direct("0.0.0.0:8080".parse()?)
+            };
+
             let sender = Hylarana::create_sender(
                 HylaranaSenderDescriptor {
                     transport: TransportDescriptor {
-                        strategy: TransportStrategy::Direct("0.0.0.0:8088".parse()?),
                         mtu: 1500,
+                        strategy,
                     },
                     multicast: false,
                     video,
@@ -174,13 +229,14 @@ impl App {
                 canvas,
             )?;
 
-            let discovery = DiscoveryService::new(
+            let discovery = DiscoveryService::register::<HashMap<String, String>>(
                 3456,
                 sender.get_id(),
                 &StreamInfo {
-                    strategy: TransportStrategy::Direct("0.0.0.0:8088".parse()?),
                     id: sender.get_id().to_string(),
-                },
+                    strategy,
+                }
+                .into(),
             )?;
 
             self.sender.replace((sender, discovery));
@@ -194,28 +250,28 @@ impl App {
             let video = self.cli.decoder.unwrap();
             let receiver = self.receiver.clone();
 
-            self.receiver_service
-                .replace(DiscoveryService::query::<StreamInfo, _>(
-                    move |addrs, mut info| {
-                        if let TransportStrategy::Direct(addr) = &mut info.strategy {
-                            addr.set_ip(IpAddr::V4(addrs[0]));
-                        }
+            self.receiver_service.replace(DiscoveryService::query(
+                move |addrs, properties: HashMap<String, String>| {
+                    let mut properties = StreamInfo::try_from(properties).unwrap();
+                    if let TransportStrategy::Direct(addr) = &mut properties.strategy {
+                        addr.set_ip(IpAddr::V4(addrs[0]));
+                    }
 
-                        if let Ok(receiver_) = Hylarana::create_receiver(
-                            info.id,
-                            HylaranaReceiverDescriptor {
-                                video,
-                                transport: TransportDescriptor {
-                                    strategy: info.strategy,
-                                    mtu: 1500,
-                                },
+                    if let Ok(receiver_) = Hylarana::create_receiver(
+                        properties.id,
+                        HylaranaReceiverDescriptor {
+                            video,
+                            transport: TransportDescriptor {
+                                strategy: properties.strategy,
+                                mtu: 1500,
                             },
-                            canvas,
-                        ) {
-                            receiver.lock().replace(receiver_);
-                        }
-                    },
-                )?);
+                        },
+                        canvas,
+                    ) {
+                        receiver.lock().replace(receiver_);
+                    }
+                },
+            )?);
         }
 
         Ok(())
@@ -335,6 +391,7 @@ fn main() -> Result<()> {
     simple_logger::init_with_level(log::Level::Info)?;
 
     let mut cli = Cli::parse();
+    println!("{:#?}", cli);
 
     // Use different default codecs on different platforms, it is better to use
     // hardware codecs by default compared to software codecs.

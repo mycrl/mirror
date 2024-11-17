@@ -50,7 +50,7 @@ pub enum TransportStrategy {
     Multicast(SocketAddr),
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct TransportDescriptor {
     pub strategy: TransportStrategy,
     /// see: [Maximum_transmission_unit](https://en.wikipedia.org/wiki/Maximum_transmission_unit)

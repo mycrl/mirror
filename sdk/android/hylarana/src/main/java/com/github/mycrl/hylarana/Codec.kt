@@ -24,26 +24,15 @@ class Video {
     ) {
         private var isRunning: Boolean = false
 
-        private val codec: MediaCodec =
-            MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
+        private val codec: MediaCodec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
         private val bufferInfo = MediaCodec.BufferInfo()
         private var surface: Surface? = null
         private var worker: Thread
 
         init {
-            val format = MediaFormat.createVideoFormat(
-                MediaFormat.MIMETYPE_VIDEO_AVC,
-                configure.width,
-                configure.height
-            )
-            format.setInteger(
-                MediaFormat.KEY_BITRATE_MODE,
-                MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR
-            )
-            format.setInteger(
-                MediaFormat.KEY_PROFILE,
-                MediaCodecInfo.CodecProfileLevel.AVCProfileBaseline
-            )
+            val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, configure.width, configure.height)
+            format.setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR)
+            format.setInteger(MediaFormat.KEY_PROFILE, MediaCodecInfo.CodecProfileLevel.AVCProfileBaseline)
             format.setFloat(MediaFormat.KEY_MAX_FPS_TO_ENCODER, configure.frameRate.toFloat())
             format.setInteger(MediaFormat.KEY_LATENCY, configure.frameRate / 10)
             format.setInteger(MediaFormat.KEY_OPERATING_RATE, configure.frameRate)
@@ -84,7 +73,7 @@ class Video {
                 Process.setThreadPriority(Process.THREAD_PRIORITY_VIDEO)
 
                 val buffer = ByteArray(2 * 1024 * 1024)
-                val streamBufferInfo = StreamBufferInfo(StreamKind.VIDEO)
+                val streamBufferInfo = StreamBufferInfo(StreamType.VIDEO)
 
                 while (isRunning) {
                     try {
@@ -150,8 +139,8 @@ class Video {
              * [MediaCodecInfo.CodecCapabilities](https://developer.android.com/reference/android/media/MediaCodecInfo.CodecCapabilities)
              */
             val format: Int
-            val width: Int
-            val height: Int
+            var width: Int
+            var height: Int
 
             /**
              * [MediaFormat#KEY_BIT_RATE](https://developer.android.com/reference/android/media/MediaFormat#KEY_BIT_RATE)
@@ -165,28 +154,17 @@ class Video {
         }
     }
 
-    class VideoDecoder(surface: Surface, configure: VideoDecoderConfigure) {
+    class VideoDecoder(surface: Surface) {
         var isRunning: Boolean = false
 
-        private var codec: MediaCodec =
-            MediaCodec.createDecoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
+        private var codec: MediaCodec = MediaCodec.createDecoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
         private val bufferInfo = MediaCodec.BufferInfo()
         private var worker: Thread
 
         init {
-            val format = MediaFormat.createVideoFormat(
-                MediaFormat.MIMETYPE_VIDEO_AVC,
-                configure.width,
-                configure.height
-            )
-            format.setInteger(
-                MediaFormat.KEY_COLOR_FORMAT,
-                MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface
-            )
-            format.setInteger(
-                MediaFormat.KEY_BITRATE_MODE,
-                MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR
-            )
+            val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, 2560, 1660)
+            format.setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
+            format.setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR)
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 if (codec.name.indexOf(".rk.") < 0 && codec.name.indexOf(".hisi.") < 0) {
@@ -245,16 +223,11 @@ class Video {
                 codec.release()
             }
         }
-
-        interface VideoDecoderConfigure {
-            val width: Int
-            val height: Int
-        }
     }
 }
 
 class Audio {
-    class AudioDecoder(private val track: AudioTrack, configure: AudioDecoderConfigure) {
+    class AudioDecoder(private val track: AudioTrack) {
         var isRunning: Boolean = false
 
         private val bufferInfo = MediaCodec.BufferInfo()
@@ -262,15 +235,8 @@ class Audio {
         private var worker: Thread
 
         init {
-            val format = MediaFormat.createAudioFormat(
-                MediaFormat.MIMETYPE_AUDIO_OPUS,
-                configure.sampleRate,
-                configure.channels
-            )
-            format.setInteger(
-                MediaFormat.KEY_BITRATE_MODE,
-                MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR
-            )
+            val format = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_OPUS, 48000, 1)
+            format.setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR)
             format.setInteger(MediaFormat.KEY_PCM_ENCODING, AudioFormat.ENCODING_PCM_16BIT)
 
             codec = MediaCodec.createDecoderByType(MediaFormat.MIMETYPE_AUDIO_OPUS)
@@ -331,11 +297,6 @@ class Audio {
                 codec.release()
             }
         }
-
-        interface AudioDecoderConfigure {
-            val sampleRate: Int
-            val channels: Int
-        }
     }
 
     class AudioEncoder(
@@ -357,15 +318,8 @@ class Audio {
         )
 
         init {
-            val format = MediaFormat.createAudioFormat(
-                MediaFormat.MIMETYPE_AUDIO_OPUS,
-                configure.sampleRate,
-                configure.channels
-            )
-            format.setInteger(
-                MediaFormat.KEY_BITRATE_MODE,
-                MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR
-            )
+            val format = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_OPUS, configure.sampleRate, configure.channels)
+            format.setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR)
             format.setInteger(MediaFormat.KEY_PCM_ENCODING, AudioFormat.ENCODING_PCM_16BIT)
             format.setInteger(MediaFormat.KEY_CHANNEL_COUNT, configure.channels)
             format.setInteger(MediaFormat.KEY_BIT_RATE, configure.bitRate)
@@ -379,7 +333,7 @@ class Audio {
                 Process.setThreadPriority(Process.THREAD_PRIORITY_URGENT_AUDIO)
 
                 val buffer = ByteArray(1024 * 1024)
-                val streamBufferInfo = StreamBufferInfo(StreamKind.AUDIO)
+                val streamBufferInfo = StreamBufferInfo(StreamType.AUDIO)
 
                 while (isRunning) {
                     try {
