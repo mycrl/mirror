@@ -26,7 +26,7 @@ extern "C"
 #include <hylarana.h>
 }
 
-#include "./cli.h"
+#include "./common.h"
 
 static HylaranaRender RENDER = nullptr;
 
@@ -201,11 +201,11 @@ private:
             return;
         }
 
-        char id[255];
-        char address[40]; 
-        char strategy[2];
+        char id[255] = { 0 };
+        char addr[40] = { 0 };
+        char strategy[5] = { 0 };
         hylarana_properties_get(properties, "id", id);
-        hylarana_properties_get(properties, "address", address);
+        hylarana_properties_get(properties, "address", addr);
         hylarana_properties_get(properties, "strategy", strategy);
 
         HylaranaFrameSink sink;
@@ -216,21 +216,22 @@ private:
 
         HylaranaDescriptor transport = {};
         transport.strategy = (HylaranaStrategy)std::stoi(std::string(strategy));
-        transport.address = address;
         transport.mtu = 1500;
 
-        std::string direct_address;
+        SocketAddr socket_addr = SocketAddr(std::string(addr));
         if (transport.strategy == STRATEGY_DIRECT)
         {
-            direct_address += std::string(addrs[0]);
-            direct_address += ":";
-            direct_address += finds(std::string(address), ":")[1];
-            transport.address = direct_address.c_str();
+            socket_addr.SetIP(std::string(addrs[0]));
         }
+
+        std::string address = socket_addr.ToString();
+        transport.address = address.c_str();
 
         HylaranaReceiverDescriptor options;
         options.transport = transport;
         options.video = OPTIONS.decoder;
+
+        DebugBreak();
 
         self->_receiver = hylarana_create_receiver(id, options, sink);
     }

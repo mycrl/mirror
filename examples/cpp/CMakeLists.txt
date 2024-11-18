@@ -17,9 +17,9 @@ endif()
 
 # Windows requires a win32 subsystem.
 if(MSVC)
-    add_executable(example WIN32 src/main.cpp src/cli.h)
+    add_executable(example WIN32 "src/main.cpp" "src/common.h")
 else()
-    add_executable(example src/main.cpp src/cli.h)
+    add_executable(example "src/main.cpp" "src/common.h")
 endif()
 
 # Add third-party libraries to the search path.

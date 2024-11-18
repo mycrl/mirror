@@ -274,6 +274,10 @@ impl ApplicationHandler for App {
             // The user closes the window, and we close the sender and receiver, in that order, and
             // release the renderer and hylarana instances, and finally stop the message loop.
             WindowEvent::CloseRequested => {
+                drop(self.sender.take());
+                drop(self.receiver.take());
+                drop(self.renderer.take());
+
                 event_loop.exit();
             }
             WindowEvent::KeyboardInput { event, .. } => {

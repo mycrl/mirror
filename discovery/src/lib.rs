@@ -55,7 +55,7 @@ impl DiscoveryService {
     /// Query the registered service, the service type is fixed, when the query
     /// is published the callback function will call back all the network
     /// addresses of the service publisher as well as the attribute information.
-    pub fn query<P: DeserializeOwned, T: Fn(Vec<Ipv4Addr>, P) + Send + 'static>(
+    pub fn query<P: DeserializeOwned + Debug, T: Fn(Vec<Ipv4Addr>, P) + Send + 'static>(
         func: T,
     ) -> Result<Self, DiscoveryError> {
         let mdns = ServiceDaemon::new()?;
@@ -64,14 +64,22 @@ impl DiscoveryService {
         let receiver = mdns.browse("_hylarana._udp.local.")?;
         thread::spawn(move || {
             let process = |info: ServiceInfo| {
-                func(
-                    info.get_addresses_v4()
-                        .into_iter()
-                        .map(|it| *it)
-                        .collect::<Vec<_>>(),
-                    serde_json::from_str(info.get_property("properties")?.val_str()).ok()?,
+                let properties =
+                    serde_json::from_str(info.get_property("properties")?.val_str()).ok()?;
+                let addrs = info
+                    .get_addresses_v4()
+                    .into_iter()
+                    .map(|it| *it)
+                    .collect::<Vec<_>>();
+
+                log::info!(
+                    "discovery service query a sender, host={}, address={:?}, properties={:?}",
+                    info.get_hostname(),
+                    addrs,
+                    properties,
                 );
 
+                func(addrs, properties);
                 Some(())
             };
 

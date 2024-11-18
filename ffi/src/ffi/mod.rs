@@ -78,6 +78,7 @@ extern "C" fn hylarana_shutdown() {
 }
 
 #[repr(C)]
+#[derive(Debug)]
 #[allow(unused)]
 enum HylaranaStrategy {
     Direct,
@@ -86,6 +87,7 @@ enum HylaranaStrategy {
 }
 
 #[repr(C)]
+#[derive(Debug)]
 struct HylaranaDescriptor {
     strategy: HylaranaStrategy,
     address: *const c_char,
@@ -96,6 +98,8 @@ impl TryInto<TransportDescriptor> for HylaranaDescriptor {
     type Error = anyhow::Error;
 
     fn try_into(self) -> Result<TransportDescriptor, Self::Error> {
+        println!("==================== {}, {:?}", Strings::from(self.address).to_string()?, self);
+
         let address: SocketAddr = Strings::from(self.address).to_string()?.parse()?;
 
         Ok(TransportDescriptor {

@@ -185,4 +185,50 @@ int parse_argv(std::string args)
     return 0;
 }
 
+class SocketAddr
+{
+public:
+    SocketAddr(std::string address)
+    {
+        auto items = finds(std::string(address), ":");
+        _ip = items[0];
+        _port = items[1];
+    }
+
+    std::string GetIP()
+    {
+        return _ip;
+    }
+
+    uint16_t GetPort()
+    {
+        return (uint16_t)std::stoi(_port);
+    }
+
+    std::string ToString()
+    {
+        return _ip + ":" + _port;
+    }
+
+    void SetPort(uint16_t port)
+    {
+        char port_str[10];
+        sprintf(port_str, "%d", port);
+        _port = std::string(std::move(port_str));
+    }
+
+    void SetPort(std::string port)
+    {
+        _port = port;
+    }
+
+    void SetIP(std::string ip)
+    {
+        _ip = ip;
+    }
+private:
+    std::string _ip;
+    std::string _port;
+};
+
 #endif

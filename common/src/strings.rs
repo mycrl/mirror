@@ -104,10 +104,10 @@ macro_rules! c_str {
 
 pub fn write_c_str(src: &str, dst: *mut c_char) {
     let src = src.as_bytes();
-    let len = src.len() + 1;
+    let len = src.len();
 
     unsafe {
         ptr::copy(src.as_ptr().cast(), dst, len);
-        ptr::write(dst.offset(len as isize) as *mut u8, 0u8);
+        ptr::write(dst.offset(len as isize + 1) as *mut u8, b'\0');
     }
 }
