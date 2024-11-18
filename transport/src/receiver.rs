@@ -6,7 +6,7 @@ use std::{
 };
 
 use crate::{
-    adapter::StreamReceiverAdapterExt, MulticastSocket, StreamInfo, StreamInfoKind,
+    adapter::StreamReceiverAdapterAbstract, MulticastSocket, StreamInfo, StreamInfoKind,
     StreamMultiReceiverAdapter, StreamReceiverAdapter, TransmissionDescriptor,
     TransmissionFragmentDecoder, TransmissionSocket, TransportDescriptor, TransportStrategy,
     UnPackage,
@@ -17,12 +17,12 @@ enum Socket {
     TransmissionSocket(Arc<TransmissionSocket>),
 }
 
-pub struct Receiver<T> {
-    adapter: Arc<T>,
+pub struct Receiver<T: StreamReceiverAdapterAbstract> {
     socket: Option<Socket>,
+    adapter: Arc<T>,
 }
 
-impl<T: Default> Default for Receiver<T> {
+impl<T: Default + StreamReceiverAdapterAbstract> Default for Receiver<T> {
     fn default() -> Self {
         Self {
             adapter: Arc::new(T::default()),
@@ -31,14 +31,20 @@ impl<T: Default> Default for Receiver<T> {
     }
 }
 
-impl<T> Receiver<T> {
+impl<T: StreamReceiverAdapterAbstract> Receiver<T> {
     pub fn get_adapter(&self) -> Arc<T> {
         self.adapter.clone()
     }
+
+    pub fn close(&self) {
+        self.adapter.close();
+    }
 }
 
-impl<T> Drop for Receiver<T> {
+impl<T: StreamReceiverAdapterAbstract> Drop for Receiver<T> {
     fn drop(&mut self) {
+        self.close();
+
         if let Some(socket) = self.socket.as_ref() {
             match socket {
                 Socket::MulticastSocket(socket) => socket.close(),
@@ -50,7 +56,7 @@ impl<T> Drop for Receiver<T> {
 
 fn create_multicast_receiver<T>(id: String, addr: SocketAddr) -> Result<Receiver<T>, Error>
 where
-    T: Default + StreamReceiverAdapterExt + 'static,
+    T: Default + StreamReceiverAdapterAbstract + 'static,
 {
     let mut receiver = Receiver::<T>::default();
 
@@ -111,7 +117,7 @@ where
 
 fn create_srt_receiver<T>(id: String, addr: SocketAddr, mtu: usize) -> Result<Receiver<T>, Error>
 where
-    T: Default + StreamReceiverAdapterExt + 'static,
+    T: Default + StreamReceiverAdapterAbstract + 'static,
 {
     let mut receiver = Receiver::<T>::default();
 
@@ -200,7 +206,7 @@ where
     Ok(receiver)
 }
 
-fn create_receiver<T: Default + StreamReceiverAdapterExt + 'static>(
+fn create_receiver<T: Default + StreamReceiverAdapterAbstract + 'static>(
     id: String,
     options: TransportDescriptor,
 ) -> Result<Receiver<T>, Error> {

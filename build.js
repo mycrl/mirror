@@ -68,7 +68,7 @@ void (async () => {
         }
     }
 
-    // await Command(`cargo build ${Args.release ? "--release" : ""} -p hylarana-shared`);
+    await Command(`cargo build ${Args.release ? "--release" : ""} -p hylarana-shared`);
     await Command(`cargo build ${Args.release ? "--release" : ""} -p hylarana-example`);
     await Command(`cargo build ${Args.release ? "--release" : ""} -p hylarana-server`);
     await Command(`cargo doc --no-deps`);
@@ -104,17 +104,17 @@ void (async () => {
         }
     }
 
-    // if (!fs.existsSync("./examples/cpp/build")) {
-    //     fs.mkdirSync("./examples/cpp/build");
-    // }
+    if (!fs.existsSync("./examples/cpp/build")) {
+        fs.mkdirSync("./examples/cpp/build");
+    }
 
-    // await Command(`cmake -DCMAKE_BUILD_TYPE=${Profile} ..`, {
-    //     cwd: join(__dirname, "./examples/cpp/build"),
-    // });
+    await Command(`cmake -DCMAKE_BUILD_TYPE=${Profile} ..`, {
+        cwd: join(__dirname, "./examples/cpp/build"),
+    });
 
-    // await Command(`cmake --build . --config=${Profile}`, {
-    //     cwd: join(__dirname, "./examples/cpp/build"),
-    // });
+    await Command(`cmake --build . --config=${Profile}`, {
+        cwd: join(__dirname, "./examples/cpp/build"),
+    });
 
     for (const item of [
         ["./README.md", "./build/README.md"],
@@ -136,14 +136,14 @@ void (async () => {
 
     if (process.platform == "win32") {
         for (const item of [
-            // [`./examples/cpp/build/${Profile}/example.exe`, "./build/bin/example-cpp.exe"],
+            [`./examples/cpp/build/${Profile}/example.exe`, "./build/bin/example-cpp.exe"],
             [`./target/${Profile.toLowerCase()}/hylarana-example.exe`, "./build/bin/example.exe"],
             [
                 `./target/${Profile.toLowerCase()}/hylarana-server.exe`,
                 "./build/bin/hylarana-server.exe",
             ],
-            // [`./target/${Profile.toLowerCase()}/hylarana.dll.lib`, "./build/lib/hylarana.dll.lib"],
-            // [`./target/${Profile.toLowerCase()}/hylarana.dll`, "./build/bin/hylarana.dll"],
+            [`./target/${Profile.toLowerCase()}/hylarana.dll.lib`, "./build/lib/hylarana.dll.lib"],
+            [`./target/${Profile.toLowerCase()}/hylarana.dll`, "./build/bin/hylarana.dll"],
             [`./target/ffmpeg/bin/avcodec-61.dll`, "./build/bin/avcodec-61.dll"],
             [`./target/ffmpeg/bin/avutil-59.dll`, "./build/bin/avutil-59.dll"],
             [`./target/ffmpeg/bin/swresample-5.dll`, "./build/bin/swresample-5.dll"],
@@ -152,13 +152,13 @@ void (async () => {
         }
     } else if (process.platform == "darwin") {
         for (const item of [
-            // [`./examples/cpp/build/example`, "./build/bin/example-cpp"],
+            [`./examples/cpp/build/example`, "./build/bin/example-cpp"],
             [`./target/${Profile.toLowerCase()}/hylarana-example`, "./build/bin/example"],
             [`./target/${Profile.toLowerCase()}/hylarana-server`, "./build/bin/hylarana-server"],
-            // [
-            //     `./target/${Profile.toLowerCase()}/libhylarana.dylib`,
-            //     "./build/bin/libhylarana.dylib",
-            // ],
+            [
+                `./target/${Profile.toLowerCase()}/libhylarana.dylib`,
+                "./build/bin/libhylarana.dylib",
+            ],
         ]) {
             fs.cpSync(...item, { force: true, recursive: true });
         }
@@ -176,7 +176,7 @@ void (async () => {
 
     if (process.platform == "win32") {
         for (const item of [
-            // ["./target/debug/hylarana.pdb", "./build/bin/hylarana.pdb"],
+            ["./target/debug/hylarana.pdb", "./build/bin/hylarana.pdb"],
             ["./target/debug/hylarana_server.pdb", "./build/bin/hylarana-server.pdb"],
         ]) {
             if (!Args.release) {

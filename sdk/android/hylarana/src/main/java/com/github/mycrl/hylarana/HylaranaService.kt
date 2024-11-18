@@ -115,7 +115,6 @@ class HylaranaService {
                     object : HylaranaReceiverAdapterObserver() {
                         private var isReleased: Boolean = false
                         private val videoDecoder = Video.VideoDecoder(observer.surface)
-
                         private val audioDecoder = if (observer.track != null) {
                             Audio.AudioDecoder(observer.track!!)
                         } else {

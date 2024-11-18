@@ -156,13 +156,19 @@ class SimpleHylaranaService : Service() {
     }
 
     fun stopSender() {
-        sender?.release()
         discovery?.release()
+        discovery = null
+
+        sender?.release()
+        sender = null
     }
 
     fun stopReceiver() {
-        receiver?.release()
         discovery?.release()
+        discovery = null
+
+        receiver?.release()
+        receiver = null
     }
 
     fun setObserver(observer: SimpleHylaranaServiceObserver) {
@@ -221,6 +227,7 @@ class SimpleHylaranaService : Service() {
 
                                         override fun close() {
                                             super.close()
+                                            stopReceiver()
                                             observer?.onReceiverClosed()
 
                                             Log.w("simple", "receiver is released.")

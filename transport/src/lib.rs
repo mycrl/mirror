@@ -8,7 +8,7 @@ mod transmission;
 pub use self::{
     adapter::{
         BufferFlag, StreamBufferInfo, StreamKind, StreamMultiReceiverAdapter,
-        StreamReceiverAdapter, StreamSenderAdapter,
+        StreamReceiverAdapter, StreamReceiverAdapterAbstract, StreamSenderAdapter,
     },
     multicast::{Server as MulticastServer, Socket as MulticastSocket},
     package::{copy_from_slice, with_capacity, Package, PacketInfo, UnPackage},

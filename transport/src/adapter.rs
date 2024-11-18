@@ -225,7 +225,7 @@ impl StreamSenderAdapter {
     }
 }
 
-pub(crate) trait StreamReceiverAdapterExt: Sync + Send {
+pub trait StreamReceiverAdapterAbstract: Sync + Send {
     fn send(&self, buf: Bytes, kind: StreamKind, flags: i32, timestamp: u64) -> bool;
     fn close(&self);
     fn lose(&self);
@@ -254,7 +254,7 @@ impl StreamReceiverAdapter {
     }
 }
 
-impl StreamReceiverAdapterExt for StreamReceiverAdapter {
+impl StreamReceiverAdapterAbstract for StreamReceiverAdapter {
     fn close(&self) {
         self.channel.send(None);
     }
@@ -313,7 +313,7 @@ impl StreamMultiReceiverAdapter {
     }
 }
 
-impl StreamReceiverAdapterExt for StreamMultiReceiverAdapter {
+impl StreamReceiverAdapterAbstract for StreamMultiReceiverAdapter {
     fn close(&self) {
         self.channel.video.send(None);
         self.channel.audio.send(None);

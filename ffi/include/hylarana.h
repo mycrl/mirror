@@ -102,9 +102,9 @@ typedef enum
 
 typedef enum
 {
-    Direct,
-    Relay,
-    Multicast,
+    STRATEGY_DIRECT,
+    STRATEGY_RELAY,
+    STRATEGY_MULTICAST,
 } HylaranaStrategy;
 
 typedef struct
@@ -411,6 +411,11 @@ EXPORT HylaranaProperties hylarana_create_properties();
 EXPORT bool hylarana_properties_insert(HylaranaProperties properties, const char* key, const char* value);
 
 /**
+ * Get value from the property list, which is Map inside.
+ */
+EXPORT bool hylarana_properties_get(HylaranaProperties properties, const char* key, char* value);
+
+/**
  * Destroy the properties.
  */
 EXPORT void hylarana_properties_destroy(HylaranaProperties properties);
@@ -423,7 +428,7 @@ EXPORT void hylarana_properties_destroy(HylaranaProperties properties);
  */
 EXPORT HylaranaDiscovery hylarana_discovery_register(uint16_t port, HylaranaProperties properties);
 
-typedef bool (*HylaranaDiscoveryQueryCallback)(void* ctx, HylaranaVideoFrame* frame);
+typedef void (*HylaranaDiscoveryQueryCallback)(void* ctx, const char** addrs, size_t addrs_size, HylaranaProperties properties);
 
 /**
  * Query the registered service, the service type is fixed, when the query

@@ -366,10 +366,11 @@ class MainActivity : Permissions() {
                     val state = layoutGetState()
                     if (state == State.Publishing) {
                         simpleHylaranaServiceBinder?.stopSender()
-                        layoutSetState(State.Connected)
                     } else {
                         simpleHylaranaServiceBinder?.stopReceiver()
                     }
+
+                    layoutSetState(State.Connected)
                 }
             }
         )

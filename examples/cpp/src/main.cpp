@@ -28,16 +28,13 @@ extern "C"
 
 #include "./cli.h"
 
-static Render RENDER = nullptr;
+static HylaranaRender RENDER = nullptr;
 
 class HylaranaService
 {
 public:
     HylaranaService()
     {
-        _hylarana_options.server = const_cast<char*>(OPTIONS.server.c_str());
-        _hylarana_options.multicast = const_cast<char*>("239.0.0.1");
-        _hylarana_options.mtu = 1500;
     }
 
     ~HylaranaService()
@@ -55,7 +52,7 @@ public:
         auto video_sources = hylarana_get_sources(SOURCE_TYPE_SCREEN);
         auto audio_sources = hylarana_get_sources(SOURCE_TYPE_AUDIO);
 
-        VideoDescriptor video_options;
+        HylaranaVideoDescriptor video_options;
         video_options.encoder.codec = OPTIONS.encoder;
         video_options.encoder.width = OPTIONS.width;
         video_options.encoder.height = OPTIONS.height;
@@ -71,7 +68,7 @@ public:
             }
         }
 
-        AudioDescriptor audio_options;
+        HylaranaAudioDescriptor audio_options;
         audio_options.encoder.sample_rate = 48000;
         audio_options.encoder.bit_rate = 64000;
 
@@ -83,25 +80,44 @@ public:
             }
         }
 
+        HylaranaDescriptor transport = {};
+        transport.address = const_cast<char*>(OPTIONS.address.c_str());
+        transport.strategy = OPTIONS.strategy;
+        transport.mtu = 1500;
+
         HylaranaSenderDescriptor options;
-        options.transport = _hylarana_options;
         options.video = &video_options;
         options.audio = &audio_options;
-        options.multicast = false;
+        options.transport = transport;
 
-        FrameSink sink;
+        HylaranaFrameSink sink;
+        sink.close = HylaranaService::_close_proc;
         sink.audio = nullptr;
         sink.video = nullptr;
-        sink.close = HylaranaService::close_proc;
         sink.ctx = (void*)this;
 
-        StreamId id = {};
-        _sender = hylarana_create_sender(&id, options, sink);
+        char id[255] = { 0 };
+        _sender = hylarana_create_sender(id, options, sink);
         if (_sender == nullptr)
         {
             return false;
         }
 
+        char strategy_str[2];
+        sprintf(strategy_str, "%d", OPTIONS.strategy);
+
+        HylaranaProperties properties = hylarana_create_properties();
+        hylarana_properties_insert(properties, "address", OPTIONS.address.c_str());
+        hylarana_properties_insert(properties, "strategy", strategy_str);
+        hylarana_properties_insert(properties, "id", id);
+
+        _discovery = hylarana_discovery_register(3456, properties);
+        if (_discovery == nullptr)
+        {
+            return false;
+        }
+
+        hylarana_properties_destroy(properties);
         _is_runing = true;
         return true;
     }
@@ -113,19 +129,8 @@ public:
             return true;
         }
 
-        FrameSink sink;
-        sink.video = HylaranaService::video_proc;
-        sink.audio = HylaranaService::audio_proc;
-        sink.close = HylaranaService::close_proc;
-        sink.ctx = (void*)this;
-
-        HylaranaReceiverDescriptor options;
-        options.transport = _hylarana_options;
-        options.video = OPTIONS.decoder;
-
-        StreamId id = {};
-        _receiver = hylarana_create_receiver(&id, options, sink);
-        if (_receiver == nullptr)
+        _discovery = hylarana_discovery_query(_query_resolve, this);
+        if (_discovery == nullptr)
         {
             return false;
         }
@@ -145,6 +150,12 @@ public:
             return;
         }
 
+        if (_discovery != nullptr)
+        {
+            hylarana_discovery_destroy(_discovery);
+            _discovery = nullptr;
+        }
+
         if (_sender != nullptr)
         {
             hylarana_sender_destroy(_sender);
@@ -158,25 +169,70 @@ public:
         }
     }
 private:
-    HylaranaDescriptor _hylarana_options = {};
-    Sender _sender = nullptr;
-    Receiver _receiver = nullptr;
+    HylaranaDiscovery _discovery = nullptr;
+    HylaranaReceiver _receiver = nullptr;
+    HylaranaSender _sender = nullptr;
     bool _is_runing = true;
 
-    static bool video_proc(void* _, VideoFrame* frame)
+    static bool _video_proc(void* _, HylaranaVideoFrame* frame)
     {
-        return renderer_on_video(RENDER, frame);
+        return hylarana_renderer_on_video(RENDER, frame);
     }
 
-    static bool audio_proc(void* _, AudioFrame* frame)
+    static bool _audio_proc(void* _, HylaranaAudioFrame* frame)
     {
-        return renderer_on_audio(RENDER, frame);
+        return hylarana_renderer_on_audio(RENDER, frame);
     }
 
-    static void close_proc(void* ctx)
+    static void _close_proc(void* ctx)
     {
         auto hylarana = (HylaranaService*)ctx;
         hylarana->Close();
+    }
+
+    static void _query_resolve(void* ctx,
+                               const char** addrs,
+                               size_t addrs_size,
+                               HylaranaProperties properties)
+    {
+        HylaranaService* self = (HylaranaService*)ctx;
+        if (addrs_size == 0)
+        {
+            return;
+        }
+
+        char id[255];
+        char address[40]; 
+        char strategy[2];
+        hylarana_properties_get(properties, "id", id);
+        hylarana_properties_get(properties, "address", address);
+        hylarana_properties_get(properties, "strategy", strategy);
+
+        HylaranaFrameSink sink;
+        sink.close = HylaranaService::_close_proc;
+        sink.video = HylaranaService::_video_proc;
+        sink.audio = HylaranaService::_audio_proc;
+        sink.ctx = ctx;
+
+        HylaranaDescriptor transport = {};
+        transport.strategy = (HylaranaStrategy)std::stoi(std::string(strategy));
+        transport.address = address;
+        transport.mtu = 1500;
+
+        std::string direct_address;
+        if (transport.strategy == STRATEGY_DIRECT)
+        {
+            direct_address += std::string(addrs[0]);
+            direct_address += ":";
+            direct_address += finds(std::string(address), ":")[1];
+            transport.address = direct_address.c_str();
+        }
+
+        HylaranaReceiverDescriptor options;
+        options.transport = transport;
+        options.video = OPTIONS.decoder;
+
+        self->_receiver = hylarana_create_receiver(id, options, sink);
     }
 };
 
@@ -272,10 +328,10 @@ int WINAPI WinMain(HINSTANCE hinstance,
                              hinstance,
                              nullptr);
 
-    auto window_handle = create_window_handle_for_win32(hwnd,
-                                                        OPTIONS.width,
-                                                        OPTIONS.height);
-    RENDER = renderer_create(window_handle, RENDER_BACKEND_DX11);
+    auto window_handle = hylarana_create_window_handle_for_win32(hwnd,
+                                                                 OPTIONS.width,
+                                                                 OPTIONS.height);
+    RENDER = hylarana_renderer_create(window_handle, RENDER_BACKEND_DX11);
     MIRROR_SERVICE = new HylaranaService();
 
     MSG message;
@@ -286,8 +342,8 @@ int WINAPI WinMain(HINSTANCE hinstance,
     }
 
     MIRROR_SERVICE->Close();
-    renderer_destroy(RENDER);
-    window_handle_destroy(window_handle);
+    hylarana_renderer_destroy(RENDER);
+    hylarana_window_handle_destroy(window_handle);
     DestroyWindow(hwnd);
 
     delete MIRROR_SERVICE;
@@ -305,21 +361,21 @@ int main(int argc, char* argv[])
 
     hylarana_startup();
 
-        SDL_Init(SDL_INIT_EVENTS);
+    SDL_Init(SDL_INIT_EVENTS);
 #ifdef LINUX
-        SDL_Window* window = SDL_CreateWindow("example",
-                                              0,
-                                              0,
-                                              OPTIONS.width,
-                                              OPTIONS.height,
-                                              SDL_WINDOW_VULKAN);
+    SDL_Window* window = SDL_CreateWindow("example",
+                                          0,
+                                          0,
+                                          OPTIONS.width,
+                                          OPTIONS.height,
+                                          SDL_WINDOW_VULKAN);
 #else
-        SDL_Window* window = SDL_CreateWindow("example",
-                                              0,
-                                              0,
-                                              OPTIONS.width,
-                                              OPTIONS.height,
-                                              SDL_WINDOW_METAL);
+    SDL_Window* window = SDL_CreateWindow("example",
+                                          0,
+                                          0,
+                                          OPTIONS.width,
+                                          OPTIONS.height,
+                                          SDL_WINDOW_METAL);
 #endif
 
     SDL_SysWMinfo info;
@@ -329,20 +385,20 @@ int main(int argc, char* argv[])
 #ifdef __OBJC__
     NSWindow* ns_window = (NSWindow*)info.info.cocoa.window;
     NSView* ns_view = [ns_window contentView];
-    auto window_handle = create_window_handle_for_appkit(ns_view,
-                                                         OPTIONS.width,
-                                                         OPTIONS.height);
+    auto window_handle = hylarana_create_window_handle_for_appkit(ns_view,
+                                                                  OPTIONS.width,
+                                                                  OPTIONS.height);
 #endif
 
 #ifdef LINUX
-    auto window_handle = create_window_handle_for_xlib(info.info.x11.window,
-                                                       info.info.x11.display,
-                                                       0,
-                                                       OPTIONS.width,
-                                                       OPTIONS.height);
+    auto window_handle = hylarana_create_window_handle_for_xlib(info.info.x11.window,
+                                                                info.info.x11.display,
+                                                                0,
+                                                                OPTIONS.width,
+                                                                OPTIONS.height);
 #endif
 
-    RENDER = renderer_create(window_handle, RENDER_BACKEND_WGPU);
+    RENDER = hylarana_renderer_create(window_handle, RENDER_BACKEND_WGPU);
     MIRROR_SERVICE = new HylaranaService();
 
     SDL_Event event;
@@ -372,8 +428,8 @@ int main(int argc, char* argv[])
         }
     }
 
-    renderer_destroy(RENDER);
-    window_handle_destroy(window_handle);
+    hylarana_renderer_destroy(RENDER);
+    hylarana_window_handle_destroy(window_handle);
     hylarana_shutdown();
 
     SDL_DestroyWindow(window);

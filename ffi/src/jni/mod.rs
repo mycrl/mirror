@@ -273,16 +273,16 @@ extern "system" fn Java_com_github_mycrl_hylarana_Hylarana_createTransportReceiv
     observer: JObject,
 ) -> *const Arc<Receiver> {
     ok_or_check(&mut env, |env| {
-        let observer = Arc::new(Receiver::new(env, &id, &options, &observer)?);
+        let receiver = Arc::new(Receiver::new(env, &id, &options, &observer)?);
 
-        let adapter = observer.receiver.get_adapter();
-        let observer_ = Arc::downgrade(&observer);
+        let adapter = receiver.get_adapter();
+        let receiver_ = Arc::downgrade(&receiver);
         thread::Builder::new()
             .name("HylaranaJniStreamReceiverThread".to_string())
             .spawn(move || {
-                while let Some(observer) = observer_.upgrade() {
+                while let Some(receiver) = receiver_.upgrade() {
                     if let Some((buf, kind, flags, timestamp)) = adapter.next() {
-                        if observer.sink(buf, kind, flags, timestamp).is_err() {
+                        if receiver.sink(buf, kind, flags, timestamp).is_err() {
                             break;
                         }
                     } else {
@@ -292,12 +292,12 @@ extern "system" fn Java_com_github_mycrl_hylarana_Hylarana_createTransportReceiv
 
                 log::info!("HylaranaJniStreamReceiverThread is closed");
 
-                if let Some(observer) = observer_.upgrade() {
-                    let _ = observer.close();
+                if let Some(receiver) = receiver_.upgrade() {
+                    let _ = receiver.close();
                 }
             })?;
 
-        Ok(Box::into_raw(Box::new(observer)))
+        Ok(Box::into_raw(Box::new(receiver)))
     })
     .unwrap_or_else(|| null_mut())
 }
@@ -316,7 +316,7 @@ extern "system" fn Java_com_github_mycrl_hylarana_Hylarana_releaseTransportRecei
 ) {
     assert!(!receiver.is_null());
 
-    drop(unsafe { Box::from_raw(receiver) });
+    let _ = unsafe { Box::from_raw(receiver) }.close();
 }
 
 /// Register the service, the service type is fixed, you can customize the
@@ -373,7 +373,7 @@ extern "system" fn Java_com_github_mycrl_hylarana_Discovery_queryDiscoveryServic
 /// ```
 #[no_mangle]
 #[allow(non_snake_case)]
-extern "system" fn Java_com_github_mycrl_hylarana_Hylarana_releaseDiscoveryService(
+extern "system" fn Java_com_github_mycrl_hylarana_Discovery_releaseDiscoveryService(
     _env: JNIEnv,
     _this: JClass,
     discovery: *mut DiscoveryService,

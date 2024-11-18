@@ -5,11 +5,7 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
-use clap::{
-    builder::{PossibleValuesParser, TypedValueParser},
-    Parser,
-};
-
+use clap::Parser;
 use hylarana::{
     shutdown, startup, AVFrameObserver, AVFrameSink, AVFrameStream, AudioDescriptor, AudioFrame,
     Capture, DiscoveryService, GraphicsBackend, Hylarana, HylaranaReceiver,
@@ -140,7 +136,7 @@ impl Sender {
             });
         }
 
-        let strategy = configure.get_strategy();
+        let strategy = configure.get_strategy().unwrap();
         let sender = Hylarana::create_sender(
             HylaranaSenderDescriptor {
                 transport: TransportDescriptor {
@@ -321,7 +317,7 @@ impl ApplicationHandler for App {
     }
 }
 
-#[derive(Parser, Debug)]
+#[derive(Parser)]
 #[command(
     about = env!("CARGO_PKG_DESCRIPTION"),
     version = env!("CARGO_PKG_VERSION"),
@@ -331,13 +327,9 @@ struct Configure {
     /// The address to which the hylarana service is bound, indicating how to
     /// connect to the hylarana service.
     #[arg(long)]
-    address: SocketAddr,
-    #[arg(
-        long,
-        value_parser = PossibleValuesParser::new(["direct", "relay", "multicast"])
-            .map(|s| s.parse::<String>()),
-    )]
-    strategy: String,
+    address: Option<SocketAddr>,
+    #[arg(long)]
+    strategy: Option<String>,
     #[arg(long, default_value_t = 1280)]
     width: u32,
     #[arg(long, default_value_t = 720)]
@@ -350,15 +342,13 @@ struct Configure {
     id: u32,
     #[arg(
         long,
-        value_parser = PossibleValuesParser::new(["libx264", "h264_qsv", "h264_videotoolbox"])
-            .map(|s| s.parse::<VideoEncoderType>()),
+        value_parser = clap::value_parser!(VideoEncoderType),
         default_value_t = Self::DEFAULT_ENCODER,
     )]
     encoder: VideoEncoderType,
     #[arg(
         long,
-        value_parser = PossibleValuesParser::new(["h264", "d3d11va", "h264_qsv", "h264_videotoolbox"])
-            .map(|s| s.parse::<VideoDecoderType>()),
+        value_parser = clap::value_parser!(VideoDecoderType),
         default_value_t = Self::DEFAULT_DECODER,
     )]
     decoder: VideoDecoderType,
@@ -383,13 +373,13 @@ impl Configure {
     #[cfg(target_os = "linux")]
     const DEFAULT_DECODER: VideoDecoderType = VideoDecoderType::H264;
 
-    fn get_strategy(&self) -> TransportStrategy {
-        match self.strategy.as_str() {
-            "direct" => TransportStrategy::Direct(self.address),
-            "relay" => TransportStrategy::Relay(self.address),
-            "multicast" => TransportStrategy::Multicast(self.address),
+    fn get_strategy(&self) -> Option<TransportStrategy> {
+        Some(match self.strategy.as_ref()?.as_str() {
+            "direct" => TransportStrategy::Direct(self.address?),
+            "relay" => TransportStrategy::Relay(self.address?),
+            "multicast" => TransportStrategy::Multicast(self.address?),
             _ => unreachable!(),
-        }
+        })
     }
 
     fn get_video_descriptor(&self) -> VideoDescriptor {
@@ -406,6 +396,8 @@ impl Configure {
 
 fn main() -> Result<()> {
     simple_logger::init_with_level(log::Level::Info)?;
+
+    Configure::parse();
 
     // Creates a message loop, which is used to create the main window.
     let event_loop = EventLoop::new()?;

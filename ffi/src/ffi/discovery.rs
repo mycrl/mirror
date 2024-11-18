@@ -5,25 +5,25 @@ use std::{
 };
 
 use hylarana::DiscoveryService;
-use hylarana_common::{c_str, strings::Strings};
-use serde::{Deserialize, Serialize};
+use hylarana_common::{
+    c_str,
+    strings::{write_c_str, Strings},
+};
 
 use super::log_error;
 
-#[repr(C)]
-#[derive(Default, Debug, Serialize, Deserialize)]
-struct RawProperties(HashMap<String, String>);
+type Properties = HashMap<String, String>;
 
 /// Create a properties.
 #[no_mangle]
-extern "C" fn hylarana_create_properties() -> *const RawProperties {
-    Box::into_raw(Box::new(RawProperties::default()))
+extern "C" fn hylarana_create_properties() -> *const Properties {
+    Box::into_raw(Box::new(Properties::default()))
 }
 
 /// Adds key pair values to the property list, which is Map inside.
 #[no_mangle]
 extern "C" fn hylarana_properties_insert(
-    properties: *mut RawProperties,
+    properties: *mut Properties,
     key: *const c_char,
     value: *const c_char,
 ) -> bool {
@@ -32,7 +32,7 @@ extern "C" fn hylarana_properties_insert(
     assert!(!key.is_null());
 
     let func = || {
-        unsafe { &mut *properties }.0.insert(
+        unsafe { &mut *properties }.insert(
             Strings::from(key).to_string()?,
             Strings::from(value).to_string()?,
         );
@@ -43,9 +43,35 @@ extern "C" fn hylarana_properties_insert(
     func().is_ok()
 }
 
+/// Get value from the property list, which is Map inside.
+#[no_mangle]
+extern "C" fn hylarana_properties_get(
+    properties: *mut Properties,
+    key: *const c_char,
+    value: *mut c_char,
+) -> bool {
+    assert!(!properties.is_null());
+    assert!(!value.is_null());
+    assert!(!key.is_null());
+
+    let key = if let Ok(it) = Strings::from(key).to_string() {
+        it
+    } else {
+        return false;
+    };
+
+    if let Some(it) = unsafe { &mut *properties }.get(&key) {
+        write_c_str(it, value);
+
+        true
+    } else {
+        false
+    }
+}
+
 /// Destroy the properties.
 #[no_mangle]
-extern "C" fn hylarana_properties_destroy(properties: *mut RawProperties) {
+extern "C" fn hylarana_properties_destroy(properties: *mut Properties) {
     assert!(!properties.is_null());
 
     drop(unsafe { Box::from_raw(properties) });
@@ -61,7 +87,7 @@ struct RawDiscovery(DiscoveryService);
 #[no_mangle]
 extern "C" fn hylarana_discovery_register(
     port: u16,
-    properties: *const RawProperties,
+    properties: *const Properties,
 ) -> *const RawDiscovery {
     let func =
         || Ok::<_, anyhow::Error>(DiscoveryService::register(port, unsafe { &*properties })?);
@@ -74,8 +100,9 @@ extern "C" fn hylarana_discovery_register(
 type Callback = extern "C" fn(
     ctx: *const c_void,
     addrs: *const *const c_char,
-    properties: *const RawProperties,
-) -> bool;
+    addrs_size: usize,
+    properties: *const Properties,
+);
 
 struct CallbackWrap {
     callback: Callback,
@@ -86,7 +113,7 @@ unsafe impl Send for CallbackWrap {}
 unsafe impl Sync for CallbackWrap {}
 
 impl CallbackWrap {
-    fn call(&self, addrs: Vec<String>, info: &RawProperties) {
+    fn call(&self, addrs: Vec<String>, info: &Properties) {
         (self.callback)(
             self.ctx,
             addrs
@@ -95,6 +122,7 @@ impl CallbackWrap {
                 .collect::<Vec<_>>()
                 .as_slice()
                 .as_ptr(),
+            addrs.len(),
             info,
         );
     }
