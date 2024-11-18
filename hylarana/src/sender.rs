@@ -71,7 +71,6 @@ pub struct HylaranaSenderDescriptor {
     pub video: Option<HylaranaSenderSourceDescriptor<VideoDescriptor>>,
     pub audio: Option<HylaranaSenderSourceDescriptor<AudioDescriptor>>,
     pub transport: TransportDescriptor,
-    pub multicast: bool,
 }
 
 struct VideoSender<T: AVFrameStream + 'static> {

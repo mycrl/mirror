@@ -329,16 +329,13 @@ extern "system" fn Java_com_github_mycrl_hylarana_Discovery_registerDiscoverySer
     mut env: JNIEnv,
     _this: JClass,
     port: jint,
-    id: JString,
     properties: JObject,
 ) -> *const DiscoveryService {
     ok_or_check(&mut env, |env| {
-        let id: String = env.get_string(&id)?.into();
         let properties = HashMap::<String, String>::from_map(env, &properties)?;
 
         Ok(Box::into_raw(Box::new(DiscoveryService::register(
             port as u16,
-            &id,
             &properties,
         )?)))
     })

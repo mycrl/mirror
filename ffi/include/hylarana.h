@@ -30,53 +30,53 @@ typedef enum
     VIDEO_FORMAT_RGBA,
     VIDEO_FORMAT_NV12,
     VIDEO_FORMAT_I420,
-} VideoFormat;
+} HylaranaVideoFormat;
 
 typedef enum
 {
     VIDEO_SUB_FORMAT_D3D11,
     VIDEO_SUB_FORMAT_SW,
-} VideoSubFormat;
+} HylaranaVideoSubFormat;
 
 typedef struct
 {
-    VideoFormat format;
-    VideoSubFormat sub_format;
+    HylaranaVideoFormat format;
+    HylaranaVideoSubFormat sub_format;
     uint32_t width;
     uint32_t height;
     void* data[3];
     size_t linesize[3];
-} VideoFrame;
+} HylaranaVideoFrame;
 
 typedef struct
 {
     int sample_rate;
     uint32_t frames;
     int16_t* data;
-} AudioFrame;
+} HylaranaAudioFrame;
 
 typedef enum
 {
     SOURCE_TYPE_CAMERA,
     SOURCE_TYPE_SCREEN,
     SOURCE_TYPE_AUDIO,
-} SourceType;
+} HylaranaSourceType;
 
 typedef struct
 {
     size_t index;
-    SourceType type;
+    HylaranaSourceType type;
     const char* id;
     const char* name;
     bool is_default;
-} Source;
+} HylaranaSource;
 
 typedef struct
 {
-    Source* items;
+    HylaranaSource* items;
     size_t capacity;
     size_t size;
-} Sources;
+} HylaranaSources;
 
 typedef enum {
     VIDEO_DECODER_H264,
@@ -84,7 +84,7 @@ typedef enum {
     VIDEO_DECODER_QSV,
     VIDEO_DECODER_CUDA,
     VIDEO_DECODER_VIDEOTOOLBOX,
-} VideoDecoderType;
+} HylaranaVideoDecoderType;
 
 typedef enum 
 {
@@ -92,24 +92,28 @@ typedef enum
     VIDEO_ENCODER_QSV,
     VIDEO_ENCODER_CUDA,
     VIDEO_ENCODER_VIDEOTOOLBOX,
-} VideoEncoderType;
+} HylaranaVideoEncoderType;
 
 typedef enum 
 {
     RENDER_BACKEND_DX11,
     RENDER_BACKEND_WGPU,
-} GraphicsBackend;
+} HylaranaGraphicsBackend;
+
+typedef enum
+{
+    Direct,
+    Relay,
+    Multicast,
+} HylaranaStrategy;
 
 typedef struct
 {
+    HylaranaStrategy strategy;
     /**
-     * hylarana server address.
+     * hylarana address.
      */
-    const char* server;
-    /**
-     * Multicast address, e.g. `239.0.0.1`.
-     */
-    const char* multicast;
+    const char* address;
     /**
      * The size of the maximum transmission unit of the network, which is
      * related to the settings of network devices such as routers or switches,
@@ -124,7 +128,7 @@ typedef struct
      * Video encoder settings, possible values are `h264_qsv`, `h264_nvenc`,
      * `libx264` and so on.
      */
-    VideoEncoderType codec;
+    HylaranaVideoEncoderType codec;
     /**
      * Frame rate setting in seconds.
      */
@@ -146,7 +150,7 @@ typedef struct
      * keyframe.
      */
     uint32_t key_frame_interval;
-} VideoEncoderDescriptor;
+} HylaranaVideoEncoderDescriptor;
 
 typedef struct
 {
@@ -158,43 +162,36 @@ typedef struct
      * The bit rate of the video encoding.
      */
     uint64_t bit_rate;
-} AudioEncoderDescriptor;
+} HylaranaAudioEncoderDescriptor;
 
 typedef struct
 {
-    Source* source;
-    VideoEncoderDescriptor encoder;
-} VideoDescriptor;
+    HylaranaSource* source;
+    HylaranaVideoEncoderDescriptor encoder;
+} HylaranaVideoDescriptor;
 
 typedef struct
 {
-    Source* source;
-    AudioEncoderDescriptor encoder;
-} AudioDescriptor;
+    HylaranaSource* source;
+    HylaranaAudioEncoderDescriptor encoder;
+} HylaranaAudioDescriptor;
 
 typedef struct
 {
-    VideoDescriptor* video;
-    AudioDescriptor* audio;
+    HylaranaVideoDescriptor* video;
+    HylaranaAudioDescriptor* audio;
     HylaranaDescriptor transport;
-    bool multicast;
 } HylaranaSenderDescriptor;
 
 typedef struct
 {
-    VideoDecoderType video;
+    HylaranaVideoDecoderType video;
     HylaranaDescriptor transport;
 } HylaranaReceiverDescriptor;
 
-typedef struct
-{
-    char* uid;
-    uint16_t port;
-} StreamId;
 
-
-typedef const void* Sender;
-typedef const void* Receiver;
+typedef const void* HylaranaSender;
+typedef const void* HylaranaReceiver;
 
 typedef struct
 {
@@ -226,7 +223,7 @@ typedef struct
      * JPEG: it has BT.601 matrix derived from System M primaries, yet the
      * primaries of most images are BT.709.
      */
-    bool (*video)(void* ctx, VideoFrame* frame);
+    bool (*video)(void* ctx, HylaranaVideoFrame* frame);
     /**
      * Callback is called when the audio frame is updated. The audio frame
      * format is fixed to PCM. Be careful not to call blocking methods inside
@@ -255,7 +252,7 @@ typedef struct
      * depth, which determines the number of possible digital values that
      * can be used to represent each sample.
      */
-    bool (*audio)(void* ctx, AudioFrame* frame);
+    bool (*audio)(void* ctx, HylaranaAudioFrame* frame);
     /**
      * Callback when the sender is closed. This may be because the external
      * side actively calls the close, or the audio and video packets cannot be
@@ -263,7 +260,7 @@ typedef struct
      */
     void (*close)(void* ctx);
     void* ctx;
-} FrameSink;
+} HylaranaFrameSink;
 
 /**
  * Because Linux does not have DllMain, you need to call it manually to achieve
@@ -287,49 +284,39 @@ EXPORT void hylarana_shutdown();
 /**
  * Get capture sources.
  */
-EXPORT Sources hylarana_get_sources(SourceType kind);
+EXPORT HylaranaSources hylarana_get_sources(HylaranaSourceType kind);
 
 /**
  * Because `Sources` are allocated internally, they also need to be released
  * internally.
  */
-EXPORT void hylarana_sources_destroy(Sources* sources);
+EXPORT void hylarana_sources_destroy(HylaranaSources* sources);
 
 /**
  * Create a sender, specify a bound NIC address, you can pass callback to
  * get the device screen or sound callback, callback can be null, if it is
  * null then it means no callback data is needed.
  */
-EXPORT Sender hylarana_create_sender(StreamId* id, HylaranaSenderDescriptor options, FrameSink sink);
-
-/**
- * Get whether the sender uses multicast transmission.
- */
-EXPORT bool hylarana_sender_get_multicast(Sender sender);
-
-/**
- * Set whether the sender uses multicast transmission.
- */
-EXPORT void hylarana_sender_set_multicast(Sender sender, bool is_multicast);
+EXPORT HylaranaSender hylarana_create_sender(char* id, HylaranaSenderDescriptor options, HylaranaFrameSink sink);
 
 /**
  * Close sender.
  */
-EXPORT void hylarana_sender_destroy(Sender sender);
+EXPORT void hylarana_sender_destroy(HylaranaSender sender);
 
 /**
  * Create a receiver, specify a bound NIC address, you can pass callback to
  * get the sender's screen or sound callback, callback can not be null.
  */
-EXPORT Receiver hylarana_create_receiver(StreamId* id, HylaranaReceiverDescriptor options, FrameSink sink);
+EXPORT HylaranaReceiver hylarana_create_receiver(const char* id, HylaranaReceiverDescriptor options, HylaranaFrameSink sink);
 
 /**
  * Close receiver.
  */
-EXPORT void hylarana_receiver_destroy(Receiver receiver);
+EXPORT void hylarana_receiver_destroy(HylaranaReceiver receiver);
 
-typedef const void* WindowHandle;
-typedef const void* Render;
+typedef const void* HylaranaWindowHandle;
+typedef const void* HylaranaRender;
 
 #ifdef WIN32
 
@@ -338,7 +325,7 @@ typedef const void* Render;
  * 
  * This variant is used on Windows systems.
  */
-EXPORT WindowHandle create_window_handle_for_win32(HWND hwnd, uint32_t width, uint32_t height);
+EXPORT HylaranaWindowHandle hylarana_create_window_handle_for_win32(HWND hwnd, uint32_t width, uint32_t height);
 
 #endif // WIN32
 
@@ -351,7 +338,7 @@ EXPORT WindowHandle create_window_handle_for_win32(HWND hwnd, uint32_t width, ui
  * working that Xlib can be built for, which is to say, most (but not all)
  * Unix systems.
  */
-EXPORT WindowHandle create_window_handle_for_xlib(uint32_t hwnd, void* display, int screen, uint32_t width, uint32_t height);
+EXPORT HylaranaWindowHandle hylarana_create_window_handle_for_xlib(uint32_t hwnd, void* display, int screen, uint32_t width, uint32_t height);
 
 /**
  * A raw window handle for Xcb.
@@ -360,7 +347,7 @@ EXPORT WindowHandle create_window_handle_for_xlib(uint32_t hwnd, void* display, 
  * working that XCB can be built for, which is to say, most (but not all)
  * Unix systems.
  */
-EXPORT WindowHandle create_window_handle_for_xcb(uint32_t hwnd, void* display, int screen, uint32_t width, uint32_t height);
+EXPORT HylaranaWindowHandle hylarana_create_window_handle_for_xcb(uint32_t hwnd, void* display, int screen, uint32_t width, uint32_t height);
 
 /**
  * A raw window handle for Wayland.
@@ -368,7 +355,7 @@ EXPORT WindowHandle create_window_handle_for_xcb(uint32_t hwnd, void* display, i
  * This variant should be expected anywhere Wayland works, which is
  * currently some subset of unix systems.
  */
-EXPORT WindowHandle create_window_handle_for_wayland(void* hwnd, void* display, uint32_t width, uint32_t height);
+EXPORT HylaranaWindowHandle hylarana_create_window_handle_for_wayland(void* hwnd, void* display, uint32_t width, uint32_t height);
 
 #endif
 
@@ -381,33 +368,73 @@ EXPORT WindowHandle create_window_handle_for_wayland(void* hwnd, void* display, 
  * ($arch-apple-ios-macabi targets, which can notably use UIKit or AppKit) can 
  * also use it despite being target_os = "ios".
  */
-EXPORT WindowHandle create_window_handle_for_appkit(void* view, uint32_t width, uint32_t height);
+EXPORT HylaranaWindowHandle hylarana_create_window_handle_for_appkit(void* view, uint32_t width, uint32_t height);
 
 #endif
 
 /**
  * Destroy the window handle.
  */
-EXPORT void window_handle_destroy(WindowHandle hwnd);
+EXPORT void hylarana_window_handle_destroy(HylaranaWindowHandle hwnd);
 
 /**
  * Creating a window renderer.
  */
-EXPORT Render renderer_create(WindowHandle hwnd, GraphicsBackend backend);
+EXPORT HylaranaRender hylarana_renderer_create(HylaranaWindowHandle hwnd, HylaranaGraphicsBackend backend);
 
 /**
  * Push the video frame into the renderer, which will update the window texture.
  */
-EXPORT bool renderer_on_video(Render render, VideoFrame* frame);
+EXPORT bool hylarana_renderer_on_video(HylaranaRender render, HylaranaVideoFrame* frame);
 
 /**
  * Push the audio frame into the renderer, which will append to audio queue.
  */
-EXPORT bool renderer_on_audio(Render render, AudioFrame* frame);
+EXPORT bool hylarana_renderer_on_audio(HylaranaRender render, HylaranaAudioFrame* frame);
 
 /**
  * Destroy the window renderer.
  */
-EXPORT void renderer_destroy(Render render);
+EXPORT void hylarana_renderer_destroy(HylaranaRender render);
+
+typedef const void* HylaranaProperties;
+typedef const void* HylaranaDiscovery;
+
+/**
+ * Create a properties.
+ */
+EXPORT HylaranaProperties hylarana_create_properties();
+
+/**
+ * Adds key pair values to the property list, which is Map inside.
+ */
+EXPORT bool hylarana_properties_insert(HylaranaProperties properties, const char* key, const char* value);
+
+/**
+ * Destroy the properties.
+ */
+EXPORT void hylarana_properties_destroy(HylaranaProperties properties);
+
+/**
+ * Register the service, the service type is fixed, you can customize the
+ * port number, id is the identifying information of the service, used to
+ * distinguish between different publishers, in properties you can add
+ * customized data to the published service.
+ */
+EXPORT HylaranaDiscovery hylarana_discovery_register(uint16_t port, HylaranaProperties properties);
+
+typedef bool (*HylaranaDiscoveryQueryCallback)(void* ctx, HylaranaVideoFrame* frame);
+
+/**
+ * Query the registered service, the service type is fixed, when the query
+ * is published the callback function will call back all the network
+ * addresses of the service publisher as well as the attribute information.
+ */
+EXPORT HylaranaDiscovery hylarana_discovery_query(HylaranaDiscoveryQueryCallback callback, void* ctx);
+
+/**
+ * Destroy the discovery.
+ */
+EXPORT void hylarana_discovery_destroy(HylaranaDiscovery discovery);
 
 #endif // MIRROR_H

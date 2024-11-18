@@ -181,14 +181,14 @@ class SimpleHylaranaService : Service() {
                 .query(
                     object : DiscoveryServiceQueryObserver() {
                         override fun resolve(addrs: Array<String>, properties: Properties) {
-                            try {
+                            if (receiver == null) {
                                 val sdp = Sdp.fromProperties(properties)
                                 if (sdp.strategy.type == HylaranaStrategyType.DIRECT) {
                                     sdp.strategy.addr =
                                         addrs[0] + ":" + sdp.strategy.addr.split(":")[1]
                                 }
 
-                                HylaranaService.createReceiver(
+                                receiver = HylaranaService.createReceiver(
                                     sdp.id,
                                     HylaranaOptions(strategy = sdp.strategy, mtu = 1500),
                                     object : HylaranaReceiverObserver() {
@@ -227,8 +227,6 @@ class SimpleHylaranaService : Service() {
                                         }
                                     }
                                 )
-                            } catch (e: Exception) {
-                                Log.e("simple", "failed to create receiver", e)
                             }
                         }
                     }
@@ -304,7 +302,6 @@ class SimpleHylaranaService : Service() {
                 Discovery()
                     .register(
                         3456,
-                        sender!!.getStreamId(),
                         Sdp(id = sender!!.getStreamId(), strategy = it).toProperties()
                     )
             }

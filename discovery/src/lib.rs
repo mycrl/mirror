@@ -3,6 +3,7 @@ use std::{fmt::Debug, net::Ipv4Addr, thread};
 use mdns_sd::{IfKind, ServiceDaemon, ServiceEvent, ServiceInfo};
 use serde::{de::DeserializeOwned, Serialize};
 use thiserror::Error;
+use uuid::Uuid;
 
 #[derive(Debug, Error)]
 pub enum DiscoveryError {
@@ -23,12 +24,12 @@ impl DiscoveryService {
     /// customized data to the published service.
     pub fn register<P: Serialize + Debug>(
         port: u16,
-        id: &str,
         properties: &P,
     ) -> Result<Self, DiscoveryError> {
         let mdns = ServiceDaemon::new()?;
         mdns.disable_interface(IfKind::IPv6)?;
 
+        let id = Uuid::new_v4().to_string();
         mdns.register(
             ServiceInfo::new(
                 "_hylarana._udp.local.",
@@ -54,25 +55,22 @@ impl DiscoveryService {
     /// Query the registered service, the service type is fixed, when the query
     /// is published the callback function will call back all the network
     /// addresses of the service publisher as well as the attribute information.
-    pub fn query<P: DeserializeOwned, T: FnOnce(Vec<Ipv4Addr>, P) + Send + 'static>(
+    pub fn query<P: DeserializeOwned, T: Fn(Vec<Ipv4Addr>, P) + Send + 'static>(
         func: T,
     ) -> Result<Self, DiscoveryError> {
         let mdns = ServiceDaemon::new()?;
         mdns.disable_interface(IfKind::IPv6)?;
 
-        let mut func = Some(func);
         let receiver = mdns.browse("_hylarana._udp.local.")?;
         thread::spawn(move || {
-            let mut process = |info: ServiceInfo| {
-                if let Some(func) = func.take() {
-                    func(
-                        info.get_addresses_v4()
-                            .into_iter()
-                            .map(|it| *it)
-                            .collect::<Vec<_>>(),
-                        serde_json::from_str(info.get_property("properties")?.val_str()).ok()?,
-                    );
-                }
+            let process = |info: ServiceInfo| {
+                func(
+                    info.get_addresses_v4()
+                        .into_iter()
+                        .map(|it| *it)
+                        .collect::<Vec<_>>(),
+                    serde_json::from_str(info.get_property("properties")?.val_str()).ok()?,
+                );
 
                 Some(())
             };

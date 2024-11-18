@@ -3,7 +3,7 @@ mod discovery;
 mod observer;
 mod renderer;
 
-use std::{ffi::c_char, fmt::Debug, ptr::null_mut};
+use std::{ffi::c_char, fmt::Debug, net::SocketAddr, ptr::null_mut};
 
 use self::{capture::RawSource, observer::RawAVFrameStream};
 
@@ -78,53 +78,17 @@ extern "C" fn hylarana_shutdown() {
 }
 
 #[repr(C)]
-union HylaranaStrategyData {
-    direct: *const c_char,
-    relay: *const c_char,
-    multicast: *const c_char,
-}
-
-#[repr(C)]
 #[allow(unused)]
-enum HylaranaStrategyType {
+enum HylaranaStrategy {
     Direct,
     Relay,
     Multicast,
 }
 
 #[repr(C)]
-struct HylaranaStrategy {
-    data: HylaranaStrategyData,
-    kind: HylaranaStrategyType,
-}
-
-impl TryInto<TransportStrategy> for HylaranaStrategy {
-    type Error = anyhow::Error;
-
-    fn try_into(self) -> Result<TransportStrategy, Self::Error> {
-        Ok(match self.kind {
-            HylaranaStrategyType::Direct => TransportStrategy::Direct(
-                Strings::from(unsafe { self.data.direct })
-                    .to_string()?
-                    .parse()?,
-            ),
-            HylaranaStrategyType::Relay => TransportStrategy::Relay(
-                Strings::from(unsafe { self.data.relay })
-                    .to_string()?
-                    .parse()?,
-            ),
-            HylaranaStrategyType::Multicast => TransportStrategy::Multicast(
-                Strings::from(unsafe { self.data.multicast })
-                    .to_string()?
-                    .parse()?,
-            ),
-        })
-    }
-}
-
-#[repr(C)]
 struct HylaranaDescriptor {
     strategy: HylaranaStrategy,
+    address: *const c_char,
     mtu: usize,
 }
 
@@ -132,8 +96,14 @@ impl TryInto<TransportDescriptor> for HylaranaDescriptor {
     type Error = anyhow::Error;
 
     fn try_into(self) -> Result<TransportDescriptor, Self::Error> {
+        let address: SocketAddr = Strings::from(self.address).to_string()?.parse()?;
+
         Ok(TransportDescriptor {
-            strategy: self.strategy.try_into()?,
+            strategy: match self.strategy {
+                HylaranaStrategy::Relay => TransportStrategy::Relay(address),
+                HylaranaStrategy::Direct => TransportStrategy::Direct(address),
+                HylaranaStrategy::Multicast => TransportStrategy::Multicast(address),
+            },
             mtu: self.mtu,
         })
     }
@@ -215,7 +185,6 @@ struct RawSenderDescriptor {
     video: *const RawSenderSourceDescriptor<RawVideoDescriptor>,
     audio: *const RawSenderSourceDescriptor<RawAudioDescriptor>,
     transport: HylaranaDescriptor,
-    multicast: bool,
 }
 
 impl TryInto<HylaranaSenderDescriptor> for RawSenderDescriptor {
@@ -227,7 +196,6 @@ impl TryInto<HylaranaSenderDescriptor> for RawSenderDescriptor {
     fn try_into(self) -> Result<HylaranaSenderDescriptor, Self::Error> {
         let mut descriptor = HylaranaSenderDescriptor {
             transport: self.transport.try_into()?,
-            multicast: self.multicast,
             audio: None,
             video: None,
         };
@@ -268,11 +236,11 @@ struct RawSender(HylaranaSender<RawAVFrameStream>);
 /// null then it means no callback data is needed.
 #[no_mangle]
 extern "C" fn hylarana_create_sender(
-    stream_id: *mut c_char,
+    id: *mut c_char,
     options: RawSenderDescriptor,
     sink: RawAVFrameStream,
 ) -> *const RawSender {
-    assert!(!stream_id.is_null());
+    assert!(!id.is_null());
 
     log::info!("extern api: hylarana create sender");
 
@@ -281,7 +249,7 @@ extern "C" fn hylarana_create_sender(
         log::info!("hylarana create options={:?}", options);
 
         let sender = Hylarana::create_sender(options, sink)?;
-        write_c_str(sender.get_id(), stream_id);
+        write_c_str(sender.get_id(), id);
 
         Ok(sender)
     };
@@ -335,17 +303,17 @@ struct RawReceiverescriptor {
 /// get the sender's screen or sound callback, callback can not be null.
 #[no_mangle]
 extern "C" fn hylarana_create_receiver(
-    stream_id: *const c_char,
+    id: *const c_char,
     options: RawReceiverescriptor,
     sink: RawAVFrameStream,
 ) -> *const RawReceiver {
-    assert!(!stream_id.is_null());
+    assert!(!id.is_null());
 
     log::info!("extern api: hylarana create receiver");
 
     let func = || {
         Ok::<_, anyhow::Error>(Hylarana::create_receiver(
-            Strings::from(stream_id).to_string()?,
+            Strings::from(id).to_string()?,
             HylaranaReceiverDescriptor {
                 transport: options.transport.try_into()?,
                 video: options.video.into(),

@@ -14,11 +14,13 @@ use super::log_error;
 #[derive(Default, Debug, Serialize, Deserialize)]
 struct RawProperties(HashMap<String, String>);
 
+/// Create a properties.
 #[no_mangle]
 extern "C" fn hylarana_create_properties() -> *const RawProperties {
     Box::into_raw(Box::new(RawProperties::default()))
 }
 
+/// Adds key pair values to the property list, which is Map inside.
 #[no_mangle]
 extern "C" fn hylarana_properties_insert(
     properties: *mut RawProperties,
@@ -41,6 +43,7 @@ extern "C" fn hylarana_properties_insert(
     func().is_ok()
 }
 
+/// Destroy the properties.
 #[no_mangle]
 extern "C" fn hylarana_properties_destroy(properties: *mut RawProperties) {
     assert!(!properties.is_null());
@@ -51,19 +54,17 @@ extern "C" fn hylarana_properties_destroy(properties: *mut RawProperties) {
 #[repr(C)]
 struct RawDiscovery(DiscoveryService);
 
+/// Register the service, the service type is fixed, you can customize the
+/// port number, id is the identifying information of the service, used to
+/// distinguish between different publishers, in properties you can add
+/// customized data to the published service.
 #[no_mangle]
 extern "C" fn hylarana_discovery_register(
     port: u16,
-    id: *const c_char,
     properties: *const RawProperties,
 ) -> *const RawDiscovery {
-    let func = || {
-        Ok::<_, anyhow::Error>(DiscoveryService::register(
-            port,
-            &Strings::from(id).to_string()?,
-            unsafe { &*properties },
-        )?)
-    };
+    let func =
+        || Ok::<_, anyhow::Error>(DiscoveryService::register(port, unsafe { &*properties })?);
 
     log_error(func())
         .map(|it| Box::into_raw(Box::new(it)))
@@ -99,6 +100,9 @@ impl CallbackWrap {
     }
 }
 
+/// Query the registered service, the service type is fixed, when the query
+/// is published the callback function will call back all the network
+/// addresses of the service publisher as well as the attribute information.
 #[no_mangle]
 extern "C" fn hylarana_discovery_query(
     callback: Callback,
@@ -119,6 +123,7 @@ extern "C" fn hylarana_discovery_query(
         .unwrap_or_else(|_| null_mut()) as *const _
 }
 
+/// Destroy the discovery.
 #[no_mangle]
 extern "C" fn hylarana_discovery_destroy(discovery: *mut RawDiscovery) {
     assert!(!discovery.is_null());
