@@ -26,7 +26,6 @@ class HylaranaStrategyType {
 
 interface HylaranaSenderConfigure {
     val video: Video.VideoEncoder.VideoEncoderConfigure
-    val audio: Audio.AudioEncoder.AudioEncoderConfigure
     val options: HylaranaOptions
 }
 
@@ -214,7 +213,7 @@ class HylaranaSender(
         })
 
     private val audioEncoder: Audio.AudioEncoder =
-        Audio.AudioEncoder(record, configure.audio, object : ByteArraySinker() {
+        Audio.AudioEncoder(record, object : ByteArraySinker() {
             override fun sink(info: StreamBufferInfo, buf: ByteArray) {
                 if (!sender.send(info, buf)) {
                     observer.close()

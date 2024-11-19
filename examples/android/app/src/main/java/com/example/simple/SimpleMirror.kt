@@ -194,6 +194,7 @@ class SimpleHylaranaService : Service() {
                                         addrs[0] + ":" + sdp.strategy.addr.split(":")[1]
                                 }
 
+                                val audioConfig = Audio.getAudioCodecConfigure()
                                 receiver = HylaranaService.createReceiver(
                                     sdp.id,
                                     HylaranaOptions(strategy = sdp.strategy, mtu = 1500),
@@ -211,8 +212,8 @@ class SimpleHylaranaService : Service() {
                                                 )
                                                 .setAudioFormat(
                                                     AudioFormat.Builder()
-                                                        .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                                                        .setSampleRate(48000)
+                                                        .setEncoding(audioConfig.channalConfig)
+                                                        .setSampleRate(audioConfig.sampleRate)
                                                         .setChannelMask(
                                                             AudioFormat.CHANNEL_OUT_MONO
                                                         )
@@ -222,7 +223,7 @@ class SimpleHylaranaService : Service() {
                                                     AudioTrack.PERFORMANCE_MODE_LOW_LATENCY
                                                 )
                                                 .setTransferMode(AudioTrack.MODE_STREAM)
-                                                .setBufferSizeInBytes(48000 / 10 * 2)
+                                                .setBufferSizeInBytes(audioConfig.sampleRate / 10 * 2)
                                                 .build()
 
                                         override fun close() {
@@ -251,6 +252,8 @@ class SimpleHylaranaService : Service() {
                 .getMediaProjection(Activity.RESULT_OK, intent)
 
         mediaProjection?.registerCallback(object : MediaProjection.Callback() {}, null)
+
+        val audioConfig = Audio.getAudioCodecConfigure()
         sender =
             strategy?.let {
                 HylaranaService.createSender(
@@ -266,24 +269,15 @@ class SimpleHylaranaService : Service() {
                                 override val bitRate = 500 * 1024 * 8
                                 override val frameRate = 60
                             }
-
-                        override val audio =
-                            object : Audio.AudioEncoder.AudioEncoderConfigure {
-                                override val channalConfig = AudioFormat.CHANNEL_IN_MONO
-                                override val sampleBits = AudioFormat.ENCODING_PCM_16BIT
-                                override val sampleRate = 48000
-                                override val bitRate = 64000
-                                override val channels = 1
-                            }
                     },
                     object : HylaranaSenderObserver() {
                         override val record =
                             AudioRecord.Builder()
                                 .setAudioFormat(
                                     AudioFormat.Builder()
-                                        .setSampleRate(48000)
+                                        .setSampleRate(audioConfig.sampleRate)
                                         .setChannelMask(AudioFormat.CHANNEL_IN_MONO)
-                                        .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                                        .setEncoding(audioConfig.channalConfig)
                                         .build()
                                 )
                                 .setAudioPlaybackCaptureConfig(
@@ -292,7 +286,7 @@ class SimpleHylaranaService : Service() {
                                         .addMatchingUsage(AudioAttributes.USAGE_GAME)
                                         .build()
                                 )
-                                .setBufferSizeInBytes(48000 / 10 * 2)
+                                .setBufferSizeInBytes(audioConfig.sampleRate / 10 * 2)
                                 .build()
 
                         override fun close() {
