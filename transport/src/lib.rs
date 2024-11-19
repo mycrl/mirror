@@ -1,336 +1,115 @@
 mod adapter;
-mod multi;
+mod multicast;
 mod package;
-mod service;
-pub mod srt;
+mod receiver;
+mod sender;
+mod transmission;
 
 pub use self::{
     adapter::{
         BufferFlag, StreamBufferInfo, StreamKind, StreamMultiReceiverAdapter,
-        StreamReceiverAdapter, StreamReceiverAdapterExt, StreamSenderAdapter,
+        StreamReceiverAdapter, StreamReceiverAdapterAbstract, StreamSenderAdapter,
     },
+    multicast::{Server as MulticastServer, Socket as MulticastSocket},
     package::{copy_from_slice, with_capacity, Package, PacketInfo, UnPackage},
-    service::{Service, Signal, SocketKind, StreamInfo},
+    receiver::{create_mix_receiver, create_split_receiver, Receiver as TransportReceiver},
+    sender::{create_sender, Sender as TransportSender},
+    transmission::{
+        Descriptor as TransmissionDescriptor, FragmentDecoder as TransmissionFragmentDecoder,
+        FragmentEncoder as TransmissionFragmentEncoder, Server as TransmissionServer,
+        Socket as TransmissionSocket,
+    },
 };
 
 use std::{
-    io::Error,
-    net::{Ipv4Addr, SocketAddr},
-    sync::{atomic::AtomicU64, Arc},
-    thread,
+    io::{Error, ErrorKind},
+    net::SocketAddr,
+    str::FromStr,
 };
 
-use hylarana_common::atomic::EasyAtomic;
-use parking_lot::Mutex;
+use serde::{Deserialize, Serialize};
 
 /// Initialize the srt communication protocol, mainly initializing some
 /// log-related things.
 pub fn startup() -> bool {
-    srt::startup()
+    transmission::startup()
 }
 
 /// Clean up the srt environment and prepare to exit.
 pub fn shutdown() {
-    srt::cleanup()
+    transmission::cleanup()
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub enum TransportStrategy {
+    Direct(SocketAddr),
+    /// The IP address and port of the server, in this case the service refers
+    /// to the mirror service.
+    Relay(SocketAddr),
+    /// The multicast address used for multicasting, which is an IP address.
+    Multicast(SocketAddr),
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct TransportDescriptor {
-    pub server: SocketAddr,
-    pub multicast: Ipv4Addr,
+    pub strategy: TransportStrategy,
+    /// see: [Maximum_transmission_unit](https://en.wikipedia.org/wiki/Maximum_transmission_unit)
     pub mtu: usize,
 }
 
-pub struct Transport {
-    options: TransportDescriptor,
-    service: Service<Box<dyn FnOnce(u16) -> Result<(), Error> + Send>>,
+#[repr(u8)]
+#[derive(Default, PartialEq, Eq, Debug, Clone, Copy)]
+pub enum StreamInfoKind {
+    #[default]
+    Subscriber = 0,
+    Publisher = 1,
 }
 
-impl Transport {
-    pub fn new(options: TransportDescriptor) -> Result<Self, Error> {
-        Ok(Self {
-            service: Service::new(options.server)?,
-            options,
-        })
-    }
+#[derive(Default, Debug, Clone)]
+pub struct StreamInfo {
+    pub id: String,
+    pub kind: StreamInfoKind,
+}
 
-    pub fn create_sender(
-        &self,
-        stream_id: u32,
-        adapter: &Arc<StreamSenderAdapter>,
-    ) -> Result<(), Error> {
-        let port = multi::alloc_port()?;
+impl FromStr for StreamInfo {
+    type Err = Error;
 
-        // Create a multicast sender, the port is automatically assigned an idle port by
-        // the system
-        let mut mcast_sender = multi::Server::new(
-            self.options.multicast,
-            format!("0.0.0.0:{}", port).parse().unwrap(),
-            self.options.mtu,
-        )?;
-
-        log::info!("create multicast sender, port={}", port);
-
-        // Create an srt configuration and carry stream information
-        let mut opt = srt::Descriptor::default();
-        opt.fc = 32;
-        opt.latency = 20;
-        opt.mtu = self.options.mtu as u32;
-        opt.stream_id = Some(
-            StreamInfo {
-                kind: SocketKind::Publisher,
-                port: Some(port),
-                id: stream_id,
-            }
-            .encode(),
-        );
-
-        // Create an srt connection to the server
-        let mut encoder = srt::FragmentEncoder::new(opt.max_pkt_size());
-        let sender = Arc::new(srt::Socket::connect(self.options.server, opt)?);
-        log::info!("sender connect to server={}", self.options.server);
-
-        let adapter_ = Arc::downgrade(adapter);
-        thread::Builder::new()
-            .name("HylaranaStreamSenderThread".to_string())
-            .spawn(move || {
-                // If the adapter has been released, close the current thread
-                'a: while let Some(adapter) = adapter_.upgrade() {
-                    if let Some((buf, kind, flags, timestamp)) = adapter.next() {
-                        if buf.is_empty() {
-                            continue;
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        if value.starts_with("#!::") {
+            let mut info = Self::default();
+            for item in value.split_at(4).1.split(',') {
+                if let Some((k, v)) = item.split_once('=') {
+                    match k {
+                        "i" => {
+                            info.id = v.to_string();
                         }
-
-                        // Packaging audio and video information
-                        let payload = Package::pack(
-                            PacketInfo {
-                                kind,
-                                flags,
-                                timestamp,
-                            },
-                            buf,
-                        );
-
-                        // Here we check whether the audio and video data are being multicasted, so
-                        // as to dynamically switch the protocol stack.
-                        if adapter.get_multicast() {
-                            if let Err(e) = mcast_sender.send(&payload) {
-                                log::error!("failed to send buf in multicast, err={:?}", e);
-
-                                break 'a;
-                            }
-                        } else {
-                            // SRT does not perform data fragmentation. It needs to be split into
-                            // fragments that do not exceed the MTU size.
-                            for chunk in encoder.encode(&payload) {
-                                if let Err(e) = sender.send(chunk) {
-                                    log::error!("failed to send buf in srt, err={:?}", e);
-
-                                    break 'a;
-                                }
-                            }
-                        }
-                    } else {
-                        break;
-                    }
-                }
-
-                log::info!("sender is closed, id={}", stream_id);
-
-                if let Some(adapter) = adapter_.upgrade() {
-                    adapter.close();
-                    sender.close();
-                }
-            })?;
-
-        Ok(())
-    }
-
-    pub fn create_receiver<T, H>(
-        &self,
-        stream_id: u32,
-        adapter: &Arc<T>,
-        online_handle: H,
-    ) -> Result<(), Error>
-    where
-        T: StreamReceiverAdapterExt + 'static,
-        H: FnOnce() + Send + 'static,
-    {
-        let current_mcast_rceiver: Arc<Mutex<Option<Arc<multi::Socket>>>> = Default::default();
-
-        // Create an srt configuration and carry stream information
-        let mut opt = srt::Descriptor::default();
-        opt.fc = 32;
-        opt.latency = 20;
-        opt.mtu = self.options.mtu as u32;
-        opt.stream_id = Some(
-            StreamInfo {
-                kind: SocketKind::Subscriber,
-                id: stream_id,
-                port: None,
-            }
-            .encode(),
-        );
-
-        // Create an srt connection to the server
-        let sequence = Arc::new(AtomicU64::new(0));
-        let mut decoder = srt::FragmentDecoder::new();
-        let receiver = Arc::new(srt::Socket::connect(self.options.server, opt)?);
-        log::info!("receiver connect to server={}", self.options.server);
-
-        let multicast_ = self.options.multicast;
-        let adapter_ = Arc::downgrade(adapter);
-        let sequence_ = Arc::downgrade(&sequence);
-        let receiver_ = Arc::downgrade(&receiver);
-        let current_mcast_rceiver_ = current_mcast_rceiver.clone();
-        let service_listener = self.service.online(
-            stream_id,
-            Box::new(move |port| {
-                // Notify external sender that the sender is online.
-                online_handle();
-
-                // Creating a multicast receiver
-                let socket = match multi::Socket::new(
-                    multicast_,
-                    SocketAddr::new("0.0.0.0".parse().unwrap(), port),
-                ) {
-                    Ok(socket) => {
-                        let socket = Arc::new(socket);
-                        if let Some(socket) = current_mcast_rceiver_.lock().replace(socket.clone())
-                        {
-                            socket.close()
-                        }
-
-                        socket
-                    }
-                    Err(e) => {
-                        if let Some(receiver) = receiver_.upgrade() {
-                            receiver.close();
-                        }
-
-                        return Err(e);
-                    }
-                };
-
-                thread::Builder::new()
-                    .name("HylaranaStreamMulticastReceiverThread".to_string())
-                    .spawn(move || {
-                        while let Some((seq, bytes)) = socket.read() {
-                            if bytes.is_empty() {
-                                break;
-                            }
-
-                            if let Some(adapter) = adapter_.upgrade() {
-                                // Check whether the sequence number is continuous, in
-                                // order to check whether packet loss has occurred
-                                if let Some(sequence) = sequence_.upgrade() {
-                                    if seq == 0 || seq - 1 == sequence.get() {
-                                        if let Some((info, package)) = UnPackage::unpack(bytes) {
-                                            if !adapter.send(
-                                                package,
-                                                info.kind,
-                                                info.flags,
-                                                info.timestamp,
-                                            ) {
-                                                log::error!("adapter on buf failed.");
-
-                                                break;
-                                            }
-                                        } else {
-                                            adapter.loss_pkt();
-                                        }
-                                    } else {
-                                        adapter.loss_pkt()
+                        "k" => {
+                            if let Ok(kind) = v.parse::<u8>() {
+                                match kind {
+                                    0 => {
+                                        info.kind = StreamInfoKind::Subscriber;
                                     }
-
-                                    sequence.update(seq);
-                                } else {
-                                    break;
-                                }
-                            } else {
-                                break;
-                            }
-                        }
-
-                        log::warn!("multicast receiver is closed, id={}", stream_id);
-
-                        if let Some(receiver) = receiver_.upgrade() {
-                            receiver.close();
-                        }
-                    })?;
-
-                Ok(())
-            }),
-        )?;
-
-        let adapter_ = Arc::downgrade(adapter);
-        thread::Builder::new()
-            .name("HylaranaStreamReceiverThread".to_string())
-            .spawn(move || {
-                let mut buf = [0u8; 2000];
-
-                loop {
-                    match receiver.read(&mut buf) {
-                        Ok(size) => {
-                            if size == 0 {
-                                break;
-                            }
-
-                            // All the fragments received from SRT are split and need to be
-                            // reassembled here
-                            if let Some((seq, bytes)) = decoder.decode(&buf[..size]) {
-                                if let Some(adapter) = adapter_.upgrade() {
-                                    // Check whether the sequence number is continuous, in order to
-                                    // check whether packet loss has
-                                    // occurred
-                                    if seq == 0 || seq - 1 == sequence.get() {
-                                        if let Some((info, package)) = UnPackage::unpack(bytes) {
-                                            if !adapter.send(
-                                                package,
-                                                info.kind,
-                                                info.flags,
-                                                info.timestamp,
-                                            ) {
-                                                log::error!("adapter on buf failed.");
-
-                                                break;
-                                            }
-                                        } else {
-                                            adapter.loss_pkt();
-                                        }
-                                    } else {
-                                        adapter.loss_pkt()
+                                    1 => {
+                                        info.kind = StreamInfoKind::Publisher;
                                     }
-
-                                    sequence.update(seq);
-                                } else {
-                                    break;
+                                    _ => (),
                                 }
                             }
                         }
-                        Err(e) => {
-                            log::error!("{:?}", e);
-
-                            break;
-                        }
+                        _ => (),
                     }
                 }
+            }
 
-                log::warn!("srt receiver is closed, id={}", stream_id);
+            Ok(info)
+        } else {
+            Err(Error::new(ErrorKind::InvalidInput, "invalid stream info"))
+        }
+    }
+}
 
-                // release service online listener.
-                drop(service_listener);
-
-                if let Some(adapter) = adapter_.upgrade() {
-                    adapter.close();
-                    receiver.close();
-                }
-
-                if let Some(socket) = current_mcast_rceiver.lock().take() {
-                    socket.close()
-                }
-            })?;
-
-        Ok(())
+impl ToString for StreamInfo {
+    fn to_string(&self) -> String {
+        format!("#!::i={},k={}", self.id, self.kind as u8)
     }
 }

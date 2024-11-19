@@ -15,8 +15,8 @@ extern "C"
 static struct
 {
 #ifdef WIN32
-    VideoEncoderType encoder = VIDEO_ENCODER_QSV;
-    VideoDecoderType decoder = VIDEO_DECODER_D3D11;
+    HylaranaVideoEncoderType encoder = VIDEO_ENCODER_QSV;
+    HylaranaVideoDecoderType decoder = VIDEO_DECODER_D3D11;
 #elif MACOS
     VideoEncoderType encoder = VIDEO_ENCODER_VIDEOTOOLBOX;
     VideoDecoderType decoder = VIDEO_DECODER_VIDEOTOOLBOX;
@@ -24,14 +24,14 @@ static struct
     VideoEncoderType encoder = VIDEO_ENCODER_X264;
     VideoDecoderType decoder = VIDEO_DECODER_H264;
 #endif
-    std::string server = "127.0.0.1:8080";
+    HylaranaStrategy strategy = STRATEGY_DIRECT;
+    std::string address = "127.0.0.1:8080";
     int width = 1280;
     int height = 720;
     int fps = 30;
-    int id = 0;
 } OPTIONS = {};
 
-VideoEncoderType encoder_from_str(std::string value)
+HylaranaVideoEncoderType encoder_from_str(std::string value)
 {
     if (value == "libx264")
     {
@@ -55,7 +55,7 @@ VideoEncoderType encoder_from_str(std::string value)
     }
 }
 
-VideoDecoderType decoder_from_str(std::string value)
+HylaranaVideoDecoderType decoder_from_str(std::string value)
 {
     if (value == "h264")
     {
@@ -80,6 +80,26 @@ VideoDecoderType decoder_from_str(std::string value)
     else
     {
         throw std::invalid_argument("decoder");
+    }
+}
+
+HylaranaStrategy strategy_from_str(std::string value)
+{
+    if (value == "direct")
+    {
+        return STRATEGY_DIRECT;
+    }
+    else if (value == "relay")
+    {
+        return STRATEGY_RELAY;
+    }
+    else if (value == "multicast")
+    {
+        return STRATEGY_MULTICAST;
+    }
+    else
+    {
+        throw std::invalid_argument("strategy");
     }
 }
 
@@ -119,13 +139,13 @@ int parse_argv(std::string args)
     for (auto path : finds(args, " "))
     {
         const auto [key, value] = get_key_value(path, "=");
-        if (key == "--server")
+        if (key == "--address")
         {
-            OPTIONS.server = value;
+            OPTIONS.address = value;
         }
-        else if (key == "--id")
+        else if (key == "--strategy")
         {
-            OPTIONS.id = std::stoi(value);
+            OPTIONS.strategy = strategy_from_str(value);
         }
         else if (key == "--fps")
         {
@@ -150,13 +170,13 @@ int parse_argv(std::string args)
         else if (key == "--help")
         {
             printf("\n");
-            printf("--id        default=0               - stream id\n");
             printf("--fps       default=30              - frame rate\n");
             printf("--width     default=1280            - video width\n");
             printf("--height    default=720             - video height\n");
             printf("--encoder   default=*               - libx264, h264_qsv, h264_nvenc, h264_videotoolbox\n");
             printf("--decoder   default=*               - h264, d3d11va, h264_qsv, h264_cuvid, h264_videotoolbox\n");
-            printf("--server    default=127.0.0.1:8080  - hylarana service bind address\n");
+            printf("--address   default=127.0.0.1:8080  - hylarana service bind address\n");
+            printf("--strategy  default=direct          - direct, relay, multicast\n");
             printf("\n");
             return -1;
         }
@@ -164,5 +184,51 @@ int parse_argv(std::string args)
 
     return 0;
 }
+
+class SocketAddr
+{
+public:
+    SocketAddr(std::string address)
+    {
+        auto items = finds(std::string(address), ":");
+        _ip = items[0];
+        _port = items[1];
+    }
+
+    std::string GetIP()
+    {
+        return _ip;
+    }
+
+    uint16_t GetPort()
+    {
+        return (uint16_t)std::stoi(_port);
+    }
+
+    std::string ToString()
+    {
+        return _ip + ":" + _port;
+    }
+
+    void SetPort(uint16_t port)
+    {
+        char port_str[10];
+        sprintf(port_str, "%d", port);
+        _port = std::string(std::move(port_str));
+    }
+
+    void SetPort(std::string port)
+    {
+        _port = port;
+    }
+
+    void SetIP(std::string ip)
+    {
+        _ip = ip;
+    }
+private:
+    std::string _ip;
+    std::string _port;
+};
 
 #endif

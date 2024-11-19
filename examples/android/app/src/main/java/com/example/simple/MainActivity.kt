@@ -13,12 +13,12 @@ import android.util.Log
 import android.view.Surface
 import android.view.SurfaceHolder
 import android.view.SurfaceView
-import android.view.View
 import android.view.WindowInsets
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -42,39 +42,42 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.github.mycrl.hylarana.HylaranaStrategy
+import com.github.mycrl.hylarana.HylaranaStrategyType
 
 abstract class Observer {
-    abstract fun OnConnect(server: String);
-    abstract fun OnPublish(id: Int);
-    abstract fun OnSubscribe(id: Int);
-    abstract fun OnStop();
-    abstract fun SetMulticast(isMulticast: Boolean);
+    abstract fun OnConnect(strategy: HylaranaStrategy)
+
+    abstract fun OnPublish()
+
+    abstract fun OnSubscribe()
+
+    abstract fun OnStop()
 }
 
 open class Layout : ComponentActivity() {
     private var observer: Observer? = null
     private var surfaceView: SurfaceView? = null
     private var clickStartHandler: (() -> Unit)? = null
-    private var server by mutableStateOf("192.168.2.88:8088")
-    private var id by mutableStateOf("0")
+    private var address by mutableStateOf("0.0.0.0:8080")
     private var state by mutableIntStateOf(State.New)
-    private var isMulticast by mutableIntStateOf(0)
 
     class State {
         companion object {
-            const val New = 0;
-            const val Connected = 1;
-            const val Publishing = 2;
-            const val Subscribeing = 3;
+            const val New = 0
+
+            const val Connected = 1
+
+            const val Publishing = 2
+
+            const val Subscribeing = 3
         }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        setContent {
-            CreateLayout()
-        }
+        setContent { CreateLayout() }
     }
 
     fun layoutSetObserver(observer: Observer) {
@@ -93,17 +96,14 @@ open class Layout : ComponentActivity() {
         this.state = state
     }
 
+    @RequiresApi(Build.VERSION_CODES.R)
     fun layoutStop() {
         state = State.Connected
-        isMulticast = 0
 
         runOnUiThread {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                window.insetsController?.show(WindowInsets.Type.statusBars() or WindowInsets.Type.navigationBars())
-            } else {
-                window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_VISIBLE
-                window.clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
-            }
+            window.insetsController?.show(
+                WindowInsets.Type.statusBars() or WindowInsets.Type.navigationBars()
+            )
         }
     }
 
@@ -112,49 +112,54 @@ open class Layout : ComponentActivity() {
         Surface(color = Color.Black) {
             AndroidView(
                 factory = { ctx ->
-                    val view = SurfaceView(ctx).apply {
-                        holder.addCallback(object : SurfaceHolder.Callback {
-                            override fun surfaceCreated(holder: SurfaceHolder) {
-                                Log.i("simple", "create preview surface view.")
-                            }
+                    val view =
+                        SurfaceView(ctx).apply {
+                            holder.addCallback(
+                                object : SurfaceHolder.Callback {
+                                    override fun surfaceCreated(holder: SurfaceHolder) {
+                                        Log.i("simple", "create preview surface view.")
+                                    }
 
-                            override fun surfaceChanged(
-                                holder: SurfaceHolder,
-                                format: Int,
-                                width: Int,
-                                height: Int
-                            ) {
-                                Log.i("simple", "preview surface view changed.")
-                            }
+                                    override fun surfaceChanged(
+                                        holder: SurfaceHolder,
+                                        format: Int,
+                                        width: Int,
+                                        height: Int
+                                    ) {
+                                        Log.i("simple", "preview surface view changed.")
+                                    }
 
-                            override fun surfaceDestroyed(holder: SurfaceHolder) {
-                                Log.i("simple", "preview surface view destroyed.")
-                            }
-                        })
-                    }
+                                    override fun surfaceDestroyed(holder: SurfaceHolder) {
+                                        Log.i("simple", "preview surface view destroyed.")
+                                    }
+                                }
+                            )
+                        }
 
                     surfaceView = view
                     view
                 },
-                modifier = Modifier
-                    .fillMaxSize(),
+                modifier = Modifier.fillMaxSize(),
             )
 
             Box(modifier = Modifier.fillMaxSize()) {
                 Column(
-                    modifier = Modifier.align(
+                    modifier =
+                    Modifier.align(
                         if (state == State.Subscribeing) {
                             Alignment.BottomStart
                         } else {
                             Alignment.Center
                         }
                     ),
-                    verticalArrangement = if (state == State.Subscribeing) {
+                    verticalArrangement =
+                    if (state == State.Subscribeing) {
                         Arrangement.Bottom
                     } else {
                         Arrangement.Center
                     },
-                    horizontalAlignment = if (state == State.Subscribeing) {
+                    horizontalAlignment =
+                    if (state == State.Subscribeing) {
                         Alignment.Start
                     } else {
                         Alignment.CenterHorizontally
@@ -162,90 +167,92 @@ open class Layout : ComponentActivity() {
                 ) {
                     if (state == State.New) {
                         TextField(
-                            value = server,
-                            label = { Text(text = "Server Address") },
-                            onValueChange = { server = it },
-                            modifier = Modifier
-                                .padding(6.dp)
-                                .width(300.dp),
-                            shape = RoundedCornerShape(6.dp),
-                        )
-                    }
-
-                    if (state == State.Connected) {
-                        TextField(
-                            value = id,
-                            label = { Text(text = "Stream ID") },
-                            onValueChange = { id = it },
-                            modifier = Modifier
-                                .padding(6.dp)
-                                .width(300.dp),
+                            value = address,
+                            label = { Text(text = "Address") },
+                            onValueChange = { address = it },
+                            modifier = Modifier.padding(6.dp).width(320.dp),
                             shape = RoundedCornerShape(6.dp),
                         )
                     }
 
                     Row() {
-                        if (state == State.New) {
-                            Button(
-                                onClick = { observer?.OnConnect(server) },
-                                shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier.width(300.dp),
-                            ) {
-                                Text(text = "Connect")
+                        when (state) {
+                            State.New -> {
+                                Button(
+                                    onClick = {
+                                        observer?.OnConnect(
+                                            HylaranaStrategy(
+                                                type = HylaranaStrategyType.DIRECT,
+                                                addr = address
+                                            )
+                                        )
+                                    },
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier.width(100.dp),
+                                ) {
+                                    Text(text = "Direct")
+                                }
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Button(
+                                    onClick = {
+                                        observer?.OnConnect(
+                                            HylaranaStrategy(
+                                                type = HylaranaStrategyType.RELAY,
+                                                addr = address
+                                            )
+                                        )
+                                    },
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier.width(100.dp),
+                                ) {
+                                    Text(text = "Relay")
+                                }
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Button(
+                                    onClick = {
+                                        observer?.OnConnect(
+                                            HylaranaStrategy(
+                                                type = HylaranaStrategyType.MULTICAST,
+                                                addr = address
+                                            )
+                                        )
+                                    },
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier.width(100.dp),
+                                ) {
+                                    Text(text = "Multicast")
+                                }
                             }
-                        } else if (state == State.Connected) {
-                            Button(
-                                onClick = { ->
-                                    state = State.Publishing
-                                    observer?.OnPublish(id.toInt())
-                                },
-                                shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier.width(140.dp),
-                            ) {
-                                Text(text = "Publish")
-                            }
-                            Spacer(modifier = Modifier.width(20.dp))
-                            Button(
-                                onClick = { ->
-                                    state = State.Subscribeing
-                                    observer?.OnSubscribe(id.toInt())
-                                },
-                                shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier.width(140.dp),
-                            ) {
-                                Text(text = "Subscribe")
-                            }
-                        } else {
-                            Button(
-                                onClick = { observer?.OnStop() },
-                                shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier.width(140.dp),
-                            ) {
-                                Text(text = "Stop")
-                            }
-
-                            if (state == State.Publishing) {
+                            State.Connected -> {
+                                Button(
+                                    onClick = { ->
+                                        state = State.Publishing
+                                        observer?.OnPublish()
+                                    },
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier.width(140.dp),
+                                ) {
+                                    Text(text = "Publish")
+                                }
                                 Spacer(modifier = Modifier.width(20.dp))
                                 Button(
                                     onClick = { ->
-                                        isMulticast = if (isMulticast == 0) {
-                                            1
-                                        } else {
-                                            0
-                                        }
-
-                                        observer?.SetMulticast(isMulticast != 0)
+                                        state = State.Subscribeing
+                                        observer?.OnSubscribe()
                                     },
                                     shape = RoundedCornerShape(8.dp),
-                                    modifier = Modifier.width(150.dp),
+                                    modifier = Modifier.width(140.dp),
                                 ) {
-                                    Text(
-                                        text = if (isMulticast == 0) {
-                                            "Enable Multicast"
-                                        } else {
-                                            "Disable Multicast"
-                                        }
-                                    )
+                                    Text(text = "Subscribe")
+                                }
+                            }
+                            else -> {
+                                Button(
+                                    onClick = { observer?.OnStop() },
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier.width(140.dp),
+                                ) {
+                                    Text(text = "Stop")
                                 }
                             }
                         }
@@ -292,7 +299,8 @@ open class Permissions : Layout() {
 
     fun requestPermissions() {
         captureScreenPermission.launch(
-            (getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager).createScreenCaptureIntent()
+            (getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager)
+                .createScreenCaptureIntent()
         )
     }
 
@@ -301,71 +309,71 @@ open class Permissions : Layout() {
     }
 }
 
+@RequiresApi(Build.VERSION_CODES.R)
 class MainActivity : Permissions() {
     private var simpleHylaranaService: Intent? = null
     private var simpleHylaranaServiceBinder: SimpleHylaranaServiceBinder? = null
-    private val connection: ServiceConnection = object : ServiceConnection {
-        override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
-            Log.i("simple", "service connected.")
+    private val connection: ServiceConnection =
+        object : ServiceConnection {
+            override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
+                Log.i("simple", "service connected.")
 
-            simpleHylaranaServiceBinder = service as SimpleHylaranaServiceBinder
-            simpleHylaranaServiceBinder?.setObserver(object : SimpleHylaranaServiceObserver() {
-                override fun onConnected() {
-                    layoutSetState(State.Connected)
+                simpleHylaranaServiceBinder = service as SimpleHylaranaServiceBinder
+                simpleHylaranaServiceBinder?.setObserver(
+                    object : SimpleHylaranaServiceObserver() {
+                        override fun onConnected() {
+                            layoutSetState(State.Connected)
+                        }
+
+                        override fun onReceiverClosed() {
+                            layoutStop()
+                        }
+                    }
+                )
+
+                layoutGetSurface()?.let { surface ->
+                    simpleHylaranaServiceBinder?.setRenderSurface(surface)
                 }
+            }
 
-                override fun onReceiverClosed() {
-                    layoutStop()
-                }
-            })
-
-            layoutGetSurface()?.let { surface ->
-                simpleHylaranaServiceBinder?.setRenderSurface(surface)
+            override fun onServiceDisconnected(name: ComponentName?) {
+                Log.w("simple", "service disconnected.")
             }
         }
-
-        override fun onServiceDisconnected(name: ComponentName?) {
-            Log.w("simple", "service disconnected.")
-        }
-    }
 
     init {
-        var senderId = 0
-
         registerPermissionsHandler { intent ->
             if (intent != null) {
-                simpleHylaranaServiceBinder?.createSender(intent, resources.displayMetrics, senderId)
+                simpleHylaranaServiceBinder?.createSender(intent, resources.displayMetrics)
             }
         }
 
-        layoutSetObserver(object : Observer() {
-            override fun OnConnect(server: String) {
-                simpleHylaranaServiceBinder?.connect(server)
-            }
+        layoutSetObserver(
+            object : Observer() {
+                override fun OnConnect(strategy: HylaranaStrategy) {
+                    simpleHylaranaServiceBinder?.connect(strategy)
+                }
 
-            override fun OnPublish(id: Int) {
-                senderId = id
-                requestPermissions()
-            }
+                override fun OnPublish() {
+                    requestPermissions()
+                }
 
-            override fun OnSubscribe(id: Int) {
-                simpleHylaranaServiceBinder?.createReceiver(id)
-            }
+                override fun OnSubscribe() {
+                    simpleHylaranaServiceBinder?.createReceiver()
+                }
 
-            override fun OnStop() {
-                val state = layoutGetState()
-                if (state == State.Publishing) {
-                    simpleHylaranaServiceBinder?.stopSender()
+                override fun OnStop() {
+                    val state = layoutGetState()
+                    if (state == State.Publishing) {
+                        simpleHylaranaServiceBinder?.stopSender()
+                    } else {
+                        simpleHylaranaServiceBinder?.stopReceiver()
+                    }
+
                     layoutSetState(State.Connected)
-                } else {
-                    simpleHylaranaServiceBinder?.stopReceiver()
                 }
             }
-
-            override fun SetMulticast(isMulticast: Boolean) {
-                simpleHylaranaServiceBinder?.setMulticast(isMulticast)
-            }
-        })
+        )
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

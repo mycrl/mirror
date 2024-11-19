@@ -27,11 +27,19 @@ import android.util.DisplayMetrics
 import android.util.Log
 import android.view.Surface
 import com.github.mycrl.hylarana.Audio
-import com.github.mycrl.hylarana.HylaranaAdapterConfigure
+import com.github.mycrl.hylarana.Discovery
+import com.github.mycrl.hylarana.DiscoveryService
+import com.github.mycrl.hylarana.DiscoveryServiceQueryObserver
+import com.github.mycrl.hylarana.HylaranaOptions
 import com.github.mycrl.hylarana.HylaranaReceiver
+import com.github.mycrl.hylarana.HylaranaReceiverObserver
 import com.github.mycrl.hylarana.HylaranaSender
+import com.github.mycrl.hylarana.HylaranaSenderConfigure
+import com.github.mycrl.hylarana.HylaranaSenderObserver
 import com.github.mycrl.hylarana.HylaranaService
-import com.github.mycrl.hylarana.ReceiverAdapterWrapper
+import com.github.mycrl.hylarana.HylaranaStrategy
+import com.github.mycrl.hylarana.HylaranaStrategyType
+import com.github.mycrl.hylarana.Properties
 import com.github.mycrl.hylarana.Video
 
 class Notify(service: SimpleHylaranaService) {
@@ -53,12 +61,13 @@ class Notify(service: SimpleHylaranaService) {
 
         val intent = Intent(service, MainActivity::class.java)
         val icon = BitmapFactory.decodeResource(service.resources, R.mipmap.sym_def_app_icon)
-        val content = PendingIntent.getActivity(
-            service,
-            0,
-            intent,
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
+        val content =
+            PendingIntent.getActivity(
+                service,
+                0,
+                intent,
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            )
 
         val builder = Notification.Builder(service.applicationContext, NotifyChannelId)
         builder.setContentIntent(content)
@@ -72,17 +81,18 @@ class Notify(service: SimpleHylaranaService) {
 }
 
 abstract class SimpleHylaranaServiceObserver() {
-    abstract fun onConnected();
-    abstract fun onReceiverClosed();
+    abstract fun onConnected()
+
+    abstract fun onReceiverClosed()
 }
 
 class SimpleHylaranaServiceBinder(private val service: SimpleHylaranaService) : Binder() {
-    fun createSender(intent: Intent, displayMetrics: DisplayMetrics, id: Int) {
-        service.createSender(intent, displayMetrics, id)
+    fun createSender(intent: Intent, displayMetrics: DisplayMetrics) {
+        service.createSender(intent, displayMetrics)
     }
 
-    fun createReceiver(id: Int) {
-        service.createReceiver(id)
+    fun createReceiver() {
+        service.createReceiver()
     }
 
     fun setRenderSurface(surface: Surface) {
@@ -91,18 +101,14 @@ class SimpleHylaranaServiceBinder(private val service: SimpleHylaranaService) : 
         service.setOutputSurface(surface)
     }
 
-    fun connect(server: String) {
-        service.connect(server)
+    fun connect(strategy: HylaranaStrategy) {
+        service.connect(strategy)
     }
 
     fun stopSender() {
         Log.i("simple", "stop sender.")
 
         service.stopSender()
-    }
-
-    fun setMulticast(isMulticast: Boolean) {
-        service.setMulticast(isMulticast)
     }
 
     fun stopReceiver() {
@@ -121,28 +127,10 @@ class SimpleHylaranaService : Service() {
     private var mediaProjection: MediaProjection? = null
     private var virtualDisplay: VirtualDisplay? = null
     private var outputSurface: Surface? = null
+    private var receiver: HylaranaReceiver? = null
     private var sender: HylaranaSender? = null
-
-    companion object {
-        private val VideoConfigure = object : Video.VideoEncoder.VideoEncoderConfigure {
-            override val format = MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface
-            override val bitRate = 500 * 1024 * 8
-            override val frameRate = 60
-            override var height = 1600
-            override var width = 2560
-        }
-
-        private val AudioConfigure = object : Audio.AudioEncoder.AudioEncoderConfigure {
-            override val channalConfig = AudioFormat.CHANNEL_IN_MONO
-            override val sampleBits = AudioFormat.ENCODING_PCM_16BIT
-            override val sampleRate = 48000
-            override val bitRate = 64000
-            override val channels = 1
-        }
-    }
-
-    private var receiverAdapter: ReceiverAdapterWrapper? = null
-    private var hylarana: HylaranaService? = null
+    private var discovery: DiscoveryService? = null
+    private var strategy: HylaranaStrategy? = null
 
     override fun onBind(intent: Intent?): IBinder {
         return SimpleHylaranaServiceBinder(this)
@@ -150,7 +138,6 @@ class SimpleHylaranaService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        hylarana?.release()
         sender?.release()
         mediaProjection?.stop()
         virtualDisplay?.release()
@@ -158,34 +145,30 @@ class SimpleHylaranaService : Service() {
         Log.w("simple", "service destroy.")
     }
 
-    fun connect(server: String) {
-        try {
-            hylarana = HylaranaService(
-                server,
-                "239.0.0.1",
-                1400
-            )
+    fun connect(strategy: HylaranaStrategy) {
+        this.strategy = strategy
 
+        try {
             observer?.onConnected()
         } catch (e: Exception) {
-            Log.e(
-                "simple",
-                "Hylarana connect exception",
-                e
-            )
+            Log.e("simple", "Hylarana connect exception", e)
         }
     }
 
     fun stopSender() {
+        discovery?.release()
+        discovery = null
+
         sender?.release()
+        sender = null
     }
 
     fun stopReceiver() {
-        receiverAdapter?.release()
-    }
+        discovery?.release()
+        discovery = null
 
-    fun setMulticast(isMulticast: Boolean) {
-        sender?.setMulticast(isMulticast)
+        receiver?.release()
+        receiver = null
     }
 
     fun setObserver(observer: SimpleHylaranaServiceObserver) {
@@ -196,101 +179,173 @@ class SimpleHylaranaService : Service() {
         outputSurface = surface
     }
 
-    fun createReceiver(id: Int) {
+    fun createReceiver() {
         Log.i("simple", "create receiver.")
 
-        hylarana?.createReceiver(id, object : HylaranaAdapterConfigure {
-            override val video = VideoConfigure
-            override val audio = AudioConfigure
-        }, object : HylaranaReceiver() {
-            override val track = createAudioTrack()
-            override val surface = outputSurface!!
+        discovery =
+            Discovery()
+                .query(
+                    object : DiscoveryServiceQueryObserver() {
+                        override fun resolve(addrs: Array<String>, properties: Properties) {
+                            if (receiver == null) {
+                                val sdp = Sdp.fromProperties(properties)
+                                if (sdp.strategy.type == HylaranaStrategyType.DIRECT) {
+                                    sdp.strategy.addr =
+                                        addrs[0] + ":" + sdp.strategy.addr.split(":")[1]
+                                }
 
-            override fun released() {
-                super.released()
-                observer?.onReceiverClosed();
+                                val audioConfig = Audio.getAudioCodecConfigure()
+                                receiver = HylaranaService.createReceiver(
+                                    sdp.id,
+                                    HylaranaOptions(strategy = sdp.strategy, mtu = 1500),
+                                    object : HylaranaReceiverObserver() {
+                                        override val surface = outputSurface!!
+                                        override val track =
+                                            AudioTrack.Builder()
+                                                .setAudioAttributes(
+                                                    AudioAttributes.Builder()
+                                                        .setUsage(AudioAttributes.USAGE_MEDIA)
+                                                        .setContentType(
+                                                            AudioAttributes.CONTENT_TYPE_MUSIC
+                                                        )
+                                                        .build()
+                                                )
+                                                .setAudioFormat(
+                                                    AudioFormat.Builder()
+                                                        .setEncoding(audioConfig.channalConfig)
+                                                        .setSampleRate(audioConfig.sampleRate)
+                                                        .setChannelMask(
+                                                            AudioFormat.CHANNEL_OUT_MONO
+                                                        )
+                                                        .build()
+                                                )
+                                                .setPerformanceMode(
+                                                    AudioTrack.PERFORMANCE_MODE_LOW_LATENCY
+                                                )
+                                                .setTransferMode(AudioTrack.MODE_STREAM)
+                                                .setBufferSizeInBytes(audioConfig.sampleRate / 10 * 2)
+                                                .build()
 
-                Log.w("simple", "receiver is released.")
-            }
+                                        override fun close() {
+                                            super.close()
+                                            stopReceiver()
+                                            observer?.onReceiverClosed()
 
-            override fun onStart(adapter: ReceiverAdapterWrapper) {
-                super.onStart(adapter)
-
-                receiverAdapter = adapter
-            }
-        })
+                                            Log.w("simple", "receiver is released.")
+                                        }
+                                    }
+                                )
+                            }
+                        }
+                    }
+                )
     }
 
-    fun createSender(intent: Intent, displayMetrics: DisplayMetrics, id: Int) {
+    @SuppressLint("MissingPermission")
+    fun createSender(intent: Intent, displayMetrics: DisplayMetrics) {
         Notify(this)
 
         Log.i("simple", "create sender.")
 
         mediaProjection =
-            (getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager).getMediaProjection(
-                Activity.RESULT_OK,
-                intent
-            )
-
-        VideoConfigure.width = displayMetrics.widthPixels
-        VideoConfigure.height = displayMetrics.heightPixels
+            (getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager)
+                .getMediaProjection(Activity.RESULT_OK, intent)
 
         mediaProjection?.registerCallback(object : MediaProjection.Callback() {}, null)
-        sender = hylarana?.createSender(
-            id,
-            object : HylaranaAdapterConfigure {
-                override val video = VideoConfigure
-                override val audio = AudioConfigure
-            },
-            createAudioRecord()
-        )
 
-        virtualDisplay = mediaProjection?.createVirtualDisplay(
-            "HylaranaVirtualDisplayService",
-            VideoConfigure.width, VideoConfigure.height, 1,
-            DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
-            null, null, null
-        )
+        val audioConfig = Audio.getAudioCodecConfigure()
+        sender =
+            strategy?.let {
+                HylaranaService.createSender(
+                    object : HylaranaSenderConfigure {
+                        override val options = HylaranaOptions(strategy = it, mtu = 1500)
+
+                        override val video =
+                            object : Video.VideoEncoder.VideoEncoderConfigure {
+                                override val format =
+                                    MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface
+                                override var height = displayMetrics.heightPixels
+                                override var width = displayMetrics.widthPixels
+                                override val bitRate = 500 * 1024 * 8
+                                override val frameRate = 60
+                            }
+                    },
+                    object : HylaranaSenderObserver() {
+                        override val record =
+                            AudioRecord.Builder()
+                                .setAudioFormat(
+                                    AudioFormat.Builder()
+                                        .setSampleRate(audioConfig.sampleRate)
+                                        .setChannelMask(AudioFormat.CHANNEL_IN_MONO)
+                                        .setEncoding(audioConfig.channalConfig)
+                                        .build()
+                                )
+                                .setAudioPlaybackCaptureConfig(
+                                    AudioPlaybackCaptureConfiguration.Builder(mediaProjection!!)
+                                        .addMatchingUsage(AudioAttributes.USAGE_MEDIA)
+                                        .addMatchingUsage(AudioAttributes.USAGE_GAME)
+                                        .build()
+                                )
+                                .setBufferSizeInBytes(audioConfig.sampleRate / 10 * 2)
+                                .build()
+
+                        override fun close() {
+                            super.close()
+
+                            sender?.release()
+                        }
+                    }
+                )
+            }
+
+        discovery =
+            strategy?.let {
+                Discovery()
+                    .register(
+                        3456,
+                        Sdp(id = sender!!.getStreamId(), strategy = it).toProperties()
+                    )
+            }
+
+        virtualDisplay =
+            mediaProjection?.createVirtualDisplay(
+                "HylaranaVirtualDisplayService",
+                displayMetrics.widthPixels,
+                displayMetrics.heightPixels,
+                1,
+                DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+                null,
+                null,
+                null
+            )
 
         virtualDisplay?.surface = sender?.getSurface()
     }
+}
 
-    private fun createAudioTrack(): AudioTrack {
-        val attr = AudioAttributes.Builder()
-        attr.setUsage(AudioAttributes.USAGE_MEDIA)
-        attr.setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-
-        val format = AudioFormat.Builder()
-        format.setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-        format.setSampleRate(AudioConfigure.sampleRate)
-        format.setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
-
-        val builder = AudioTrack.Builder()
-        builder.setAudioAttributes(attr.build())
-        builder.setAudioFormat(format.build())
-        builder.setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY)
-        builder.setTransferMode(AudioTrack.MODE_STREAM)
-        builder.setBufferSizeInBytes(AudioConfigure.sampleRate / 10 * 2)
-
-        return builder.build()
+data class Sdp(val id: String, val strategy: HylaranaStrategy) {
+    fun toProperties(): Properties {
+        return mapOf(
+            "id" to id,
+            "strategy" to strategy.type.toString(),
+            "address" to strategy.addr,
+        )
     }
 
-    @SuppressLint("MissingPermission")
-    private fun createAudioRecord(): AudioRecord {
-        val format = AudioFormat.Builder()
-        format.setSampleRate(AudioConfigure.sampleRate)
-        format.setChannelMask(AudioFormat.CHANNEL_IN_MONO)
-        format.setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-
-        val configure = AudioPlaybackCaptureConfiguration.Builder(mediaProjection!!)
-        configure.addMatchingUsage(AudioAttributes.USAGE_MEDIA)
-        configure.addMatchingUsage(AudioAttributes.USAGE_GAME)
-
-        val builder = AudioRecord.Builder()
-        builder.setAudioFormat(format.build())
-        builder.setAudioPlaybackCaptureConfig(configure.build())
-        builder.setBufferSizeInBytes(AudioConfigure.sampleRate / 10 * 2)
-
-        return builder.build()
+    companion object {
+        fun fromProperties(properties: Properties): Sdp {
+            return Sdp(
+                id = properties["id"] ?: throw Exception("not found id property"),
+                strategy =
+                HylaranaStrategy(
+                    type =
+                    (properties["strategy"]
+                        ?: throw Exception("not found strategy property"))
+                        .toInt(),
+                    addr =
+                    properties["address"] ?: throw Exception("not found address property")
+                )
+            )
+        }
     }
 }

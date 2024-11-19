@@ -58,7 +58,6 @@ void (async () => {
         "./build/doc",
         "./build/bin",
         "./build/lib",
-        "./build/server",
         "./build/include",
         "./build/examples",
         "./build/examples/cpp",
@@ -71,7 +70,7 @@ void (async () => {
 
     await Command(`cargo build ${Args.release ? "--release" : ""} -p hylarana-shared`);
     await Command(`cargo build ${Args.release ? "--release" : ""} -p hylarana-example`);
-    await Command(`cargo build ${Args.release ? "--release" : ""} -p hylarana-service`);
+    await Command(`cargo build ${Args.release ? "--release" : ""} -p hylarana-server`);
     await Command(`cargo doc --no-deps`);
 
     /* download ffmpeg librarys for windows */
@@ -140,8 +139,8 @@ void (async () => {
             [`./examples/cpp/build/${Profile}/example.exe`, "./build/bin/example-cpp.exe"],
             [`./target/${Profile.toLowerCase()}/hylarana-example.exe`, "./build/bin/example.exe"],
             [
-                `./target/${Profile.toLowerCase()}/hylarana-service.exe`,
-                "./build/server/hylarana-service.exe",
+                `./target/${Profile.toLowerCase()}/hylarana-server.exe`,
+                "./build/bin/hylarana-server.exe",
             ],
             [`./target/${Profile.toLowerCase()}/hylarana.dll.lib`, "./build/lib/hylarana.dll.lib"],
             [`./target/${Profile.toLowerCase()}/hylarana.dll`, "./build/bin/hylarana.dll"],
@@ -155,10 +154,7 @@ void (async () => {
         for (const item of [
             [`./examples/cpp/build/example`, "./build/bin/example-cpp"],
             [`./target/${Profile.toLowerCase()}/hylarana-example`, "./build/bin/example"],
-            [
-                `./target/${Profile.toLowerCase()}/hylarana-service`,
-                "./build/server/hylarana-service",
-            ],
+            [`./target/${Profile.toLowerCase()}/hylarana-server`, "./build/bin/hylarana-server"],
             [
                 `./target/${Profile.toLowerCase()}/libhylarana.dylib`,
                 "./build/bin/libhylarana.dylib",
@@ -170,10 +166,7 @@ void (async () => {
         for (const item of [
             [`./examples/cpp/build/example`, "./build/bin/example-cpp"],
             [`./target/${Profile.toLowerCase()}/hylarana-example`, "./build/bin/example"],
-            [
-                `./target/${Profile.toLowerCase()}/hylarana-service`,
-                "./build/server/hylarana-service",
-            ],
+            [`./target/${Profile.toLowerCase()}/hylarana-server`, "./build/bin/hylarana-server"],
             [`./target/${Profile.toLowerCase()}/libhylarana.so`, "./build/bin/libhylarana.so"],
             [`./target/ffmpeg/lib`, "./build/lib"],
         ]) {
@@ -184,7 +177,7 @@ void (async () => {
     if (process.platform == "win32") {
         for (const item of [
             ["./target/debug/hylarana.pdb", "./build/bin/hylarana.pdb"],
-            ["./target/debug/hylarana_service.pdb", "./build/server/hylarana-service.pdb"],
+            ["./target/debug/hylarana_server.pdb", "./build/bin/hylarana-server.pdb"],
         ]) {
             if (!Args.release) {
                 fs.cpSync(...item, { force: true, recursive: true });

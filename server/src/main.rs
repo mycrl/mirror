@@ -1,28 +1,53 @@
-use crate::{route::Route, Configure};
-
 use std::{
     collections::{HashMap, HashSet},
+    net::SocketAddr,
+    str::FromStr,
     sync::Arc,
     thread,
 };
 
 use anyhow::Result;
+use clap::Parser;
 use hylarana_transport::{
-    srt::{Descriptor, Server},
-    SocketKind, StreamInfo,
+    shutdown, startup, StreamInfo, StreamInfoKind, TransmissionDescriptor, TransmissionServer,
 };
 use parking_lot::RwLock;
 
-pub fn start_server(config: Configure, route: Arc<Route>) -> Result<()> {
+// #[global_allocator]
+// static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
+#[derive(Parser, Clone, Debug)]
+#[command(
+    about = env!("CARGO_PKG_DESCRIPTION"),
+    version = env!("CARGO_PKG_VERSION"),
+    author = env!("CARGO_PKG_AUTHORS"),
+)]
+pub struct Configure {
+    #[arg(long)]
+    pub bind: SocketAddr,
+    #[arg(long)]
+    pub mtu: usize,
+}
+
+fn main() -> Result<()> {
+    // Initialize srt and logger
+    simple_logger::init_with_level(log::Level::Info)?;
+    startup();
+
+    // Parse command line parameters. Note that if the command line parameters are
+    // incorrect, panic will occur.
+    let config = Configure::parse();
+    log::info!("configure: {:?}", config);
+
     // Configuration of the srt server. Since this suite only works within the LAN,
     // the delay is set to the minimum delay without considering network factors.
-    let mut opt = Descriptor::default();
+    let mut opt = TransmissionDescriptor::default();
     opt.mtu = config.mtu as u32;
     opt.latency = 40;
     opt.fc = 32;
 
     // Start the srt server
-    let server = Server::bind(config.bind, opt, 100)?;
+    let server = TransmissionServer::bind(config.bind, opt, 100)?;
     log::info!("starting srt server...");
 
     let sockets = Arc::new(RwLock::new(HashMap::with_capacity(200)));
@@ -34,20 +59,21 @@ pub fn start_server(config: Configure, route: Arc<Route>) -> Result<()> {
                 let stream_id = socket.get_stream_id();
                 log::info!("new srt socket, addr={:?}, stream_id={:?}", addr, stream_id);
 
-                let route = route.clone();
                 let socket = Arc::new(socket);
 
                 // Get the stream information carried in the srt link. If the stream information
                 // does not exist or is invalid, the current connection is rejected. Skipping
                 // this step directly will trigger the release of the link and close it.
-                let stream_info =
-                    if let Some(info) = stream_id.as_ref().and_then(|it| StreamInfo::decode(it)) {
-                        info
-                    } else {
-                        log::error!("invalid stream id, addr={:?}", addr);
+                let stream_info = if let Some(info) = stream_id
+                    .as_ref()
+                    .and_then(|it| StreamInfo::from_str(it).ok())
+                {
+                    info
+                } else {
+                    log::error!("invalid stream id, addr={:?}", addr);
 
-                        continue;
-                    };
+                    continue;
+                };
 
                 log::info!(
                     "accept a srt socket, addr={:?}, info={:?}",
@@ -55,19 +81,14 @@ pub fn start_server(config: Configure, route: Arc<Route>) -> Result<()> {
                     stream_info
                 );
 
-                // The multicast port number exists only for publishers
-                if let Some(port) = stream_info.port {
-                    route.add(stream_info.id, port)
-                }
-
                 {
                     // If it is a subscriber, add the current connection to the subscription
                     // connection pool
-                    if stream_info.kind == SocketKind::Subscriber {
+                    if stream_info.kind == StreamInfoKind::Subscriber {
                         sockets.write().insert(addr, socket.clone());
                         subscribers
                             .write()
-                            .entry(stream_info.id)
+                            .entry(stream_info.id.clone())
                             .or_insert_with(|| HashSet::with_capacity(200))
                             .insert(addr);
                     }
@@ -89,7 +110,7 @@ pub fn start_server(config: Configure, route: Arc<Route>) -> Result<()> {
 
                                 // Subscribers are not allowed to write any information to the
                                 // server!
-                                if stream_info.kind == SocketKind::Subscriber {
+                                if stream_info.kind == StreamInfoKind::Subscriber {
                                     break;
                                 }
 
@@ -147,7 +168,7 @@ pub fn start_server(config: Configure, route: Arc<Route>) -> Result<()> {
 
                     // If the publisher has exited, it is necessary to close all subscribers of the
                     // current channel and inform the client that the publisher has exited.
-                    if stream_info.kind == SocketKind::Publisher {
+                    if stream_info.kind == StreamInfoKind::Publisher {
                         if let Some(items) = subscribers.remove(&stream_info.id) {
                             for addr in items.iter() {
                                 if let Some(socket) = sockets.remove(addr) {
@@ -161,12 +182,6 @@ pub fn start_server(config: Configure, route: Arc<Route>) -> Result<()> {
                             items.remove(&addr);
                         }
                     }
-
-                    // If the publisher exits, inform the router that the publisher has exited and
-                    // start cleaning up
-                    if stream_info.kind == SocketKind::Publisher {
-                        route.remove(stream_info.id)
-                    }
                 });
             }
             Err(e) => {
@@ -177,5 +192,6 @@ pub fn start_server(config: Configure, route: Arc<Route>) -> Result<()> {
         }
     }
 
+    shutdown();
     Ok(())
 }
