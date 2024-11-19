@@ -18,11 +18,11 @@ static struct
     HylaranaVideoEncoderType encoder = VIDEO_ENCODER_QSV;
     HylaranaVideoDecoderType decoder = VIDEO_DECODER_D3D11;
 #elif MACOS
-    VideoEncoderType encoder = VIDEO_ENCODER_VIDEOTOOLBOX;
-    VideoDecoderType decoder = VIDEO_DECODER_VIDEOTOOLBOX;
+    HylaranaVideoEncoderType encoder = VIDEO_ENCODER_VIDEOTOOLBOX;
+    HylaranaVideoDecoderType decoder = VIDEO_DECODER_VIDEOTOOLBOX;
 #else
-    VideoEncoderType encoder = VIDEO_ENCODER_X264;
-    VideoDecoderType decoder = VIDEO_DECODER_H264;
+    HylaranaVideoEncoderType encoder = VIDEO_ENCODER_X264;
+    HylaranaVideoDecoderType decoder = VIDEO_DECODER_H264;
 #endif
     HylaranaStrategy strategy = STRATEGY_DIRECT;
     std::string address = "127.0.0.1:8080";

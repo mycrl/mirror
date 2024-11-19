@@ -231,8 +231,6 @@ private:
         options.transport = transport;
         options.video = OPTIONS.decoder;
 
-        DebugBreak();
-
         self->_receiver = hylarana_create_receiver(id, options, sink);
     }
 };
