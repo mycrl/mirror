@@ -9,4 +9,4 @@ repository = "https://github.com/mycrl/hylarana"
 
 [dependencies]
 rubato = "0.16.0"
-hylarana-common = { path = "../common", version = "0.2" }
+hylarana-common = { path = "../common", version = "0.2.0-beta" }

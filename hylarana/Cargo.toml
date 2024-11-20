@@ -12,12 +12,12 @@ thiserror = "1.0.63"
 bytes = "1.5"
 log = "0.4.20"
 parking_lot = "0.12"
-hylarana-common = { path = "../common", version = "0.2" }
-hylarana-transport = { path = "../transport", version = "0.2" }
-hylarana-graphics = { path = "../graphics", version = "0.2" }
-hylarana-discovery = { path = "../discovery", version = "0.2" }
+hylarana-common = { path = "../common", version = "0.2.0-beta" }
+hylarana-transport = { path = "../transport", version = "0.2.0-beta" }
+hylarana-graphics = { path = "../graphics", version = "0.2.0-beta" }
+hylarana-discovery = { path = "../discovery", version = "0.2.0-beta" }
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
-hylarana-capture = { path = "../capture", version = "0.2" }
-hylarana-codec = { path = "../codec", version = "0.2" }
+hylarana-capture = { path = "../capture", version = "0.2.0-beta" }
+hylarana-codec = { path = "../codec", version = "0.2.0-beta" }
 rodio = { version = "0.19.0", default-features = false }

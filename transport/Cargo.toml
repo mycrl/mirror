@@ -11,7 +11,7 @@ repository = "https://github.com/mycrl/hylarana"
 bytes = "1.5.0"
 log = "0.4.20"
 crossbeam = "0.8.4"
-hylarana-common = { path = "../common", version = "0.2" }
+hylarana-common = { path = "../common", version = "0.2.0-beta" }
 xxhash-rust = { version = "0.8.11", features = ["xxh3", "xxh64"] }
 parking_lot = "0.12"
 rmp-serde = "1.3.0"

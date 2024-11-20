@@ -10,7 +10,7 @@ repository = "https://github.com/mycrl/hylarana"
 [dependencies]
 log = "0.4.20"
 thiserror = "1.0.63"
-hylarana-common = { path = "../common", version = "0.2" }
+hylarana-common = { path = "../common", version = "0.2.0-beta" }
 
 [target.'cfg(target_os = "windows")'.dependencies.mirror-ffmpeg-sys]
 default-features = false

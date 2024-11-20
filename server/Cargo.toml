@@ -11,8 +11,8 @@ repository = "https://github.com/mycrl/hylarana"
 anyhow = "1.0.79"
 log = "0.4.20"
 simple_logger = "4"
-hylarana-common = { path = "../common", version = "0.2" }
-hylarana-transport = { path = "../transport", version = "0.2" }
+hylarana-common = { path = "../common", version = "0.2.0-beta" }
+hylarana-transport = { path = "../transport", version = "0.2.0-beta" }
 clap = { version = "4", features = ["derive"] }
 mimalloc = { version = "*", default-features = false }
 parking_lot = "0.12"

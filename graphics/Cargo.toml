@@ -13,5 +13,5 @@ thiserror = "1.0.63"
 smallvec = "1.13.2"
 wgpu = "23"
 bytemuck = { version = "1.17.1", features = ["derive"] }
-hylarana-common = { path = "../common", version = "0.2" }
-hylarana-resample = { path = "../resample", version = "0.2" }
+hylarana-common = { path = "../common", version = "0.2.0-beta" }
+hylarana-resample = { path = "../resample", version = "0.2.0-beta" }
