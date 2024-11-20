@@ -27,6 +27,7 @@ features = ["Win32_Media", "Win32_Media_MediaFoundation"]
 v4l = "0.14.0"
 
 [target.'cfg(target_os = "linux")'.dependencies.mirror-ffmpeg-sys]
+default-features = false
 version = "0.1" 
 features = [
     "swscale",
