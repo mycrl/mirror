@@ -1,6 +1,6 @@
 [package]
 name = "hylarana-transport"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "A cross-platform screen casting library implemented by Rust."
 license = "LGPL-2.1-only"
