@@ -2,6 +2,7 @@
 <div align="center">
    <h1>Hylarana</h1>
 </div>
+<br/>
 <div align="center">
   <strong>A cross-platform screen casting library implemented by rust.</strong>
 </div>
@@ -11,27 +12,31 @@
   <img src="https://img.shields.io/github/issues/mycrl/hylarana"/>
   <img src="https://img.shields.io/github/stars/mycrl/hylarana"/>
 </div>
+
+<div align="center">
+  <span>documentation:</span>
+  <a href="https://docs.rs/hylarana/latest/hylarana">docs.rs</a>
+  <span>/</span>
+  <a href="./ffi/include/hylarana.h">c/c++</a>
+</div>
+<div align="center">
+  <span>examples:</span>
+  <a href="./examples/rust">rust</a>
+  <span>/</span>
+  <a href="./examples/cpp">c++</a>
+  <span>/</span>
+  <a href="./examples/android">android</a>
+</div>
 <br/>
 <br/>
+
+---
 
 Pure software screen projection is different from Miracast, AirPlay, etc., which need to rely on hardware support. This project was not designed to work on a wide area network, but works well in a local area network environment.
 
 The project is cross-platform, but the priority platforms supported are Windows and Android, Unlike a solution like DLAN, this project is more akin to airplay, so low latency is the main goal, currently the latency is controlled at around 150-250ms (with some variations on different platforms with different codecs), and maintains a highly easy to use API and very few external dependencies.
 
 Unlike traditional screen casting implementations, this project can work in forwarding mode, in which it can support casting to hundreds or thousands of devices at the same time, which can be useful in some specific scenarios (e.g., all advertising screens in a building).
-
-## Documentation
-
--   Rust: [docs.rs](https://docs.rs/hylarana/latest/hylarana/)
--   C/C++: This project also compiles dynamic link libraries, so for C/C++ projects, use this header file [hylarana.h](./ffi/include/hylarana.h)
-
-## Examples
-
-> Automated builds can be downloaded from the github release page.
-
--   [Android](./examples/android) - this is an android studio project.
--   [C++](./examples/cpp) - the build product is `example-cpp`.
--   [Rust](./examples/rust) - the build product is `example`.
 
 ## Build Instructions
 
