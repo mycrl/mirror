@@ -14,5 +14,5 @@ simple_logger = "4"
 hylarana-common = { path = "../common", version = "0.2.0-beta" }
 hylarana-transport = { path = "../transport", version = "0.2.0-beta" }
 clap = { version = "4", features = ["derive"] }
-mimalloc = { version = "*", default-features = false }
+mimalloc = { version = "0.1.43", default-features = false }
 parking_lot = "0.12"
