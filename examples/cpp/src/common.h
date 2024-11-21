@@ -41,10 +41,6 @@ HylaranaVideoEncoderType encoder_from_str(std::string value)
     {
         return VIDEO_ENCODER_QSV;
     }
-    else if (value == "h264_nvenc")
-    {
-        return VIDEO_ENCODER_CUDA;
-    }
     else if (value == "h264_videotoolbox")
     {
         return VIDEO_ENCODER_VIDEOTOOLBOX;
@@ -68,10 +64,6 @@ HylaranaVideoDecoderType decoder_from_str(std::string value)
     else if (value == "h264_qsv")
     {
         return VIDEO_DECODER_QSV;
-    }
-    else if (value == "h264_cuvid")
-    {
-        return VIDEO_DECODER_CUDA;
     }
     else if (value == "h264_videotoolbox")
     {

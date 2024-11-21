@@ -77,6 +77,7 @@ impl Default for AudioFrame {
     }
 }
 
+/// Video frame format.
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VideoFormat {
@@ -86,6 +87,7 @@ pub enum VideoFormat {
     I420,
 }
 
+/// Subtype of the video frame.
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VideoSubFormat {

@@ -1,3 +1,5 @@
+#![doc = include_str!("../README.md")]
+
 mod receiver;
 mod sender;
 
@@ -17,8 +19,8 @@ pub use hylarana_common::{
     frame::{AudioFrame, VideoFormat, VideoFrame, VideoSubFormat},
     Size,
 };
-pub use hylarana_discovery::{DiscoveryError, DiscoveryService};
 
+pub use hylarana_discovery::{DiscoveryError, DiscoveryService};
 pub use hylarana_graphics::raw_window_handle;
 pub use hylarana_transport::{TransportDescriptor, TransportStrategy};
 
@@ -103,6 +105,7 @@ pub fn shutdown() -> Result<(), HylaranaError> {
     Ok(())
 }
 
+/// Audio and video streaming events observer.
 pub trait AVFrameObserver: Sync + Send {
     /// Callback when the sender is closed. This may be because the external
     /// side actively calls the close, or the audio and video packets cannot be
@@ -110,11 +113,14 @@ pub trait AVFrameObserver: Sync + Send {
     fn close(&self) {}
 }
 
+/// Streaming sink for audio and video frames.
 pub trait AVFrameSink: Sync + Send {
     /// Callback occurs when the video frame is updated. The video frame format
     /// is fixed to NV12. Be careful not to call blocking methods inside the
     /// callback, which will seriously slow down the encoding and decoding
     /// pipeline.
+    /// 
+    /// Returning `false` causes the stream to close.
     #[allow(unused_variables)]
     fn video(&self, frame: &VideoFrame) -> bool {
         true
@@ -124,6 +130,8 @@ pub trait AVFrameSink: Sync + Send {
     /// format is fixed to PCM. Be careful not to call blocking methods inside
     /// the callback, which will seriously slow down the encoding and decoding
     /// pipeline.
+    /// 
+    /// Returning `false` causes the stream to close.
     #[allow(unused_variables)]
     fn audio(&self, frame: &AudioFrame) -> bool {
         true
@@ -133,12 +141,12 @@ pub trait AVFrameSink: Sync + Send {
 /// Abstraction of audio and video streams.
 pub trait AVFrameStream: AVFrameSink + AVFrameObserver {}
 
+/// Creates entries for the sender and receiver.
 pub struct Hylarana;
 
 impl Hylarana {
-    /// Create a sender, specify a bound NIC address, you can pass callback to
-    /// get the device screen or sound callback, callback can be null, if it is
-    /// null then it means no callback data is needed.
+    /// Creates a sender that can specify the audio source or video source to be
+    /// captured.
     pub fn create_sender<T: AVFrameStream + 'static>(
         options: HylaranaSenderDescriptor,
         sink: T,
@@ -151,8 +159,8 @@ impl Hylarana {
         Ok(sender)
     }
 
-    /// Create a receiver, specify a bound NIC address, you can pass callback to
-    /// get the sender's screen or sound callback, callback can not be null.
+    /// To create a receiver, you need to specify the sender's ID to associate
+    /// with it.
     pub fn create_receiver<T: AVFrameStream + 'static>(
         id: String,
         options: HylaranaReceiverDescriptor,
@@ -258,7 +266,7 @@ unsafe impl Send for AudioRender {}
 unsafe impl Sync for AudioRender {}
 
 impl AudioRender {
-    /// Create a video player.
+    /// Create a audio player.
     pub fn new() -> Result<Self, RendererError> {
         let (stream, stream_handle) = OutputStream::try_default()?;
         let sink = Sink::try_new(&stream_handle)?;
@@ -284,12 +292,19 @@ impl Drop for AudioRender {
     }
 }
 
+/// Back-end implementation of graphics.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GraphicsBackend {
+    /// Backend implemented using D3D11, which is supported on an older device
+    /// and platform and has better performance performance and memory
+    /// footprint, but only on windows.
     Direct3D11,
+    /// Cross-platform graphics backends implemented using WebGPUs are supported
+    /// on a number of common platforms or devices.
     WebGPU,
 }
 
+/// Video player that can render video frames to window.
 pub enum VideoRender<'a> {
     WebGPU(WgpuRenderer<'a>),
     #[cfg(target_os = "windows")]
@@ -297,6 +312,7 @@ pub enum VideoRender<'a> {
 }
 
 impl<'a> VideoRender<'a> {
+    /// Create a video player.
     pub fn new<T: Into<SurfaceTarget<'a>>>(
         backend: GraphicsBackend,
         window: T,
@@ -342,6 +358,8 @@ impl<'a> VideoRender<'a> {
         })
     }
 
+    /// Push video frames to the queue and the player will render them as
+    /// quickly as possible, basically in real time.
     pub fn send(&mut self, frame: &VideoFrame) -> Result<(), RendererError> {
         match frame.sub_format {
             #[cfg(target_os = "windows")]

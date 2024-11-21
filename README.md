@@ -22,7 +22,7 @@ Unlike traditional screen casting implementations, this project can work in forw
 
 ## Documentation
 
--   Rust: [hylarana crate document](https://mycrl.github.io/hylarana/hylarana/index.html)
+-   Rust: [docs.rs](https://docs.rs/hylarana/latest/hylarana/)
 -   C/C++: This project also compiles dynamic link libraries, so for C/C++ projects, use this header file [hylarana.h](./ffi/include/hylarana.h)
 
 ## Examples

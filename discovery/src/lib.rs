@@ -13,14 +13,15 @@ pub enum DiscoveryError {
     JsonError(#[from] serde_json::Error),
 }
 
-/// LAN service discovery, which exposes its services through the MDNS protocol
+/// LAN service discovery.
+///
+/// which exposes its services through the MDNS protocol
 /// and can allow other nodes or clients to discover the current service.
 pub struct DiscoveryService(ServiceDaemon);
 
 impl DiscoveryService {
     /// Register the service, the service type is fixed, you can customize the
-    /// port number, id is the identifying information of the service, used to
-    /// distinguish between different publishers, in properties you can add
+    /// port number, in properties you can add
     /// customized data to the published service.
     pub fn register<P: Serialize + Debug>(
         port: u16,

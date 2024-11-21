@@ -99,6 +99,7 @@ pub trait CaptureHandler: Sync + Send {
     ) -> Result<(), Self::Error>;
 }
 
+/// Video source type or Audio source type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SourceType {
     /// Camera or video capture card and other devices (and support virtual
@@ -111,6 +112,7 @@ pub enum SourceType {
     Audio,
 }
 
+/// Video source or Audio source.
 #[derive(Debug, Clone)]
 pub struct Source {
     /// Device ID, usually the symbolic link to the device or the address of the
@@ -198,6 +200,8 @@ impl Capture {
         })
     }
 
+    /// Create a capture and start capturing audio and video frames by
+    /// specifying the source to be captured.
     pub fn new<V, A>(
         CaptureDescriptor { video, audio }: CaptureDescriptor<V, A>,
     ) -> Result<Self, CaptureError>
@@ -240,6 +244,7 @@ impl Capture {
         Ok(Self(devices))
     }
 
+    /// Stop capturing and turn off internal audio/video frame pushing.
     pub fn close(&self) -> Result<(), CaptureError> {
         for item in self.0.iter() {
             match item {

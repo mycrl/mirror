@@ -55,7 +55,6 @@ void (async () => {
     for (const path of [
         "./target",
         "./build",
-        "./build/doc",
         "./build/bin",
         "./build/lib",
         "./build/include",
@@ -71,7 +70,6 @@ void (async () => {
     await Command(`cargo build ${Args.release ? "--release" : ""} -p hylarana-shared`);
     await Command(`cargo build ${Args.release ? "--release" : ""} -p hylarana-example`);
     await Command(`cargo build ${Args.release ? "--release" : ""} -p hylarana-server`);
-    await Command(`cargo doc --no-deps`);
 
     /* download ffmpeg librarys for windows */
     if (process.platform == "win32" || process.platform == "linux") {
@@ -127,9 +125,6 @@ void (async () => {
 
         /* inculde */
         ["./ffi/include/hylarana.h", "./build/include/hylarana.h"],
-
-        /* doc */
-        ["./target/doc", "./build/doc"],
     ]) {
         fs.cpSync(...item, { force: true, recursive: true });
     }

@@ -1,24 +1,23 @@
 [package]
 name = "hylarana"
-version = "0.1.1"
+version = "0.2.0-beta.1"
 edition = "2021"
 description = "A cross-platform screen casting library implemented by Rust."
 license = "LGPL-2.1-only"
-readme = "../README.md"
+readme = "./README.md"
 repository = "https://github.com/mycrl/hylarana"
-documentation = "https://mycrl.github.io/hylarana/hylarana/index.html"
 
 [dependencies]
 thiserror = "1.0.63"
 bytes = "1.5"
 log = "0.4.20"
 parking_lot = "0.12"
-hylarana-common = { path = "../common", version = "0.1" }
-hylarana-transport = { path = "../transport", version = "0.1" }
-hylarana-graphics = { path = "../graphics", version = "0.1" }
-hylarana-discovery = { path = "../discovery", version = "0.1" }
+hylarana-common = { path = "../common", version = "0.2.0-beta.1" }
+hylarana-transport = { path = "../transport", version = "0.2.0-beta.1" }
+hylarana-graphics = { path = "../graphics", version = "0.2.0-beta.1" }
+hylarana-discovery = { path = "../discovery", version = "0.2.0-beta.1" }
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
-hylarana-capture = { path = "../capture", version = "0.1" }
-hylarana-codec = { path = "../codec", version = "0.1" }
+hylarana-capture = { path = "../capture", version = "0.2.0-beta.1" }
+hylarana-codec = { path = "../codec", version = "0.2.0-beta.1" }
 rodio = { version = "0.19.0", default-features = false }

@@ -115,7 +115,6 @@ impl TryInto<TransportDescriptor> for HylaranaDescriptor {
 enum RawVideoEncoderType {
     X264,
     Qsv,
-    Cuda,
     VideoToolBox,
 }
 
@@ -124,7 +123,6 @@ impl Into<VideoEncoderType> for RawVideoEncoderType {
         match self {
             Self::X264 => VideoEncoderType::X264,
             Self::Qsv => VideoEncoderType::Qsv,
-            Self::Cuda => VideoEncoderType::Cuda,
             Self::VideoToolBox => VideoEncoderType::VideoToolBox,
         }
     }
@@ -277,7 +275,6 @@ enum RawVideoDecoderType {
     H264,
     D3D11,
     Qsv,
-    Cuda,
     VideoToolBox,
 }
 
@@ -287,7 +284,6 @@ impl Into<VideoDecoderType> for RawVideoDecoderType {
             Self::H264 => VideoDecoderType::H264,
             Self::D3D11 => VideoDecoderType::D3D11,
             Self::Qsv => VideoDecoderType::Qsv,
-            Self::Cuda => VideoDecoderType::Cuda,
             Self::VideoToolBox => VideoDecoderType::VideoToolBox,
         }
     }
