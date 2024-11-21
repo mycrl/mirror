@@ -12,7 +12,7 @@ anyhow = "1.0.79"
 log = "0.4.20"
 simple_logger = "4"
 hylarana-common = { path = "../common", version = "0.2.0-beta" }
-hylarana-transport = { path = "../transport", version = "0.2.0-beta" }
+hylarana-transport = { path = "../transport", version = "0.2.0-beta.1" }
 clap = { version = "4", features = ["derive"] }
 mimalloc = { version = "0.1.43", default-features = false }
 parking_lot = "0.12"

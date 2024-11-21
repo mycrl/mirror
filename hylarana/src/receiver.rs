@@ -26,6 +26,7 @@ pub enum HylaranaReceiverError {
     AudioDecoderError(#[from] hylarana_codec::AudioDecoderError),
 }
 
+/// Receiver configuration.
 #[derive(Debug, Clone)]
 pub struct HylaranaReceiverDescriptor {
     pub transport: TransportDescriptor,
@@ -141,6 +142,7 @@ fn create_audio_decoder<T: AVFrameStream + 'static>(
     Ok(())
 }
 
+/// Screen casting receiver.
 pub struct HylaranaReceiver<T: AVFrameStream + 'static> {
     #[allow(unused)]
     transport: TransportReceiver<StreamMultiReceiverAdapter>,
@@ -152,7 +154,7 @@ impl<T: AVFrameStream + 'static> HylaranaReceiver<T> {
     /// Create a receiving end. The receiving end is much simpler to implement.
     /// You only need to decode the data in the queue and call it back to the
     /// sink.
-    pub fn new(
+    pub(crate) fn new(
         id: String,
         options: HylaranaReceiverDescriptor,
         sink: T,

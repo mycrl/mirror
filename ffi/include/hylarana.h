@@ -82,7 +82,6 @@ typedef enum {
     VIDEO_DECODER_H264,
     VIDEO_DECODER_D3D11,
     VIDEO_DECODER_QSV,
-    VIDEO_DECODER_CUDA,
     VIDEO_DECODER_VIDEOTOOLBOX,
 } HylaranaVideoDecoderType;
 
@@ -90,7 +89,6 @@ typedef enum
 {
     VIDEO_ENCODER_X264,
     VIDEO_ENCODER_QSV,
-    VIDEO_ENCODER_CUDA,
     VIDEO_ENCODER_VIDEOTOOLBOX,
 } HylaranaVideoEncoderType;
 

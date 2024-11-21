@@ -4,7 +4,7 @@ version = "0.2.0-beta"
 edition = "2021"
 description = "A cross-platform screen casting library implemented by Rust."
 license = "LGPL-2.1-only"
-readme = "../README.md"
+readme = "./README.md"
 repository = "https://github.com/mycrl/hylarana"
 
 [dependencies]
@@ -13,7 +13,7 @@ bytes = "1.5"
 log = "0.4.20"
 parking_lot = "0.12"
 hylarana-common = { path = "../common", version = "0.2.0-beta" }
-hylarana-transport = { path = "../transport", version = "0.2.0-beta" }
+hylarana-transport = { path = "../transport", version = "0.2.0-beta.1" }
 hylarana-graphics = { path = "../graphics", version = "0.2.0-beta" }
 hylarana-discovery = { path = "../discovery", version = "0.2.0-beta" }
 

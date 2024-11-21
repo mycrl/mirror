@@ -429,14 +429,6 @@ impl VideoEncoder {
                 set_option(context_mut, "low_power", 1);
                 set_option(context_mut, "vcm", 1);
             }
-            VideoEncoderType::Cuda => {
-                set_option(context_mut, "zerolatency", 1);
-                set_option(context_mut, "b_adapt", 0);
-                set_option(context_mut, "rc", 2);
-                set_option(context_mut, "cbr", 1);
-                set_option(context_mut, "preset", 7);
-                set_option(context_mut, "tune", 3);
-            }
             VideoEncoderType::VideoToolBox => {}
         };
 

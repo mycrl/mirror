@@ -65,7 +65,7 @@ pub struct HylaranaSenderSourceDescriptor<T> {
     pub options: T,
 }
 
-/// Transmitter Configuration Description.
+/// Sender configuration.
 #[derive(Debug, Clone)]
 pub struct HylaranaSenderDescriptor {
     pub video: Option<HylaranaSenderSourceDescriptor<VideoDescriptor>>,
@@ -289,6 +289,7 @@ impl<T: AVFrameStream + 'static> FrameArrived for AudioSender<T> {
     }
 }
 
+/// Screen casting sender.
 pub struct HylaranaSender<T: AVFrameStream + 'static> {
     transport: TransportSender,
     status: Arc<AtomicBool>,
@@ -300,7 +301,10 @@ impl<T: AVFrameStream + 'static> HylaranaSender<T> {
     // Create a sender. The capture of the sender is started following the sender,
     // but both video capture and audio capture can be empty, which means you can
     // create a sender that captures nothing.
-    pub fn new(options: HylaranaSenderDescriptor, sink: T) -> Result<Self, HylaranaSenderError> {
+    pub(crate) fn new(
+        options: HylaranaSenderDescriptor,
+        sink: T,
+    ) -> Result<Self, HylaranaSenderError> {
         log::info!("create sender");
 
         let mut capture_options = CaptureDescriptor::default();
@@ -365,6 +369,8 @@ impl<T: AVFrameStream + 'static> HylaranaSender<T> {
         })
     }
 
+    /// Get the ID of the sender, each sender has an individual ID identifier,
+    /// you need to specify the ID of the sender when creating the receiver.
     pub fn get_id(&self) -> &str {
         self.transport.get_id()
     }
