@@ -1,6 +1,6 @@
 [package]
 name = "hylarana-server"
-version = "0.2.0-beta"
+version = "0.2.0-beta.1"
 edition = "2021"
 description = "A cross-platform screen casting library implemented by Rust."
 license = "LGPL-2.1-only"
@@ -11,7 +11,7 @@ repository = "https://github.com/mycrl/hylarana"
 anyhow = "1.0.79"
 log = "0.4.20"
 simple_logger = "4"
-hylarana-common = { path = "../common", version = "0.2.0-beta" }
+hylarana-common = { path = "../common", version = "0.2.0-beta.1" }
 hylarana-transport = { path = "../transport", version = "0.2.0-beta.1" }
 clap = { version = "4", features = ["derive"] }
 mimalloc = { version = "0.1.43", default-features = false }
