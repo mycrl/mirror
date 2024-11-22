@@ -119,8 +119,10 @@ internal class Hylarana {
             {
                 run {
                     if (sender != 0L) {
-                        releaseTransportSender(sender)
+                        val ptr = sender
                         sender = 0L
+
+                        releaseTransportSender(ptr)
                     }
                 }
             },
@@ -138,8 +140,10 @@ internal class Hylarana {
         return HylaranaReceiverAdapter {
             run {
                 if (receiver != 0L) {
-                    releaseTransportReceiver(receiver)
+                    val ptr = receiver
                     receiver = 0L
+
+                    releaseTransportReceiver(ptr)
                 }
             }
         }

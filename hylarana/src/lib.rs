@@ -119,7 +119,7 @@ pub trait AVFrameSink: Sync + Send {
     /// is fixed to NV12. Be careful not to call blocking methods inside the
     /// callback, which will seriously slow down the encoding and decoding
     /// pipeline.
-    /// 
+    ///
     /// Returning `false` causes the stream to close.
     #[allow(unused_variables)]
     fn video(&self, frame: &VideoFrame) -> bool {
@@ -130,7 +130,7 @@ pub trait AVFrameSink: Sync + Send {
     /// format is fixed to PCM. Be careful not to call blocking methods inside
     /// the callback, which will seriously slow down the encoding and decoding
     /// pipeline.
-    /// 
+    ///
     /// Returning `false` causes the stream to close.
     #[allow(unused_variables)]
     fn audio(&self, frame: &AudioFrame) -> bool {

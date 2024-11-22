@@ -101,7 +101,7 @@ pub(crate) fn get_current_env<'local>() -> JNIEnv<'local> {
 #[no_mangle]
 #[allow(non_snake_case)]
 extern "system" fn JNI_OnLoad(vm: JavaVM, _: *mut c_void) -> i32 {
-    logger::init_with_android(log::LevelFilter::Info);
+    logger::init_with_android("com.github.mycrl.hylarana", log::LevelFilter::Info);
     hylarana_transport::startup();
     JVM.lock().unwrap().replace(vm);
 
@@ -161,7 +161,7 @@ where
     match func(env) {
         Ok(ret) => Some(ret),
         Err(e) => {
-            log::error!("java runtime exception, err={:?}", e);
+            log::error!("{:?}", e);
             None
         }
     }
@@ -316,7 +316,9 @@ extern "system" fn Java_com_github_mycrl_hylarana_Hylarana_releaseTransportRecei
 ) {
     assert!(!receiver.is_null());
 
-    let _ = unsafe { Box::from_raw(receiver) }.close();
+    if let Err(e) = unsafe { Box::from_raw(receiver) }.close() {
+        log::error!("{:?}", e);
+    }
 }
 
 /// Register the service, the service type is fixed, you can customize the

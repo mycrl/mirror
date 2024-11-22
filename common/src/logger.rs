@@ -128,7 +128,10 @@ extern "C" {
     fn android_log_write(prio: c_int, tag: *const c_char, text: *const c_char) -> c_int;
 }
 
-pub struct AndroidLogger;
+pub struct AndroidLogger {
+    #[allow(unused)]
+    package: String,
+}
 
 impl log::Log for AndroidLogger {
     fn flush(&self) {}
@@ -142,18 +145,25 @@ impl log::Log for AndroidLogger {
         unsafe {
             android_log_write(
                 AndroidLogLevel::from_level(record.level()) as c_int,
-                "com.github.mycrl.hylarana\0".as_ptr() as *const _,
-                format!("{}\0", record.args()).as_ptr() as *const _,
+                format!("{}\0", self.package).as_ptr() as *const _,
+                format!(
+                    "({}) - {}\0",
+                    record.file_static().unwrap_or("*"),
+                    record.args()
+                )
+                .as_ptr() as *const _,
             );
         }
     }
 }
 
-pub fn init_with_android(level: LevelFilter) {
-    log::set_boxed_logger(Box::new(AndroidLogger)).unwrap();
+pub fn init_with_android(package: &str, level: LevelFilter) {
     log::set_max_level(level);
+    log::set_boxed_logger(Box::new(AndroidLogger {
+        package: package.to_string(),
+    }))
+    .unwrap();
 
-    #[cfg(not(debug_assertions))]
     std::panic::set_hook(Box::new(|info| {
         log::error!(
             "pnaic: location={:?}, message={:?}",
