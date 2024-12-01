@@ -16,14 +16,10 @@
 <div align="center">
   <span>documentation:</span>
   <a href="https://docs.rs/hylarana/latest/hylarana">docs.rs</a>
-  <span>/</span>
-  <a href="./ffi/include/hylarana.h">c/c++</a>
 </div>
 <div align="center">
   <span>examples:</span>
   <a href="./examples/rust">rust</a>
-  <span>/</span>
-  <a href="./examples/cpp">c++</a>
   <span>/</span>
   <a href="./examples/android">android</a>
 </div>
