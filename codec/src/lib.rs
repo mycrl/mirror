@@ -4,7 +4,7 @@ mod video;
 
 use std::ffi::{c_char, c_int, c_void};
 
-use hylarana_common::strings::Strings;
+use hylarana_common::strings::PSTR;
 use log::Level;
 use mirror_ffmpeg_sys::*;
 
@@ -87,7 +87,7 @@ unsafe extern "C" fn logger_proc(
     vsnprintf(chars.as_mut_ptr(), 2048, message, args);
 
     let level: LoggerLevel = std::mem::transmute(level);
-    if let Ok(message) = Strings::from(chars.as_ptr()).to_string() {
+    if let Ok(message) = PSTR::from(chars.as_ptr()).to_string() {
         log::log!(
             target: "ffmpeg",
             level.into(),

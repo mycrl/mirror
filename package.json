@@ -18,8 +18,5 @@
     "bugs": {
         "url": "https://github.com/mycrl/hylarana/issues"
     },
-    "homepage": "https://github.com/mycrl/hylarana#readme",
-    "workspaces": [
-        "sdk/node"
-    ]
+    "homepage": "https://github.com/mycrl/hylarana#readme"
 }

@@ -161,7 +161,7 @@ pub struct CameraCapture(Arc<AtomicBool>);
 impl CaptureHandler for CameraCapture {
     type Frame = VideoFrame;
     type Error = CameraCaptureError;
-    type CaptureDescriptor = VideoCaptureSourceDescription;
+    type CaptureOptions = VideoCaptureSourceDescription;
 
     fn get_sources() -> Result<Vec<Source>, Self::Error> {
         let mut attributes = create_attributes()?;
@@ -205,7 +205,7 @@ impl CaptureHandler for CameraCapture {
     #[rustfmt::skip]
     fn start<S: FrameArrived<Frame = Self::Frame> + 'static>(
         &self,
-        opt: Self::CaptureDescriptor,
+        opt: Self::CaptureOptions,
         arrived: S,
     ) -> Result<(), Self::Error> {
         let mut attributes = create_attributes()?;

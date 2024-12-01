@@ -13,7 +13,7 @@ use hylarana_common::{
     Size,
 };
 
-use hylarana_resample::win32::{Resource, VideoResampler, VideoResamplerDescriptor};
+use hylarana_resample::win32::{Resource, VideoResampler, VideoResamplerOptions};
 use parking_lot::Mutex;
 use thiserror::Error;
 use windows::{
@@ -128,7 +128,7 @@ impl GraphicsCaptureApiHandler for WindowsCapture {
         };
 
         // Convert texture formats and scale sizes.
-        let mut transform = VideoResampler::new(VideoResamplerDescriptor {
+        let mut transform = VideoResampler::new(VideoResamplerOptions {
             direct3d: flags.options.direct3d,
             input: Resource::Default(
                 DXGI_FORMAT_R8G8B8A8_UNORM,
@@ -247,7 +247,7 @@ pub struct ScreenCapture(Mutex<Option<CaptureControl<WindowsCapture, ScreenCaptu
 impl CaptureHandler for ScreenCapture {
     type Frame = VideoFrame;
     type Error = ScreenCaptureError;
-    type CaptureDescriptor = VideoCaptureSourceDescription;
+    type CaptureOptions = VideoCaptureSourceDescription;
 
     fn get_sources() -> Result<Vec<Source>, Self::Error> {
         let primary_name = Monitor::primary()?.name()?;
@@ -268,7 +268,7 @@ impl CaptureHandler for ScreenCapture {
 
     fn start<S: FrameArrived<Frame = Self::Frame> + 'static>(
         &self,
-        options: Self::CaptureDescriptor,
+        options: Self::CaptureOptions,
         arrived: S,
     ) -> Result<(), Self::Error> {
         let source = Monitor::enumerate()?

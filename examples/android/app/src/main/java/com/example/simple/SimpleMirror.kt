@@ -212,7 +212,7 @@ class SimpleHylaranaService : Service() {
                                                 )
                                                 .setAudioFormat(
                                                     AudioFormat.Builder()
-                                                        .setEncoding(audioConfig.channalConfig)
+                                                        .setEncoding(audioConfig.sampleBits)
                                                         .setSampleRate(audioConfig.sampleRate)
                                                         .setChannelMask(
                                                             AudioFormat.CHANNEL_OUT_MONO
@@ -227,7 +227,6 @@ class SimpleHylaranaService : Service() {
                                                 .build()
 
                                         override fun close() {
-                                            super.close()
                                             stopReceiver()
                                             observer?.onReceiverClosed()
 
@@ -277,7 +276,7 @@ class SimpleHylaranaService : Service() {
                                     AudioFormat.Builder()
                                         .setSampleRate(audioConfig.sampleRate)
                                         .setChannelMask(AudioFormat.CHANNEL_IN_MONO)
-                                        .setEncoding(audioConfig.channalConfig)
+                                        .setEncoding(audioConfig.sampleBits)
                                         .build()
                                 )
                                 .setAudioPlaybackCaptureConfig(

@@ -1,6 +1,6 @@
 [package]
 name = "hylarana-capture"
-version = "0.2.0-beta.1"
+version = "0.2.0"
 edition = "2021"
 description = "A cross-platform screen casting library implemented by Rust."
 license = "LGPL-2.1-only"
@@ -13,8 +13,8 @@ cpal = "0.15.3"
 once_cell = "1.19.0"
 log = "0.4.20"
 parking_lot = "0.12"
-hylarana-common = { path = "../common", version = "0.2.0-beta.1" }
-hylarana-resample = { path = "../resample", version = "0.2.0-beta.1" }
+hylarana-common = { path = "../common", version = "0.2.0" }
+hylarana-resample = { path = "../resample", version = "0.2.0" }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows-capture = { version = "1.4.0" }

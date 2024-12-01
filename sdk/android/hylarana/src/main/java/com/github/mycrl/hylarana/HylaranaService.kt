@@ -6,7 +6,7 @@ import android.util.Log
 import android.view.Surface
 import kotlin.Exception
 
-typealias HylaranaOptions = TransportDescriptor
+typealias HylaranaOptions = TransportOptions
 typealias HylaranaStrategy = TransportStrategy
 
 class StreamType {

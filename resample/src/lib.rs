@@ -109,7 +109,7 @@ pub mod win32 {
         Texture(ID3D11Texture2D),
     }
 
-    pub struct VideoResamplerDescriptor {
+    pub struct VideoResamplerOptions {
         pub direct3d: Direct3DDevice,
         pub input: Resource,
         pub output: Resource,
@@ -143,7 +143,7 @@ pub mod win32 {
         /// directly use the device when it has been created externally, so
         /// there is no need to copy across devices, which improves
         /// processing performance.
-        pub fn new(options: VideoResamplerDescriptor) -> Result<Self, Error> {
+        pub fn new(options: VideoResamplerOptions) -> Result<Self, Error> {
             let (d3d_device, d3d_context) = (options.direct3d.device, options.direct3d.context);
             let video_device = d3d_device.cast::<ID3D11VideoDevice>()?;
             let video_context = d3d_context.cast::<ID3D11VideoContext>()?;

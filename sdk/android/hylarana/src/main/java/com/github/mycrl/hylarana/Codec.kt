@@ -240,11 +240,6 @@ class Audio {
         val sampleRate: Int
 
         /**
-         * [AudioFormat#CHANNEL_IN_MONO](https://developer.android.com/reference/android/media/AudioFormat#CHANNEL_IN_MONO)
-         */
-        val channalConfig: Int
-
-        /**
          * Number of audio channels, such as mono or stereo (dual channel)
          */
         val channels: Int
@@ -257,8 +252,7 @@ class Audio {
 
     companion object {
         fun getAudioCodecConfigure(): AudioCodecConfigure {
-            return object: Audio.AudioCodecConfigure {
-                override val channalConfig = AudioFormat.CHANNEL_IN_MONO
+            return object: AudioCodecConfigure {
                 override val sampleBits = AudioFormat.ENCODING_PCM_16BIT
                 override val sampleRate = 48000
                 override val bitRate = 64000

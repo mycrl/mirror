@@ -8,7 +8,7 @@ use std::{
 use hylarana_codec::{AudioDecoder, VideoDecoder, VideoDecoderSettings, VideoDecoderType};
 use hylarana_common::atomic::EasyAtomic;
 use hylarana_transport::{
-    StreamKind, StreamMultiReceiverAdapter, TransportDescriptor, TransportReceiver,
+    StreamKind, StreamMultiReceiverAdapter, TransportOptions, TransportReceiver,
 };
 
 use thiserror::Error;
@@ -26,11 +26,17 @@ pub enum HylaranaReceiverError {
     AudioDecoderError(#[from] hylarana_codec::AudioDecoderError),
 }
 
+/// Receiver media codec configuration.
+#[derive(Debug, Clone)]
+pub struct HylaranaReceiverCodecOptions {
+    pub video: VideoDecoderType,
+}
+
 /// Receiver configuration.
 #[derive(Debug, Clone)]
-pub struct HylaranaReceiverDescriptor {
-    pub transport: TransportDescriptor,
-    pub video: VideoDecoderType,
+pub struct HylaranaReceiverOptions {
+    pub transport: TransportOptions,
+    pub codec: HylaranaReceiverCodecOptions,
 }
 
 fn create_video_decoder<T: AVFrameStream + 'static>(
@@ -156,7 +162,7 @@ impl<T: AVFrameStream + 'static> HylaranaReceiver<T> {
     /// sink.
     pub(crate) fn new(
         id: String,
-        options: HylaranaReceiverDescriptor,
+        options: HylaranaReceiverOptions,
         sink: T,
     ) -> Result<Self, HylaranaReceiverError> {
         log::info!("create receiver");
@@ -171,7 +177,7 @@ impl<T: AVFrameStream + 'static> HylaranaReceiver<T> {
             status.clone(),
             &sink,
             VideoDecoderSettings {
-                codec: options.video,
+                codec: options.codec.video,
                 #[cfg(target_os = "windows")]
                 direct3d: Some(crate::get_direct3d()),
             },

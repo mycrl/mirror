@@ -217,7 +217,7 @@ pub mod dx11 {
         Size,
     };
 
-    use hylarana_resample::win32::{Resource, VideoResampler, VideoResamplerDescriptor};
+    use hylarana_resample::win32::{Resource, VideoResampler, VideoResamplerOptions};
     use thiserror::Error;
 
     use crate::{Texture, Texture2DRaw, Texture2DResource};
@@ -318,7 +318,7 @@ pub mod dx11 {
                 };
 
                 self.video_processor
-                    .replace(VideoResampler::new(VideoResamplerDescriptor {
+                    .replace(VideoResampler::new(VideoResamplerOptions {
                         direct3d: self.direct3d.clone(),
                         input: Resource::Default(format, size),
                         output: Resource::Texture(unsafe {

@@ -9,7 +9,7 @@ use std::{
 use anyhow::Result;
 use clap::Parser;
 use hylarana_transport::{
-    shutdown, startup, StreamInfo, StreamInfoKind, TransmissionDescriptor, TransmissionServer,
+    shutdown, startup, StreamInfo, StreamInfoKind, TransmissionOptions, TransmissionServer,
 };
 use parking_lot::RwLock;
 
@@ -41,7 +41,7 @@ fn main() -> Result<()> {
 
     // Configuration of the srt server. Since this suite only works within the LAN,
     // the delay is set to the minimum delay without considering network factors.
-    let mut opt = TransmissionDescriptor::default();
+    let mut opt = TransmissionOptions::default();
     opt.mtu = config.mtu as u32;
     opt.latency = 40;
     opt.fc = 32;

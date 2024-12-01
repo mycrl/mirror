@@ -1,23 +1,24 @@
 mod capture;
 mod discovery;
 mod observer;
-mod renderer;
+mod player;
 
 use std::{ffi::c_char, fmt::Debug, net::SocketAddr, ptr::null_mut};
 
-use self::{capture::RawSource, observer::RawAVFrameStream};
+use self::{
+    capture::RawSource,
+    observer::RawAVFrameStream,
+    player::{Player, RawPlayerOptions},
+};
 
 use hylarana::{
-    shutdown, startup, AudioDescriptor, GraphicsBackend, Hylarana, HylaranaReceiver,
-    HylaranaReceiverDescriptor, HylaranaSender, HylaranaSenderDescriptor,
-    HylaranaSenderSourceDescriptor, TransportDescriptor, TransportStrategy, VideoDecoderType,
-    VideoDescriptor, VideoEncoderType,
+    shutdown, startup, AudioOptions, Hylarana, HylaranaReceiver, HylaranaReceiverCodecOptions,
+    HylaranaReceiverOptions, HylaranaSender, HylaranaSenderMediaOptions, HylaranaSenderOptions,
+    HylaranaSenderTrackOptions, TransportOptions, TransportStrategy, VideoDecoderType,
+    VideoEncoderType, VideoOptions,
 };
 
-use hylarana_common::{
-    logger,
-    strings::{write_c_str, Strings},
-};
+use hylarana_common::{logger, strings::PSTR};
 
 // In fact, this is a package that is convenient for recording errors. If the
 // result is an error message, it is output to the log. This function does not
@@ -58,14 +59,13 @@ extern "system" fn DllMain(
 /// SDK.
 #[no_mangle]
 extern "C" fn hylarana_startup() -> bool {
-    let func = || {
+    log_error((|| {
         logger::init_logger(log::LevelFilter::Info, None)?;
 
         startup()?;
         Ok::<_, anyhow::Error>(())
-    };
-
-    log_error(func()).is_ok()
+    })())
+    .is_ok()
 }
 
 /// Cleans up the environment when the SDK exits, and is recommended to be
@@ -79,30 +79,30 @@ extern "C" fn hylarana_shutdown() {
 
 #[repr(C)]
 #[allow(unused)]
-enum HylaranaStrategy {
+enum RawTransportStrategy {
     Direct,
     Relay,
     Multicast,
 }
 
 #[repr(C)]
-struct HylaranaDescriptor {
-    strategy: HylaranaStrategy,
+struct RawTransportOptions {
+    strategy: RawTransportStrategy,
     address: *const c_char,
     mtu: usize,
 }
 
-impl TryInto<TransportDescriptor> for HylaranaDescriptor {
+impl TryInto<TransportOptions> for RawTransportOptions {
     type Error = anyhow::Error;
 
-    fn try_into(self) -> Result<TransportDescriptor, Self::Error> {
-        let address: SocketAddr = Strings::from(self.address).to_string()?.parse()?;
+    fn try_into(self) -> Result<TransportOptions, Self::Error> {
+        let address: SocketAddr = PSTR::from(self.address).to_string()?.parse()?;
 
-        Ok(TransportDescriptor {
+        Ok(TransportOptions {
             strategy: match self.strategy {
-                HylaranaStrategy::Relay => TransportStrategy::Relay(address),
-                HylaranaStrategy::Direct => TransportStrategy::Direct(address),
-                HylaranaStrategy::Multicast => TransportStrategy::Multicast(address),
+                RawTransportStrategy::Relay => TransportStrategy::Relay(address),
+                RawTransportStrategy::Direct => TransportStrategy::Direct(address),
+                RawTransportStrategy::Multicast => TransportStrategy::Multicast(address),
             },
             mtu: self.mtu,
         })
@@ -131,7 +131,7 @@ impl Into<VideoEncoderType> for RawVideoEncoderType {
 /// Video Codec Configuretion.
 #[repr(C)]
 #[derive(Clone, Copy)]
-struct RawVideoDescriptor {
+struct RawVideoOptions {
     codec: RawVideoEncoderType,
     frame_rate: u8,
     width: u32,
@@ -140,11 +140,11 @@ struct RawVideoDescriptor {
     key_frame_interval: u32,
 }
 
-impl TryInto<VideoDescriptor> for RawVideoDescriptor {
+impl TryInto<VideoOptions> for RawVideoOptions {
     type Error = anyhow::Error;
 
-    fn try_into(self) -> Result<VideoDescriptor, Self::Error> {
-        Ok(VideoDescriptor {
+    fn try_into(self) -> Result<VideoOptions, Self::Error> {
+        Ok(VideoOptions {
             codec: self.codec.into(),
             key_frame_interval: self.key_frame_interval,
             frame_rate: self.frame_rate,
@@ -158,14 +158,14 @@ impl TryInto<VideoDescriptor> for RawVideoDescriptor {
 /// Audio Codec Configuration.
 #[repr(C)]
 #[derive(Clone, Copy)]
-struct RawAudioDescriptor {
+struct RawAudioOptions {
     sample_rate: u64,
     bit_rate: u64,
 }
 
-impl Into<AudioDescriptor> for RawAudioDescriptor {
-    fn into(self) -> AudioDescriptor {
-        AudioDescriptor {
+impl Into<AudioOptions> for RawAudioOptions {
+    fn into(self) -> AudioOptions {
+        AudioOptions {
             sample_rate: self.sample_rate,
             bit_rate: self.bit_rate,
         }
@@ -173,56 +173,61 @@ impl Into<AudioDescriptor> for RawAudioDescriptor {
 }
 
 #[repr(C)]
-struct RawSenderSourceDescriptor<T> {
+struct RawSenderTrackOptions<T> {
     source: *const RawSource,
     options: T,
 }
 
 #[repr(C)]
-struct RawSenderDescriptor {
-    video: *const RawSenderSourceDescriptor<RawVideoDescriptor>,
-    audio: *const RawSenderSourceDescriptor<RawAudioDescriptor>,
-    transport: HylaranaDescriptor,
+struct RawSenderMediaOptions {
+    video: *const RawSenderTrackOptions<RawVideoOptions>,
+    audio: *const RawSenderTrackOptions<RawAudioOptions>,
 }
 
-impl TryInto<HylaranaSenderDescriptor> for RawSenderDescriptor {
+impl TryInto<HylaranaSenderMediaOptions> for RawSenderMediaOptions {
+    type Error = anyhow::Error;
+
+    fn try_into(self) -> Result<HylaranaSenderMediaOptions, Self::Error> {
+        Ok(HylaranaSenderMediaOptions {
+            video: if !self.video.is_null() {
+                let video = unsafe { &*self.video };
+                Some(HylaranaSenderTrackOptions {
+                    source: unsafe { &*video.source }.try_into()?,
+                    options: video.options.try_into()?,
+                })
+            } else {
+                None
+            },
+            audio: if !self.audio.is_null() {
+                let audio = unsafe { &*self.audio };
+                Some(HylaranaSenderTrackOptions {
+                    source: unsafe { &*audio.source }.try_into()?,
+                    options: audio.options.try_into()?,
+                })
+            } else {
+                None
+            },
+        })
+    }
+}
+
+#[repr(C)]
+struct RawSenderOptions {
+    media: RawSenderMediaOptions,
+    transport: RawTransportOptions,
+}
+
+impl TryInto<HylaranaSenderOptions> for RawSenderOptions {
     type Error = anyhow::Error;
 
     // Both video and audio are optional, so the type conversion here is a bit more
     // complicated.
     #[rustfmt::skip]
-    fn try_into(self) -> Result<HylaranaSenderDescriptor, Self::Error> {
-        let mut descriptor = HylaranaSenderDescriptor {
+    fn try_into(self) -> Result<HylaranaSenderOptions, Self::Error> {
+        Ok(HylaranaSenderOptions {
             transport: self.transport.try_into()?,
-            audio: None,
-            video: None,
-        };
-
-        if !self.video.is_null() {
-            let video = unsafe { &*self.video };
-            let options: VideoDescriptor = video.options.try_into()?;
-
-            // Check whether the external parameters are configured correctly to 
-            // avoid some clowns inserting some inexplicable parameters.
-            anyhow::ensure!(options.width % 4 == 0 && options.width <= 4096, "invalid video width");
-            anyhow::ensure!(options.height % 4 == 0 && options.height <= 2560, "invalid video height");
-            anyhow::ensure!(options.frame_rate <= 60, "invalid video frame rate");
-
-            descriptor.video = Some(HylaranaSenderSourceDescriptor {
-                source: unsafe { &*video.source }.try_into()?,
-                options,
-            });
-        }
-
-        if !self.audio.is_null() {
-            let audio = unsafe { &*self.audio };
-            descriptor.audio = Some(HylaranaSenderSourceDescriptor {
-                source: unsafe { &*audio.source }.try_into()?,
-                options: audio.options.try_into()?,
-        });
-        }
-
-        Ok(descriptor)
+            media: self.media.try_into()?,
+        })
     }
 }
 
@@ -234,40 +239,75 @@ struct RawSender(HylaranaSender<RawAVFrameStream>);
 /// null then it means no callback data is needed.
 #[no_mangle]
 extern "C" fn hylarana_create_sender(
-    id: *mut c_char,
-    options: RawSenderDescriptor,
+    options: RawSenderOptions,
     sink: RawAVFrameStream,
+    id: *mut c_char,
 ) -> *const RawSender {
     assert!(!id.is_null());
 
     log::info!("extern api: hylarana create sender");
 
-    let func = || {
-        let options: HylaranaSenderDescriptor = options.try_into()?;
-        log::info!("hylarana create options={:?}", options);
+    log_error((|| {
+        let options: HylaranaSenderOptions = options.try_into()?;
+        log::info!("create sender options={:?}", options);
 
         let sender = Hylarana::create_sender(options, sink)?;
-        write_c_str(sender.get_id(), id);
+        PSTR::strcpy(sender.get_id(), id);
 
         Ok(sender)
-    };
-
-    log_error(func())
-        .map(|sender| Box::into_raw(Box::new(RawSender(sender))))
-        .unwrap_or_else(|_: anyhow::Error| null_mut())
+    })())
+    .map(|it| Box::into_raw(Box::new(RawSender(it))))
+    .unwrap_or_else(|_: anyhow::Error| null_mut())
 }
 
-/// Close sender.
+/// Destroy sender.
 #[no_mangle]
-extern "C" fn hylarana_sender_destroy(sender: *const RawSender) {
+extern "C" fn hylarana_sender_destroy(sender: *mut RawSender) {
     assert!(!sender.is_null());
 
     log::info!("extern api: hylarana close sender");
-    drop(unsafe { Box::from_raw(sender as *mut RawSender) })
+
+    drop(unsafe { Box::from_raw(sender) })
 }
 
 #[repr(C)]
-struct RawReceiver(HylaranaReceiver<RawAVFrameStream>);
+struct RawSenderWithPlayer(HylaranaSender<Player>);
+
+/// Create the sender. the difference is that this function creates the player
+/// together, you don't need to implement the stream sink manually, the player
+/// manages it automatically.
+#[no_mangle]
+extern "C" fn hylarana_create_sender_with_player(
+    options: RawSenderOptions,
+    player_options: RawPlayerOptions,
+    id: *mut c_char,
+) -> *const RawSenderWithPlayer {
+    assert!(!id.is_null());
+
+    log::info!("extern api: hylarana create sender with player");
+
+    log_error((|| {
+        let options: HylaranaSenderOptions = options.try_into()?;
+        log::info!("create sender options={:?}", options);
+
+        let sender = Hylarana::create_sender(options, player_options.create_player()?)?;
+        PSTR::strcpy(sender.get_id(), id);
+
+        Ok(sender)
+    })())
+    .map(|it| Box::into_raw(Box::new(RawSenderWithPlayer(it))))
+    .unwrap_or_else(|_: anyhow::Error| null_mut())
+}
+
+/// Destroy sender with player.
+#[no_mangle]
+extern "C" fn hylarana_sender_with_player_destroy(sender: *mut RawSenderWithPlayer) {
+    assert!(!sender.is_null());
+
+    log::info!("extern api: hylarana close sender with player");
+
+    drop(unsafe { Box::from_raw(sender) })
+}
 
 #[repr(C)]
 #[allow(unused)]
@@ -290,60 +330,95 @@ impl Into<VideoDecoderType> for RawVideoDecoderType {
 }
 
 #[repr(C)]
-struct RawReceiverescriptor {
+struct RawReceiverCodecOptions {
     video: RawVideoDecoderType,
-    transport: HylaranaDescriptor,
 }
+
+#[repr(C)]
+struct RawReceiverOptions {
+    codec: RawReceiverCodecOptions,
+    transport: RawTransportOptions,
+}
+
+#[repr(C)]
+struct RawReceiver(HylaranaReceiver<RawAVFrameStream>);
 
 /// Create a receiver, specify a bound NIC address, you can pass callback to
 /// get the sender's screen or sound callback, callback can not be null.
 #[no_mangle]
 extern "C" fn hylarana_create_receiver(
     id: *const c_char,
-    options: RawReceiverescriptor,
+    options: RawReceiverOptions,
     sink: RawAVFrameStream,
 ) -> *const RawReceiver {
     assert!(!id.is_null());
 
     log::info!("extern api: hylarana create receiver");
 
-    let func = || {
+    log_error((|| {
         Ok::<_, anyhow::Error>(Hylarana::create_receiver(
-            Strings::from(id).to_string()?,
-            HylaranaReceiverDescriptor {
+            PSTR::from(id).to_string()?,
+            HylaranaReceiverOptions {
                 transport: options.transport.try_into()?,
-                video: options.video.into(),
+                codec: HylaranaReceiverCodecOptions {
+                    video: options.codec.video.into(),
+                },
             },
             sink,
         )?)
-    };
-
-    log_error(func())
-        .map(|receiver| Box::into_raw(Box::new(RawReceiver(receiver))))
-        .unwrap_or_else(|_| null_mut())
+    })())
+    .map(|it| Box::into_raw(Box::new(RawReceiver(it))))
+    .unwrap_or_else(|_| null_mut())
 }
 
-/// Close receiver.
+/// Destroy receiver.
 #[no_mangle]
-extern "C" fn hylarana_receiver_destroy(receiver: *const RawReceiver) {
+extern "C" fn hylarana_receiver_destroy(receiver: *mut RawReceiver) {
     assert!(!receiver.is_null());
 
     log::info!("extern api: hylarana close receiver");
-    drop(unsafe { Box::from_raw(receiver as *mut RawReceiver) })
+
+    drop(unsafe { Box::from_raw(receiver) })
 }
 
 #[repr(C)]
-#[allow(unused)]
-enum RawGraphicsBackend {
-    Direct3D11,
-    WebGPU,
+struct RawReceiverWithPlayer(HylaranaReceiver<Player>);
+
+/// Create the receiver. the difference is that this function creates the player
+/// together, you don't need to implement the stream sink manually, the player
+/// manages it automatically.
+#[no_mangle]
+extern "C" fn hylarana_create_receiver_with_player(
+    id: *const c_char,
+    options: RawReceiverOptions,
+    player_options: RawPlayerOptions,
+) -> *const RawReceiverWithPlayer {
+    assert!(!id.is_null());
+
+    log::info!("extern api: hylarana create receiver with player");
+
+    log_error((|| {
+        Ok::<_, anyhow::Error>(Hylarana::create_receiver(
+            PSTR::from(id).to_string()?,
+            HylaranaReceiverOptions {
+                transport: options.transport.try_into()?,
+                codec: HylaranaReceiverCodecOptions {
+                    video: options.codec.video.into(),
+                },
+            },
+            player_options.create_player()?,
+        )?)
+    })())
+    .map(|it| Box::into_raw(Box::new(RawReceiverWithPlayer(it))))
+    .unwrap_or_else(|_| null_mut())
 }
 
-impl Into<GraphicsBackend> for RawGraphicsBackend {
-    fn into(self) -> GraphicsBackend {
-        match self {
-            Self::Direct3D11 => GraphicsBackend::Direct3D11,
-            Self::WebGPU => GraphicsBackend::WebGPU,
-        }
-    }
+/// Destroy receiver with player.
+#[no_mangle]
+extern "C" fn hylarana_receiver_with_player_destroy(receiver: *mut RawReceiverWithPlayer) {
+    assert!(!receiver.is_null());
+
+    log::info!("extern api: hylarana close receiver with player");
+
+    drop(unsafe { Box::from_raw(receiver) })
 }

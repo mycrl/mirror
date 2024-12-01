@@ -7,8 +7,8 @@ use std::{
 
 use bytes::BytesMut;
 use hylarana_capture::{
-    AudioCaptureSourceDescription, Capture, CaptureDescriptor, FrameArrived, Source,
-    SourceCaptureDescriptor, VideoCaptureSourceDescription,
+    AudioCaptureSourceDescription, Capture, CaptureOptions, FrameArrived, Source,
+    SourceCaptureOptions, VideoCaptureSourceDescription,
 };
 
 use hylarana_common::{
@@ -24,7 +24,7 @@ use hylarana_codec::{
 
 use hylarana_transport::{
     copy_from_slice as package_copy_from_slice, BufferFlag, StreamBufferInfo, StreamSenderAdapter,
-    TransportDescriptor, TransportSender,
+    TransportOptions, TransportSender,
 };
 
 use thiserror::Error;
@@ -43,7 +43,7 @@ pub enum HylaranaSenderError {
 
 /// Description of video coding.
 #[derive(Debug, Clone)]
-pub struct VideoDescriptor {
+pub struct VideoOptions {
     pub codec: VideoEncoderType,
     pub frame_rate: u8,
     pub width: u32,
@@ -54,23 +54,30 @@ pub struct VideoDescriptor {
 
 /// Description of the audio encoding.
 #[derive(Debug, Clone, Copy)]
-pub struct AudioDescriptor {
+pub struct AudioOptions {
     pub sample_rate: u64,
     pub bit_rate: u64,
 }
 
+/// Options of the media track.
 #[derive(Debug, Clone)]
-pub struct HylaranaSenderSourceDescriptor<T> {
+pub struct HylaranaSenderTrackOptions<T> {
     pub source: Source,
     pub options: T,
 }
 
+/// Options of the media stream.
+#[derive(Debug, Clone)]
+pub struct HylaranaSenderMediaOptions {
+    pub video: Option<HylaranaSenderTrackOptions<VideoOptions>>,
+    pub audio: Option<HylaranaSenderTrackOptions<AudioOptions>>,
+}
+
 /// Sender configuration.
 #[derive(Debug, Clone)]
-pub struct HylaranaSenderDescriptor {
-    pub video: Option<HylaranaSenderSourceDescriptor<VideoDescriptor>>,
-    pub audio: Option<HylaranaSenderSourceDescriptor<AudioDescriptor>>,
-    pub transport: TransportDescriptor,
+pub struct HylaranaSenderOptions {
+    pub media: HylaranaSenderMediaOptions,
+    pub transport: TransportOptions,
 }
 
 struct VideoSender<T: AVFrameStream + 'static> {
@@ -302,18 +309,18 @@ impl<T: AVFrameStream + 'static> HylaranaSender<T> {
     // but both video capture and audio capture can be empty, which means you can
     // create a sender that captures nothing.
     pub(crate) fn new(
-        options: HylaranaSenderDescriptor,
+        options: HylaranaSenderOptions,
         sink: T,
     ) -> Result<Self, HylaranaSenderError> {
         log::info!("create sender");
 
-        let mut capture_options = CaptureDescriptor::default();
+        let mut capture_options = CaptureOptions::default();
         let transport = hylarana_transport::create_sender(options.transport)?;
         let status = Arc::new(AtomicBool::new(false));
         let sink = Arc::new(sink);
 
-        if let Some(HylaranaSenderSourceDescriptor { source, options }) = options.audio {
-            capture_options.audio = Some(SourceCaptureDescriptor {
+        if let Some(HylaranaSenderTrackOptions { source, options }) = options.media.audio {
+            capture_options.audio = Some(SourceCaptureOptions {
                 arrived: AudioSender::new(
                     status.clone(),
                     &transport,
@@ -330,8 +337,8 @@ impl<T: AVFrameStream + 'static> HylaranaSender<T> {
             });
         }
 
-        if let Some(HylaranaSenderSourceDescriptor { source, options }) = options.video {
-            capture_options.video = Some(SourceCaptureDescriptor {
+        if let Some(HylaranaSenderTrackOptions { source, options }) = options.media.video {
+            capture_options.video = Some(SourceCaptureOptions {
                 description: VideoCaptureSourceDescription {
                     hardware: CodecType::from(options.codec).is_hardware(),
                     fps: options.frame_rate,
@@ -362,7 +369,7 @@ impl<T: AVFrameStream + 'static> HylaranaSender<T> {
         }
 
         Ok(Self {
-            capture: Capture::new(capture_options)?,
+            capture: Capture::start(capture_options)?,
             transport,
             status,
             sink,

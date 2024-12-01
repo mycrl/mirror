@@ -1,10 +1,9 @@
-use std::sync::{atomic::AtomicBool, Arc};
+use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
 use bytes::Bytes;
-use hylarana_common::atomic::EasyAtomic;
 use hylarana_transport::{
-    create_mix_receiver, StreamKind, StreamReceiverAdapter, TransportDescriptor, TransportReceiver,
+    create_mix_receiver, StreamKind, StreamReceiverAdapter, TransportOptions, TransportReceiver,
 };
 
 use jni::{
@@ -15,7 +14,6 @@ use jni::{
 use super::{get_current_env, object::TransformObject};
 
 pub struct Receiver {
-    closed: AtomicBool,
     observer: GlobalRef,
     receiver: TransportReceiver<StreamReceiverAdapter>,
 }
@@ -49,9 +47,8 @@ impl Receiver {
         let id: String = env.get_string(id)?.into();
 
         Ok(Self {
-            closed: AtomicBool::new(false),
+            receiver: create_mix_receiver(id, TransportOptions::from_object(env, &options)?)?,
             observer: env.new_global_ref(observer)?,
-            receiver: create_mix_receiver(id, TransportDescriptor::from_object(env, &options)?)?,
         })
     }
 
@@ -83,10 +80,8 @@ impl Receiver {
     }
 
     pub fn close(&self) -> Result<()> {
-        if !self.closed.get() {
-            let mut env = get_current_env();
-            env.call_method(self.observer.as_obj(), "close", "()V", &[])?;
-        }
+        let mut env = get_current_env();
+        env.call_method(self.observer.as_obj(), "close", "()V", &[])?;
 
         Ok(())
     }

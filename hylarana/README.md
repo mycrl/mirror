@@ -45,9 +45,9 @@ Next, create the sender configurations.
 Start by creating the encoding configurations for the audio and video sources:
 
 ```rust
-let video_descriptor = HylaranaSenderSourceDescriptor {
+let video_options = HylaranaSenderTrackOptions {
     source: video_source,
-    options: VideoDescriptor {
+    options: VideoOptions {
         codec: VideoEncoderType::X264,
         frame_rate: 30,
         width: 1280,
@@ -57,9 +57,9 @@ let video_descriptor = HylaranaSenderSourceDescriptor {
     },
 }
 
-let audio_descriptor = HylaranaSenderSourceDescriptor {
+let audio_options = HylaranaSenderTrackOptions {
     source: audio_source,
-    options: AudioDescriptor {
+    options: AudioOptions {
         sample_rate: 48000,
         bit_rate: 64000,
     },
@@ -73,7 +73,7 @@ Then, create the sender.
 First, we use UDP multicast as the network transmission method for screen casting:
 
 ```rust
-let transport = TransportDescriptor {
+let transport = TransportOptions {
     strategy: TransportStrategy::Multicast("239.0.0.1:8080".parse()?),
     mtu: 1500,
 };
@@ -85,10 +85,12 @@ Pass these configurations to the `create_sender` function to create the sender:
 
 ```rust
 let sender = Hylarana::create_sender(
-    HylaranaSenderDescriptor {
+    HylaranaSenderOptions {
         transport,
-        video: video_descriptor,
-        audio: audio_descriptor,
+        media: HylaranaSenderMediaOptions {
+            video: video_options,
+            audio: audio_options,
+        },
     },
     view,
 )?;
@@ -97,7 +99,7 @@ let sender = Hylarana::create_sender(
 You may notice that `view` we haven't created yet, don't worry, we'll go back and create `view` to display our sender preview screen next.
 
 ```rust
-struct View(Renderer<'static>);
+struct View(Mutex<VideoRender<'a>>);
 
 impl AVFrameStream for View {}
 
@@ -107,7 +109,7 @@ impl AVFrameSink for View {
     }
 
     fn video(&self, frame: &VideoFrame) -> bool {
-        self.0.video(frame)
+        self.video.send(frame).is_ok()
     }
 }
 
@@ -118,24 +120,28 @@ impl AVFrameObserver for View {
 }
 ```
 
-We implement `AVFrameStream` for `View`, which is needed for `create_sender`. We submit every video frame we receive to the `Renderer`, but the audio we don't process because playing native sound will cause an audio loopback (you don't want that).
+We implement `AVFrameStream` for `View`, which is needed for `create_sender`. We submit every video frame we receive to the `VideoRender`, but the audio we don't process because playing native sound will cause an audio loopback (you don't want that).
 
-Let's go back to how to create the `Renderer`.
+Let's go back to how to create the `VideoRender`.
 
 The renderer needs a window to output and display the screen, it is recommended to use `winit` to create a native window, this library is very easy to use, but instead of showing how to create a window with winit and such, we will assume that a `window` has been created:
 
 ```rust
 let inner_size = window.inner_size();
-let renderer = Renderer::new(GraphicsBackend::WebGPU, window, Size {
-    width: inner_size.width,
-    height: inner_size.height,
+let video_render = VideoRender::new(VideoRenderOptions {
+    backend: VideoRenderBackend::WebGPU,
+    target: window,
+    size: Size {
+        width: inner_size.width,
+        height: inner_size.height,
+    },
 })?;
 ```
 
 Then create `View`.
 
 ```rust
-let view = View(renderer);
+let view = View(video_render);
 ```
 
 This way, we have a window where we can preview the video screen.
@@ -151,9 +157,11 @@ Creating a receiver is much simpler, and we refer directly to the sender's creat
 ```rust
 let receiver = Hylarana::create_receiver(
     id,
-    HylaranaReceiverDescriptor {
-        video: VideoDecoderType::H264,
-        transport: TransportDescriptor {
+    HylaranaReceiverOptions {
+        codec: HylaranaReceiverCodecOptions {
+            video: VideoDecoderType::H264,
+        },
+        transport: TransportOptions {
             strategy: TransportStrategy::Multicast("239.0.0.1:8080".parse()?),
             mtu: 1500,
         },
@@ -162,7 +170,7 @@ let receiver = Hylarana::create_receiver(
 )?;
 ```
 
-The `id` comes from the sender, for video decoding we use a software decoder, and the transport layer policy needs to be the same on the receiver side as on the sender side, otherwise the two sides won't be able to communicate with each other using different policies. The creation of the `view` has already been implemented in the above section on creating the sender, so we won't implement it here.
+The `id` comes from the sender, for video decoding we use a software decoder, and the transport layer policy needs to be the same on the receiver side as on the sender side, otherwise the two sides won't be able to communicate with each other using different policies. The creation of the `view` has already been implemented in the above section on creating the sender, so we won't implement it here. But the receiving end needs to play the sound, you just need to create one more `AudioRender` and refer to the example above to process the audio frames.
 
 ## LAN discovery
 
@@ -198,9 +206,11 @@ let service = DiscoveryService::query(|addrs, info: StreamInfo| {
     if info.name == "test" {
         let receiver = Hylarana::create_receiver(
             info.id,
-            HylaranaReceiverDescriptor {
-                video: VideoDecoderType::H264,
-                transport: TransportDescriptor {
+            HylaranaReceiverOptions {
+                codec: HylaranaReceiverCodecOptions {
+                    video: VideoDecoderType::H264,
+                },
+                transport: TransportOptions {
                     strategy: info.strategy,
                     mtu: 1500,
                 },

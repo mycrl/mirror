@@ -179,10 +179,10 @@ trait Texture2DSample {
     /// Creates a new BindGroupLayout.
     ///
     /// A BindGroupLayout is a handle to the GPU-side layout of a binding group.
-    /// It can be used to create a BindGroupDescriptor object, which in turn can
+    /// It can be used to create a BindGroupOptions object, which in turn can
     /// be used to create a BindGroup object with Device::create_bind_group. A
     /// series of BindGroupLayouts can also be used to create a
-    /// PipelineLayoutDescriptor, which can be used to create a PipelineLayout.
+    /// PipelineLayoutOptions, which can be used to create a PipelineLayout.
     fn bind_group_layout(&self, device: &Device) -> BindGroupLayout {
         let mut entries: SmallVec<[BindGroupLayoutEntry; 5]> = SmallVec::with_capacity(5);
         for (i, _) in self.views_descriptors(None).into_iter().enumerate() {

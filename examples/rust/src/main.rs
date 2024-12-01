@@ -7,11 +7,12 @@ use std::{
 use anyhow::{anyhow, Result};
 use clap::Parser;
 use hylarana::{
-    shutdown, startup, AVFrameObserver, AVFrameSink, AVFrameStream, AudioDescriptor, AudioFrame,
-    Capture, DiscoveryService, GraphicsBackend, Hylarana, HylaranaReceiver,
-    HylaranaReceiverDescriptor, HylaranaSender, HylaranaSenderDescriptor,
-    HylaranaSenderSourceDescriptor, Renderer, Size, SourceType, TransportDescriptor,
-    TransportStrategy, VideoDecoderType, VideoDescriptor, VideoEncoderType, VideoFrame,
+    shutdown, startup, AVFrameObserver, AVFrameStreamPlayer, AVFrameStreamPlayerOptions,
+    AudioOptions, Capture, DiscoveryService, Hylarana, HylaranaReceiver,
+    HylaranaReceiverCodecOptions, HylaranaReceiverOptions, HylaranaSender,
+    HylaranaSenderMediaOptions, HylaranaSenderOptions, HylaranaSenderTrackOptions, Size,
+    SourceType, TransportOptions, TransportStrategy, VideoDecoderType, VideoEncoderType,
+    VideoOptions, VideoRenderBackend, VideoRenderOptions,
 };
 
 use parking_lot::Mutex;
@@ -79,29 +80,23 @@ impl TryFrom<Properties> for StreamInfo {
     }
 }
 
-struct View {
-    renderer: Arc<Renderer<'static>>,
-    unmute: bool,
+trait GetSize {
+    fn size(&self) -> Size;
 }
 
-impl AVFrameStream for View {}
-
-impl AVFrameSink for View {
-    fn audio(&self, frame: &AudioFrame) -> bool {
-        // If it's needed for muting, no audio frames are pushed to the player.
-        if !self.unmute {
-            return self.renderer.audio(frame);
+impl GetSize for Window {
+    fn size(&self) -> Size {
+        let size = self.inner_size();
+        Size {
+            width: size.width,
+            height: size.height,
         }
-
-        true
-    }
-
-    fn video(&self, frame: &VideoFrame) -> bool {
-        self.renderer.video(frame)
     }
 }
 
-impl AVFrameObserver for View {
+struct ViewObserver;
+
+impl AVFrameObserver for ViewObserver {
     fn close(&self) {
         println!("view is closed");
     }
@@ -109,17 +104,17 @@ impl AVFrameObserver for View {
 
 #[allow(unused)]
 struct Sender {
-    sender: HylaranaSender<View>,
+    sender: HylaranaSender<AVFrameStreamPlayer<'static, ViewObserver>>,
     discovery: DiscoveryService,
 }
 
 impl Sender {
-    fn new(configure: &Configure, renderer: Arc<Renderer<'static>>) -> Result<Self> {
+    fn new(configure: &Configure, window: Arc<Window>) -> Result<Self> {
         // Get the first screen that can be captured.
         let mut video = None;
         if let Some(source) = Capture::get_sources(SourceType::Screen)?.get(0) {
-            video = Some(HylaranaSenderSourceDescriptor {
-                options: configure.get_video_descriptor(),
+            video = Some(HylaranaSenderTrackOptions {
+                options: configure.get_video_options(),
                 source: source.clone(),
             });
         }
@@ -127,9 +122,9 @@ impl Sender {
         // Get the first audio input device that can be captured.
         let mut audio = None;
         if let Some(source) = Capture::get_sources(SourceType::Audio)?.get(0) {
-            audio = Some(HylaranaSenderSourceDescriptor {
+            audio = Some(HylaranaSenderTrackOptions {
                 source: source.clone(),
-                options: AudioDescriptor {
+                options: AudioOptions {
                     sample_rate: 48000,
                     bit_rate: 64000,
                 },
@@ -138,18 +133,21 @@ impl Sender {
 
         let strategy = configure.get_strategy().unwrap();
         let sender = Hylarana::create_sender(
-            HylaranaSenderDescriptor {
-                transport: TransportDescriptor {
+            HylaranaSenderOptions {
+                transport: TransportOptions {
                     strategy,
                     mtu: 1500,
                 },
-                video,
-                audio,
+                media: HylaranaSenderMediaOptions { video, audio },
             },
-            View {
-                renderer,
-                unmute: true,
-            },
+            AVFrameStreamPlayer::new(
+                AVFrameStreamPlayerOptions::OnlyVideo(VideoRenderOptions {
+                    backend: VideoRenderBackend::WebGPU,
+                    size: window.size(),
+                    target: window,
+                }),
+                ViewObserver,
+            )?,
         )?;
 
         // Register the current sender's information with the LAN discovery service so
@@ -170,12 +168,12 @@ impl Sender {
 
 #[allow(unused)]
 struct Receiver {
-    receiver: Arc<Mutex<Option<HylaranaReceiver<View>>>>,
+    receiver: Arc<Mutex<Option<HylaranaReceiver<AVFrameStreamPlayer<'static, ViewObserver>>>>>,
     discovery: DiscoveryService,
 }
 
 impl Receiver {
-    fn new(configure: &Configure, renderer: Arc<Renderer<'static>>) -> Result<Self> {
+    fn new(configure: &Configure, window: Arc<Window>) -> Result<Self> {
         let video_decoder = configure.decoder;
 
         let receiver = Arc::new(Mutex::new(None));
@@ -200,17 +198,24 @@ impl Receiver {
 
                 if let Ok(it) = Hylarana::create_receiver(
                     properties.id,
-                    HylaranaReceiverDescriptor {
-                        video: video_decoder,
-                        transport: TransportDescriptor {
+                    HylaranaReceiverOptions {
+                        codec: HylaranaReceiverCodecOptions {
+                            video: video_decoder,
+                        },
+                        transport: TransportOptions {
                             strategy: properties.strategy,
                             mtu: 1500,
                         },
                     },
-                    View {
-                        renderer: renderer.clone(),
-                        unmute: false,
-                    },
+                    AVFrameStreamPlayer::new(
+                        AVFrameStreamPlayerOptions::All(VideoRenderOptions {
+                            backend: VideoRenderBackend::WebGPU,
+                            size: window.size(),
+                            target: window.clone(),
+                        }),
+                        ViewObserver,
+                    )
+                    .unwrap(),
                 ) {
                     receiver.lock().replace(it);
                 }
@@ -226,7 +231,7 @@ impl Receiver {
 
 #[derive(Default)]
 struct App {
-    renderer: Option<Arc<Renderer<'static>>>,
+    window: Option<Arc<Window>>,
     receiver: Option<Receiver>,
     sender: Option<Sender>,
 }
@@ -243,22 +248,10 @@ impl ApplicationHandler for App {
                 configure.height,
             )));
 
-            let window = Arc::new(event_loop.create_window(attr)?);
-            self.renderer.replace(Arc::new(Renderer::new(
-                GraphicsBackend::WebGPU,
-                window.clone(),
-                Size {
-                    width: configure.width,
-                    height: configure.height,
-                },
-            )?));
-
-            // This is a very bad behavior, but here, for simplicity of implementation, it's
-            // just a straightforward way to say that you don't release the window, so
-            // please don't ever imitate it.
-            std::mem::forget(window);
-
+            self.window
+                .replace(Arc::new(event_loop.create_window(attr)?));
             startup()?;
+
             Ok::<_, anyhow::Error>(())
         })()
         .unwrap()
@@ -276,7 +269,6 @@ impl ApplicationHandler for App {
             WindowEvent::CloseRequested => {
                 drop(self.sender.take());
                 drop(self.receiver.take());
-                drop(self.renderer.take());
 
                 event_loop.exit();
             }
@@ -290,17 +282,16 @@ impl ApplicationHandler for App {
                             //
                             // The receiving end is the same.
                             KeyCode::KeyS => {
-                                if let (None, Some(renderer)) = (&self.sender, &self.renderer) {
+                                if let (None, Some(window)) = (&self.sender, &self.window) {
                                     self.sender.replace(
-                                        Sender::new(&Configure::parse(), renderer.clone()).unwrap(),
+                                        Sender::new(&Configure::parse(), window.clone()).unwrap(),
                                     );
                                 }
                             }
                             KeyCode::KeyR => {
-                                if let (None, Some(renderer)) = (&self.receiver, &self.renderer) {
+                                if let (None, Some(window)) = (&self.receiver, &self.window) {
                                     self.receiver.replace(
-                                        Receiver::new(&Configure::parse(), renderer.clone())
-                                            .unwrap(),
+                                        Receiver::new(&Configure::parse(), window.clone()).unwrap(),
                                     );
                                 }
                             }
@@ -386,8 +377,8 @@ impl Configure {
         })
     }
 
-    fn get_video_descriptor(&self) -> VideoDescriptor {
-        VideoDescriptor {
+    fn get_video_options(&self) -> VideoOptions {
+        VideoOptions {
             codec: self.encoder,
             frame_rate: self.fps,
             width: self.width,

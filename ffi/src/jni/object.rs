@@ -4,7 +4,7 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
-use hylarana_transport::{StreamBufferInfo, StreamKind, TransportDescriptor, TransportStrategy};
+use hylarana_transport::{StreamBufferInfo, StreamKind, TransportOptions, TransportStrategy};
 use jni::{
     objects::{JMap, JObject, JObjectArray, JString, JValueGen},
     JNIEnv,
@@ -104,7 +104,7 @@ impl TransformObject for TransportStrategy {
 }
 
 // ```kt
-// data class TransportDescriptor(
+// data class TransportOptions(
 //     val strategy: TransportStrategy,
 //     /**
 //      * see: [Maximum_transmission_unit](https://en.wikipedia.org/wiki/Maximum_transmission_unit)
@@ -112,7 +112,7 @@ impl TransformObject for TransportStrategy {
 //     val mtu: Int
 // )
 // ```
-impl TransformObject for TransportDescriptor {
+impl TransformObject for TransportOptions {
     fn from_object(env: &mut JNIEnv, object: &JObject) -> Result<Self> {
         let strategy = object.get_object(
             env,

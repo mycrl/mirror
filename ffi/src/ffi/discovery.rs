@@ -5,10 +5,7 @@ use std::{
 };
 
 use hylarana::DiscoveryService;
-use hylarana_common::{
-    c_str,
-    strings::{write_c_str, Strings},
-};
+use hylarana_common::strings::PSTR;
 
 use super::log_error;
 
@@ -31,16 +28,13 @@ extern "C" fn hylarana_properties_insert(
     assert!(!value.is_null());
     assert!(!key.is_null());
 
-    let func = || {
-        unsafe { &mut *properties }.insert(
-            Strings::from(key).to_string()?,
-            Strings::from(value).to_string()?,
-        );
+    (|| {
+        unsafe { &mut *properties }
+            .insert(PSTR::from(key).to_string()?, PSTR::from(value).to_string()?);
 
         Ok::<_, anyhow::Error>(())
-    };
-
-    func().is_ok()
+    })()
+    .is_ok()
 }
 
 /// Get value from the property list, which is Map inside.
@@ -54,14 +48,14 @@ extern "C" fn hylarana_properties_get(
     assert!(!value.is_null());
     assert!(!key.is_null());
 
-    let key = if let Ok(it) = Strings::from(key).to_string() {
+    let key = if let Ok(it) = PSTR::from(key).to_string() {
         it
     } else {
         return false;
     };
 
     if let Some(it) = unsafe { &mut *properties }.get(&key) {
-        write_c_str(it, value);
+        PSTR::strcpy(it, value);
 
         true
     } else {
@@ -89,12 +83,11 @@ extern "C" fn hylarana_discovery_register(
     port: u16,
     properties: *const Properties,
 ) -> *const RawDiscovery {
-    let func =
-        || Ok::<_, anyhow::Error>(DiscoveryService::register(port, unsafe { &*properties })?);
-
-    log_error(func())
-        .map(|it| Box::into_raw(Box::new(it)))
-        .unwrap_or_else(|_| null_mut()) as *const _
+    log_error((|| {
+        Ok::<_, anyhow::Error>(DiscoveryService::register(port, unsafe { &*properties })?)
+    })())
+    .map(|it| Box::into_raw(Box::new(it)))
+    .unwrap_or_else(|_| null_mut()) as *const _
 }
 
 type Callback = extern "C" fn(
@@ -118,7 +111,7 @@ impl CallbackWrap {
             self.ctx,
             addrs
                 .iter()
-                .map(|it| c_str!(it.as_str()))
+                .map(|it| PSTR::from(it.as_str()).as_ptr())
                 .collect::<Vec<_>>()
                 .as_slice()
                 .as_ptr(),
@@ -137,18 +130,17 @@ extern "C" fn hylarana_discovery_query(
     ctx: *const c_void,
 ) -> *const RawDiscovery {
     let callback = CallbackWrap { callback, ctx };
-    let func = || {
+
+    log_error((|| {
         Ok::<_, anyhow::Error>(DiscoveryService::query(move |addrs, info| {
             callback.call(
                 addrs.iter().map(|it| it.to_string()).collect::<Vec<_>>(),
                 &info,
             );
         })?)
-    };
-
-    log_error(func())
-        .map(|it| Box::into_raw(Box::new(it)))
-        .unwrap_or_else(|_| null_mut()) as *const _
+    })())
+    .map(|it| Box::into_raw(Box::new(it)))
+    .unwrap_or_else(|_| null_mut()) as *const _
 }
 
 /// Destroy the discovery.

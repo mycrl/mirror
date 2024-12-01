@@ -4,7 +4,7 @@ use std::{
 };
 
 use hylarana::{Capture, Source, SourceType};
-use hylarana_common::strings::Strings;
+use hylarana_common::strings::PSTR;
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
@@ -48,8 +48,8 @@ impl TryInto<Source> for &RawSource {
 
     fn try_into(self) -> Result<Source, Self::Error> {
         Ok(Source {
-            name: Strings::from(self.name).to_string()?,
-            id: Strings::from(self.id).to_string()?,
+            name: PSTR::from(self.name).to_string()?,
+            id: PSTR::from(self.id).to_string()?,
             is_default: self.is_default,
             kind: self.kind.into(),
             index: self.index,
