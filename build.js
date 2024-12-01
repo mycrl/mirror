@@ -52,16 +52,7 @@ const Replace = (file, filters) => {
 void (async () => {
     const Profile = Args.release ? "Release" : "Debug";
 
-    for (const path of [
-        "./target",
-        "./build",
-        "./build/bin",
-        "./build/lib",
-        "./build/include",
-        "./build/examples",
-        "./build/examples/cpp",
-        "./build/examples/rust",
-    ]) {
+    for (const path of ["./target", "./build", "./build/bin", "./build/lib", "./build/include"]) {
         if (!fs.existsSync(path)) {
             fs.mkdirSync(path);
         }
@@ -102,26 +93,9 @@ void (async () => {
         }
     }
 
-    if (!fs.existsSync("./examples/cpp/build")) {
-        fs.mkdirSync("./examples/cpp/build");
-    }
-
-    await Command(`cmake -DCMAKE_BUILD_TYPE=${Profile} ..`, {
-        cwd: join(__dirname, "./examples/cpp/build"),
-    });
-
-    await Command(`cmake --build . --config=${Profile}`, {
-        cwd: join(__dirname, "./examples/cpp/build"),
-    });
-
     for (const item of [
         ["./README.md", "./build/README.md"],
         ["./LICENSE", "./build/LICENSE"],
-
-        /* examples */
-        ["./examples/cpp/src", "./build/examples/cpp/src"],
-        ["./examples/cpp/CMakeLists.txt", "./build/examples/cpp/CMakeLists.txt"],
-        ["./examples/rust", "./build/examples/rust"],
 
         /* inculde */
         ["./ffi/include/hylarana.h", "./build/include/hylarana.h"],
@@ -131,7 +105,6 @@ void (async () => {
 
     if (process.platform == "win32") {
         for (const item of [
-            [`./examples/cpp/build/${Profile}/example.exe`, "./build/bin/example-cpp.exe"],
             [`./target/${Profile.toLowerCase()}/hylarana-example.exe`, "./build/bin/example.exe"],
             [
                 `./target/${Profile.toLowerCase()}/hylarana-server.exe`,
@@ -147,7 +120,6 @@ void (async () => {
         }
     } else if (process.platform == "darwin") {
         for (const item of [
-            [`./examples/cpp/build/example`, "./build/bin/example-cpp"],
             [`./target/${Profile.toLowerCase()}/hylarana-example`, "./build/bin/example"],
             [`./target/${Profile.toLowerCase()}/hylarana-server`, "./build/bin/hylarana-server"],
             [
@@ -159,7 +131,6 @@ void (async () => {
         }
     } else if (process.platform == "linux") {
         for (const item of [
-            [`./examples/cpp/build/example`, "./build/bin/example-cpp"],
             [`./target/${Profile.toLowerCase()}/hylarana-example`, "./build/bin/example"],
             [`./target/${Profile.toLowerCase()}/hylarana-server`, "./build/bin/hylarana-server"],
             [`./target/${Profile.toLowerCase()}/libhylarana.so`, "./build/bin/libhylarana.so"],
@@ -181,14 +152,6 @@ void (async () => {
             }
         }
     }
-
-    Replace("./build/examples/cpp/CMakeLists.txt", [
-        ["../../sdk/renderer/include", "../include"],
-        ["../../sdk/cpp/include", "../include"],
-        ["../../frame/include", "../include"],
-        ["../../target/debug", "../lib"],
-        ["../../target/release", "../lib"],
-    ]);
 
     /* async block end */
 })().catch((e) => {

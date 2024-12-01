@@ -20,5 +20,4 @@ members = [
     "transport",
     "examples/rust", 
     "discovery",
-    "sdk/node"
 ]
