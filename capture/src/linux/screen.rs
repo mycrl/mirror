@@ -9,8 +9,8 @@ use std::{
 
 use hylarana_common::{
     atomic::EasyAtomic,
-    c_str,
     frame::{VideoFormat, VideoFrame, VideoSubFormat},
+    strings::PSTR,
 };
 
 use mirror_ffmpeg_sys::*;
@@ -141,7 +141,7 @@ impl Capture {
         };
 
         // Currently you can only capture the screen in the x11 desktop environment.
-        let format = unsafe { av_find_input_format(c_str!("x11grab")) };
+        let format = unsafe { av_find_input_format(PSTR::from("x11grab").as_ptr()) };
         if format.is_null() {
             return Err(ScreenCaptureError::NotFoundInputFormat);
         }
@@ -154,14 +154,19 @@ impl Capture {
             ("framerete".to_string(), options.fps.to_string()),
         ] {
             unsafe {
-                av_dict_set(&mut format_options, c_str!(k), c_str!(v), 0);
+                av_dict_set(
+                    &mut format_options,
+                    PSTR::from(k).as_ptr(),
+                    PSTR::from(v).as_ptr(),
+                    0,
+                );
             }
         }
 
         if unsafe {
             avformat_open_input(
                 &mut this.fmt_ctx,
-                c_str!(options.source.id.as_str()),
+                PSTR::from(options.source.id.as_str()).as_ptr(),
                 format,
                 &mut format_options,
             )
