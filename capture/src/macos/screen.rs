@@ -12,7 +12,7 @@ pub struct ScreenCapture;
 impl CaptureHandler for ScreenCapture {
     type Frame = VideoFrame;
     type Error = ScreenCaptureError;
-    type CaptureDescriptor = VideoCaptureSourceDescription;
+    type CaptureOptions = VideoCaptureSourceDescription;
 
     fn get_sources() -> Result<Vec<Source>, Self::Error> {
         Ok(Vec::new())
@@ -20,7 +20,7 @@ impl CaptureHandler for ScreenCapture {
 
     fn start<S: FrameArrived<Frame = Self::Frame> + 'static>(
         &self,
-        _options: Self::CaptureDescriptor,
+        _options: Self::CaptureOptions,
         mut _arrived: S,
     ) -> Result<(), Self::Error> {
         todo!("screen capture is not supported on macos")

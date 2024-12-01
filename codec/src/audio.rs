@@ -2,7 +2,7 @@ use crate::codec::{set_option, set_str_option};
 
 use std::{ffi::c_int, ptr::null_mut};
 
-use hylarana_common::{c_str, frame::AudioFrame};
+use hylarana_common::{frame::AudioFrame, strings::PSTR};
 use mirror_ffmpeg_sys::*;
 use thiserror::Error;
 
@@ -39,7 +39,7 @@ unsafe impl Send for AudioDecoder {}
 
 impl AudioDecoder {
     pub fn new() -> Result<Self, AudioDecoderError> {
-        let codec = unsafe { avcodec_find_decoder_by_name(c_str!("libopus")) };
+        let codec = unsafe { avcodec_find_decoder_by_name(PSTR::from("libopus").as_ptr()) };
         if codec.is_null() {
             return Err(AudioDecoderError::NotFoundAVCodec);
         }
@@ -230,7 +230,7 @@ unsafe impl Send for AudioEncoder {}
 
 impl AudioEncoder {
     pub fn new(options: AudioEncoderSettings) -> Result<Self, AudioEncoderError> {
-        let codec = unsafe { avcodec_find_encoder_by_name(c_str!("libopus")) };
+        let codec = unsafe { avcodec_find_encoder_by_name(PSTR::from("libopus").as_ptr()) };
         if codec.is_null() {
             return Err(AudioEncoderError::NotFoundAVCodec);
         }

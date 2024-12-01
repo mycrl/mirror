@@ -1,0 +1,18 @@
+[package]
+name = "hylarana-napi"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+anyhow = "1.0.82"
+log = "0.4.20"
+hylarana = { path = "../../hylarana" }
+napi = { version = "3.0.0-alpha.11", features = ["napi9"] }
+napi-derive = "3.0.0-alpha.11"
+simple_logger = "5"
+
+[build-dependencies]
+napi-build = "1"

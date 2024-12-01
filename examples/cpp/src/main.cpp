@@ -52,13 +52,13 @@ public:
         auto video_sources = hylarana_get_sources(SOURCE_TYPE_SCREEN);
         auto audio_sources = hylarana_get_sources(SOURCE_TYPE_AUDIO);
 
-        HylaranaVideoDescriptor video_options;
-        video_options.encoder.codec = OPTIONS.encoder;
-        video_options.encoder.width = OPTIONS.width;
-        video_options.encoder.height = OPTIONS.height;
-        video_options.encoder.frame_rate = OPTIONS.fps;
-        video_options.encoder.key_frame_interval = 21;
-        video_options.encoder.bit_rate = 500 * 1024 * 8;
+        HylaranaVideoTrackOptions video_options;
+        video_options.options.codec = OPTIONS.encoder;
+        video_options.options.width = OPTIONS.width;
+        video_options.options.height = OPTIONS.height;
+        video_options.options.frame_rate = OPTIONS.fps;
+        video_options.options.key_frame_interval = 21;
+        video_options.options.bit_rate = 500 * 1024 * 8;
 
         for (int i = 0; i < video_sources.size; i++)
         {
@@ -68,9 +68,9 @@ public:
             }
         }
 
-        HylaranaAudioDescriptor audio_options;
-        audio_options.encoder.sample_rate = 48000;
-        audio_options.encoder.bit_rate = 64000;
+        HylaranaAudioTrackOptions audio_options;
+        audio_options.options.sample_rate = 48000;
+        audio_options.options.bit_rate = 64000;
 
         for (int i = 0; i < audio_sources.size; i++)
         {
@@ -80,15 +80,18 @@ public:
             }
         }
 
-        HylaranaDescriptor transport = {};
+        HylaranaTransportOptions transport = {};
         transport.address = const_cast<char*>(OPTIONS.address.c_str());
         transport.strategy = OPTIONS.strategy;
         transport.mtu = 1500;
 
-        HylaranaSenderDescriptor options;
-        options.video = &video_options;
-        options.audio = &audio_options;
+        HylaranaSenderMediaOptions media;
+        media.video = &video_options;
+        media.audio = &audio_options;
+
+        HylaranaSenderOptions options;
         options.transport = transport;
+        options.media = media;
 
         HylaranaFrameSink sink;
         sink.close = HylaranaService::_close_proc;
@@ -214,8 +217,8 @@ private:
         sink.audio = HylaranaService::_audio_proc;
         sink.ctx = ctx;
 
-        HylaranaDescriptor transport = {};
-        transport.strategy = (HylaranaStrategy)std::stoi(std::string(strategy));
+        HylaranaTransportOptions transport = {};
+        transport.strategy = (HylaranaTransportStrategy)std::stoi(std::string(strategy));
         transport.mtu = 1500;
 
         SocketAddr socket_addr = SocketAddr(std::string(addr));
@@ -227,9 +230,12 @@ private:
         std::string address = socket_addr.ToString();
         transport.address = address.c_str();
 
-        HylaranaReceiverDescriptor options;
+        HylaranaReceiverCodecOptions codec;
+        codec.video = OPTIONS.decoder;
+
+        HylaranaReceiverOptions options;
         options.transport = transport;
-        options.video = OPTIONS.decoder;
+        options.codec = codec;
 
         self->_receiver = hylarana_create_receiver(id, options, sink);
     }

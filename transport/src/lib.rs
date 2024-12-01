@@ -15,9 +15,9 @@ pub use self::{
     receiver::{create_mix_receiver, create_split_receiver, Receiver as TransportReceiver},
     sender::{create_sender, Sender as TransportSender},
     transmission::{
-        Descriptor as TransmissionDescriptor, FragmentDecoder as TransmissionFragmentDecoder,
-        FragmentEncoder as TransmissionFragmentEncoder, Server as TransmissionServer,
-        Socket as TransmissionSocket,
+        FragmentDecoder as TransmissionFragmentDecoder,
+        FragmentEncoder as TransmissionFragmentEncoder, Options as TransmissionOptions,
+        Server as TransmissionServer, Socket as TransmissionSocket,
     },
 };
 
@@ -79,7 +79,7 @@ pub enum TransportStrategy {
 
 /// Transport configuration.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-pub struct TransportDescriptor {
+pub struct TransportOptions {
     pub strategy: TransportStrategy,
     /// see: [Maximum_transmission_unit](https://en.wikipedia.org/wiki/Maximum_transmission_unit)
     pub mtu: usize,

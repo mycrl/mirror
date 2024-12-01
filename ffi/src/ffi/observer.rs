@@ -31,7 +31,7 @@ pub(crate) struct RawAVFrameStream {
     /// allows BT.2020 primaries (since 2021). The same happens with
     /// JPEG: it has BT.601 matrix derived from System M primaries, yet the
     /// primaries of most images are BT.709.
-    video: Option<extern "C" fn(ctx: *const c_void, frame: *const VideoFrame) -> bool>,
+    pub(crate) video: Option<extern "C" fn(ctx: *const c_void, frame: *const VideoFrame) -> bool>,
     /// Callback is called when the audio frame is updated. The audio frame
     /// format is fixed to PCM. Be careful not to call blocking methods
     /// inside the callback, which will seriously slow down the
@@ -58,12 +58,12 @@ pub(crate) struct RawAVFrameStream {
     /// the number of times per second that samples are taken; and the bit
     /// depth, which determines the number of possible digital values that
     /// can be used to represent each sample.
-    audio: Option<extern "C" fn(ctx: *const c_void, frame: *const AudioFrame) -> bool>,
+    pub(crate) audio: Option<extern "C" fn(ctx: *const c_void, frame: *const AudioFrame) -> bool>,
     /// Callback when the sender is closed. This may be because the external
     /// side actively calls the close, or the audio and video packets cannot
     /// be sent (the network is disconnected), etc.
-    close: Option<extern "C" fn(ctx: *const c_void)>,
-    ctx: *const c_void,
+    pub(crate) close: Option<extern "C" fn(ctx: *const c_void)>,
+    pub(crate) ctx: *const c_void,
 }
 
 unsafe impl Send for RawAVFrameStream {}

@@ -24,26 +24,18 @@ pub enum StringError {
 ///
 /// CString is to &CStr as String is to &str: the former in each pair are owned
 /// strings; the latter are borrowed references.
-pub struct Strings {
+pub struct PSTR {
     ptr: *const c_char,
     drop: bool,
 }
 
-impl Drop for Strings {
-    fn drop(&mut self) {
-        if self.drop && !self.ptr.is_null() {
-            drop(unsafe { CString::from_raw(self.ptr as *mut c_char) })
-        }
-    }
-}
-
-impl From<*const c_char> for Strings {
+impl From<*const c_char> for PSTR {
     fn from(ptr: *const c_char) -> Self {
         Self { drop: false, ptr }
     }
 }
 
-impl From<&str> for Strings {
+impl From<&str> for PSTR {
     fn from(value: &str) -> Self {
         Self {
             ptr: CString::new(value).unwrap().into_raw(),
@@ -52,7 +44,7 @@ impl From<&str> for Strings {
     }
 }
 
-impl From<String> for Strings {
+impl From<String> for PSTR {
     fn from(value: String) -> Self {
         Self {
             ptr: CString::new(value).unwrap().into_raw(),
@@ -61,7 +53,7 @@ impl From<String> for Strings {
     }
 }
 
-impl Strings {
+impl PSTR {
     /// Yields a &str slice if the CStr contains valid UTF-8.
     ///
     /// If the contents of the CStr are valid UTF-8 data, this function will
@@ -93,21 +85,26 @@ impl Strings {
     pub fn as_ptr(&self) -> *const c_char {
         self.ptr
     }
+
+    /// Copy the string pointed to by src to dest.
+    ///
+    /// The behavior of this function is essentially the same as the behavior of
+    /// `strcpy` in the C standard library.
+    pub fn strcpy(src: &str, dest: *mut c_char) {
+        let src = src.as_bytes();
+        let len = src.len();
+
+        unsafe {
+            ptr::copy(src.as_ptr().cast(), dest, len);
+            ptr::write(dest.offset(len as isize + 1) as *mut u8, b'\0');
+        }
+    }
 }
 
-#[macro_export]
-macro_rules! c_str {
-    ($s:expr) => {
-        hylarana_common::strings::Strings::from($s).as_ptr()
-    };
-}
-
-pub fn write_c_str(src: &str, dst: *mut c_char) {
-    let src = src.as_bytes();
-    let len = src.len();
-
-    unsafe {
-        ptr::copy(src.as_ptr().cast(), dst, len);
-        ptr::write(dst.offset(len as isize + 1) as *mut u8, b'\0');
+impl Drop for PSTR {
+    fn drop(&mut self) {
+        if self.drop && !self.ptr.is_null() {
+            drop(unsafe { CString::from_raw(self.ptr as *mut c_char) })
+        }
     }
 }

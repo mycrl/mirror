@@ -4,7 +4,7 @@ use anyhow::Result;
 use bytes::BytesMut;
 use hylarana_transport::{
     create_sender, with_capacity as package_with_capacity, StreamBufferInfo, StreamSenderAdapter,
-    TransportDescriptor, TransportSender,
+    TransportOptions, TransportSender,
 };
 
 use jni::{
@@ -21,7 +21,7 @@ pub struct Sender {
 
 impl Sender {
     pub fn new(env: &mut JNIEnv, options: &JObject) -> Result<Self> {
-        let sender = create_sender(TransportDescriptor::from_object(env, &options)?)?;
+        let sender = create_sender(TransportOptions::from_object(env, &options)?)?;
         Ok(Self {
             adapter: sender.get_adapter(),
             sender,

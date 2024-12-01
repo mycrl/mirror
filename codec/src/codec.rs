@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use hylarana_common::c_str;
+use hylarana_common::strings::PSTR;
 use mirror_ffmpeg_sys::*;
 use thiserror::Error;
 
@@ -199,12 +199,14 @@ impl CodecType {
 
     pub unsafe fn find_av_codec(&self) -> *const AVCodec {
         match self {
-            Self::Encoder(kind) => avcodec_find_encoder_by_name(c_str!(kind.to_string())),
+            Self::Encoder(kind) => {
+                avcodec_find_encoder_by_name(PSTR::from(kind.to_string()).as_ptr())
+            }
             Self::Decoder(kind) => {
                 if *kind == VideoDecoderType::D3D11 || *kind == VideoDecoderType::VideoToolBox {
                     avcodec_find_decoder(AVCodecID::AV_CODEC_ID_H264)
                 } else {
-                    avcodec_find_decoder_by_name(c_str!(kind.to_string()))
+                    avcodec_find_decoder_by_name(PSTR::from(kind.to_string()).as_ptr())
                 }
             }
         }
@@ -449,12 +451,17 @@ pub fn create_video_frame(
 
 pub fn set_option(context: &mut AVCodecContext, key: &str, value: i64) {
     unsafe {
-        av_opt_set_int(context.priv_data, c_str!(key), value, 0);
+        av_opt_set_int(context.priv_data, PSTR::from(key).as_ptr(), value, 0);
     }
 }
 
 pub fn set_str_option(context: &mut AVCodecContext, key: &str, value: &str) {
     unsafe {
-        av_opt_set(context.priv_data, c_str!(key), c_str!(value), 0);
+        av_opt_set(
+            context.priv_data,
+            PSTR::from(key).as_ptr(),
+            PSTR::from(value).as_ptr(),
+            0,
+        );
     }
 }

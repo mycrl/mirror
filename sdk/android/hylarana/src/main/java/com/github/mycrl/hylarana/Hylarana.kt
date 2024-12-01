@@ -41,7 +41,7 @@ data class TransportStrategy(
     var addr: String
 )
 
-data class TransportDescriptor(
+data class TransportOptions(
     val strategy: TransportStrategy,
     /**
      * see: [Maximum_transmission_unit](https://en.wikipedia.org/wiki/Maximum_transmission_unit)
@@ -93,7 +93,7 @@ internal class Hylarana {
     }
 
     fun createSender(
-        options: TransportDescriptor
+        options: TransportOptions
     ): HylaranaSenderAdapter {
         var sender = createTransportSender(options)
         if (sender == 0L) {
@@ -130,7 +130,7 @@ internal class Hylarana {
     }
 
     fun createReceiver(
-        id: String, options: TransportDescriptor, observer: HylaranaReceiverAdapterObserver
+        id: String, options: TransportOptions, observer: HylaranaReceiverAdapterObserver
     ): HylaranaReceiverAdapter {
         var receiver = createTransportReceiver(id, options, observer)
         if (receiver == 0L) {
@@ -154,7 +154,7 @@ internal class Hylarana {
      * was successful or not.
      */
     private external fun createTransportSender(
-        options: TransportDescriptor,
+        options: TransportOptions,
     ): Long
 
     /**
@@ -184,7 +184,7 @@ internal class Hylarana {
      */
     private external fun createTransportReceiver(
         id: String,
-        options: TransportDescriptor,
+        options: TransportOptions,
         observer: HylaranaReceiverAdapterObserver,
     ): Long
 

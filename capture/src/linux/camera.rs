@@ -37,7 +37,7 @@ pub struct CameraCapture(Arc<AtomicBool>);
 impl CaptureHandler for CameraCapture {
     type Frame = VideoFrame;
     type Error = CameraCaptureError;
-    type CaptureDescriptor = VideoCaptureSourceDescription;
+    type CaptureOptions = VideoCaptureSourceDescription;
 
     fn get_sources() -> Result<Vec<Source>, Self::Error> {
         let mut sources = Vec::with_capacity(5);
@@ -71,7 +71,7 @@ impl CaptureHandler for CameraCapture {
 
     fn start<S: FrameArrived<Frame = Self::Frame> + 'static>(
         &self,
-        options: Self::CaptureDescriptor,
+        options: Self::CaptureOptions,
         mut arrived: S,
     ) -> Result<(), Self::Error> {
         let status = Arc::downgrade(&self.0);

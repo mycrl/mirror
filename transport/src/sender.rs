@@ -11,8 +11,8 @@ use uuid::Uuid;
 
 use crate::{
     adapter::StreamSenderAdapter, MulticastServer, Package, PacketInfo, StreamInfo, StreamInfoKind,
-    TransmissionDescriptor, TransmissionFragmentEncoder, TransmissionServer, TransmissionSocket,
-    TransportDescriptor, TransportStrategy,
+    TransmissionFragmentEncoder, TransmissionOptions, TransmissionServer, TransmissionSocket,
+    TransportOptions, TransportStrategy,
 };
 
 pub struct Sender {
@@ -114,7 +114,7 @@ fn create_relay_sender(addr: SocketAddr, mtu: usize) -> Result<Sender, Error> {
     let sender = Sender::default();
 
     // Create an srt configuration and carry stream information
-    let mut opt = TransmissionDescriptor::default();
+    let mut opt = TransmissionOptions::default();
     opt.fc = 32;
     opt.latency = 20;
     opt.mtu = mtu as u32;
@@ -188,7 +188,7 @@ fn create_direct_sender(addr: SocketAddr, mtu: usize) -> Result<Sender, Error> {
 
     // Configuration of the srt server. Since this suite only works within the LAN,
     // the delay is set to the minimum delay without considering network factors.
-    let mut opt = TransmissionDescriptor::default();
+    let mut opt = TransmissionOptions::default();
     opt.mtu = mtu as u32;
     opt.latency = 20;
     opt.fc = 32;
@@ -286,7 +286,7 @@ fn create_direct_sender(addr: SocketAddr, mtu: usize) -> Result<Sender, Error> {
 /// Create a sender, the sender only sends data and does not receive data, and
 /// no sender has a separate ID, you can get the ID of the current sender by
 /// `get_id`.
-pub fn create_sender(options: TransportDescriptor) -> Result<Sender, Error> {
+pub fn create_sender(options: TransportOptions) -> Result<Sender, Error> {
     match options.strategy {
         TransportStrategy::Multicast(addr) => create_multicast_sender(addr, options.mtu),
         TransportStrategy::Direct(addr) => create_direct_sender(addr, options.mtu),

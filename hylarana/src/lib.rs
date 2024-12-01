@@ -3,15 +3,18 @@
 mod receiver;
 mod sender;
 
+use std::slice::from_raw_parts;
+
 pub use self::{
-    receiver::{HylaranaReceiver, HylaranaReceiverDescriptor, HylaranaReceiverError},
+    receiver::{
+        HylaranaReceiver, HylaranaReceiverCodecOptions, HylaranaReceiverError,
+        HylaranaReceiverOptions,
+    },
     sender::{
-        AudioDescriptor, HylaranaSender, HylaranaSenderDescriptor, HylaranaSenderError,
-        HylaranaSenderSourceDescriptor, VideoDescriptor,
+        AudioOptions, HylaranaSender, HylaranaSenderError, HylaranaSenderMediaOptions,
+        HylaranaSenderOptions, HylaranaSenderTrackOptions, VideoOptions,
     },
 };
-
-use std::slice::from_raw_parts;
 
 pub use hylarana_capture::{Capture, Source, SourceType};
 pub use hylarana_codec::{VideoDecoderType, VideoEncoderType};
@@ -21,8 +24,8 @@ pub use hylarana_common::{
 };
 
 pub use hylarana_discovery::{DiscoveryError, DiscoveryService};
-pub use hylarana_graphics::raw_window_handle;
-pub use hylarana_transport::{TransportDescriptor, TransportStrategy};
+pub use hylarana_graphics::{raw_window_handle, SurfaceTarget};
+pub use hylarana_transport::{TransportOptions, TransportStrategy};
 
 #[cfg(target_os = "windows")]
 use hylarana_common::win32::{
@@ -33,6 +36,8 @@ use hylarana_common::win32::{
 #[cfg(target_os = "macos")]
 use hylarana_common::macos::{CVPixelBufferRef, PixelBufferRef};
 
+use parking_lot::Mutex;
+
 #[cfg(target_os = "windows")]
 use parking_lot::RwLock;
 
@@ -40,11 +45,10 @@ use parking_lot::RwLock;
 use hylarana_graphics::dx11::Dx11Renderer;
 
 use hylarana_graphics::{
-    Renderer as WgpuRenderer, RendererOptions as WgpuRendererOptions, SurfaceTarget, Texture,
-    Texture2DBuffer, Texture2DResource,
+    Renderer as WgpuRenderer, RendererOptions as WgpuRendererOptions, Texture, Texture2DBuffer,
+    Texture2DResource,
 };
 
-use parking_lot::Mutex;
 use rodio::{OutputStream, OutputStreamHandle, Sink};
 use thiserror::Error;
 
@@ -148,7 +152,7 @@ impl Hylarana {
     /// Creates a sender that can specify the audio source or video source to be
     /// captured.
     pub fn create_sender<T: AVFrameStream + 'static>(
-        options: HylaranaSenderDescriptor,
+        options: HylaranaSenderOptions,
         sink: T,
     ) -> Result<HylaranaSender<T>, HylaranaSenderError> {
         log::info!("create sender: options={:?}", options);
@@ -163,7 +167,7 @@ impl Hylarana {
     /// with it.
     pub fn create_receiver<T: AVFrameStream + 'static>(
         id: String,
-        options: HylaranaReceiverDescriptor,
+        options: HylaranaReceiverOptions,
         sink: T,
     ) -> Result<HylaranaReceiver<T>, HylaranaReceiverError> {
         log::info!("create receiver: id={:?}, options={:?}", id, options);
@@ -188,23 +192,130 @@ pub(crate) fn get_direct3d() -> Direct3DDevice {
 }
 
 #[derive(Debug, Error)]
-pub enum RendererError {
-    #[error("no output device available")]
-    AudioNotFoundOutputDevice,
+pub enum AVFrameStreamPlayerError {
     #[error(transparent)]
-    AudioStreamError(#[from] rodio::StreamError),
+    VideoRenderError(#[from] VideoRenderError),
     #[error(transparent)]
-    AudioPlayError(#[from] rodio::PlayError),
-    #[error("send audio queue error")]
-    AudioSendQueueError,
+    AudioRenderError(#[from] AudioRenderError),
+}
+
+/// Configuration of the audio and video streaming player.
+pub enum AVFrameStreamPlayerOptions<T> {
+    /// Play video only.
+    OnlyVideo(VideoRenderOptions<T>),
+    /// Both audio and video will play.
+    All(VideoRenderOptions<T>),
+    /// Play audio only.
+    OnlyAudio,
+}
+
+/// Player for audio and video streaming.
+///
+/// This player is used to quickly and easily create a player that implements
+/// AVFrameStream, you only need to focus on the stream observer, the rest of
+/// the player will be automatically hosted.
+pub struct AVFrameStreamPlayer<'a, O> {
+    video: Option<Mutex<VideoRender<'a>>>,
+    audio: Option<AudioRender>,
+    observer: O,
+}
+
+impl<'a, O> AVFrameStreamPlayer<'a, O>
+where
+    O: AVFrameObserver,
+{
+    pub fn new<T>(
+        options: AVFrameStreamPlayerOptions<T>,
+        observer: O,
+    ) -> Result<Self, AVFrameStreamPlayerError>
+    where
+        T: Into<SurfaceTarget<'a>>,
+    {
+        Ok(Self {
+            observer,
+            audio: match options {
+                AVFrameStreamPlayerOptions::All(_) | AVFrameStreamPlayerOptions::OnlyAudio => {
+                    Some(AudioRender::new()?)
+                }
+                _ => None,
+            },
+            video: match options {
+                AVFrameStreamPlayerOptions::All(options)
+                | AVFrameStreamPlayerOptions::OnlyVideo(options) => {
+                    Some(Mutex::new(VideoRender::new(options)?))
+                }
+                _ => None,
+            },
+        })
+    }
+}
+
+impl<'a, O> AVFrameStream for AVFrameStreamPlayer<'a, O> where O: AVFrameObserver {}
+
+impl<'a, O> AVFrameObserver for AVFrameStreamPlayer<'a, O>
+where
+    O: AVFrameObserver,
+{
+    fn close(&self) {
+        self.observer.close();
+    }
+}
+
+impl<'a, O> AVFrameSink for AVFrameStreamPlayer<'a, O>
+where
+    O: AVFrameObserver,
+{
+    fn audio(&self, frame: &AudioFrame) -> bool {
+        if let Some(player) = &self.audio {
+            if let Err(e) = player.send(frame) {
+                log::error!("AVFrameStreamPlayer sink audio error={:?}", e);
+
+                false
+            } else {
+                true
+            }
+        } else {
+            true
+        }
+    }
+
+    fn video(&self, frame: &VideoFrame) -> bool {
+        if let Some(player) = &self.video {
+            if let Err(e) = player.lock().send(frame) {
+                log::error!("AVFrameStreamPlayer sink video error={:?}", e);
+
+                false
+            } else {
+                true
+            }
+        } else {
+            true
+        }
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum VideoRenderError {
     #[error(transparent)]
     #[cfg(target_os = "windows")]
-    VideoDx11GraphicsError(#[from] hylarana_graphics::dx11::Dx11GraphicsError),
+    Dx11GraphicsError(#[from] hylarana_graphics::dx11::Dx11GraphicsError),
     #[error(transparent)]
-    VideoGraphicsError(#[from] hylarana_graphics::GraphicsError),
+    GraphicsError(#[from] hylarana_graphics::GraphicsError),
     #[error("invalid d3d11texture2d texture")]
     #[cfg(target_os = "windows")]
-    VideoInvalidD3D11Texture,
+    InvalidD3D11Texture,
+}
+
+#[derive(Debug, Error)]
+pub enum AudioRenderError {
+    #[error("no output device available")]
+    NotFoundOutputDevice,
+    #[error(transparent)]
+    StreamError(#[from] rodio::StreamError),
+    #[error(transparent)]
+    PlayError(#[from] rodio::PlayError),
+    #[error("send audio queue error")]
+    SendQueueError,
 }
 
 struct AudioSamples {
@@ -267,7 +378,7 @@ unsafe impl Sync for AudioRender {}
 
 impl AudioRender {
     /// Create a audio player.
-    pub fn new() -> Result<Self, RendererError> {
+    pub fn new() -> Result<Self, AudioRenderError> {
         let (stream, stream_handle) = OutputStream::try_default()?;
         let sink = Sink::try_new(&stream_handle)?;
 
@@ -280,7 +391,7 @@ impl AudioRender {
     }
 
     /// Push an audio clip to the queue.
-    pub fn send(&self, frame: &AudioFrame) -> Result<(), RendererError> {
+    pub fn send(&self, frame: &AudioFrame) -> Result<(), AudioRenderError> {
         self.sink.append(AudioSamples::from(frame));
         Ok(())
     }
@@ -294,7 +405,7 @@ impl Drop for AudioRender {
 
 /// Back-end implementation of graphics.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum GraphicsBackend {
+pub enum VideoRenderBackend {
     /// Backend implemented using D3D11, which is supported on an older device
     /// and platform and has better performance performance and memory
     /// footprint, but only on windows.
@@ -302,6 +413,16 @@ pub enum GraphicsBackend {
     /// Cross-platform graphics backends implemented using WebGPUs are supported
     /// on a number of common platforms or devices.
     WebGPU,
+}
+
+/// Video renderer configuration.
+pub struct VideoRenderOptions<T> {
+    /// The graphics backend used by the video renderer.
+    pub backend: VideoRenderBackend,
+    /// The size of the target window.
+    pub size: Size,
+    /// Renders the target's window.
+    pub target: T,
 }
 
 /// Video player that can render video frames to window.
@@ -313,11 +434,16 @@ pub enum VideoRender<'a> {
 
 impl<'a> VideoRender<'a> {
     /// Create a video player.
-    pub fn new<T: Into<SurfaceTarget<'a>>>(
-        backend: GraphicsBackend,
-        window: T,
-        size: Size,
-    ) -> Result<Self, RendererError> {
+    pub fn new<T>(
+        VideoRenderOptions {
+            backend,
+            size,
+            target,
+        }: VideoRenderOptions<T>,
+    ) -> Result<Self, VideoRenderError>
+    where
+        T: Into<SurfaceTarget<'a>>,
+    {
         log::info!(
             "create video render, backend={:?}, size={:?}",
             backend,
@@ -329,8 +455,8 @@ impl<'a> VideoRender<'a> {
 
         Ok(match backend {
             #[cfg(target_os = "windows")]
-            GraphicsBackend::Direct3D11 => Self::Direct3D11(Dx11Renderer::new(
-                match window.into() {
+            VideoRenderBackend::Direct3D11 => Self::Direct3D11(Dx11Renderer::new(
+                match target.into() {
                     SurfaceTarget::Window(window) => match window.window_handle().unwrap().as_raw()
                     {
                         raw_window_handle::RawWindowHandle::Win32(window) => {
@@ -347,10 +473,10 @@ impl<'a> VideoRender<'a> {
                 size,
                 direct3d,
             )?),
-            GraphicsBackend::WebGPU => Self::WebGPU(WgpuRenderer::new(WgpuRendererOptions {
+            VideoRenderBackend::WebGPU => Self::WebGPU(WgpuRenderer::new(WgpuRendererOptions {
+                window: target,
                 #[cfg(target_os = "windows")]
                 direct3d,
-                window,
                 size,
             })?),
             #[allow(unreachable_patterns)]
@@ -360,14 +486,14 @@ impl<'a> VideoRender<'a> {
 
     /// Push video frames to the queue and the player will render them as
     /// quickly as possible, basically in real time.
-    pub fn send(&mut self, frame: &VideoFrame) -> Result<(), RendererError> {
+    pub fn send(&mut self, frame: &VideoFrame) -> Result<(), VideoRenderError> {
         match frame.sub_format {
             #[cfg(target_os = "windows")]
             VideoSubFormat::D3D11 => {
                 let texture =
                     Texture2DResource::Texture(hylarana_graphics::Texture2DRaw::ID3D11Texture2D(
                         d3d_texture_borrowed_raw(&(frame.data[0] as *mut _))
-                            .ok_or_else(|| RendererError::VideoInvalidD3D11Texture)?
+                            .ok_or_else(|| VideoRenderError::VideoInvalidD3D11Texture)?
                             .clone(),
                         frame.data[1] as u32,
                     ));
@@ -518,59 +644,5 @@ impl<'a> VideoRender<'a> {
         }
 
         Ok(())
-    }
-}
-
-/// Renderer for video frames and audio frames.
-///
-/// Typically, the player underpinnings for audio and video are implementedin
-/// hardware, but not always, the underpinnings automatically select the adapter
-/// and fall back to the software adapter if the hardware adapter is
-/// unavailable, for video this can be done by enabling the dx11 feature tobe
-/// implemented with Direct3D 11 Graphics, which works fine on some very old
-/// devices.
-pub struct Renderer<'a> {
-    video: Mutex<VideoRender<'a>>,
-    audio: AudioRender,
-}
-
-impl<'a> Renderer<'a> {
-    pub fn new<T: Into<SurfaceTarget<'a>>>(
-        backend: GraphicsBackend,
-        window: T,
-        size: Size,
-    ) -> Result<Self, RendererError> {
-        Ok(Self {
-            video: Mutex::new(VideoRender::new(backend, window, size)?),
-            audio: AudioRender::new()?,
-        })
-    }
-}
-
-impl<'a> AVFrameSink for Renderer<'a> {
-    /// Renders the audio frame, note that a queue is maintained internally,
-    /// here it just pushes the audio to the playback queue, and if the queue is
-    /// empty, it fills the mute data to the player by default, so you need to
-    /// pay attention to the push rate.
-    fn audio(&self, frame: &AudioFrame) -> bool {
-        if let Err(e) = self.audio.send(frame) {
-            log::error!("{:?}", e);
-
-            return false;
-        }
-
-        true
-    }
-
-    /// Renders video frames and can automatically handle rendering of hardware
-    /// textures and rendering textures.
-    fn video(&self, frame: &VideoFrame) -> bool {
-        if let Err(e) = self.video.lock().send(frame) {
-            log::error!("{:?}", e);
-
-            return false;
-        }
-
-        true
     }
 }

@@ -172,7 +172,7 @@ where
 ///
 /// ```kt
 /// private external fun createTransportSender(
-///     options: TransportDescriptor,
+///     options: TransportOptions,
 /// ): Long
 /// ```
 #[no_mangle]
@@ -259,7 +259,7 @@ extern "system" fn Java_com_github_mycrl_hylarana_Hylarana_releaseTransportSende
 /// ```kt
 /// private external fun createTransportReceiver(
 ///     id: String,
-///     options: TransportDescriptor,
+///     options: TransportOptions,
 ///     observer: HylaranaReceiverAdapterObserver,
 /// ): Long
 /// ```

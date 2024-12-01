@@ -5,12 +5,12 @@ use std::{
     mem::size_of,
 };
 
-use hylarana_common::strings::Strings;
+use hylarana_common::strings::PSTR;
 
 use super::{error, srt_getsockflag, srt_setsockflag, SRTSOCKET, SRT_SOCKOPT, SRT_TRANSTYPE};
 
 #[derive(Debug, Clone)]
-pub struct Descriptor {
+pub struct Options {
     pub stream_id: Option<String>,
     pub max_bandwidth: i64,
     pub latency: u32,
@@ -20,7 +20,7 @@ pub struct Descriptor {
     pub fc: u32,
 }
 
-impl Descriptor {
+impl Options {
     pub(crate) fn apply_socket(&self, fd: i32) -> Result<(), Error> {
         set_sock_opt(fd, SRT_SOCKOPT::SRTO_TRANSTYPE, &SRT_TRANSTYPE::SRTT_LIVE)?;
         set_sock_opt(fd, SRT_SOCKOPT::SRTO_RCVSYN, &1_i32)?;
@@ -46,7 +46,7 @@ impl Descriptor {
     }
 }
 
-impl Default for Descriptor {
+impl Default for Options {
     fn default() -> Self {
         Self {
             fec: "fec,layout:staircase,rows:5,cols:10,arq:onreq".to_string(),
@@ -85,7 +85,7 @@ fn set_sock_opt_str(sock: SRTSOCKET, opt: SRT_SOCKOPT, flag: &str) -> Result<(),
         srt_setsockflag(
             sock,
             opt,
-            Strings::from(flag).as_ptr() as *const _,
+            PSTR::from(flag).as_ptr() as *const _,
             flag.len() as c_int,
         )
     } == 0
@@ -101,7 +101,7 @@ pub(crate) fn get_sock_opt_str(sock: SRTSOCKET, opt: SRT_SOCKOPT) -> Option<Stri
     let mut optlen = 521;
 
     if unsafe { srt_getsockflag(sock, opt, optval.as_mut_ptr() as *mut _, &mut optlen) } == 0 {
-        Strings::from(optval.as_ptr()).to_string().ok()
+        PSTR::from(optval.as_ptr()).to_string().ok()
     } else {
         None
     }

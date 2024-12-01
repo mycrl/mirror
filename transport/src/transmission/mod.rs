@@ -5,7 +5,7 @@ mod socket;
 
 pub use self::{
     fragments::{FragmentDecoder, FragmentEncoder},
-    options::Descriptor,
+    options::Options,
     server::Server,
     socket::Socket,
     SRT_TRACEBSTATS as TraceStats,
@@ -17,7 +17,7 @@ use std::{
     ptr::null,
 };
 
-use hylarana_common::strings::Strings;
+use hylarana_common::strings::PSTR;
 use libc::sockaddr;
 use log::{log, Level};
 
@@ -40,8 +40,8 @@ extern "C" fn loghandler(
     message: *const c_char,
 ) {
     if let (Ok(area), Ok(message)) = (
-        Strings::from(area).to_string(),
-        Strings::from(message).to_string(),
+        PSTR::from(area).to_string(),
+        PSTR::from(message).to_string(),
     ) {
         log!(
             target: "srt",
@@ -673,7 +673,7 @@ extern "C" {
     /// convention, although the "level" parameter is ignored. The second
     /// version (srt_setsockflag) omits the "level" parameter completely.
     ///
-    /// Descriptor correspond to various data types, so you need to know what
+    /// Options correspond to various data types, so you need to know what
     /// data type is assigned to a particular option, and to pass a
     /// variable of the appropriate data type with the option value
     /// to be set.
@@ -694,7 +694,7 @@ extern "C" {
     /// convention, although the "level" parameter is ignored. The second
     /// version (srt_getsockflag) omits the "level" parameter completely.
     ///
-    /// Descriptor correspond to various data types (see API-socket-options.md).
+    /// Options correspond to various data types (see API-socket-options.md).
     /// A variable optval of the appropriate data type has to be passed. The
     /// integer value of optlen should originally contain the size of the optval
     /// type provided; on return, it will be set to the size of the value

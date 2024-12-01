@@ -5,7 +5,7 @@ use os_socketaddr::OsSocketAddr;
 use super::{options::get_sock_opt_str, SRT_SOCKOPT};
 
 use super::{
-    error, options::Descriptor, srt_bstats, srt_close, srt_connect, srt_create_socket, srt_recv,
+    error, options::Options, srt_bstats, srt_close, srt_connect, srt_create_socket, srt_recv,
     srt_send, TraceStats, SRTSOCKET, SRT_INVALID_SOCK,
 };
 
@@ -99,7 +99,7 @@ impl Socket {
     /// error this function may return any additional information. In
     /// non-blocking mode a detailed "late" failure cannot be distinguished,
     /// and therefore it can also be obtained from this function.
-    pub fn connect(addr: SocketAddr, opt: Descriptor) -> Result<Self, Error> {
+    pub fn connect(addr: SocketAddr, opt: Options) -> Result<Self, Error> {
         let fd = unsafe { srt_create_socket() };
         if fd == SRT_INVALID_SOCK {
             return Err(error());

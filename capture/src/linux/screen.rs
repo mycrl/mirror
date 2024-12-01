@@ -48,7 +48,7 @@ pub struct ScreenCapture(Arc<AtomicBool>);
 impl CaptureHandler for ScreenCapture {
     type Frame = VideoFrame;
     type Error = ScreenCaptureError;
-    type CaptureDescriptor = VideoCaptureSourceDescription;
+    type CaptureOptions = VideoCaptureSourceDescription;
 
     // x11 Capture does not currently support multiple screens.
     fn get_sources() -> Result<Vec<Source>, Self::Error> {
@@ -63,7 +63,7 @@ impl CaptureHandler for ScreenCapture {
 
     fn start<S: FrameArrived<Frame = Self::Frame> + 'static>(
         &self,
-        options: Self::CaptureDescriptor,
+        options: Self::CaptureOptions,
         mut arrived: S,
     ) -> Result<(), Self::Error> {
         let mut capture = Capture::new(&options)?;

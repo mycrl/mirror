@@ -7,9 +7,8 @@ use std::{
 
 use crate::{
     adapter::StreamReceiverAdapterAbstract, MulticastSocket, StreamInfo, StreamInfoKind,
-    StreamMultiReceiverAdapter, StreamReceiverAdapter, TransmissionDescriptor,
-    TransmissionFragmentDecoder, TransmissionSocket, TransportDescriptor, TransportStrategy,
-    UnPackage,
+    StreamMultiReceiverAdapter, StreamReceiverAdapter, TransmissionFragmentDecoder,
+    TransmissionOptions, TransmissionSocket, TransportOptions, TransportStrategy, UnPackage,
 };
 
 enum Socket {
@@ -122,7 +121,7 @@ where
     let mut receiver = Receiver::<T>::default();
 
     // Create an srt configuration and carry stream information
-    let mut opt = TransmissionDescriptor::default();
+    let mut opt = TransmissionOptions::default();
     opt.fc = 32;
     opt.latency = 20;
     opt.mtu = mtu as u32;
@@ -208,7 +207,7 @@ where
 
 fn create_receiver<T: Default + StreamReceiverAdapterAbstract + 'static>(
     id: String,
-    options: TransportDescriptor,
+    options: TransportOptions,
 ) -> Result<Receiver<T>, Error> {
     match options.strategy {
         TransportStrategy::Multicast(addr) => create_multicast_receiver(id, addr),
@@ -223,7 +222,7 @@ fn create_receiver<T: Default + StreamReceiverAdapterAbstract + 'static>(
 /// from different threads.
 pub fn create_split_receiver(
     id: String,
-    options: TransportDescriptor,
+    options: TransportOptions,
 ) -> Result<Receiver<StreamMultiReceiverAdapter>, Error> {
     create_receiver::<StreamMultiReceiverAdapter>(id, options)
 }
@@ -233,7 +232,7 @@ pub fn create_split_receiver(
 /// receiver is mixed, and you need to process it yourself by data type.
 pub fn create_mix_receiver(
     id: String,
-    options: TransportDescriptor,
+    options: TransportOptions,
 ) -> Result<Receiver<StreamReceiverAdapter>, Error> {
     create_receiver::<StreamReceiverAdapter>(id, options)
 }
