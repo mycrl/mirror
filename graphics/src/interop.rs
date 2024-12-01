@@ -33,8 +33,8 @@ pub mod win32 {
     };
 
     use wgpu::{
-        hal::api::Dx12, Device, Extent3d, Texture, TextureDimension, TextureFormat, TextureOptions,
-        TextureUsages,
+        hal::api::Dx12, Device, Extent3d, Texture, TextureDescriptor, TextureDimension,
+        TextureFormat, TextureUsages,
     };
 
     pub struct Interop {
@@ -112,7 +112,7 @@ pub mod win32 {
                         .ok_or_else(|| InteropError::NotFoundDxBackend)??
                 };
 
-                let desc = TextureOptions {
+                let desc = TextureDescriptor {
                     label: None,
                     mip_level_count: desc.MipLevels,
                     sample_count: desc.SampleDesc.Count,

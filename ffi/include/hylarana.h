@@ -488,13 +488,16 @@ typedef enum
      * Play audio only.
      */
     AV_PLAYER_ONLY_AUDIO,
+    /**
+     * Nothing plays.
+     */
+    AV_PLAYER_QUIET,
 } HylaranaAVFrameStreamPlayerType;
 
 typedef union
 {
-    HylaranaVideoRenderOptions all;
-    HylaranaVideoRenderOptions only_video;
-    struct {} only_audio;
+    HylaranaVideoRenderOptions some;
+    struct {} none;
 } HylaranaAVFrameStreamPlayerValue;
 
 /**

@@ -1,20 +1,15 @@
-use std::{
-    ffi::{c_ulong, c_void},
-    net::SocketAddr,
-    ptr::NonNull,
-};
+use std::net::SocketAddr;
 
 use hylarana::{
     raw_window_handle::{
-        AppKitWindowHandle, DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle,
-        RawDisplayHandle, RawWindowHandle, Win32WindowHandle, WindowHandle, XlibDisplayHandle,
-        XlibWindowHandle,
+        DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, RawWindowHandle,
+        Win32WindowHandle, WindowHandle,
     },
-    AVFrameObserver, AVFrameSink, AVFrameStream, AVFrameStreamPlayer, AVFrameStreamPlayerOptions,
-    AudioFrame, AudioOptions, Capture, Hylarana, HylaranaReceiver, HylaranaReceiverCodecOptions,
-    HylaranaReceiverOptions, HylaranaSender, HylaranaSenderMediaOptions, HylaranaSenderOptions,
-    HylaranaSenderTrackOptions, Size, Source, SourceType, TransportOptions, TransportStrategy,
-    VideoDecoderType, VideoEncoderType, VideoFrame, VideoOptions, VideoRenderBackend,
+    AVFrameObserver, AVFrameStreamPlayer, AVFrameStreamPlayerOptions, AudioOptions, Capture,
+    Hylarana, HylaranaReceiver, HylaranaReceiverCodecOptions, HylaranaReceiverOptions,
+    HylaranaSender, HylaranaSenderMediaOptions, HylaranaSenderOptions, HylaranaSenderTrackOptions,
+    Size, Source, SourceType, TransportOptions, TransportStrategy, VideoDecoderType,
+    VideoEncoderType, VideoOptions, VideoRenderBackend, VideoRenderOptions,
 };
 
 use napi::{
@@ -57,52 +52,10 @@ pub fn shutdown() -> napi::Result<()> {
 
 #[napi(object)]
 #[derive(Clone)]
-pub struct HylaranaWin32Window {
-    /// A handle to a window.
-    ///
-    /// This type is declared in WinDef.h as follows:
-    ///
-    /// typedef HANDLE HWND;
+pub struct HylaranaWindow {
     pub hwnd: JsBigInt,
     pub width: u32,
     pub height: u32,
-}
-
-#[napi(object)]
-#[derive(Clone)]
-pub struct HylaranaLinuxWindow {
-    /// typedef unsigned long int XID;
-    ///
-    /// typedef XID Window;
-    pub window: JsBigInt,
-    pub display: JsBigInt,
-    pub screen: i32,
-    pub width: u32,
-    pub height: u32,
-}
-
-#[napi(object)]
-#[derive(Clone)]
-pub struct HylaranaMacosWindow {
-    /// The infrastructure for drawing, printing, and handling events in an app.
-    ///
-    /// AppKit handles most of your app’s NSView management. Unless you’re
-    /// implementing a concrete subclass of NSView or working intimately with
-    /// the content of the view hierarchy at runtime, you don’t need to know
-    /// much about this class’s interface. For any view, there are many methods
-    /// that you can use as-is. The following methods are commonly used.
-    pub ns_view: JsBigInt,
-    pub width: u32,
-    pub height: u32,
-}
-
-/// A window handle for a particular windowing system.
-#[napi]
-#[derive(Clone)]
-pub enum HylaranaWindow {
-    Windows(HylaranaWin32Window),
-    Linux(HylaranaLinuxWindow),
-    Macos(HylaranaMacosWindow),
 }
 
 unsafe impl Send for HylaranaWindow {}
@@ -110,61 +63,25 @@ unsafe impl Sync for HylaranaWindow {}
 
 impl HylaranaWindow {
     pub fn size(&self) -> Size {
-        match self {
-            Self::Windows(HylaranaWin32Window { width, height, .. })
-            | Self::Linux(HylaranaLinuxWindow { width, height, .. })
-            | Self::Macos(HylaranaMacosWindow { width, height, .. }) => Size {
-                width: *width,
-                height: *height,
-            },
+        Size {
+            width: self.width,
+            height: self.height,
         }
     }
 }
 
 impl HasDisplayHandle for HylaranaWindow {
     fn display_handle(&self) -> Result<DisplayHandle<'_>, HandleError> {
-        Ok(match self {
-            Self::Macos(_) => DisplayHandle::appkit(),
-            Self::Windows(_) => DisplayHandle::windows(),
-            // This variant is likely to show up anywhere someone manages to get X11 working
-            // that Xlib can be built for, which is to say, most (but not all) Unix systems.
-            Self::Linux(HylaranaLinuxWindow {
-                display, screen, ..
-            }) => unsafe {
-                DisplayHandle::borrow_raw(RawDisplayHandle::Xlib(XlibDisplayHandle::new(
-                    NonNull::new(display.get_i64().unwrap().0 as *mut c_void),
-                    *screen,
-                )))
-            },
-        })
+        Ok(DisplayHandle::windows())
     }
 }
 
 impl HasWindowHandle for HylaranaWindow {
     fn window_handle(&self) -> Result<WindowHandle<'_>, HandleError> {
-        Ok(match self {
-            // This variant is used on Windows systems.
-            Self::Windows(HylaranaWin32Window { hwnd, .. }) => unsafe {
-                WindowHandle::borrow_raw(RawWindowHandle::Win32(Win32WindowHandle::new(
-                    std::num::NonZeroIsize::new(hwnd.get_i64().unwrap().0 as isize).unwrap(),
-                )))
-            },
-            // This variant is likely to show up anywhere someone manages to get X11
-            // working that Xlib can be built for, which is to say, most (but not all)
-            // Unix systems.
-            Self::Linux(HylaranaLinuxWindow { window, .. }) => unsafe {
-                WindowHandle::borrow_raw(RawWindowHandle::Xlib(XlibWindowHandle::new(
-                    window.get_u64().unwrap().0 as c_ulong,
-                )))
-            },
-            // This variant is likely to be used on macOS, although Mac Catalyst
-            // ($arch-apple-ios-macabi targets, which can notably use UIKit or AppKit) can also
-            // use it despite being target_os = "ios".
-            Self::Macos(HylaranaMacosWindow { ns_view, .. }) => unsafe {
-                WindowHandle::borrow_raw(RawWindowHandle::AppKit(AppKitWindowHandle::new(
-                    std::ptr::NonNull::new_unchecked(ns_view.get_i64().unwrap().0 as *mut c_void),
-                )))
-            },
+        Ok(unsafe {
+            WindowHandle::borrow_raw(RawWindowHandle::Win32(Win32WindowHandle::new(
+                std::num::NonZeroIsize::new(self.hwnd.get_i64().unwrap().0 as isize).unwrap(),
+            )))
         })
     }
 }
@@ -230,37 +147,13 @@ pub struct HylaranaVideoPlayerOptions {
     pub backend: HylaranaVideoRenderBackend,
 }
 
-#[napi(object)]
-#[derive(Clone)]
-pub struct HylaranaAudioPlayerOptions {
-    pub mute: bool,
-}
-
-#[napi(object)]
-#[derive(Clone)]
-pub struct HylaranaPlayerOptions {
-    pub video: HylaranaVideoPlayerOptions,
-    pub audio: HylaranaAudioPlayerOptions,
-}
-
-/// Renders video frames and audio/video frames to the native window.
-pub struct Window {
-    pub callback: ThreadsafeFunction<(), JsUnknown, (), false>,
-    pub mute: bool,
-}
-
-impl AVFrameStream for Window {}
-
-impl AVFrameSink for Window {
-    fn video(&self, frame: &VideoFrame) -> bool {}
-
-    fn audio(&self, frame: &AudioFrame) -> bool {}
-}
-
-impl AVFrameObserver for Window {
-    fn close(&self) {
-        self.callback
-            .call((), ThreadsafeFunctionCallMode::NonBlocking);
+impl Into<VideoRenderOptions<HylaranaWindow>> for HylaranaVideoPlayerOptions {
+    fn into(self) -> VideoRenderOptions<HylaranaWindow> {
+        VideoRenderOptions {
+            backend: self.backend.into(),
+            size: self.window.size(),
+            target: self.window,
+        }
     }
 }
 
@@ -476,11 +369,58 @@ impl Into<HylaranaSenderMediaOptions> for HylaranaSenderMediaTrackOptions {
     }
 }
 
+/// Configuration of the audio and video streaming player.
+#[napi]
+#[derive(Clone)]
+pub enum HylaranaPlayerOptionsType {
+    /// Play video only.
+    OnlyVideo,
+    /// Both audio and video will play.
+    All,
+    /// Play audio only.
+    OnlyAudio,
+    /// Nothing plays.
+    Quiet,
+}
+
+#[napi(object)]
+#[derive(Clone)]
+pub struct HylaranaPlayerOptions {
+    pub kind: HylaranaPlayerOptionsType,
+    pub value: Option<HylaranaVideoPlayerOptions>,
+}
+
+impl Into<AVFrameStreamPlayerOptions<HylaranaWindow>> for HylaranaPlayerOptions {
+    fn into(self) -> AVFrameStreamPlayerOptions<HylaranaWindow> {
+        type Ty = HylaranaPlayerOptionsType;
+
+        match self {
+            Self {
+                kind: Ty::OnlyVideo,
+                value: Some(it),
+            } => AVFrameStreamPlayerOptions::OnlyVideo(it.into()),
+            Self {
+                kind: Ty::All,
+                value: Some(it),
+            } => AVFrameStreamPlayerOptions::All(it.into()),
+            Self {
+                kind: Ty::OnlyAudio,
+                value: None,
+            } => AVFrameStreamPlayerOptions::OnlyAudio,
+            Self {
+                kind: Ty::Quiet,
+                value: None,
+            } => AVFrameStreamPlayerOptions::Quiet,
+            _ => unreachable!(),
+        }
+    }
+}
+
 #[napi(object)]
 pub struct HylaranaSenderServiceOptions {
     pub media: HylaranaSenderMediaTrackOptions,
     pub transport: HylaranaTransportOptions,
-    pub player: Option<HylaranaPlayerOptions>,
+    pub player: HylaranaPlayerOptions,
 }
 
 impl TryInto<HylaranaSenderOptions> for HylaranaSenderServiceOptions {
@@ -494,19 +434,32 @@ impl TryInto<HylaranaSenderOptions> for HylaranaSenderServiceOptions {
     }
 }
 
+struct Callback(ThreadsafeFunction<(), JsUnknown, (), false>);
+
+impl AVFrameObserver for Callback {
+    fn close(&self) {
+        self.0.call((), ThreadsafeFunctionCallMode::NonBlocking);
+    }
+}
+
 #[napi(ts_args_type = "options: HylaranaSenderServiceOptions, callback: () => void")]
 pub fn create_sender(
     options: HylaranaSenderServiceOptions,
     callback: Function,
 ) -> napi::Result<HylaranaSenderService> {
     let func = || {
-        Ok::<_, anyhow::Error>(HylaranaSenderService(Some(Hylarana::create_sender(
-            options.try_into()?,
-            EmptyWindow(
+        let player = AVFrameStreamPlayer::new(
+            options.player.clone().into(),
+            Callback(
                 callback
                     .build_threadsafe_function::<()>()
                     .build_callback(|it| Ok(it.value))?,
             ),
+        )?;
+
+        Ok::<_, anyhow::Error>(HylaranaSenderService(Some(Hylarana::create_sender(
+            options.try_into()?,
+            player,
         )?)))
     };
 
@@ -530,7 +483,7 @@ impl Into<HylaranaReceiverCodecOptions> for HylaranaReceiverMediaCodecOptions {
 pub struct HylaranaReceiverServiceOptions {
     pub codec: HylaranaReceiverMediaCodecOptions,
     pub transport: HylaranaTransportOptions,
-    pub player: Option<HylaranaPlayerOptions>,
+    pub player: HylaranaPlayerOptions,
 }
 
 impl TryInto<HylaranaReceiverOptions> for HylaranaReceiverServiceOptions {
@@ -551,15 +504,19 @@ pub fn create_receiver(
     callback: Function,
 ) -> napi::Result<HylaranaReceiverService> {
     let func = || {
+        let player = AVFrameStreamPlayer::new(
+            options.player.clone().into(),
+            Callback(
+                callback
+                    .build_threadsafe_function::<()>()
+                    .build_callback(|it| Ok(it.value))?,
+            ),
+        )?;
+
         Ok::<_, anyhow::Error>(HylaranaReceiverService(Some(Hylarana::create_receiver(
             id,
             options.try_into()?,
-            Window {
-                renderer: self.renderer.clone(),
-                callback: callback
-                    .build_threadsafe_function::<()>()
-                    .build_callback(|it| Ok(it.value))?,
-            },
+            player,
         )?)))
     };
 
@@ -567,7 +524,7 @@ pub fn create_receiver(
 }
 
 #[napi]
-pub struct HylaranaSenderService(Option<HylaranaSender<EmptyWindow>>);
+pub struct HylaranaSenderService(Option<HylaranaSender<AVFrameStreamPlayer<'static, Callback>>>);
 
 #[napi]
 impl HylaranaSenderService {
@@ -578,7 +535,9 @@ impl HylaranaSenderService {
 }
 
 #[napi]
-pub struct HylaranaReceiverService(Option<HylaranaReceiver<Window>>);
+pub struct HylaranaReceiverService(
+    Option<HylaranaReceiver<AVFrameStreamPlayer<'static, Callback>>>,
+);
 
 #[napi]
 impl HylaranaReceiverService {

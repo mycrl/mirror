@@ -207,6 +207,8 @@ pub enum AVFrameStreamPlayerOptions<T> {
     All(VideoRenderOptions<T>),
     /// Play audio only.
     OnlyAudio,
+    /// Nothing plays.
+    Quiet,
 }
 
 /// Player for audio and video streaming.
@@ -493,7 +495,7 @@ impl<'a> VideoRender<'a> {
                 let texture =
                     Texture2DResource::Texture(hylarana_graphics::Texture2DRaw::ID3D11Texture2D(
                         d3d_texture_borrowed_raw(&(frame.data[0] as *mut _))
-                            .ok_or_else(|| VideoRenderError::VideoInvalidD3D11Texture)?
+                            .ok_or_else(|| VideoRenderError::InvalidD3D11Texture)?
                             .clone(),
                         frame.data[1] as u32,
                     ));

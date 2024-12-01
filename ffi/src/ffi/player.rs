@@ -282,6 +282,8 @@ enum RawAVFrameStreamPlayerType {
     OnlyVideo,
     /// Play audio only.
     OnlyAudio,
+    /// Nothing plays.
+    Quiet,
 }
 
 /// Back-end implementation of graphics.
@@ -326,9 +328,8 @@ impl Into<VideoRenderOptions<RawWindowOptions>> for RawVideoRenderOptions {
 
 #[repr(C)]
 union RawAVFrameStreamPlayerValue {
-    all: RawVideoRenderOptions,
-    only_video: RawVideoRenderOptions,
-    only_audio: (),
+    some: RawVideoRenderOptions,
+    none: (),
 }
 
 #[repr(C)]
@@ -346,9 +347,10 @@ impl Into<AVFrameStreamPlayerOptions<RawWindowOptions>> for RawAVFrameStreamPlay
 
         unsafe {
             match self {
-                Self { kind: T::All, value: V { all } } => U::All(all.into()),
-                Self { kind: T::OnlyVideo, value: V { only_video } } => U::OnlyVideo(only_video.into()),
+                Self { kind: T::All, value: V { some } } => U::All(some.into()),
+                Self { kind: T::OnlyVideo, value: V { some } } => U::OnlyVideo(some.into()),
                 Self { kind: T::OnlyAudio, .. } => U::OnlyAudio,
+                Self { kind: T::Quiet, .. } => U::Quiet,
             }
         }
     }
