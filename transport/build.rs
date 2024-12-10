@@ -146,6 +146,11 @@ fn use_library(srt_dir: String) -> Result<()> {
             "sed -i '12i set(CMAKE_CXX_FLAGS \"-fPIC\")' CMakeLists.txt",
             &srt_dir,
         )?;
+
+        exec(
+            "sed -i '12i set(CMAKE_POSITION_INDEPENDENT_CODE ON)' CMakeLists.txt",
+            &srt_dir,
+        )?;
     }
 
     if !is_exsit(&join(&srt_dir, "./libsrt.a")) {
