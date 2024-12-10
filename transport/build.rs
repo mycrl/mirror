@@ -52,7 +52,7 @@ fn main() -> Result<()> {
             exec(
                 "git clone --branch v1.5.4 https://github.com/Haivision/srt",
                 &out_dir,
-            )?; // fixed 1.5.4-rc.0
+            )?; // fixed 1.5.4
         }
 
         use_library(srt_dir)?;
