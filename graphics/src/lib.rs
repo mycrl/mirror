@@ -73,7 +73,7 @@ impl<'a> Renderer<'a> {
             backends: if cfg!(target_os = "windows") {
                 Backends::DX12
             } else if cfg!(target_os = "linux") {
-                Backends::VULKAN
+                Backends::default()
             } else {
                 Backends::METAL
             },
