@@ -529,6 +529,7 @@ impl<'a> VideoRender<'a> {
 /// implemented with Direct3D 11 Graphics, which works fine on some very old
 /// devices.
 pub struct Renderer<'a> {
+    #[cfg(not(target_os = "linux"))]
     video: Mutex<VideoRender<'a>>,
     audio: AudioRender,
 }
@@ -540,6 +541,7 @@ impl<'a> Renderer<'a> {
         size: Size,
     ) -> Result<Self, RendererError> {
         Ok(Self {
+            #[cfg(not(target_os = "linux"))]
             video: Mutex::new(VideoRender::new(backend, window, size)?),
             audio: AudioRender::new()?,
         })
@@ -564,10 +566,13 @@ impl<'a> AVFrameSink for Renderer<'a> {
     /// Renders video frames and can automatically handle rendering of hardware
     /// textures and rendering textures.
     fn video(&self, frame: &VideoFrame) -> bool {
-        if let Err(e) = self.video.lock().send(frame) {
-            log::error!("{:?}", e);
-
-            return false;
+        #[cfg(not(target_os = "linux"))]
+        {
+            if let Err(e) = self.video.lock().send(frame) {
+                log::error!("{:?}", e);
+    
+                return false;
+            }
         }
 
         true
