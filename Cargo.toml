@@ -18,6 +18,5 @@ members = [
     "hylarana",
     "service",
     "transport",
-    "examples/rust",
-    "sdk/node"
+    "examples/rust"
 ]

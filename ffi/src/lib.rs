@@ -1135,10 +1135,11 @@ pub mod desktop {
     }
 
     #[repr(C)]
-    struct RawRenderer(Renderer<'static>);
+    struct RawRenderer(Renderer);
 
     /// Creating a window renderer.
     #[no_mangle]
+    #[cfg(target_os = "windows")]
     extern "C" fn renderer_create(
         window_handle: *const RawWindowHandleRef,
         backend: RawGraphicsBackend,
@@ -1152,6 +1153,19 @@ pub mod desktop {
                 window,
                 window.size(),
             )?))
+        };
+
+        checker(func())
+            .map(|ret| Box::into_raw(Box::new(ret)))
+            .unwrap_or_else(|_| null_mut())
+    }
+
+    /// Creating a window renderer.
+    #[no_mangle]
+    #[cfg(not(target_os = "windows"))]
+    extern "C" fn renderer_create() -> *mut RawRenderer {
+        let func = || {
+            Ok::<RawRenderer, anyhow::Error>(RawRenderer(Renderer::new()?))
         };
 
         checker(func())
@@ -1200,6 +1214,7 @@ pub mod desktop {
     unsafe impl Sync for RawWindowHandleRef {}
 
     impl RawWindowHandleRef {
+        #[cfg(target_os = "windows")]
         fn size(&self) -> Size {
             *match self {
                 Self::Win32(_, size)

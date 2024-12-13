@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use std::{net::SocketAddr, sync::Arc};
 
 use anyhow::Result;
@@ -32,7 +34,7 @@ enum StreamKind {
 
 struct Canvas {
     kind: StreamKind,
-    renderer: Arc<Mutex<Renderer<'static>>>,
+    renderer: Arc<Mutex<Renderer>>,
     event_proxy: EventLoopProxy<AppEvent>,
 }
 
@@ -71,7 +73,7 @@ struct App {
     cli: Cli,
     event_proxy: EventLoopProxy<AppEvent>,
     window: Option<Arc<Window>>,
-    renderer: Option<Arc<Mutex<Renderer<'static>>>>,
+    renderer: Option<Arc<Mutex<Renderer>>>,
     hylarana: Option<Hylarana>,
     sender: Option<Sender<Canvas>>,
     receiver: Option<Receiver<Canvas>>,
@@ -108,6 +110,7 @@ impl App {
 
         let window = Arc::new(event_loop.create_window(attr)?);
 
+        #[cfg(target_os = "windows")]
         self.renderer.replace(Arc::new(Mutex::new(Renderer::new(
             GraphicsBackend::WebGPU,
             window.clone(),
@@ -116,6 +119,9 @@ impl App {
                 height: self.cli.height,
             },
         )?)));
+
+        #[cfg(not(target_os = "windows"))]
+        self.renderer.replace(Arc::new(Mutex::new(Renderer::new()?)));
 
         self.window.replace(window);
         self.hylarana.replace(Hylarana::new(TransportDescriptor {

@@ -27,10 +27,8 @@ use hylarana_common::win32::{
 #[cfg(target_os = "macos")]
 use hylarana_common::macos::{CVPixelBufferRef, PixelBufferRef};
 
-use parking_lot::Mutex;
-
 #[cfg(target_os = "windows")]
-use parking_lot::RwLock;
+use parking_lot::{RwLock, Mutex};
 
 #[cfg(target_os = "windows")]
 use hylarana_graphics::dx11::Dx11Renderer;
@@ -528,27 +526,41 @@ impl<'a> VideoRender<'a> {
 /// unavailable, for video this can be done by enabling the dx11 feature tobe
 /// implemented with Direct3D 11 Graphics, which works fine on some very old
 /// devices.
-pub struct Renderer<'a> {
-    #[cfg(not(target_os = "linux"))]
-    video: Mutex<VideoRender<'a>>,
+#[cfg(target_os = "windows")]
+pub struct Renderer {
+    video: Mutex<VideoRender<'static>>,
     audio: AudioRender,
 }
 
-impl<'a> Renderer<'a> {
-    pub fn new<T: Into<SurfaceTarget<'a>>>(
+#[cfg(not(target_os = "windows"))]
+pub struct Renderer {
+    audio: AudioRender,
+}
+
+#[cfg(target_os = "windows")]
+impl<'a> Renderer {
+    pub fn new<T: Into<SurfaceTarget<'static>>>(
         backend: GraphicsBackend,
         window: T,
         size: Size,
     ) -> Result<Self, RendererError> {
         Ok(Self {
-            #[cfg(not(target_os = "linux"))]
             video: Mutex::new(VideoRender::new(backend, window, size)?),
             audio: AudioRender::new()?,
         })
     }
 }
 
-impl<'a> AVFrameSink for Renderer<'a> {
+#[cfg(not(target_os = "windows"))]
+impl Renderer {
+    pub fn new() -> Result<Self, RendererError> {
+        Ok(Self {
+            audio: AudioRender::new()?,
+        })
+    }
+}
+
+impl AVFrameSink for Renderer {
     /// Renders the audio frame, note that a queue is maintained internally,
     /// here it just pushes the audio to the playback queue, and if the queue is
     /// empty, it fills the mute data to the player by default, so you need to
@@ -565,12 +577,13 @@ impl<'a> AVFrameSink for Renderer<'a> {
 
     /// Renders video frames and can automatically handle rendering of hardware
     /// textures and rendering textures.
+    #[allow(unused_variables)]
     fn video(&self, frame: &VideoFrame) -> bool {
-        #[cfg(not(target_os = "linux"))]
+        #[cfg(target_os = "windows")]
         {
             if let Err(e) = self.video.lock().send(frame) {
                 log::error!("{:?}", e);
-    
+
                 return false;
             }
         }

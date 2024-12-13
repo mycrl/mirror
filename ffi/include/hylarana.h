@@ -388,10 +388,21 @@ EXPORT WindowHandle create_window_handle_for_appkit(void* view, uint32_t width, 
  */
 EXPORT void window_handle_destroy(WindowHandle hwnd);
 
+#ifdef WIN32
+
 /**
  * Creating a window renderer.
  */
 EXPORT Render renderer_create(WindowHandle hwnd, GraphicsBackend backend);
+
+#else
+
+/**
+ * Creating a window renderer.
+ */
+EXPORT Render renderer_create();
+
+#endif // WIN32
 
 /**
  * Push the video frame into the renderer, which will update the window texture.
