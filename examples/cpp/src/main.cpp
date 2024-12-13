@@ -315,44 +315,24 @@ int main(int argc, char* argv[])
 
     hylarana_startup();
 
-        SDL_Init(SDL_INIT_EVENTS);
+    SDL_Init(SDL_INIT_EVENTS);
 #ifdef LINUX
-        SDL_Window* window = SDL_CreateWindow("example",
-                                              0,
-                                              0,
-                                              OPTIONS.width,
-                                              OPTIONS.height,
-                                              SDL_WINDOW_VULKAN);
+    SDL_Window* window = SDL_CreateWindow("example",
+                                            0,
+                                            0,
+                                            OPTIONS.width,
+                                            OPTIONS.height,
+                                            SDL_WINDOW_VULKAN);
 #else
-        SDL_Window* window = SDL_CreateWindow("example",
-                                              0,
-                                              0,
-                                              OPTIONS.width,
-                                              OPTIONS.height,
-                                              SDL_WINDOW_METAL);
+    SDL_Window* window = SDL_CreateWindow("example",
+                                            0,
+                                            0,
+                                            OPTIONS.width,
+                                            OPTIONS.height,
+                                            SDL_WINDOW_METAL);
 #endif
 
-    SDL_SysWMinfo info;
-    SDL_VERSION(&info.version);
-    SDL_GetWindowWMInfo(window, &info);
-
-#ifdef __OBJC__
-    NSWindow* ns_window = (NSWindow*)info.info.cocoa.window;
-    NSView* ns_view = [ns_window contentView];
-    auto window_handle = create_window_handle_for_appkit(ns_view,
-                                                         OPTIONS.width,
-                                                         OPTIONS.height);
-#endif
-
-#ifdef LINUX
-    auto window_handle = create_window_handle_for_xlib(info.info.x11.window,
-                                                       info.info.x11.display,
-                                                       0,
-                                                       OPTIONS.width,
-                                                       OPTIONS.height);
-#endif
-
-    RENDER = renderer_create(window_handle, RENDER_BACKEND_WGPU);
+    RENDER = renderer_create();
     MIRROR_SERVICE = new HylaranaService();
 
     SDL_Event event;
@@ -383,7 +363,6 @@ int main(int argc, char* argv[])
     }
 
     renderer_destroy(RENDER);
-    window_handle_destroy(window_handle);
     hylarana_shutdown();
 
     SDL_DestroyWindow(window);
