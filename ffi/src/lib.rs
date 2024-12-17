@@ -1164,9 +1164,7 @@ pub mod desktop {
     #[no_mangle]
     #[cfg(not(target_os = "windows"))]
     extern "C" fn renderer_create() -> *mut RawRenderer {
-        let func = || {
-            Ok::<RawRenderer, anyhow::Error>(RawRenderer(Renderer::new()?))
-        };
+        let func = || Ok::<RawRenderer, anyhow::Error>(RawRenderer(Renderer::new()?));
 
         checker(func())
             .map(|ret| Box::into_raw(Box::new(ret)))

@@ -28,7 +28,7 @@ use hylarana_common::win32::{
 use hylarana_common::macos::{CVPixelBufferRef, PixelBufferRef};
 
 #[cfg(target_os = "windows")]
-use parking_lot::{RwLock, Mutex};
+use parking_lot::{Mutex, RwLock};
 
 #[cfg(target_os = "windows")]
 use hylarana_graphics::dx11::Dx11Renderer;

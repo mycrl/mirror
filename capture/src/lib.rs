@@ -18,7 +18,11 @@ mod macos {
     pub mod screen;
 }
 
-pub use self::audio::{AudioCapture, AudioCaptureError};
+#[cfg(target_os = "linux")]
+pub use self::audio::linux::{AudioCapture, AudioCaptureError};
+
+#[cfg(target_os = "windows")]
+pub use self::audio::win32::{AudioCapture, AudioCaptureError};
 
 #[cfg(target_os = "windows")]
 pub use self::win32::{

@@ -121,7 +121,8 @@ impl App {
         )?)));
 
         #[cfg(not(target_os = "windows"))]
-        self.renderer.replace(Arc::new(Mutex::new(Renderer::new()?)));
+        self.renderer
+            .replace(Arc::new(Mutex::new(Renderer::new()?)));
 
         self.window.replace(window);
         self.hylarana.replace(Hylarana::new(TransportDescriptor {
@@ -151,7 +152,8 @@ impl App {
             ));
         }
 
-        if let Some(source) = Capture::get_sources(SourceType::Audio)?.get(0) {
+        let audio_sources = Capture::get_sources(SourceType::Audio)?;
+        if let Some(source) = audio_sources.get(1) {
             options.audio = Some((
                 source.clone(),
                 AudioDescriptor {
